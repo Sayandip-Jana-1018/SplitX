@@ -17,7 +17,7 @@ const CreateTransactionSchema = z.object({
     })).optional(),
 });
 
-// GET /api/transactions?tripId=xxx
+// GET /api/transactions?tripId=xxx  OR  /api/transactions?limit=N (auto-detect trips)
 export async function GET(req: Request) {
     try {
         const session = await auth();
@@ -27,12 +27,44 @@ export async function GET(req: Request) {
 
         const { searchParams } = new URL(req.url);
         const tripId = searchParams.get('tripId');
-        if (!tripId) {
-            return NextResponse.json({ error: 'tripId required' }, { status: 400 });
+        const limit = parseInt(searchParams.get('limit') || '50', 10);
+
+        // If tripId is provided, use it directly
+        if (tripId) {
+            const transactions = await prisma.transaction.findMany({
+                where: { tripId },
+                include: {
+                    payer: { select: { id: true, name: true, image: true } },
+                    splits: {
+                        include: { user: { select: { id: true, name: true } } },
+                    },
+                },
+                orderBy: { createdAt: 'desc' },
+                take: limit,
+            });
+            return NextResponse.json(transactions);
         }
 
+        // No tripId — auto-discover all trips for this user's groups
+        const user = await prisma.user.findUnique({ where: { email: session.user.email } });
+        if (!user) return NextResponse.json([], { status: 200 });
+
+        const trips = await prisma.trip.findMany({
+            where: {
+                group: {
+                    OR: [
+                        { ownerId: user.id },
+                        { members: { some: { userId: user.id } } },
+                    ],
+                },
+            },
+            select: { id: true },
+        });
+
+        if (trips.length === 0) return NextResponse.json([]);
+
         const transactions = await prisma.transaction.findMany({
-            where: { tripId },
+            where: { tripId: { in: trips.map(t => t.id) } },
             include: {
                 payer: { select: { id: true, name: true, image: true } },
                 splits: {
@@ -40,6 +72,7 @@ export async function GET(req: Request) {
                 },
             },
             orderBy: { createdAt: 'desc' },
+            take: limit,
         });
 
         return NextResponse.json(transactions);

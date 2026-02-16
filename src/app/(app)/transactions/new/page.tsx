@@ -1,37 +1,116 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Delete, Check, ChevronDown } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { Delete, Check, ChevronDown, Loader2 } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Button from '@/components/ui/Button';
 import Modal from '@/components/ui/Modal';
 import Avatar from '@/components/ui/Avatar';
+import { useToast } from '@/components/ui/Toast';
+import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { CATEGORIES, PAYMENT_METHODS, formatCurrency, toPaise, cn } from '@/lib/utils';
+import { z } from 'zod';
 import styles from './quickadd.module.css';
 
-const MOCK_MEMBERS = [
-    { id: '1', name: 'Sayan Das (You)' },
-    { id: '2', name: 'Aman Singh' },
-    { id: '3', name: 'Priya Gupta' },
-    { id: '4', name: 'Rahul Verma' },
-];
+interface GroupItem {
+    id: string;
+    name: string;
+    emoji: string;
+    members: { user: { id: string; name: string | null; image: string | null } }[];
+}
 
 export default function QuickAddPage() {
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const { toast } = useToast();
+    const { user: currentUser, loading: userLoading } = useCurrentUser();
+
+    // Data state
+    const [groups, setGroups] = useState<GroupItem[]>([]);
+    const [selectedGroupId, setSelectedGroupId] = useState<string>('');
+    const [activeTripId, setActiveTripId] = useState<string>('');
+    const [members, setMembers] = useState<{ id: string; name: string }[]>([]);
+    const [loadingGroups, setLoadingGroups] = useState(true);
+
+    // Form state
     const [amount, setAmount] = useState('');
     const [title, setTitle] = useState('');
     const [category, setCategory] = useState('general');
     const [method, setMethod] = useState('cash');
-    const [payerId, setPayerId] = useState('1');
+    const [payerId, setPayerId] = useState('');
     const [showCategories, setShowCategories] = useState(false);
     const [showPayers, setShowPayers] = useState(false);
     const [showMethods, setShowMethods] = useState(false);
+    const [showGroups, setShowGroups] = useState(false);
     const [saving, setSaving] = useState(false);
 
+    // Pre-fill from URL params (from scan page)
+    useEffect(() => {
+        const paramAmount = searchParams.get('amount');
+        const paramTitle = searchParams.get('title');
+        const paramMethod = searchParams.get('method');
+        if (paramAmount) setAmount(paramAmount);
+        if (paramTitle) setTitle(paramTitle);
+        if (paramMethod) setMethod(paramMethod);
+    }, [searchParams]);
+
+    // Fetch groups on mount
+    useEffect(() => {
+        async function loadGroups() {
+            try {
+                const res = await fetch('/api/groups');
+                if (res.ok) {
+                    const data = await res.json();
+                    setGroups(data);
+                    if (data.length > 0) {
+                        setSelectedGroupId(data[0].id);
+                    }
+                }
+            } catch {
+                // handle silently
+            } finally {
+                setLoadingGroups(false);
+            }
+        }
+        loadGroups();
+    }, []);
+
+    // When group changes, fetch its detail (for trip ID and members)
+    useEffect(() => {
+        if (!selectedGroupId) return;
+        async function loadGroupDetail() {
+            try {
+                const res = await fetch(`/api/groups/${selectedGroupId}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    // Get active trip
+                    if (data.activeTrip) {
+                        setActiveTripId(data.activeTrip.id);
+                    }
+                    // Set members from group
+                    const memberList = (data.members || []).map((m: { user: { id: string; name: string | null } }) => ({
+                        id: m.user.id,
+                        name: m.user.name || 'Unknown',
+                    }));
+                    setMembers(memberList);
+                    // Default payer to current user
+                    if (currentUser && memberList.some((m: { id: string }) => m.id === currentUser.id)) {
+                        setPayerId(currentUser.id);
+                    } else if (memberList.length > 0) {
+                        setPayerId(memberList[0].id);
+                    }
+                }
+            } catch {
+                // handle silently
+            }
+        }
+        loadGroupDetail();
+    }, [selectedGroupId, currentUser]);
+
     const numericAmount = parseFloat(amount) || 0;
-    const splitPerPerson = MOCK_MEMBERS.length > 0
-        ? formatCurrency(toPaise(numericAmount / MOCK_MEMBERS.length))
+    const splitPerPerson = members.length > 0
+        ? formatCurrency(toPaise(numericAmount / members.length))
         : '₹0';
 
     const handleNumPad = useCallback((key: string) => {
@@ -42,7 +121,6 @@ export default function QuickAddPage() {
                 setAmount((prev) => (prev || '0') + '.');
             }
         } else {
-            // Limit: max 7 digits before decimal, 2 after
             const parts = amount.split('.');
             if (parts[1] && parts[1].length >= 2) return;
             if (!parts[1] && parts[0] && parts[0].length >= 7) return;
@@ -51,27 +129,100 @@ export default function QuickAddPage() {
                 return prev + key;
             });
         }
-        // Haptic feedback
         if (navigator.vibrate) navigator.vibrate(10);
     }, [amount]);
 
     const handleSave = async () => {
-        if (!numericAmount || !title.trim()) return;
+        // Client-side Zod validation
+        const formSchema = z.object({
+            title: z.string().min(1, 'Please add a description').max(200, 'Description too long'),
+            amount: z.number().positive('Amount must be greater than zero'),
+            tripId: z.string().min(1, 'Please select a group with an active trip'),
+        });
+
+        const result = formSchema.safeParse({
+            title: title.trim(),
+            amount: numericAmount,
+            tripId: activeTripId,
+        });
+
+        if (!result.success) {
+            const firstError = result.error.issues[0];
+            toast(firstError.message, 'error');
+            return;
+        }
+
         setSaving(true);
+        try {
+            const res = await fetch('/api/transactions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    tripId: activeTripId,
+                    title: title.trim(),
+                    amount: toPaise(numericAmount),
+                    category,
+                    method,
+                    splitType: 'equal',
+                }),
+            });
 
-        // TODO: API call
-        await new Promise((r) => setTimeout(r, 500));
-
-        setSaving(false);
-        router.push('/transactions');
+            if (res.ok) {
+                toast(`Expense added! ${formatCurrency(toPaise(numericAmount))} for "${title.trim()}"`, 'success');
+                router.push('/transactions');
+            } else {
+                const err = await res.json().catch(() => ({}));
+                toast(err.error || 'Failed to add expense', 'error');
+            }
+        } catch {
+            toast('Network error — please check your connection', 'error');
+        } finally {
+            setSaving(false);
+        }
     };
 
-    const payerName = MOCK_MEMBERS.find((m) => m.id === payerId)?.name || 'Select';
+    const selectedGroup = groups.find(g => g.id === selectedGroupId);
+    const payerMember = members.find(m => m.id === payerId);
+    const payerDisplay = payerMember
+        ? (payerMember.id === currentUser?.id ? `${payerMember.name} (You)` : payerMember.name)
+        : 'Select';
     const catData = CATEGORIES[category];
     const methodData = PAYMENT_METHODS[method];
 
+    if (loadingGroups || userLoading) {
+        return (
+            <div className={styles.quickAdd} style={{ alignItems: 'center', justifyContent: 'center' }}>
+                <Loader2 size={32} style={{ animation: 'spin 1s linear infinite', color: 'var(--accent-500)' }} />
+            </div>
+        );
+    }
+
+    if (groups.length === 0) {
+        return (
+            <div className={styles.quickAdd} style={{ alignItems: 'center', justifyContent: 'center', textAlign: 'center', gap: 'var(--space-4)' }}>
+                <div style={{ fontSize: '48px' }}>📋</div>
+                <h3 style={{ color: 'var(--fg-primary)', fontSize: 'var(--text-lg)', fontWeight: 'var(--weight-semibold)' }}>
+                    No groups yet
+                </h3>
+                <p style={{ color: 'var(--fg-tertiary)', fontSize: 'var(--text-sm)' }}>
+                    Create a group first to start adding expenses
+                </p>
+                <Button onClick={() => router.push('/groups')}>Go to Groups</Button>
+            </div>
+        );
+    }
+
     return (
         <div className={styles.quickAdd}>
+            {/* ── Group Selector Chip ── */}
+            <div className={styles.metaRow} style={{ justifyContent: 'center' }}>
+                <button className={cn(styles.chip, styles.chipActive)} onClick={() => setShowGroups(true)}>
+                    <span>{selectedGroup?.emoji || '📋'}</span>
+                    {selectedGroup?.name || 'Select Group'}
+                    <ChevronDown size={14} />
+                </button>
+            </div>
+
             {/* ── Amount Display ── */}
             <div className={styles.amountDisplay}>
                 <span className={styles.currencySign}>₹</span>
@@ -97,41 +248,32 @@ export default function QuickAddPage() {
 
             {/* ── Meta Row: Category / Payer / Method chips ── */}
             <div className={styles.metaRow}>
-                <button
-                    className={cn(styles.chip)}
-                    onClick={() => setShowCategories(true)}
-                >
+                <button className={cn(styles.chip)} onClick={() => setShowCategories(true)}>
                     <span>{catData.emoji}</span>
                     {catData.label}
                     <ChevronDown size={14} />
                 </button>
 
-                <button
-                    className={cn(styles.chip)}
-                    onClick={() => setShowPayers(true)}
-                >
-                    👤 {payerName.split(' ')[0]}
+                <button className={cn(styles.chip)} onClick={() => setShowPayers(true)}>
+                    👤 {payerDisplay.split(' ')[0]}
                     <ChevronDown size={14} />
                 </button>
 
-                <button
-                    className={cn(styles.chip)}
-                    onClick={() => setShowMethods(true)}
-                >
+                <button className={cn(styles.chip)} onClick={() => setShowMethods(true)}>
                     {methodData.emoji} {methodData.label}
                     <ChevronDown size={14} />
                 </button>
             </div>
 
             {/* ── Split Info ── */}
-            {numericAmount > 0 && (
+            {numericAmount > 0 && members.length > 0 && (
                 <motion.div
                     className={styles.splitInfo}
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                 >
                     Split equally: <span className={styles.splitAmount}>{splitPerPerson}</span> / person
-                    ({MOCK_MEMBERS.length} people)
+                    ({members.length} people)
                 </motion.div>
             )}
 
@@ -157,7 +299,7 @@ export default function QuickAddPage() {
                 <Button
                     fullWidth
                     size="lg"
-                    disabled={!numericAmount || !title.trim()}
+                    disabled={!numericAmount || !title.trim() || !activeTripId}
                     loading={saving}
                     leftIcon={<Check size={18} />}
                     onClick={handleSave}
@@ -165,6 +307,34 @@ export default function QuickAddPage() {
                     Add Expense · {numericAmount > 0 ? formatCurrency(toPaise(numericAmount)) : '₹0'}
                 </Button>
             </div>
+
+            {/* ── Group Picker Modal ── */}
+            <Modal
+                isOpen={showGroups}
+                onClose={() => setShowGroups(false)}
+                title="Select Group"
+                size="small"
+            >
+                <div className={styles.payerGrid}>
+                    {groups.map((g) => (
+                        <motion.button
+                            key={g.id}
+                            className={cn(
+                                styles.payerItem,
+                                selectedGroupId === g.id && styles.payerItemActive,
+                            )}
+                            whileTap={{ scale: 0.97 }}
+                            onClick={() => { setSelectedGroupId(g.id); setShowGroups(false); }}
+                        >
+                            <span style={{ fontSize: 24 }}>{g.emoji}</span>
+                            <span className={styles.payerName}>{g.name}</span>
+                            {selectedGroupId === g.id && (
+                                <Check size={16} style={{ marginLeft: 'auto', color: 'var(--accent-500)' }} />
+                            )}
+                        </motion.button>
+                    ))}
+                </div>
+            </Modal>
 
             {/* ── Category Picker Modal ── */}
             <Modal
@@ -199,7 +369,7 @@ export default function QuickAddPage() {
                 size="small"
             >
                 <div className={styles.payerGrid}>
-                    {MOCK_MEMBERS.map((member) => (
+                    {members.map((member) => (
                         <motion.button
                             key={member.id}
                             className={cn(
@@ -210,7 +380,9 @@ export default function QuickAddPage() {
                             onClick={() => { setPayerId(member.id); setShowPayers(false); }}
                         >
                             <Avatar name={member.name} size="sm" />
-                            <span className={styles.payerName}>{member.name}</span>
+                            <span className={styles.payerName}>
+                                {member.id === currentUser?.id ? `${member.name} (You)` : member.name}
+                            </span>
                             {payerId === member.id && (
                                 <Check size={16} style={{ marginLeft: 'auto', color: 'var(--accent-500)' }} />
                             )}

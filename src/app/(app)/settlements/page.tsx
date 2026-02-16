@@ -1,139 +1,322 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowRightLeft, Check, ExternalLink, Share2, Download, GitBranch } from 'lucide-react';
+import { ArrowRightLeft, Check, ExternalLink, Share2, Download, GitBranch, Inbox, Sparkles } from 'lucide-react';
 import Button from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
 import Avatar from '@/components/ui/Avatar';
 import Badge from '@/components/ui/Badge';
+import Modal from '@/components/ui/Modal';
 import SettlementGraph from '@/components/features/SettlementGraph';
-import { formatCurrency, cn } from '@/lib/utils';
-import { exportAsText, exportAsCSV, shareSettlement } from '@/lib/export';
-import { openUpiPayment, generateReminder, sendWhatsAppReminder } from '@/lib/upi';
+import { useToast } from '@/components/ui/Toast';
+import { useCurrentUser } from '@/hooks/useCurrentUser';
+import { formatCurrency } from '@/lib/utils';
+import { exportAsText, shareSettlement } from '@/lib/export';
+import { openUpiPayment, generateReminder } from '@/lib/upi';
+import { SettlementSkeleton } from '@/components/ui/Skeleton';
 
-const MOCK_SETTLEMENTS = [
-    { id: '1', from: { name: 'You', id: 'self' }, to: { name: 'Priya Gupta', id: '3' }, amount: 175000, status: 'pending' },
-    { id: '2', from: { name: 'Aman Singh', id: '2' }, to: { name: 'You', id: 'self' }, amount: 85000, status: 'pending' },
-    { id: '3', from: { name: 'Rahul Verma', id: '4' }, to: { name: 'Sayan Das', id: '1' }, amount: 62500, status: 'settled' },
-    { id: '4', from: { name: 'You', id: 'self' }, to: { name: 'Tanisha Roy', id: '5' }, amount: 42000, status: 'pending' },
-];
+/* ── Glassmorphic styles ── */
+const glass: React.CSSProperties = {
+    background: 'var(--bg-glass)',
+    backdropFilter: 'blur(24px) saturate(1.5)',
+    WebkitBackdropFilter: 'blur(24px) saturate(1.5)',
+    border: '1px solid var(--border-glass)',
+    borderRadius: 'var(--radius-xl)',
+    boxShadow: 'var(--shadow-card)',
+    position: 'relative',
+    overflow: 'hidden',
+};
 
-const GRAPH_MEMBERS = ['You', 'Priya Gupta', 'Aman Singh', 'Rahul Verma', 'Tanisha Roy'];
-const GRAPH_SETTLEMENTS = MOCK_SETTLEMENTS
-    .filter((s) => s.status === 'pending')
-    .map((s) => ({ from: s.from.name, to: s.to.name, amount: s.amount }));
-
-const totalYouOwe = MOCK_SETTLEMENTS
-    .filter((s) => s.from.id === 'self' && s.status === 'pending')
-    .reduce((sum, s) => sum + s.amount, 0);
-
-const totalOwedToYou = MOCK_SETTLEMENTS
-    .filter((s) => s.to.id === 'self' && s.status === 'pending')
-    .reduce((sum, s) => sum + s.amount, 0);
+/* ── Types ── */
+interface UserRef { id: string; name: string | null; image?: string | null }
+interface ComputedTransfer { from: string; to: string; amount: number }
+interface RecordedSettlement {
+    id: string; fromId: string; toId: string; amount: number;
+    status: string; method: string | null; note: string | null;
+    from: UserRef; to: UserRef; createdAt: string;
+}
+interface SettlementApiResponse {
+    computed: ComputedTransfer[];
+    recorded: RecordedSettlement[];
+    balances: Record<string, number>;
+}
 
 export default function SettlementsPage() {
+    const [loading, setLoading] = useState(true);
+    const { user: currentUser } = useCurrentUser();
+    const { toast } = useToast();
+    const [computed, setComputed] = useState<ComputedTransfer[]>([]);
+    const [recorded, setRecorded] = useState<RecordedSettlement[]>([]);
+    const [memberNames, setMemberNames] = useState<Record<string, string>>({});
+    const [graphMembers, setGraphMembers] = useState<string[]>([]);
+    const [activeTripId, setActiveTripId] = useState<string>('');
     const [tab, setTab] = useState<'pending' | 'settled'>('pending');
     const [showGraph, setShowGraph] = useState(false);
+    const [confirmSettle, setConfirmSettle] = useState<{ from: string; to: string; amount: number } | null>(null);
+    const [settling, setSettling] = useState(false);
 
-    const filteredSettlements = MOCK_SETTLEMENTS.filter((s) =>
+    const fetchSettlements = useCallback(async () => {
+        try {
+            const groupsRes = await fetch('/api/groups');
+            if (!groupsRes.ok) { setLoading(false); return; }
+            const groups = await groupsRes.json();
+            if (!Array.isArray(groups) || groups.length === 0) { setLoading(false); return; }
+
+            const nameMap: Record<string, string> = {};
+            for (const g of groups) {
+                if (g.members) {
+                    for (const m of g.members) {
+                        const userId = m.userId || m.user?.id;
+                        const name = m.user?.name || m.name || 'Unknown';
+                        if (userId) nameMap[userId] = name;
+                    }
+                }
+            }
+            setMemberNames(nameMap);
+
+            const detailRes = await fetch(`/api/groups/${groups[0].id}`);
+            if (!detailRes.ok) { setLoading(false); return; }
+            const detail = await detailRes.json();
+            if (!detail.activeTrip) { setLoading(false); return; }
+            setActiveTripId(detail.activeTrip.id);
+
+            const settRes = await fetch(`/api/settlements?tripId=${detail.activeTrip.id}`);
+            if (settRes.ok) {
+                const data: SettlementApiResponse = await settRes.json();
+                setComputed(data.computed || []);
+                setRecorded(data.recorded || []);
+                const allUserIds = new Set<string>();
+                for (const t of data.computed) { allUserIds.add(t.from); allUserIds.add(t.to); }
+                for (const r of data.recorded) { allUserIds.add(r.fromId); allUserIds.add(r.toId); }
+                setGraphMembers(Array.from(allUserIds).map(id => nameMap[id] || id));
+            }
+        } catch (err) {
+            console.error('Failed to fetch settlements:', err);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => { fetchSettlements(); }, [fetchSettlements]);
+
+    const currentUserId = currentUser?.id || null;
+
+    const pendingSettlements = computed.map((t, i) => ({
+        id: `computed-${i}`,
+        from: { name: memberNames[t.from] || t.from, id: t.from },
+        to: { name: memberNames[t.to] || t.to, id: t.to },
+        amount: t.amount, status: 'pending' as const,
+    }));
+
+    const settledSettlements = recorded
+        .filter(r => r.status === 'completed')
+        .map(r => ({
+            id: r.id,
+            from: { name: r.from.name || 'Unknown', id: r.fromId },
+            to: { name: r.to.name || 'Unknown', id: r.toId },
+            amount: r.amount, status: 'settled' as const,
+        }));
+
+    const allSettlements = [...pendingSettlements, ...settledSettlements];
+    const filteredSettlements = allSettlements.filter(s =>
         tab === 'pending' ? s.status === 'pending' : s.status === 'settled'
     );
 
+    const totalYouOwe = pendingSettlements.filter(s => s.from.id === currentUserId).reduce((sum, s) => sum + s.amount, 0);
+    const totalOwedToYou = pendingSettlements.filter(s => s.to.id === currentUserId).reduce((sum, s) => sum + s.amount, 0);
+
+    const graphSettlements = pendingSettlements.map(s => ({
+        from: s.from.name, to: s.to.name, amount: s.amount,
+    }));
+
+    const handleMarkAsPaid = async () => {
+        if (!confirmSettle || !activeTripId) return;
+        setSettling(true);
+        try {
+            const res = await fetch('/api/settlements', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    tripId: activeTripId, toUserId: confirmSettle.to,
+                    amount: confirmSettle.amount, method: 'cash',
+                }),
+            });
+            if (res.ok) {
+                toast('Settlement recorded ✅', 'success');
+                setConfirmSettle(null);
+                setLoading(true);
+                await fetchSettlements();
+            } else {
+                const err = await res.json().catch(() => ({}));
+                toast(err.error || 'Failed to record settlement', 'error');
+            }
+        } catch {
+            toast('Network error', 'error');
+        } finally {
+            setSettling(false);
+        }
+    };
+
+    if (loading) return <SettlementSkeleton />;
+
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-            <div>
-                <h2 style={{ fontSize: 'var(--text-xl)', fontWeight: 700 }}>Settlements</h2>
-                <p style={{ color: 'var(--fg-secondary)', fontSize: 'var(--text-sm)' }}>
+            {/* ═══ HEADER ═══ */}
+            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                    <ArrowRightLeft size={14} style={{ color: 'var(--accent-400)' }} />
+                    <span style={{
+                        fontSize: 'var(--text-xs)', color: 'var(--fg-tertiary)',
+                        fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em',
+                    }}>
+                        Settle Up
+                    </span>
+                </div>
+                <h2 style={{
+                    fontSize: 'var(--text-xl)', fontWeight: 800,
+                    background: 'linear-gradient(135deg, var(--fg-primary), var(--accent-400))',
+                    WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+                }}>
+                    Settlements
+                </h2>
+                <p style={{ color: 'var(--fg-tertiary)', fontSize: 'var(--text-xs)', marginTop: 2 }}>
                     Minimum transfers to settle all debts
                 </p>
-            </div>
+            </motion.div>
 
-            {/* Summary Cards */}
-            <div style={{
-                display: 'grid',
-                gridTemplateColumns: '1fr 1fr',
-                gap: 'var(--space-3)',
-            }}>
-                <Card padding="normal">
-                    <p style={{ fontSize: 'var(--text-xs)', color: 'var(--fg-tertiary)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>
-                        You Owe
-                    </p>
-                    <p style={{ fontSize: 'var(--text-xl)', fontWeight: 700, color: 'var(--color-error)' }}>
-                        {formatCurrency(totalYouOwe)}
-                    </p>
-                </Card>
-                <Card padding="normal">
-                    <p style={{ fontSize: 'var(--text-xs)', color: 'var(--fg-tertiary)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>
-                        Owed to You
-                    </p>
-                    <p style={{ fontSize: 'var(--text-xl)', fontWeight: 700, color: 'var(--color-success)' }}>
-                        {formatCurrency(totalOwedToYou)}
-                    </p>
-                </Card>
-            </div>
+            {/* ═══ BALANCE OVERVIEW — Glassmorphic Hero ═══ */}
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.5, delay: 0.05 }}>
+                <div style={{
+                    ...glass, borderRadius: 'var(--radius-2xl)', padding: 'var(--space-4)',
+                    background: 'linear-gradient(135deg, rgba(var(--accent-500-rgb), 0.08), var(--bg-glass), rgba(var(--accent-500-rgb), 0.04))',
+                    boxShadow: 'var(--shadow-card), 0 0 30px rgba(var(--accent-500-rgb), 0.06)',
+                }}>
+                    {/* Top light edge */}
+                    <div style={{
+                        position: 'absolute', top: 0, left: '15%', right: '15%', height: 1,
+                        background: 'linear-gradient(90deg, transparent, rgba(var(--accent-500-rgb), 0.15), transparent)',
+                        pointerEvents: 'none',
+                    }} />
+                    <div style={{ position: 'relative', zIndex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
+                        <div style={{
+                            padding: 'var(--space-3)',
+                            background: 'rgba(239, 68, 68, 0.06)',
+                            borderRadius: 'var(--radius-xl)',
+                            border: '1px solid rgba(239, 68, 68, 0.1)',
+                            textAlign: 'center',
+                        }}>
+                            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-error)', fontWeight: 600, marginBottom: 4 }}>
+                                You Owe
+                            </div>
+                            <div style={{ fontSize: 'var(--text-lg)', fontWeight: 800, color: 'var(--fg-primary)' }}>
+                                {formatCurrency(totalYouOwe)}
+                            </div>
+                        </div>
+                        <div style={{
+                            padding: 'var(--space-3)',
+                            background: 'rgba(16, 185, 129, 0.06)',
+                            borderRadius: 'var(--radius-xl)',
+                            border: '1px solid rgba(16, 185, 129, 0.1)',
+                            textAlign: 'center',
+                        }}>
+                            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-success)', fontWeight: 600, marginBottom: 4 }}>
+                                Owed to You
+                            </div>
+                            <div style={{ fontSize: 'var(--text-lg)', fontWeight: 800, color: 'var(--fg-primary)' }}>
+                                {formatCurrency(totalOwedToYou)}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </motion.div>
 
-            {/* Settlement Graph Toggle */}
-            <Button
-                variant="outline"
-                fullWidth
-                leftIcon={<GitBranch size={16} />}
-                onClick={() => setShowGraph(!showGraph)}
-            >
-                {showGraph ? 'Hide' : 'Show'} Transfer Graph
-            </Button>
-
-            <AnimatePresence>
-                {showGraph && (
-                    <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: 0.3 }}
-                        style={{ overflow: 'hidden' }}
-                    >
-                        <Card padding="normal">
-                            <SettlementGraph members={GRAPH_MEMBERS} settlements={GRAPH_SETTLEMENTS} />
-                        </Card>
+            {/* ═══ TRANSFER GRAPH TOGGLE ═══ */}
+            {graphMembers.length > 0 && (
+                <>
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}>
+                        <button
+                            onClick={() => setShowGraph(!showGraph)}
+                            style={{
+                                width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                                padding: '10px 16px', borderRadius: 'var(--radius-xl)',
+                                ...glass, cursor: 'pointer',
+                                color: showGraph ? 'var(--accent-400)' : 'var(--fg-secondary)',
+                                fontSize: 'var(--text-sm)', fontWeight: 600, transition: 'all 0.2s',
+                            }}
+                        >
+                            <GitBranch size={15} /> {showGraph ? 'Hide' : 'Show'} Transfer Graph
+                        </button>
                     </motion.div>
-                )}
-            </AnimatePresence>
+                    <AnimatePresence>
+                        {showGraph && (
+                            <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: 'auto', opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                transition={{ duration: 0.3 }}
+                                style={{ overflow: 'hidden' }}
+                            >
+                                <div style={{ ...glass, borderRadius: 'var(--radius-2xl)', padding: 'var(--space-4)' }}>
+                                    <SettlementGraph members={graphMembers} settlements={graphSettlements} />
+                                </div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                </>
+            )}
 
-            {/* Tabs */}
+            {/* ═══ TABS — Glassmorphic Segmented Control ═══ */}
             <div style={{
-                display: 'flex',
-                background: 'var(--bg-tertiary)',
-                borderRadius: 'var(--radius-lg)',
-                padding: 3,
+                display: 'flex', ...glass, borderRadius: 'var(--radius-xl)', padding: 3,
             }}>
                 {(['pending', 'settled'] as const).map((t) => (
                     <button
                         key={t}
                         onClick={() => setTab(t)}
                         style={{
-                            flex: 1,
-                            padding: '8px 16px',
-                            borderRadius: 'var(--radius-md)',
-                            border: 'none',
-                            cursor: 'pointer',
-                            fontSize: 'var(--text-sm)',
-                            fontWeight: 500,
-                            background: tab === t ? 'var(--surface-card)' : 'transparent',
-                            color: tab === t ? 'var(--fg-primary)' : 'var(--fg-tertiary)',
-                            boxShadow: tab === t ? 'var(--shadow-sm)' : 'none',
-                            transition: 'all 0.2s',
+                            flex: 1, padding: '9px 16px', borderRadius: 'var(--radius-lg)',
+                            border: 'none', cursor: 'pointer',
+                            fontSize: 'var(--text-sm)', fontWeight: 600,
+                            background: tab === t
+                                ? 'linear-gradient(135deg, rgba(var(--accent-500-rgb), 0.15), rgba(var(--accent-500-rgb), 0.08))'
+                                : 'transparent',
+                            color: tab === t ? 'var(--accent-400)' : 'var(--fg-tertiary)',
+                            boxShadow: tab === t ? '0 0 12px rgba(var(--accent-500-rgb), 0.1)' : 'none',
+                            transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
                         }}
                     >
-                        {t === 'pending' ? 'Pending' : 'Settled'}
+                        {t === 'pending' ? `Pending (${pendingSettlements.length})` : `Settled (${settledSettlements.length})`}
                     </button>
                 ))}
             </div>
 
-            {/* Settlement List */}
+            {/* ═══ SETTLEMENT LIST — Glassmorphic Cards ═══ */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-                {filteredSettlements.map((settlement, i) => {
-                    const isSender = settlement.from.id === 'self';
-                    const isReceiver = settlement.to.id === 'self';
+                {filteredSettlements.length === 0 ? (
+                    <div style={{
+                        ...glass, borderRadius: 'var(--radius-2xl)',
+                        padding: 'var(--space-10) var(--space-4)', textAlign: 'center',
+                    }}>
+                        <div style={{ position: 'relative', zIndex: 1 }}>
+                            <div style={{
+                                width: 52, height: 52, borderRadius: 'var(--radius-2xl)',
+                                background: 'rgba(var(--accent-500-rgb), 0.08)',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                margin: '0 auto var(--space-3)', color: 'var(--accent-400)',
+                            }}>
+                                <Inbox size={24} />
+                            </div>
+                            <div style={{ fontWeight: 600, color: 'var(--fg-primary)', marginBottom: 4 }}>
+                                {tab === 'pending' ? 'All settled up! 🎉' : 'No settled payments yet'}
+                            </div>
+                            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--fg-tertiary)' }}>
+                                {tab === 'pending' ? 'No pending settlements.' : 'Mark payments as settled to track them here.'}
+                            </div>
+                        </div>
+                    </div>
+                ) : filteredSettlements.map((settlement, i) => {
+                    const isSender = settlement.from.id === currentUserId;
+                    const isReceiver = settlement.to.id === currentUserId;
                     const isSettled = settlement.status === 'settled';
 
                     return (
@@ -141,44 +324,57 @@ export default function SettlementsPage() {
                             key={settlement.id}
                             initial={{ opacity: 0, y: 12 }}
                             animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: i * 0.08 }}
+                            transition={{ delay: i * 0.06, duration: 0.4 }}
                         >
-                            <Card
-                                padding="normal"
-                                glow={!isSettled}
-                                style={isSettled ? { opacity: 0.7 } : undefined}
+                            <div style={{
+                                ...glass,
+                                borderRadius: 'var(--radius-xl)',
+                                padding: 'var(--space-4)',
+                                opacity: isSettled ? 0.65 : 1,
+                                borderColor: isSender ? 'rgba(239, 68, 68, 0.12)' : isReceiver ? 'rgba(16, 185, 129, 0.12)' : 'var(--border-glass)',
+                                transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+                            }}
+                                onMouseEnter={(e) => {
+                                    if (!isSettled) {
+                                        e.currentTarget.style.transform = 'translateY(-2px)';
+                                        e.currentTarget.style.boxShadow = 'var(--shadow-card-hover)';
+                                    }
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.currentTarget.style.transform = 'translateY(0)';
+                                    e.currentTarget.style.boxShadow = '';
+                                }}
                             >
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+                                <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
                                     {/* Transfer direction */}
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
                                         <Avatar name={settlement.from.name} size="sm" />
                                         <div style={{ flex: 1 }}>
-                                            <div style={{
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: 'var(--space-2)',
-                                                fontSize: 'var(--text-sm)',
-                                            }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--text-sm)' }}>
                                                 <span style={{
-                                                    fontWeight: 600,
+                                                    fontWeight: 700,
                                                     color: isSender ? 'var(--color-error)' : 'var(--fg-primary)',
                                                 }}>
-                                                    {settlement.from.name}
+                                                    {isSender ? 'You' : settlement.from.name}
                                                 </span>
-                                                <ArrowRightLeft size={14} style={{ color: 'var(--fg-muted)' }} />
+                                                <ArrowRightLeft size={13} style={{ color: 'var(--fg-muted)' }} />
                                                 <span style={{
-                                                    fontWeight: 600,
+                                                    fontWeight: 700,
                                                     color: isReceiver ? 'var(--color-success)' : 'var(--fg-primary)',
                                                 }}>
-                                                    {settlement.to.name}
+                                                    {isReceiver ? 'You' : settlement.to.name}
                                                 </span>
                                             </div>
                                         </div>
                                         <div style={{ textAlign: 'right' }}>
                                             <span style={{
-                                                fontSize: 'var(--text-lg)',
-                                                fontWeight: 700,
-                                                color: isSender ? 'var(--color-error)' : isReceiver ? 'var(--color-success)' : 'var(--fg-primary)',
+                                                fontSize: 'var(--text-lg)', fontWeight: 800,
+                                                background: isSender
+                                                    ? 'linear-gradient(135deg, var(--color-error), #fca5a5)'
+                                                    : isReceiver
+                                                        ? 'linear-gradient(135deg, var(--color-success), #6ee7b7)'
+                                                        : 'linear-gradient(135deg, var(--fg-primary), var(--fg-secondary))',
+                                                WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
                                             }}>
                                                 {formatCurrency(settlement.amount)}
                                             </span>
@@ -190,21 +386,44 @@ export default function SettlementsPage() {
                                         <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
                                             {isSender && (
                                                 <>
-                                                    <Button size="sm" fullWidth leftIcon={<ExternalLink size={14} />} onClick={() => openUpiPayment({ upiId: 'user@okaxis', payeeName: settlement.to.name, amount: settlement.amount / 100, note: `AutoSplit: ${settlement.from.name} → ${settlement.to.name}` })}>
+                                                    <Button size="sm" fullWidth leftIcon={<ExternalLink size={13} />}
+                                                        style={{
+                                                            background: 'linear-gradient(135deg, var(--accent-500), var(--accent-600))',
+                                                            boxShadow: '0 4px 16px rgba(var(--accent-500-rgb), 0.25)',
+                                                        }}
+                                                        onClick={() => openUpiPayment({
+                                                            upiId: 'user@okaxis',
+                                                            payeeName: settlement.to.name,
+                                                            amount: settlement.amount / 100,
+                                                            note: `AutoSplit: ${settlement.from.name} → ${settlement.to.name}`
+                                                        })}
+                                                    >
                                                         Pay via UPI
                                                     </Button>
-                                                    <Button size="sm" variant="ghost" iconOnly>
-                                                        <Check size={16} />
+                                                    <Button size="sm" variant="ghost" iconOnly
+                                                        onClick={() => setConfirmSettle({ from: settlement.from.id, to: settlement.to.id, amount: settlement.amount })}
+                                                        style={{ borderRadius: 'var(--radius-lg)' }}
+                                                    >
+                                                        <Check size={15} />
                                                     </Button>
                                                 </>
                                             )}
                                             {isReceiver && (
                                                 <>
-                                                    <Button size="sm" fullWidth variant="outline" leftIcon={<Share2 size={14} />} onClick={() => { const msg = generateReminder('You', settlement.from.name, settlement.amount / 100); navigator.clipboard.writeText(msg); }}>
-                                                        Send Reminder
+                                                    <Button size="sm" fullWidth variant="outline"
+                                                        leftIcon={<Share2 size={13} />}
+                                                        onClick={() => {
+                                                            const msg = generateReminder('You', settlement.from.name, settlement.amount / 100);
+                                                            navigator.clipboard.writeText(msg);
+                                                            toast('Reminder copied', 'success');
+                                                        }}
+                                                    >
+                                                        Remind
                                                     </Button>
-                                                    <Button size="sm" variant="ghost" iconOnly>
-                                                        <Check size={16} />
+                                                    <Button size="sm" variant="ghost" iconOnly
+                                                        onClick={() => setConfirmSettle({ from: settlement.from.id, to: settlement.to.id, amount: settlement.amount })}
+                                                    >
+                                                        <Check size={15} />
                                                     </Button>
                                                 </>
                                             )}
@@ -216,46 +435,99 @@ export default function SettlementsPage() {
 
                                     {isSettled && (
                                         <Badge variant="success" size="sm">
-                                            <Check size={12} /> Settled
+                                            <Check size={11} /> Settled
                                         </Badge>
                                     )}
                                 </div>
-                            </Card>
+                            </div>
                         </motion.div>
                     );
                 })}
             </div>
 
-            <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-                <Button variant="outline" fullWidth leftIcon={<Download size={16} />} onClick={() => {
-                    const data = {
-                        groupName: 'Goa Trip',
-                        tripName: 'Goa_Trip_2025',
-                        members: GRAPH_MEMBERS.map((m) => ({ name: m })),
-                        transactions: [],
-                        settlements: MOCK_SETTLEMENTS.filter((s) => s.status === 'pending').map((s) => ({ from: s.from.name, to: s.to.name, amount: s.amount })),
-                        totalSpent: MOCK_SETTLEMENTS.reduce((sum, s) => sum + s.amount, 0),
-                        exportDate: new Date(),
-                    };
-                    exportAsText(data);
-                }}>
-                    Export .txt
-                </Button>
-                <Button variant="outline" fullWidth leftIcon={<Share2 size={16} />} onClick={() => {
-                    const data = {
-                        groupName: 'Goa Trip',
-                        tripName: 'Goa_Trip_2025',
-                        members: GRAPH_MEMBERS.map((m) => ({ name: m })),
-                        transactions: [],
-                        settlements: MOCK_SETTLEMENTS.filter((s) => s.status === 'pending').map((s) => ({ from: s.from.name, to: s.to.name, amount: s.amount })),
-                        totalSpent: MOCK_SETTLEMENTS.reduce((sum, s) => sum + s.amount, 0),
-                        exportDate: new Date(),
-                    };
-                    shareSettlement(data);
-                }}>
-                    Share
-                </Button>
-            </div>
+            {/* ═══ EXPORT ACTIONS ═══ */}
+            {pendingSettlements.length > 0 && (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }}>
+                    <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                        <button
+                            onClick={() => {
+                                const data = {
+                                    groupName: 'Group', tripName: 'Trip',
+                                    members: graphMembers.map(m => ({ name: m })),
+                                    transactions: [], settlements: graphSettlements,
+                                    totalSpent: pendingSettlements.reduce((sum, s) => sum + s.amount, 0),
+                                    exportDate: new Date(),
+                                };
+                                exportAsText(data);
+                            }}
+                            style={{
+                                flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                                padding: '10px', borderRadius: 'var(--radius-xl)',
+                                ...glass, cursor: 'pointer',
+                                color: 'var(--fg-secondary)', fontSize: 'var(--text-xs)', fontWeight: 600,
+                                transition: 'all 0.2s',
+                            }}
+                        >
+                            <Download size={14} /> Export
+                        </button>
+                        <button
+                            onClick={() => {
+                                const data = {
+                                    groupName: 'Group', tripName: 'Trip',
+                                    members: graphMembers.map(m => ({ name: m })),
+                                    transactions: [], settlements: graphSettlements,
+                                    totalSpent: pendingSettlements.reduce((sum, s) => sum + s.amount, 0),
+                                    exportDate: new Date(),
+                                };
+                                shareSettlement(data);
+                            }}
+                            style={{
+                                flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                                padding: '10px', borderRadius: 'var(--radius-xl)',
+                                ...glass, cursor: 'pointer',
+                                color: 'var(--fg-secondary)', fontSize: 'var(--text-xs)', fontWeight: 600,
+                                transition: 'all 0.2s',
+                            }}
+                        >
+                            <Share2 size={14} /> Share
+                        </button>
+                    </div>
+                </motion.div>
+            )}
+
+            {/* ═══ CONFIRM SETTLEMENT MODAL ═══ */}
+            <Modal
+                isOpen={!!confirmSettle}
+                onClose={() => setConfirmSettle(null)}
+                title="Confirm Settlement"
+                size="small"
+            >
+                {confirmSettle && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', textAlign: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--space-3)' }}>
+                            <Avatar name={memberNames[confirmSettle.from] || 'User'} size="md" />
+                            <ArrowRightLeft size={20} style={{ color: 'var(--fg-muted)' }} />
+                            <Avatar name={memberNames[confirmSettle.to] || 'User'} size="md" />
+                        </div>
+                        <p style={{ color: 'var(--fg-secondary)', fontSize: 'var(--text-sm)' }}>
+                            Mark <strong>{formatCurrency(confirmSettle.amount)}</strong> from{' '}
+                            <strong>{memberNames[confirmSettle.from] || 'User'}</strong> to{' '}
+                            <strong>{memberNames[confirmSettle.to] || 'User'}</strong> as settled?
+                        </p>
+                        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                            <Button variant="outline" fullWidth onClick={() => setConfirmSettle(null)}>Cancel</Button>
+                            <Button fullWidth loading={settling} onClick={handleMarkAsPaid}
+                                style={{
+                                    background: 'linear-gradient(135deg, var(--accent-500), var(--accent-600))',
+                                    boxShadow: '0 4px 20px rgba(var(--accent-500-rgb), 0.3)',
+                                }}
+                            >
+                                Confirm
+                            </Button>
+                        </div>
+                    </div>
+                )}
+            </Modal>
         </div>
     );
 }

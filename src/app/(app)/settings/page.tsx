@@ -1,248 +1,447 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { User, Palette, Moon, Sun, Bell, Shield, LogOut, ChevronRight, Smartphone } from 'lucide-react';
-import { Card } from '@/components/ui/Card';
+import { User, Palette, Moon, Sun, Bell, Shield, LogOut, ChevronRight, Smartphone, Check, Loader2, Save, Settings, Camera } from 'lucide-react';
 import Avatar from '@/components/ui/Avatar';
 import Button from '@/components/ui/Button';
-import { useThemeContext } from '@/components/providers/ThemeProvider';
-import { ACCENT_COLORS } from '@/hooks/useTheme';
+import { Input } from '@/components/ui/Input';
+import { useThemeContext, COLOR_PALETTES } from '@/components/providers/ThemeProvider';
+import { useCurrentUser } from '@/hooks/useCurrentUser';
+import { useToast } from '@/components/ui/Toast';
+import { signOut } from 'next-auth/react';
 
-const MOCK_USER = {
-    name: 'Sayan Das',
-    email: 'sayan@example.com',
-    joinedDate: 'Feb 2026',
+/* ── Glassmorphic styles ── */
+const glass: React.CSSProperties = {
+    background: 'var(--bg-glass)',
+    backdropFilter: 'blur(24px) saturate(1.5)',
+    WebkitBackdropFilter: 'blur(24px) saturate(1.5)',
+    border: '1px solid var(--border-glass)',
+    borderRadius: 'var(--radius-xl)',
+    boxShadow: 'var(--shadow-card)',
+    position: 'relative',
+    overflow: 'hidden',
 };
 
 export default function SettingsPage() {
-    const { theme, accent, setTheme, setAccent } = useThemeContext();
+    const { theme, palette, setTheme, setPalette } = useThemeContext();
+    const { user, loading: userLoading } = useCurrentUser();
+    const { toast } = useToast();
+
+    const [editingProfile, setEditingProfile] = useState(false);
+    const [editName, setEditName] = useState('');
+    const [editPhone, setEditPhone] = useState('');
+    const [editUpiId, setEditUpiId] = useState('');
+    const [savingProfile, setSavingProfile] = useState(false);
+    const [uploadingAvatar, setUploadingAvatar] = useState(false);
+
+    useEffect(() => {
+        if (user) {
+            setEditName(user.name || '');
+            setEditPhone(user.phone || '');
+            setEditUpiId(user.upiId || '');
+        }
+    }, [user]);
+
+    const handleSaveProfile = async () => {
+        setSavingProfile(true);
+        try {
+            const res = await fetch('/api/me', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: editName.trim(),
+                    phone: editPhone.trim() || undefined,
+                    upiId: editUpiId.trim() || undefined,
+                }),
+            });
+            if (res.ok) {
+                toast('Profile updated', 'success');
+                setEditingProfile(false);
+            } else {
+                toast('Failed to update', 'error');
+            }
+        } catch {
+            toast('Network error', 'error');
+        } finally {
+            setSavingProfile(false);
+        }
+    };
+
+    const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+        if (!validTypes.includes(file.type)) {
+            toast('Please use JPEG, PNG, WebP, or GIF', 'error');
+            return;
+        }
+        if (file.size > 2 * 1024 * 1024) {
+            toast('Image must be under 2MB', 'error');
+            return;
+        }
+
+        setUploadingAvatar(true);
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            const res = await fetch('/api/me/avatar', { method: 'POST', body: formData });
+            if (res.ok) {
+                toast('Avatar updated!', 'success');
+                window.location.reload();
+            } else {
+                const data = await res.json();
+                toast(data.error || 'Upload failed', 'error');
+            }
+        } catch {
+            toast('Network error', 'error');
+        } finally {
+            setUploadingAvatar(false);
+        }
+    };
+
+    const handleSignOut = async () => {
+        try { await signOut({ callbackUrl: '/login' }); }
+        catch { window.location.href = '/login'; }
+    };
+
+    const memberSince = user?.createdAt
+        ? new Date(user.createdAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+        : '...';
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
-            <div>
-                <h2 style={{ fontSize: 'var(--text-xl)', fontWeight: 700 }}>Settings</h2>
-                <p style={{ color: 'var(--fg-secondary)', fontSize: 'var(--text-sm)' }}>
-                    Customize your experience
-                </p>
-            </div>
+            {/* ═══ HEADER ═══ */}
+            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                    <Settings size={14} style={{ color: 'var(--accent-400)' }} />
+                    <span style={{
+                        fontSize: 'var(--text-xs)', color: 'var(--fg-tertiary)',
+                        fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em',
+                    }}>
+                        Preferences
+                    </span>
+                </div>
+                <h2 style={{
+                    fontSize: 'var(--text-xl)', fontWeight: 800,
+                    background: 'linear-gradient(135deg, var(--fg-primary), var(--accent-400))',
+                    WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+                }}>
+                    Settings
+                </h2>
+            </motion.div>
 
-            {/* Profile Card */}
-            <Card padding="normal">
-                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
-                    <Avatar name={MOCK_USER.name} size="lg" />
-                    <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 'var(--text-lg)', fontWeight: 600 }}>{MOCK_USER.name}</div>
-                        <div style={{ fontSize: 'var(--text-sm)', color: 'var(--fg-tertiary)' }}>{MOCK_USER.email}</div>
-                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--fg-muted)', marginTop: 2 }}>
-                            Member since {MOCK_USER.joinedDate}
+            {/* ═══ PROFILE CARD — Glassmorphic with glow ring ═══ */}
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.5, delay: 0.05 }}>
+                <div style={{
+                    ...glass, borderRadius: 'var(--radius-2xl)', padding: 'var(--space-5)',
+                    background: 'linear-gradient(135deg, rgba(var(--accent-500-rgb), 0.08), var(--bg-glass), rgba(var(--accent-500-rgb), 0.04))',
+                    boxShadow: 'var(--shadow-card), 0 0 30px rgba(var(--accent-500-rgb), 0.06)',
+                }}>
+                    {/* Top light */}
+                    <div style={{
+                        position: 'absolute', top: 0, left: '15%', right: '15%', height: 1,
+                        background: 'linear-gradient(90deg, transparent, rgba(var(--accent-500-rgb), 0.15), transparent)',
+                        pointerEvents: 'none',
+                    }} />
+                    <div style={{ position: 'relative', zIndex: 1 }}>
+                        {userLoading ? (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
+                                <div style={{
+                                    width: 56, height: 56, borderRadius: '50%',
+                                    background: 'rgba(var(--accent-500-rgb), 0.06)',
+                                    animation: 'pulse 2s ease infinite',
+                                }} />
+                                <div style={{ flex: 1 }}>
+                                    <div style={{ width: '50%', height: 14, borderRadius: 8, background: 'rgba(var(--accent-500-rgb), 0.08)', marginBottom: 8 }} />
+                                    <div style={{ width: '70%', height: 10, borderRadius: 6, background: 'rgba(var(--accent-500-rgb), 0.05)' }} />
+                                </div>
+                            </div>
+                        ) : editingProfile ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+                                <Input label="Name" value={editName} onChange={(e) => setEditName(e.target.value)} leftIcon={<User size={16} />} />
+                                <Input label="Phone" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} placeholder="+91 9876543210" leftIcon={<Smartphone size={16} />} />
+                                <Input label="UPI ID" value={editUpiId} onChange={(e) => setEditUpiId(e.target.value)} placeholder="name@upi" />
+                                <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                                    <Button fullWidth
+                                        leftIcon={savingProfile ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Save size={14} />}
+                                        onClick={handleSaveProfile}
+                                        disabled={savingProfile || !editName.trim()}
+                                        style={{
+                                            background: 'linear-gradient(135deg, var(--accent-500), var(--accent-600))',
+                                            boxShadow: '0 4px 16px rgba(var(--accent-500-rgb), 0.25)',
+                                        }}
+                                    >
+                                        Save
+                                    </Button>
+                                    <Button variant="outline" onClick={() => setEditingProfile(false)}>Cancel</Button>
+                                </div>
+                            </div>
+                        ) : (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
+                                {/* Avatar with glow ring */}
+                                <div style={{
+                                    padding: 3, borderRadius: '50%',
+                                    background: 'linear-gradient(135deg, var(--accent-400), var(--accent-600))',
+                                    boxShadow: '0 0 20px rgba(var(--accent-500-rgb), 0.3)',
+                                    position: 'relative',
+                                }}>
+                                    <div style={{ borderRadius: '50%', padding: 2, background: 'var(--bg-primary)' }}>
+                                        <Avatar name={user?.name || 'User'} image={user?.image} size="lg" />
+                                    </div>
+                                    {/* Camera overlay for upload */}
+                                    <label style={{
+                                        position: 'absolute', bottom: -2, right: -2,
+                                        width: 24, height: 24, borderRadius: '50%',
+                                        background: 'var(--accent-500)',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        cursor: uploadingAvatar ? 'wait' : 'pointer',
+                                        boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                                        border: '2px solid var(--bg-primary)',
+                                    }}>
+                                        {uploadingAvatar ? (
+                                            <Loader2 size={11} style={{ color: 'white', animation: 'spin 1s linear infinite' }} />
+                                        ) : (
+                                            <Camera size={11} style={{ color: 'white' }} />
+                                        )}
+                                        <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={handleAvatarUpload} style={{ display: 'none' }} disabled={uploadingAvatar} />
+                                    </label>
+                                </div>
+                                <div style={{ flex: 1 }}>
+                                    <div style={{
+                                        fontSize: 'var(--text-base)', fontWeight: 700, color: 'var(--fg-primary)',
+                                    }}>
+                                        {user?.name || 'User'}
+                                    </div>
+                                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--fg-tertiary)', marginTop: 2 }}>
+                                        {user?.email || ''}
+                                    </div>
+                                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--fg-muted)', marginTop: 2 }}>
+                                        Since {memberSince}
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => setEditingProfile(true)}
+                                    style={{
+                                        padding: '6px 14px', borderRadius: 'var(--radius-full)',
+                                        background: 'rgba(var(--accent-500-rgb), 0.08)',
+                                        border: '1px solid rgba(var(--accent-500-rgb), 0.12)',
+                                        color: 'var(--accent-400)', fontSize: 'var(--text-xs)', fontWeight: 600,
+                                        cursor: 'pointer', transition: 'all 0.2s',
+                                    }}
+                                >
+                                    Edit
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </motion.div>
+
+            {/* ═══ APPEARANCE — Glassmorphic Section ═══ */}
+            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+                <GlassSection title="Appearance" icon={<Palette size={16} />}>
+                    {/* Theme Toggle */}
+                    <div style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        padding: 'var(--space-3) 0',
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+                            {theme === 'dark' ? <Moon size={16} /> : <Sun size={16} />}
+                            <span style={{ fontSize: 'var(--text-sm)', fontWeight: 600 }}>Dark Mode</span>
+                        </div>
+                        <ToggleSwitch
+                            checked={theme === 'dark'}
+                            onChange={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                        />
+                    </div>
+
+                    {/* Color Palette Picker */}
+                    <div style={{ padding: 'var(--space-3) 0' }}>
+                        <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, marginBottom: 'var(--space-3)' }}>
+                            Accent Color
+                        </div>
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                            {COLOR_PALETTES.map((p) => {
+                                const isActive = palette === p.id;
+                                return (
+                                    <motion.button
+                                        key={p.id}
+                                        whileTap={{ scale: 0.9 }}
+                                        whileHover={{ scale: 1.05 }}
+                                        onClick={() => setPalette(p.id)}
+                                        title={p.name}
+                                        style={{
+                                            display: 'flex', alignItems: 'center', gap: 6,
+                                            padding: '6px 12px', borderRadius: 'var(--radius-full)',
+                                            border: isActive ? `2px solid ${p.accent500}` : '1px solid var(--border-glass)',
+                                            background: isActive ? `rgba(${p.accent500rgb}, 0.12)` : 'var(--bg-glass)',
+                                            backdropFilter: 'blur(8px)',
+                                            WebkitBackdropFilter: 'blur(8px)',
+                                            cursor: 'pointer',
+                                            fontSize: 'var(--text-xs)', fontWeight: 600,
+                                            color: isActive ? p.accent500 : 'var(--fg-secondary)',
+                                            whiteSpace: 'nowrap',
+                                            transition: 'all 0.2s',
+                                            boxShadow: isActive ? `0 0 12px rgba(${p.accent500rgb}, 0.2)` : 'none',
+                                        }}
+                                    >
+                                        <span style={{ display: 'flex', gap: 2 }}>
+                                            {p.swatches.map((c, i) => (
+                                                <span key={i} style={{
+                                                    width: 8, height: 8, borderRadius: '50%', background: c,
+                                                }} />
+                                            ))}
+                                        </span>
+                                        {p.name}
+                                        {isActive && <Check size={11} />}
+                                    </motion.button>
+                                );
+                            })}
                         </div>
                     </div>
-                    <Button variant="ghost" size="sm">Edit</Button>
-                </div>
-            </Card>
+                </GlassSection>
+            </motion.div>
 
-            {/* Appearance */}
-            <SettingsGroup title="Appearance" icon={<Palette size={18} />}>
-                {/* Theme Toggle */}
-                <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: 'var(--space-3) 0',
-                }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                        {theme === 'dark' ? <Moon size={18} /> : <Sun size={18} />}
-                        <span style={{ fontSize: 'var(--text-sm)', fontWeight: 500 }}>Dark Mode</span>
-                    </div>
-                    <ToggleSwitch
-                        checked={theme === 'dark'}
-                        onChange={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                    />
-                </div>
+            {/* ═══ NOTIFICATIONS ═══ */}
+            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
+                <GlassSection title="Notifications" icon={<Bell size={16} />}>
+                    <GlassRow label="Push Notifications" subtitle="Get notified about settlements" />
+                    <GlassRow label="Expense Reminders" subtitle="Daily summary of pending splits" />
+                </GlassSection>
+            </motion.div>
 
-                {/* Accent Color */}
-                <div style={{ padding: 'var(--space-3) 0' }}>
-                    <div style={{
-                        fontSize: 'var(--text-sm)',
-                        fontWeight: 500,
-                        marginBottom: 'var(--space-3)',
-                    }}>
-                        Accent Color
-                    </div>
-                    <div style={{
-                        display: 'flex',
-                        gap: 'var(--space-2)',
-                        flexWrap: 'wrap',
-                    }}>
-                        {ACCENT_COLORS.map((a) => (
-                            <motion.button
-                                key={a.value}
-                                whileTap={{ scale: 0.85 }}
-                                onClick={() => setAccent(a.value)}
-                                style={{
-                                    width: 36,
-                                    height: 36,
-                                    borderRadius: '50%',
-                                    background: a.color,
-                                    border: accent === a.value
-                                        ? '3px solid var(--fg-primary)'
-                                        : '2px solid transparent',
-                                    cursor: 'pointer',
-                                    outline: accent === a.value ? '2px solid var(--bg-primary)' : 'none',
-                                    transition: 'all 0.15s',
-                                }}
-                                title={a.label}
-                            />
-                        ))}
-                    </div>
-                </div>
-            </SettingsGroup>
+            {/* ═══ PRIVACY ═══ */}
+            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+                <GlassSection title="Privacy & Security" icon={<Shield size={16} />}>
+                    <GlassRow label="Data Processing" subtitle="All data processed on-device" disabled />
+                    <GlassRow label="Export My Data" action />
+                    <GlassRow label="Delete Account" danger action />
+                </GlassSection>
+            </motion.div>
 
-            {/* Notifications */}
-            <SettingsGroup title="Notifications" icon={<Bell size={18} />}>
-                <SettingsRow label="Push Notifications" subtitle="Get notified about settlements" />
-                <SettingsRow label="Expense Reminders" subtitle="Daily summary of pending splits" />
-            </SettingsGroup>
+            {/* ═══ APP INFO ═══ */}
+            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
+                <GlassSection title="App" icon={<Smartphone size={16} />}>
+                    <GlassRow label="Version" subtitle="1.0.0 (MVP)" disabled />
+                    <GlassRow label="Install as App (PWA)" action />
+                </GlassSection>
+            </motion.div>
 
-            {/* Privacy */}
-            <SettingsGroup title="Privacy & Security" icon={<Shield size={18} />}>
-                <SettingsRow label="Data Processing" subtitle="All data processed on-device" disabled />
-                <SettingsRow label="Export My Data" action />
-                <SettingsRow label="Delete Account" danger action />
-            </SettingsGroup>
-
-            {/* App Info */}
-            <SettingsGroup title="App" icon={<Smartphone size={18} />}>
-                <SettingsRow label="Version" subtitle="1.0.0 (MVP)" disabled />
-                <SettingsRow label="Install as App (PWA)" action />
-            </SettingsGroup>
-
-            {/* Sign Out */}
-            <Button
-                variant="danger"
-                fullWidth
-                leftIcon={<LogOut size={16} />}
-                onClick={() => window.location.href = '/login'}
-            >
-                Sign Out
-            </Button>
+            {/* ═══ SIGN OUT ═══ */}
+            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+                <button
+                    onClick={handleSignOut}
+                    style={{
+                        width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                        padding: '14px', borderRadius: 'var(--radius-xl)',
+                        background: 'rgba(239, 68, 68, 0.08)',
+                        border: '1px solid rgba(239, 68, 68, 0.15)',
+                        backdropFilter: 'blur(16px)',
+                        WebkitBackdropFilter: 'blur(16px)',
+                        color: 'var(--color-error)',
+                        fontSize: 'var(--text-sm)', fontWeight: 700,
+                        cursor: 'pointer', transition: 'all 0.2s',
+                    }}
+                    onMouseEnter={(e) => {
+                        e.currentTarget.style.background = 'rgba(239, 68, 68, 0.14)';
+                        e.currentTarget.style.boxShadow = '0 0 20px rgba(239, 68, 68, 0.1)';
+                    }}
+                    onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'rgba(239, 68, 68, 0.08)';
+                        e.currentTarget.style.boxShadow = 'none';
+                    }}
+                >
+                    <LogOut size={16} /> Sign Out
+                </button>
+            </motion.div>
         </div>
     );
 }
 
-// ── Sub-components ──
+/* ═══ Sub-components ═══ */
 
-function SettingsGroup({
-    title,
-    icon,
-    children,
-}: {
-    title: string;
-    icon: React.ReactNode;
-    children: React.ReactNode;
-}) {
-    return (
-        <div>
-            <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 'var(--space-2)',
-                fontSize: 'var(--text-sm)',
-                fontWeight: 600,
-                color: 'var(--fg-secondary)',
-                marginBottom: 'var(--space-2)',
-            }}>
-                {icon}
-                {title}
-            </div>
-            <Card padding="normal">
-                <div style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 0,
-                }}>
-                    {children}
-                </div>
-            </Card>
-        </div>
-    );
-}
-
-function SettingsRow({
-    label,
-    subtitle,
-    danger,
-    action,
-    disabled,
-}: {
-    label: string;
-    subtitle?: string;
-    danger?: boolean;
-    action?: boolean;
-    disabled?: boolean;
+function GlassSection({ title, icon, children }: {
+    title: string; icon: React.ReactNode; children: React.ReactNode;
 }) {
     return (
         <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: 'var(--space-3) 0',
-            borderTop: '1px solid var(--border-subtle)',
-            opacity: disabled ? 0.6 : 1,
+            background: 'var(--bg-glass)',
+            backdropFilter: 'blur(24px) saturate(1.5)',
+            WebkitBackdropFilter: 'blur(24px) saturate(1.5)',
+            border: '1px solid var(--border-glass)',
+            borderRadius: 'var(--radius-xl)',
+            boxShadow: 'var(--shadow-card)',
+            padding: 'var(--space-4)',
+            position: 'relative',
+            overflow: 'hidden',
         }}>
-            <div>
-                <span style={{
-                    fontSize: 'var(--text-sm)',
-                    fontWeight: 500,
-                    color: danger ? 'var(--color-error)' : 'var(--fg-primary)',
-                }}>
-                    {label}
-                </span>
-                {subtitle && (
-                    <p style={{ fontSize: 'var(--text-xs)', color: 'var(--fg-tertiary)', marginTop: 1 }}>
-                        {subtitle}
-                    </p>
-                )}
+            <div style={{
+                display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
+                marginBottom: 'var(--space-3)', paddingBottom: 'var(--space-2)',
+                borderBottom: '1px solid var(--border-subtle)',
+            }}>
+                <span style={{ color: 'var(--accent-400)' }}>{icon}</span>
+                <span style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--fg-primary)' }}>{title}</span>
             </div>
-            {action && <ChevronRight size={16} style={{ color: 'var(--fg-muted)' }} />}
+            {children}
         </div>
     );
 }
 
-function ToggleSwitch({
-    checked,
-    onChange,
-}: {
-    checked: boolean;
-    onChange: () => void;
+function GlassRow({ label, subtitle, danger, action, disabled }: {
+    label: string; subtitle?: string; danger?: boolean; action?: boolean; disabled?: boolean;
 }) {
+    return (
+        <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: 'var(--space-3) 0', opacity: disabled ? 0.5 : 1,
+            cursor: disabled ? 'default' : action ? 'pointer' : 'default',
+            borderBottom: '1px solid rgba(var(--accent-500-rgb), 0.04)',
+        }}>
+            <div>
+                <div style={{
+                    fontSize: 'var(--text-sm)', fontWeight: 600,
+                    color: danger ? 'var(--color-error)' : 'var(--fg-primary)',
+                }}>
+                    {label}
+                </div>
+                {subtitle && (
+                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--fg-tertiary)', marginTop: 2 }}>
+                        {subtitle}
+                    </div>
+                )}
+            </div>
+            {action && <ChevronRight size={15} style={{ color: 'var(--fg-muted)' }} />}
+        </div>
+    );
+}
+
+function ToggleSwitch({ checked, onChange }: { checked: boolean; onChange: () => void }) {
     return (
         <motion.button
             onClick={onChange}
             style={{
-                width: 48,
-                height: 28,
-                borderRadius: 14,
-                background: checked ? 'var(--accent-500)' : 'var(--bg-tertiary)',
-                border: '1px solid var(--border-default)',
-                cursor: 'pointer',
-                position: 'relative',
-                padding: 0,
+                width: 46, height: 26, borderRadius: 'var(--radius-full)',
+                border: 'none', padding: 3, cursor: 'pointer',
+                background: checked
+                    ? 'linear-gradient(135deg, var(--accent-500), var(--accent-600))'
+                    : 'var(--bg-tertiary)',
+                display: 'flex', alignItems: 'center',
+                justifyContent: checked ? 'flex-end' : 'flex-start',
+                transition: 'background 0.3s',
+                boxShadow: checked ? '0 0 12px rgba(var(--accent-500-rgb), 0.2)' : 'none',
             }}
         >
             <motion.div
-                animate={{ x: checked ? 22 : 2 }}
-                transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                layout
                 style={{
-                    width: 22,
-                    height: 22,
-                    borderRadius: '50%',
+                    width: 20, height: 20, borderRadius: '50%',
                     background: 'white',
-                    position: 'absolute',
-                    top: 2,
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                    boxShadow: '0 1px 4px rgba(0,0,0,0.2)',
                 }}
+                transition={{ type: 'spring', stiffness: 500, damping: 30 }}
             />
         </motion.button>
     );

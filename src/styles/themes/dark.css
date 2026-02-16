@@ -1,84 +1,109 @@
 /* ═══════════════════════════════════════════════════════════════
-   Dark Mode Theme — Premium Edition
-   Rich, deep backgrounds with subtle color tinting for depth.
+   Dark Mode Theme — Ultra-Premium Glassmorphism Edition
+   Neutral deep-space blacks tinted by the active accent palette.
+   All color tinting uses var(--accent-500-rgb) so switching palettes
+   properly recolors the entire UI.
    Applied when: <html data-theme="dark">
    ═══════════════════════════════════════════════════════════════ */
 
 [data-theme="dark"] {
     color-scheme: dark;
 
-    /* ── Backgrounds — deep navy-black with subtle warmth ── */
-    --bg-primary: #07070e;
-    --bg-secondary: #0d0d18;
-    --bg-tertiary: #13132a;
-    --bg-elevated: #171730;
-    --bg-sunken: #050508;
-    --bg-overlay: rgba(0, 0, 0, 0.75);
-    --bg-glass: rgba(12, 12, 30, 0.65);
-    --bg-glass-strong: rgba(12, 12, 30, 0.85);
+    /* ── Backgrounds — neutral deep-space, accent-tinted via overlays ── */
+    --bg-primary: #08080c;
+    --bg-secondary: #0e0e13;
+    --bg-tertiary: #141419;
+    --bg-elevated: #1a1a21;
+    --bg-sunken: #050507;
+    --bg-overlay: rgba(0, 0, 0, 0.8);
+
+    /* ── Glass — accent-tinted frosted glass ── */
+    --bg-glass: rgba(14, 14, 20, 0.55);
+    --bg-glass-strong: rgba(14, 14, 20, 0.78);
+    --bg-glass-subtle: rgba(14, 14, 20, 0.35);
+    --bg-glass-iridescent: linear-gradient(135deg,
+            rgba(var(--accent-500-rgb), 0.06) 0%,
+            rgba(var(--accent-500-rgb), 0.03) 30%,
+            rgba(14, 14, 20, 0.55) 60%,
+            rgba(var(--accent-500-rgb), 0.02) 100%);
 
     /* ── Mesh gradient background for pages ── */
     --bg-mesh: radial-gradient(ellipse 80% 50% at 50% -20%,
-            rgba(var(--accent-500-rgb), 0.08) 0%,
+            rgba(var(--accent-500-rgb), 0.12) 0%,
             transparent 70%);
 
-    /* ── Foregrounds (text) ── */
-    --fg-primary: #eef0f6;
-    --fg-secondary: #9ba3b8;
-    --fg-tertiary: #5e6882;
+    /* ── Foregrounds (text) — high-contrast with slight warmth ── */
+    --fg-primary: #f0f2f8;
+    --fg-secondary: #a0a8c0;
+    --fg-tertiary: #636d88;
     --fg-muted: #3d4663;
-    --fg-inverse: #07070e;
+    --fg-inverse: #06060f;
     --fg-on-accent: #ffffff;
 
-    /* ── Borders ── */
-    --border-default: rgba(255, 255, 255, 0.06);
+    /* ── Borders — luminous glass edges ── */
+    --border-default: rgba(255, 255, 255, 0.07);
     --border-subtle: rgba(255, 255, 255, 0.04);
-    --border-strong: rgba(255, 255, 255, 0.12);
+    --border-strong: rgba(255, 255, 255, 0.14);
     --border-focus: var(--accent-400);
-    --border-glass: rgba(255, 255, 255, 0.08);
+    --border-glass: rgba(255, 255, 255, 0.10);
+    --border-glass-shimmer: linear-gradient(135deg,
+            rgba(255, 255, 255, 0.12) 0%,
+            rgba(255, 255, 255, 0.03) 40%,
+            rgba(var(--accent-500-rgb), 0.15) 60%,
+            rgba(255, 255, 255, 0.06) 100%);
 
-    /* ── Surfaces (cards, panels) — glass layering ── */
-    --surface-card: rgba(14, 14, 32, 0.6);
-    --surface-card-hover: rgba(20, 20, 48, 0.7);
-    --surface-panel: rgba(14, 14, 32, 0.8);
-    --surface-popover: rgba(18, 18, 40, 0.95);
-    --surface-input: rgba(16, 16, 36, 0.8);
-    --surface-input-hover: rgba(22, 22, 50, 0.9);
+    /* ── Surfaces (cards, panels) — neutral glass layering ── */
+    --surface-card: rgba(16, 16, 22, 0.60);
+    --surface-card-hover: rgba(22, 22, 30, 0.72);
+    --surface-panel: rgba(14, 14, 20, 0.78);
+    --surface-popover: rgba(18, 18, 24, 0.95);
+    --surface-input: rgba(16, 16, 22, 0.7);
+    --surface-input-hover: rgba(22, 22, 30, 0.82);
 
-    /* ── Semantic Colors ── */
+    /* ── Semantic Colors — vibrant neon-ish tints ── */
     --color-success: #34d399;
-    --color-success-bg: rgba(16, 185, 129, 0.12);
-    --color-success-border: rgba(16, 185, 129, 0.25);
+    --color-success-bg: rgba(16, 185, 129, 0.14);
+    --color-success-border: rgba(16, 185, 129, 0.28);
     --color-warning: #fbbf24;
-    --color-warning-bg: rgba(245, 158, 11, 0.12);
-    --color-warning-border: rgba(245, 158, 11, 0.25);
+    --color-warning-bg: rgba(245, 158, 11, 0.14);
+    --color-warning-border: rgba(245, 158, 11, 0.28);
     --color-error: #f87171;
-    --color-error-bg: rgba(239, 68, 68, 0.12);
-    --color-error-border: rgba(239, 68, 68, 0.25);
+    --color-error-bg: rgba(239, 68, 68, 0.14);
+    --color-error-border: rgba(239, 68, 68, 0.28);
     --color-info: #60a5fa;
-    --color-info-bg: rgba(59, 130, 246, 0.12);
-    --color-info-border: rgba(59, 130, 246, 0.25);
+    --color-info-bg: rgba(59, 130, 246, 0.14);
+    --color-info-border: rgba(59, 130, 246, 0.28);
 
     /* ── Scrollbar ── */
     --scrollbar-bg: transparent;
     --scrollbar-thumb: rgba(255, 255, 255, 0.08);
-    --scrollbar-thumb-hover: rgba(255, 255, 255, 0.15);
+    --scrollbar-thumb-hover: rgba(255, 255, 255, 0.18);
 
-    /* ── Shadows — dark mode: colored ambient glow ── */
-    --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.5);
-    --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.4), 0 0 1px rgba(0, 0, 0, 0.3);
-    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5), 0 0 1px rgba(0, 0, 0, 0.3);
-    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.6), 0 0 1px rgba(0, 0, 0, 0.3);
-    --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.6), 0 0 1px rgba(0, 0, 0, 0.3);
+    /* ── Shadows — layered depth with colored ambient glow ── */
+    --shadow-xs: 0 1px 3px rgba(0, 0, 0, 0.5);
+    --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.45),
+        0 0 1px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.5),
+        0 0 1px rgba(0, 0, 0, 0.3);
+    --shadow-lg: 0 8px 28px rgba(0, 0, 0, 0.55),
+        0 0 1px rgba(0, 0, 0, 0.3);
+    --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.6),
+        0 0 1px rgba(0, 0, 0, 0.3);
 
-    /* ── Glow shadows ── */
-    --shadow-glow: 0 0 24px rgba(var(--accent-500-rgb), 0.2),
-        0 0 6px rgba(var(--accent-500-rgb), 0.1);
-    --shadow-glow-lg: 0 0 50px rgba(var(--accent-500-rgb), 0.3),
-        0 0 15px rgba(var(--accent-500-rgb), 0.15);
+    /* ── Glow shadows — premium accent halos ── */
+    --shadow-glow: 0 0 28px rgba(var(--accent-500-rgb), 0.22),
+        0 0 8px rgba(var(--accent-500-rgb), 0.12);
+    --shadow-glow-lg: 0 0 60px rgba(var(--accent-500-rgb), 0.30),
+        0 0 20px rgba(var(--accent-500-rgb), 0.16);
+    --shadow-glow-sm: 0 0 12px rgba(var(--accent-500-rgb), 0.15),
+        0 0 4px rgba(var(--accent-500-rgb), 0.08);
+
+    /* ── Card shadows — layered glass depth + accent glow ── */
     --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.4),
-        0 0 0 1px rgba(255, 255, 255, 0.04);
-    --shadow-card-hover: 0 8px 32px rgba(0, 0, 0, 0.5),
-        0 0 0 1px rgba(var(--accent-500-rgb), 0.15),
-        0 0 20px rgba(var(--accent-500-rgb), 0.06);
+        0 0 0 1px rgba(255, 255, 255, 0.05),
+        inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    --shadow-card-hover: 0 8px 36px rgba(0, 0, 0, 0.5),
+        0 0 0 1px rgba(var(--accent-500-rgb), 0.18),
+        0 0 30px rgba(var(--accent-500-rgb), 0.08),
+        inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }

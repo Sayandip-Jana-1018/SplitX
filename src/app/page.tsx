@@ -1,263 +1,366 @@
 'use client';
 
-import { motion } from 'framer-motion';
-import { ArrowRight, Zap, Users, Receipt, PieChart, Shield, Smartphone } from 'lucide-react';
+import { useRef } from 'react';
+import Link from 'next/link';
+import { motion, useInView } from 'framer-motion';
+import {
+  Zap, Receipt, Users, ArrowRightLeft, BarChart3, Camera,
+  Wifi, Shield, Smartphone, CheckCircle, ArrowRight, Sparkles,
+  Globe, TrendingUp,
+} from 'lucide-react';
 import Button from '@/components/ui/Button';
-import ThemeSelector from '@/components/features/ThemeSelector';
+import Navbar from '@/components/ui/Navbar';
+import ScrollProgress from '@/components/ui/ScrollProgress';
+import AnimatedGradient from '@/components/ui/AnimatedGradient';
+import TiltCard from '@/components/ui/TiltCard';
 import styles from './landing.module.css';
 
+/* ── Animation variants ── */
 const fadeUp = {
-  initial: { opacity: 0, y: 30 },
-  animate: { opacity: 1, y: 0 },
+  hidden: { opacity: 0, y: 30 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: [0.16, 1, 0.3, 1] as const } },
 };
 
 const stagger = {
-  animate: {
-    transition: { staggerChildren: 0.1 },
+  visible: {
+    transition: { staggerChildren: 0.12 },
   },
 };
 
+const scaleIn = {
+  hidden: { opacity: 0, scale: 0.85 },
+  visible: { opacity: 1, scale: 1, transition: { duration: 0.5, ease: [0.16, 1, 0.3, 1] as const } },
+};
+
+/* ── Animated section wrapper ── */
+function AnimatedSection({ children, className, delay = 0 }: {
+  children: React.ReactNode;
+  className?: string;
+  delay?: number;
+}) {
+  const ref = useRef(null);
+  const isInView = useInView(ref, { once: true, amount: 0.15 });
+
+  return (
+    <motion.section
+      ref={ref}
+      className={className}
+      initial="hidden"
+      animate={isInView ? 'visible' : 'hidden'}
+      variants={stagger}
+      style={{ transitionDelay: `${delay}ms` }}
+    >
+      {children}
+    </motion.section>
+  );
+}
+
+/* ── Feature data ── */
 const FEATURES = [
   {
     icon: <Zap size={24} />,
-    title: 'Ultra-Fast Entry',
-    desc: 'Add expenses in under 3 seconds. Big numpad, one-tap payer, instant split calculation.',
+    title: 'Auto-Capture',
+    desc: 'Automatically track expenses from UPI notifications and SMS — zero manual entry.',
+    gradient: 'linear-gradient(135deg, #f59e0b, #ef4444)',
   },
   {
-    icon: <Users size={24} />,
-    title: 'Smart Groups',
-    desc: 'Create groups, invite via link or QR. Everyone stays synced in real-time.',
-  },
-  {
-    icon: <Receipt size={24} />,
+    icon: <Camera size={24} />,
     title: 'Receipt OCR',
-    desc: 'Snap a photo of any receipt. AI extracts amount, date, and merchant automatically.',
+    desc: 'Snap a photo of any receipt and we extract items, amounts, and tax instantly.',
+    gradient: 'linear-gradient(135deg, #3b82f6, #6366f1)',
   },
   {
-    icon: <PieChart size={24} />,
-    title: 'Min Transfers',
-    desc: 'Our algorithm calculates the minimum number of payments needed to settle all debts.',
+    icon: <ArrowRightLeft size={24} />,
+    title: 'Smart Splits',
+    desc: 'Equal, percentage, or item-based splits. Our algorithm finds minimum transfers.',
+    gradient: 'linear-gradient(135deg, #10b981, #06b6d4)',
+  },
+  {
+    icon: <BarChart3 size={24} />,
+    title: 'Rich Analytics',
+    desc: 'Spending trends, category breakdowns, and group comparisons with beautiful charts.',
+    gradient: 'linear-gradient(135deg, #8b5cf6, #ec4899)',
+  },
+  {
+    icon: <Smartphone size={24} />,
+    title: 'Installable PWA',
+    desc: 'Works offline, installs like a native app. Lightning fast on any device.',
+    gradient: 'linear-gradient(135deg, #6366f1, #3b82f6)',
   },
   {
     icon: <Shield size={24} />,
     title: 'Privacy First',
-    desc: 'Your data stays yours. On-device processing, encrypted storage, transparent controls.',
-  },
-  {
-    icon: <Smartphone size={24} />,
-    title: 'Works Everywhere',
-    desc: 'Installable PWA. Works on Android, iOS, and desktop. Even works offline.',
+    desc: 'Everything parsed on-device. Your financial data never touches our servers.',
+    gradient: 'linear-gradient(135deg, #14b8a6, #10b981)',
   },
 ];
 
 const STEPS = [
-  { num: 1, title: 'Create a Group', desc: 'Add your friends, share the invite link. Everyone joins in one tap.' },
-  { num: 2, title: 'Log Expenses', desc: 'Paid for dinner? Add it in 3 seconds. Cash, GPay, PhonePe — all tracked.' },
-  { num: 3, title: 'Auto Settle', desc: 'See exactly who owes whom. Minimal transfers. One-tap UPI request links.' },
+  { num: '01', title: 'Create a Trip', desc: 'Start a group and invite friends via QR code or link.' },
+  { num: '02', title: 'Log Expenses', desc: 'Auto-capture, scan receipts, or add manually in 3 seconds.' },
+  { num: '03', title: 'Settle Up', desc: 'One tap UPI deep-links. Minimum transfers calculated automatically.' },
 ];
 
-const DEMO_TRANSACTIONS = [
-  { emoji: '🍕', label: 'Pizza Night', amount: '₹860', method: 'GPay' },
-  { emoji: '⛽', label: 'Fuel Stop', amount: '₹1,200', method: 'Cash' },
-  { emoji: '🏨', label: 'Hotel Room', amount: '₹3,500', method: 'PhonePe' },
+const STATS = [
+  { label: 'Expenses Tracked', value: '10K+', icon: <Receipt size={18} /> },
+  { label: 'Groups Created', value: '500+', icon: <Users size={18} /> },
+  { label: 'Countries', value: '12+', icon: <Globe size={18} /> },
+  { label: 'Time Saved', value: '95%', icon: <TrendingUp size={18} /> },
 ];
 
 export default function LandingPage() {
   return (
-    <div className={styles.landing}>
-      {/* ── Navigation ── */}
-      <nav className={styles.nav}>
-        <div className={styles.logo}>
-          <div className={styles.logoIcon}>⚡</div>
-          AutoSplit
-        </div>
-        <div className={styles.navRight}>
-          <ThemeSelector />
-          <span className={styles.navLoginBtn}>
-            <Button variant="ghost" size="sm" onClick={() => window.location.href = '/login'}>
-              Log In
-            </Button>
-          </span>
-          <Button size="sm" onClick={() => window.location.href = '/register'}>
-            Get Started
-          </Button>
-        </div>
-      </nav>
+    <div className={styles.landingPage}>
+      {/* ── Scroll Progress Bar ── */}
+      <ScrollProgress />
 
-      {/* ── Hero ── */}
-      <section className={styles.hero}>
-        <div className={styles.bgOrbs}>
-          <motion.div
-            className={`${styles.orb} ${styles.orb1}`}
-            animate={{ x: [0, 30, 0], y: [0, -20, 0] }}
-            transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
-          />
-          <motion.div
-            className={`${styles.orb} ${styles.orb2}`}
-            animate={{ x: [0, -20, 0], y: [0, 30, 0] }}
-            transition={{ duration: 10, repeat: Infinity, ease: 'easeInOut' }}
-          />
-          <motion.div
-            className={`${styles.orb} ${styles.orb3}`}
-            animate={{ scale: [1, 1.2, 1], opacity: [0.15, 0.1, 0.15] }}
-            transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
-          />
-        </div>
+      {/* ── Ambient Orbs ── */}
+      <div className={styles.orbContainer} aria-hidden>
+        <div className={styles.orb1} />
+        <div className={styles.orb2} />
+        <div className={styles.orb3} />
+      </div>
 
-        <motion.div
-          className={styles.heroContent}
-          variants={stagger}
-          initial="initial"
-          animate="animate"
-        >
-          <motion.div className={styles.heroTag} variants={fadeUp} transition={{ duration: 0.5 }}>
-            ✨ Never argue about money again
+      {/* ══════════════════════════════════════════════
+               Navigation
+               ══════════════════════════════════════════════ */}
+      <Navbar />
+
+      {/* ══════════════════════════════════════════════
+               Hero Section
+               ══════════════════════════════════════════════ */}
+      <section className={styles.hero} style={{ position: 'relative', overflow: 'hidden' }}>
+        <AnimatedGradient />
+        <div className={styles.heroContent} style={{ position: 'relative', zIndex: 1 }}>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.1 }}
+            className={styles.heroBadge}
+          >
+            <Sparkles size={14} />
+            <span>Powered by AI &amp; OCR</span>
           </motion.div>
 
-          <motion.h1 className={styles.heroTitle} variants={fadeUp} transition={{ duration: 0.5 }}>
-            Split expenses.{' '}
-            <span className="text-gradient">Not friendships.</span>
+          <motion.h1
+            className={styles.heroTitle}
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.7, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
+          >
+            Split expenses
+            <br />
+            <span className={styles.heroGradient}>without the drama.</span>
           </motion.h1>
 
-          <motion.p className={styles.heroSubtitle} variants={fadeUp} transition={{ duration: 0.5 }}>
-            Keep track of every expense cash or UPI with your group.
-            AutoSplit figures out who owes whom, instantly and accurately.
-            Spend less time calculating, and more time enjoying the trip.
+          <motion.p
+            className={styles.heroSubtitle}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.4 }}
+          >
+            The smartest way to track group expenses on trips.
+            Auto-capture from UPI, scan receipts, and settle with one tap.
           </motion.p>
 
-
-
-
-          <motion.div className={styles.heroCta} variants={fadeUp} transition={{ duration: 0.5 }}>
-            <Button size="lg" rightIcon={<ArrowRight size={18} />} onClick={() => window.location.href = '/register'}>
-              Start Splitting Free
-            </Button>
-            <Button variant="secondary" size="lg" onClick={() => {
-              document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' });
-            }}>
-              See How It Works
-            </Button>
+          <motion.div
+            className={styles.heroCTAs}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.55 }}
+          >
+            <Link href="/register">
+              <Button variant="primary" size="lg" rightIcon={<ArrowRight size={18} />}>
+                Start Splitting — Free
+              </Button>
+            </Link>
+            <Link href="#features">
+              <Button variant="outline" size="lg">
+                See Features
+              </Button>
+            </Link>
           </motion.div>
 
-          {/* Demo floating cards */}
+          {/* ── Floating Demo Cards ── */}
           <motion.div
             className={styles.demoCards}
-            variants={fadeUp}
-            transition={{ duration: 0.5, delay: 0.3 }}
+            initial={{ opacity: 0, y: 40 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.7, delay: 0.7, ease: [0.16, 1, 0.3, 1] }}
           >
-            {DEMO_TRANSACTIONS.map((txn, i) => (
-              <motion.div
-                key={i}
-                className={styles.demoCard}
-                animate={{ y: [0, -6, 0] }}
-                transition={{
-                  duration: 3,
-                  delay: i * 0.5,
-                  repeat: Infinity,
-                  ease: 'easeInOut',
-                }}
-              >
-                <span style={{ fontSize: 28 }}>{txn.emoji}</span>
-                <div>
-                  <div className={styles.demoAmount}>{txn.amount}</div>
-                  <div className={styles.demoLabel}>{txn.label}</div>
-                  <div className={styles.demoMethod}>{txn.method}</div>
-                </div>
-              </motion.div>
-            ))}
+            <motion.div
+              className={styles.demoCard}
+              animate={{ y: [0, -8, 0] }}
+              transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+            >
+              <div className={styles.demoCardIcon}>🍕</div>
+              <div className={styles.demoCardContent}>
+                <span className={styles.demoCardTitle}>Dinner at Barbeque Nation</span>
+                <span className={styles.demoCardMeta}>Sayan paid · ₹4,500</span>
+              </div>
+              <div className={styles.demoCardBadge}>GPay</div>
+            </motion.div>
+
+            <motion.div
+              className={styles.demoCard}
+              animate={{ y: [0, 8, 0] }}
+              transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut', delay: 1 }}
+            >
+              <div className={styles.demoCardIcon}>🚗</div>
+              <div className={styles.demoCardContent}>
+                <span className={styles.demoCardTitle}>Cab to Airport</span>
+                <span className={styles.demoCardMeta}>Aman paid · ₹1,200</span>
+              </div>
+              <div className={styles.demoCardBadge}>Cash</div>
+            </motion.div>
+
+            <motion.div
+              className={styles.demoCard}
+              animate={{ y: [0, -6, 0] }}
+              transition={{ duration: 4.5, repeat: Infinity, ease: 'easeInOut', delay: 0.5 }}
+            >
+              <div className={styles.demoCardIcon}>🏨</div>
+              <div className={styles.demoCardContent}>
+                <span className={styles.demoCardTitle}>Hotel Room — 2 nights</span>
+                <span className={styles.demoCardMeta}>Priya paid · ₹8,900</span>
+              </div>
+              <div className={styles.demoCardBadge}>PhonePe</div>
+            </motion.div>
           </motion.div>
-        </motion.div>
+        </div>
       </section>
 
-      {/* ── Features ── */}
-      <section className={styles.features} id="features">
-        <motion.h2
-          className={styles.sectionTitle}
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.5 }}
-        >
-          Everything you need to split smart
-        </motion.h2>
-        <motion.p
-          className={styles.sectionSub}
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.5, delay: 0.1 }}
-        >
-          From quick entries to intelligent settlements, AutoSplit handles it all.
-        </motion.p>
-
-        <div className={styles.featureGrid}>
-          {FEATURES.map((feature, i) => (
+      {/* ══════════════════════════════════════════════
+               Social Proof Stats
+               ══════════════════════════════════════════════ */}
+      <AnimatedSection className={styles.statsSection}>
+        <div className={styles.statsGrid}>
+          {STATS.map((stat, i) => (
             <motion.div
-              key={i}
-              className={styles.featureCard}
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.4, delay: i * 0.1 }}
+              key={stat.label}
+              className={styles.statItem}
+              variants={fadeUp}
+              transition={{ delay: i * 0.1 }}
             >
-              <div className={styles.featureIcon}>{feature.icon}</div>
-              <h3 className={styles.featureTitle}>{feature.title}</h3>
-              <p className={styles.featureDesc}>{feature.desc}</p>
+              <div className={styles.statIcon}>{stat.icon}</div>
+              <span className={styles.statValue}>{stat.value}</span>
+              <span className={styles.statLabel}>{stat.label}</span>
             </motion.div>
           ))}
         </div>
-      </section>
+      </AnimatedSection>
 
-      {/* ── How It Works ── */}
-      <section className={styles.howItWorks} id="how-it-works">
-        <motion.h2
-          className={styles.sectionTitle}
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.5 }}
-        >
-          Three steps. Zero hassle.
-        </motion.h2>
-        <motion.p
-          className={styles.sectionSub}
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.5, delay: 0.1 }}
-        >
-          Going on a trip? Here&apos;s your new workflow.
-        </motion.p>
+      {/* ══════════════════════════════════════════════
+               Features Section
+               ══════════════════════════════════════════════ */}
+      <AnimatedSection className={styles.featuresSection} delay={100}>
+        <motion.div className={styles.sectionHeader} variants={fadeUp}>
+          <span className={styles.sectionBadge}>Features</span>
+          <h2 className={styles.sectionTitle}>
+            Everything you need to
+            <br />
+            <span className={styles.heroGradient}>split expenses effortlessly.</span>
+          </h2>
+          <p className={styles.sectionSubtitle}>
+            From auto-capture to smart settlements — we handle the math so you can enjoy the trip.
+          </p>
+        </motion.div>
+
+        <div className={styles.featuresGrid} id="features">
+          {FEATURES.map((f, i) => (
+            <TiltCard key={f.title}>
+              <motion.div
+                className={styles.featureCard}
+                variants={scaleIn}
+                transition={{ delay: i * 0.08 }}
+                whileHover={{ y: -4, transition: { duration: 0.2 } }}
+              >
+                <div
+                  className={styles.featureIcon}
+                  style={{ background: f.gradient }}
+                >
+                  {f.icon}
+                </div>
+                <h3 className={styles.featureTitle}>{f.title}</h3>
+                <p className={styles.featureDesc}>{f.desc}</p>
+              </motion.div>
+            </TiltCard>
+          ))}
+        </div>
+      </AnimatedSection>
+
+      {/* ══════════════════════════════════════════════
+               How It Works
+               ══════════════════════════════════════════════ */}
+      <AnimatedSection className={styles.howSection} delay={150}>
+        <motion.div className={styles.sectionHeader} variants={fadeUp}>
+          <span className={styles.sectionBadge}>How It Works</span>
+          <h2 className={styles.sectionTitle}>Three steps. Zero stress.</h2>
+          <p className={styles.sectionSubtitle}>
+            Get from group trip to settled up in under a minute.
+          </p>
+        </motion.div>
 
         <div className={styles.stepsGrid}>
           {STEPS.map((step, i) => (
             <motion.div
-              key={i}
-              className={styles.step}
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.4, delay: i * 0.15 }}
+              key={step.num}
+              className={styles.stepCard}
+              variants={fadeUp}
+              transition={{ delay: i * 0.15 }}
             >
-              <motion.div
-                className={styles.stepNum}
-                whileHover={{ scale: 1.1, rotate: 5 }}
-                transition={{ type: 'spring', stiffness: 300 }}
-              >
-                {step.num}
-              </motion.div>
+              <div className={styles.stepNum}>{step.num}</div>
               <h3 className={styles.stepTitle}>{step.title}</h3>
               <p className={styles.stepDesc}>{step.desc}</p>
+              {i < STEPS.length - 1 && (
+                <div className={styles.stepConnector}>
+                  <ArrowRight size={16} />
+                </div>
+              )}
             </motion.div>
           ))}
         </div>
-      </section>
+      </AnimatedSection>
 
-      {/* ── Footer ── */}
+      {/* ══════════════════════════════════════════════
+               Bottom CTA Section
+               ══════════════════════════════════════════════ */}
+      <AnimatedSection className={styles.ctaSection}>
+        <motion.div className={styles.ctaContent} variants={fadeUp}>
+          <h2 className={styles.ctaTitle}>
+            Ready to split smarter?
+          </h2>
+          <p className={styles.ctaSubtitle}>
+            Join thousands of groups who settled expenses without awkward conversations.
+          </p>
+          <div className={styles.ctaCTAs}>
+            <Link href="/register">
+              <Button variant="primary" size="lg" rightIcon={<ArrowRight size={18} />}>
+                Get Started — It&apos;s Free
+              </Button>
+            </Link>
+          </div>
+          <div className={styles.ctaFeatures}>
+            <span><CheckCircle size={14} /> Free forever</span>
+            <span><CheckCircle size={14} /> No credit card</span>
+            <span><CheckCircle size={14} /> Works offline</span>
+          </div>
+        </motion.div>
+      </AnimatedSection>
+
+      {/* ══════════════════════════════════════════════
+               Footer
+               ══════════════════════════════════════════════ */}
       <footer className={styles.footer}>
-        <p className={styles.footerText}>
-          © 2026 AutoSplit. Built with ❤️ by Sayan. Split expenses, not friendships.
-        </p>
+        <div className={styles.footerInner}>
+          <div className={styles.footerBrand}>
+            <div className={styles.logoIcon}>⚡</div>
+            <span>AutoSplit</span>
+          </div>
+          <p className={styles.footerCopy}>
+            © {new Date().getFullYear()} AutoSplit. Built with ❤️ by Sayandip.
+          </p>
+        </div>
       </footer>
     </div>
   );

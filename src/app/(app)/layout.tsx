@@ -18,6 +18,10 @@ import {
 import ClipboardBanner from '@/components/features/ClipboardBanner';
 import ThemeSelector from '@/components/features/ThemeSelector';
 import Avatar from '@/components/ui/Avatar';
+import OfflineIndicator from '@/components/ui/OfflineIndicator';
+import OnboardingTour from '@/components/features/OnboardingTour';
+import { useHaptics } from '@/hooks/useHaptics';
+import GlobalSearch from '@/components/ui/GlobalSearch';
 import styles from './app.module.css';
 import { cn } from '@/lib/utils';
 
@@ -46,11 +50,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
     const router = useRouter();
     const [sidebarOpen, setSidebarOpen] = useState(false);
+    const haptics = useHaptics();
 
     const pageTitle = NAV_ITEMS.find((item) => pathname.startsWith(item.href))?.label || 'Dashboard';
 
     return (
         <div className={styles.appShell}>
+            <OfflineIndicator />
+            <OnboardingTour />
             {/* ── Mobile Sidebar Overlay ── */}
             <AnimatePresence>
                 {sidebarOpen && (
@@ -110,7 +117,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 </nav>
 
                 <div className={styles.sidebarFooter}>
-                    <ThemeSelector />
                     <div className={styles.userCard}>
                         <Avatar name={MOCK_USER.name} size="sm" />
                         <div>
@@ -144,6 +150,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                         <h1 className={styles.headerTitle}>{pageTitle}</h1>
                     </div>
                     <div className={styles.headerRight}>
+                        <GlobalSearch />
                         <ThemeSelector />
                     </div>
                 </header>
@@ -182,7 +189,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                                 styles.bottomNavItem,
                                 pathname.startsWith(item.href) && styles.bottomNavItemActive
                             )}
-                            onClick={() => router.push(item.href)}
+                            onClick={() => {
+                                haptics.light();
+                                router.push(item.href);
+                            }}
                         >
                             {item.icon}
                             <span>{item.label}</span>

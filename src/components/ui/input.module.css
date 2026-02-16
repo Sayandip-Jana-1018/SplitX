@@ -2,33 +2,33 @@
    Input — Premium Focus Effects
    ═══════════════════════════════════════════════════════════════ */
 
-.inputWrapper {
-    position: relative;
+.wrapper {
     display: flex;
     flex-direction: column;
-    gap: var(--space-1);
+    gap: var(--space-1, 4px);
 }
 
 .label {
-    font-size: var(--text-sm);
-    font-weight: var(--weight-medium);
+    font-size: var(--text-sm, 14px);
+    font-weight: var(--weight-medium, 500);
     color: var(--fg-secondary);
     margin-bottom: 2px;
 }
 
-.required {
-    color: var(--color-error);
-    margin-left: 2px;
+.inputContainer {
+    position: relative;
+    display: flex;
+    align-items: center;
 }
 
 .input {
     width: 100%;
-    padding: var(--space-2) var(--space-3);
-    font-size: var(--text-sm);
+    padding: 10px 14px;
+    font-size: var(--text-sm, 14px);
     color: var(--fg-primary);
     background: var(--surface-input, var(--bg-secondary));
     border: 1.5px solid var(--border-default);
-    border-radius: var(--radius-lg);
+    border-radius: var(--radius-lg, 12px);
     outline: none;
     transition:
         border-color 0.25s ease,
@@ -55,46 +55,61 @@
 }
 
 /* ── Size variants ── */
-.sm {
-    padding: var(--space-1) var(--space-2);
-    font-size: var(--text-xs);
-    border-radius: var(--radius-md);
+.inputLarge {
+    padding: 14px 18px;
+    font-size: var(--text-base, 16px);
 }
 
-.lg {
-    padding: var(--space-3) var(--space-4);
-    font-size: var(--text-base);
+/* ── With left icon — needs enough padding to clear the icon ── */
+.hasLeftIcon {
+    padding-left: 40px;
 }
 
-/* ── With icon ── */
-.hasIcon {
-    padding-left: var(--space-8);
+/* ── With right icon ── */
+.hasRightIcon {
+    padding-right: 40px;
 }
 
-.iconWrapper {
+.leftIcon {
     position: absolute;
-    left: var(--space-3);
+    left: 12px;
     top: 50%;
     transform: translateY(-50%);
     color: var(--fg-muted);
     display: flex;
+    align-items: center;
     pointer-events: none;
     transition: color 0.25s ease;
+    z-index: 1;
 }
 
-/* Icon color changes on focus */
-.inputWrapper:focus-within .iconWrapper {
+.rightIcon {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--fg-muted);
+    display: flex;
+    align-items: center;
+    pointer-events: none;
+    transition: color 0.25s ease;
+    z-index: 1;
+}
+
+/* Icon color on focus */
+.inputContainer:focus-within .leftIcon,
+.inputContainer:focus-within .rightIcon {
     color: var(--accent-500);
 }
 
 /* ── Error state ── */
-.error {
+.error .input {
     border-color: var(--color-error) !important;
     box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1) !important;
 }
 
 .errorText {
-    font-size: var(--text-xs);
+    font-size: var(--text-xs, 12px);
     color: var(--color-error);
     margin-top: 2px;
 }
@@ -103,11 +118,4 @@
 .textarea {
     min-height: 100px;
     resize: vertical;
-}
-
-/* ── Helper text ── */
-.helper {
-    font-size: var(--text-xs);
-    color: var(--fg-tertiary);
-    margin-top: 2px;
 }

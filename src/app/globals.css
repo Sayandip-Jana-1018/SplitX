@@ -195,8 +195,38 @@ p {
 
 .glass {
     background: var(--bg-glass);
-    backdrop-filter: blur(20px) saturate(1.4);
-    -webkit-backdrop-filter: blur(20px) saturate(1.4);
+    backdrop-filter: blur(24px) saturate(1.5);
+    -webkit-backdrop-filter: blur(24px) saturate(1.5);
+    border: 1px solid var(--border-glass);
+    position: relative;
+}
+
+/* Iridescent shimmer overlay */
+[data-theme="dark"] .glass::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(135deg,
+            rgba(255, 255, 255, 0.06) 0%,
+            transparent 35%,
+            rgba(var(--accent-500-rgb), 0.03) 70%,
+            rgba(var(--accent-500-rgb), 0.04) 100%);
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* Top edge light */
+[data-theme="dark"] .glass::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 10%;
+    right: 10%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.12), transparent);
+    pointer-events: none;
+    z-index: 1;
 }
 
 .text-gradient {

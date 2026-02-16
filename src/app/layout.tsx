@@ -41,7 +41,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" data-theme="dark" data-accent="blue" suppressHydrationWarning>
+    <html lang="en" data-theme="dark" data-palette="amethyst-haze" suppressHydrationWarning>
       <body>
         <ThemeProvider>
           <ToastProvider>

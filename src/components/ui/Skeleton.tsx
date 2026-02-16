@@ -120,3 +120,85 @@ export function DashboardSkeleton() {
         </div>
     );
 }
+
+/** Skeleton for transaction list page */
+export function TransactionSkeleton() {
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+            {/* Search bar */}
+            <Skeleton variant="rectangular" height={44} />
+            {/* Filter chips */}
+            <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                <Skeleton variant="rectangular" width={80} height={32} />
+                <Skeleton variant="rectangular" width={100} height={32} />
+                <Skeleton variant="rectangular" width={70} height={32} />
+            </div>
+            {/* Transaction cards */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+                {Array.from({ length: 5 }).map((_, i) => (
+                    <Skeleton key={i} variant="card" />
+                ))}
+            </div>
+        </div>
+    );
+}
+
+/** Skeleton for settlements page */
+export function SettlementSkeleton() {
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+            {/* Summary row */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 'var(--space-3)' }}>
+                <Skeleton variant="stat" />
+                <Skeleton variant="stat" />
+            </div>
+            {/* Section header */}
+            <Skeleton width={140} height={16} />
+            {/* Settlement cards */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+                {Array.from({ length: 3 }).map((_, i) => (
+                    <Skeleton key={i} variant="card" />
+                ))}
+            </div>
+        </div>
+    );
+}
+
+/** Skeleton for groups grid */
+export function GroupCardSkeleton() {
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Skeleton width={160} height={24} />
+                <Skeleton variant="rectangular" width={120} height={36} />
+            </div>
+            {/* Group cards */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+                {Array.from({ length: 3 }).map((_, i) => (
+                    <div key={i} style={{
+                        padding: 'var(--space-4)',
+                        borderRadius: 'var(--radius-xl)',
+                        background: 'var(--surface-card)',
+                        border: '1px solid var(--border-default)',
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                            <Skeleton variant="circle" width={44} height={44} />
+                            <div style={{ flex: 1 }}>
+                                <Skeleton width={140} height={16} />
+                                <div style={{ marginTop: 6 }}>
+                                    <Skeleton width={200} height={12} />
+                                </div>
+                            </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                            <Skeleton variant="rectangular" width={80} height={24} />
+                            <Skeleton variant="rectangular" width={100} height={24} />
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+

@@ -1,7 +1,8 @@
 'use client';
 
 import { createContext, useContext } from 'react';
-import { useTheme, ACCENT_COLORS } from '@/hooks/useTheme';
+import { useTheme, COLOR_PALETTES } from '@/hooks/useTheme';
+import type { PaletteId, ColorPalette } from '@/hooks/useTheme';
 
 type ThemeContextType = ReturnType<typeof useTheme>;
 
@@ -25,4 +26,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     );
 }
 
-export { ACCENT_COLORS };
+// Re-export for consumers
+export { COLOR_PALETTES };
+export type { PaletteId, ColorPalette };

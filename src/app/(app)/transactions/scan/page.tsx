@@ -373,7 +373,13 @@ export default function ScanReceiptPage() {
                             <Button
                                 fullWidth
                                 leftIcon={<Check size={16} />}
-                                onClick={() => router.push('/transactions/new')}
+                                onClick={() => {
+                                    const params = new URLSearchParams();
+                                    if (parsed.amount) params.set('amount', String(parsed.amount / 100));
+                                    if (parsed.merchant) params.set('title', parsed.merchant);
+                                    if (parsed.method) params.set('method', parsed.method);
+                                    router.push(`/transactions/new?${params.toString()}`);
+                                }}
                             >
                                 Add as Expense
                             </Button>

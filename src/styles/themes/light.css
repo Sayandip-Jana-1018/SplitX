@@ -1,20 +1,24 @@
 /* ═══════════════════════════════════════════════════════════════
-   Light Mode Theme
+   Light Mode Theme — Premium & Clean
+   Rich layered surfaces with depth, shadows, and subtle accent tints
    Applied when: <html data-theme="light">
    ═══════════════════════════════════════════════════════════════ */
 
 [data-theme="light"] {
     color-scheme: light;
 
-    /* ── Backgrounds ── */
-    --bg-primary: #f8f9fc;
-    --bg-secondary: #ffffff;
-    --bg-tertiary: #f1f3f8;
+    /* ── Backgrounds — layered with subtle warmth ── */
+    --bg-primary: #f0f2f7;
+    --bg-secondary: #f7f8fb;
+    --bg-tertiary: #e8ecf3;
     --bg-elevated: #ffffff;
-    --bg-sunken: #edf0f5;
-    --bg-overlay: rgba(15, 23, 42, 0.4);
-    --bg-glass: rgba(255, 255, 255, 0.75);
-    --bg-glass-strong: rgba(255, 255, 255, 0.92);
+    --bg-sunken: #e3e7ef;
+    --bg-overlay: rgba(15, 23, 42, 0.5);
+
+    /* ── Glass — visible frosted glass with accent tint ── */
+    --bg-glass: rgba(255, 255, 255, 0.65);
+    --bg-glass-strong: rgba(255, 255, 255, 0.85);
+    --bg-glass-subtle: rgba(255, 255, 255, 0.45);
 
     /* ── Foregrounds (text) ── */
     --fg-primary: #0f172a;
@@ -24,46 +28,62 @@
     --fg-inverse: #ffffff;
     --fg-on-accent: #ffffff;
 
-    /* ── Borders ── */
-    --border-default: rgba(0, 0, 0, 0.06);
-    --border-subtle: rgba(0, 0, 0, 0.03);
-    --border-strong: rgba(0, 0, 0, 0.1);
+    /* ── Borders — more visible for card edges ── */
+    --border-default: rgba(0, 0, 0, 0.08);
+    --border-subtle: rgba(0, 0, 0, 0.04);
+    --border-strong: rgba(0, 0, 0, 0.14);
     --border-focus: var(--accent-500);
-    --border-glass: rgba(0, 0, 0, 0.04);
+    --border-glass: rgba(0, 0, 0, 0.08);
 
     /* ── Surfaces (cards, panels) ── */
-    --surface-card: rgba(255, 255, 255, 0.8);
+    --surface-card: rgba(255, 255, 255, 0.75);
     --surface-card-hover: rgba(255, 255, 255, 0.95);
     --surface-panel: #ffffff;
-    --surface-popover: #ffffff;
+    --surface-popover: rgba(255, 255, 255, 0.96);
     --surface-input: #ffffff;
     --surface-input-hover: #f8fafc;
 
     /* ── Semantic Colors ── */
-    --color-success: #10b981;
+    --color-success: #059669;
     --color-success-bg: #ecfdf5;
     --color-success-border: #a7f3d0;
-    --color-warning: #f59e0b;
+    --color-warning: #d97706;
     --color-warning-bg: #fffbeb;
     --color-warning-border: #fde68a;
-    --color-error: #ef4444;
+    --color-error: #dc2626;
     --color-error-bg: #fef2f2;
     --color-error-border: #fecaca;
-    --color-info: #3b82f6;
+    --color-info: #2563eb;
     --color-info-bg: #eff6ff;
     --color-info-border: #bfdbfe;
 
     /* ── Scrollbar ── */
     --scrollbar-bg: transparent;
-    --scrollbar-thumb: #d1d5db;
+    --scrollbar-thumb: #c1c5ce;
     --scrollbar-thumb-hover: #9ca3af;
 
-    /* ── Shadows ── */
-    --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
-    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
-    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06), 0 2px 4px rgba(0, 0, 0, 0.04);
-    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.08), 0 4px 8px rgba(0, 0, 0, 0.04);
-    --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.08), 0 8px 16px rgba(0, 0, 0, 0.04);
-    --shadow-glow: 0 0 20px rgba(var(--accent-500-rgb), 0.12);
-    --shadow-glow-lg: 0 0 40px rgba(var(--accent-500-rgb), 0.15);
+    /* ── Shadows — deeper & more visible for depth ── */
+    --shadow-xs: 0 1px 3px rgba(0, 0, 0, 0.06);
+    --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.07),
+        0 1px 2px rgba(0, 0, 0, 0.04);
+    --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.08),
+        0 2px 6px rgba(0, 0, 0, 0.04);
+    --shadow-lg: 0 10px 32px rgba(0, 0, 0, 0.10),
+        0 4px 10px rgba(0, 0, 0, 0.05);
+    --shadow-xl: 0 20px 56px rgba(0, 0, 0, 0.12),
+        0 8px 18px rgba(0, 0, 0, 0.06);
+
+    /* ── Glow shadows — accent halos (stronger in light mode) ── */
+    --shadow-glow: 0 0 24px rgba(var(--accent-500-rgb), 0.15);
+    --shadow-glow-lg: 0 0 48px rgba(var(--accent-500-rgb), 0.18);
+    --shadow-glow-sm: 0 0 12px rgba(var(--accent-500-rgb), 0.12);
+
+    /* ── Card shadows — layered for floating effect ── */
+    --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.05),
+        0 4px 20px rgba(0, 0, 0, 0.04),
+        0 0 0 1px rgba(0, 0, 0, 0.04);
+    --shadow-card-hover: 0 8px 32px rgba(0, 0, 0, 0.10),
+        0 2px 8px rgba(0, 0, 0, 0.05),
+        0 0 0 1px rgba(var(--accent-500-rgb), 0.15),
+        0 0 24px rgba(var(--accent-500-rgb), 0.06);
 }

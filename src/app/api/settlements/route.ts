@@ -11,7 +11,7 @@ const SettleSchema = z.object({
     note: z.string().optional(),
 });
 
-// GET /api/settlements?tripId=xxx — get computed settlements for a trip
+// GET /api/settlements?tripId=xxx — get computed settlements for a trip (or all trips if omitted)
 export async function GET(req: Request) {
     try {
         const session = await auth();
@@ -20,9 +20,32 @@ export async function GET(req: Request) {
         }
 
         const { searchParams } = new URL(req.url);
-        const tripId = searchParams.get('tripId');
+        let tripId = searchParams.get('tripId');
+
+        // If no tripId, auto-detect from user's groups
         if (!tripId) {
-            return NextResponse.json({ error: 'tripId required' }, { status: 400 });
+            const user = await prisma.user.findUnique({ where: { email: session.user.email } });
+            if (!user) return NextResponse.json({ computed: [], recorded: [], balances: {} });
+
+            const trips = await prisma.trip.findMany({
+                where: {
+                    isActive: true,
+                    group: {
+                        OR: [
+                            { ownerId: user.id },
+                            { members: { some: { userId: user.id } } },
+                        ],
+                    },
+                },
+                select: { id: true },
+                orderBy: { createdAt: 'desc' },
+                take: 1,
+            });
+
+            if (trips.length === 0) {
+                return NextResponse.json({ computed: [], recorded: [], balances: {} });
+            }
+            tripId = trips[0].id;
         }
 
         // Get all transactions + splits for this trip
