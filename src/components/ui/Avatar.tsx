@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import styles from './avatar.module.css';
 import { cn, getInitials, getAvatarColor } from '@/lib/utils';
 
@@ -16,15 +17,24 @@ interface AvatarProps {
 export default function Avatar({ name, image, size = 'md', ring, className }: AvatarProps) {
     const initials = getInitials(name);
     const bgColor = getAvatarColor(name);
+    const [imgError, setImgError] = useState(false);
+
+    const showImage = image && !imgError;
 
     return (
         <div
             className={cn(styles.avatar, styles[size], ring && styles.ring, className)}
-            style={{ backgroundColor: image ? undefined : bgColor }}
+            style={{ backgroundColor: showImage ? undefined : bgColor }}
             title={name}
         >
-            {image ? (
-                <img src={image} alt={name} className={styles.image} />
+            {showImage ? (
+                <img
+                    src={image}
+                    alt={name}
+                    className={styles.image}
+                    onError={() => setImgError(true)}
+                    referrerPolicy="no-referrer"
+                />
             ) : (
                 initials
             )}

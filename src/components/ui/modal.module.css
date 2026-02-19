@@ -1,13 +1,13 @@
 .overlay {
     position: fixed;
     inset: 0;
-    background: rgba(255, 255, 255, 0.15);
+    background: rgba(0, 0, 0, 0.45);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: var(--z-modal-backdrop);
+    z-index: 9990;
     padding: var(--space-4);
     overflow-y: auto;
 }
@@ -20,7 +20,7 @@
     max-height: 85vh;
     overflow-y: auto;
     box-shadow: var(--shadow-2xl);
-    z-index: var(--z-modal);
+    z-index: 9991;
 }
 
 .small {

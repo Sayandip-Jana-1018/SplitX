@@ -211,6 +211,7 @@ export default function GroupsPage() {
                             <div style={{
                                 ...glass, padding: 'var(--space-4)',
                                 cursor: 'pointer',
+                                textAlign: 'left',
                                 transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
                             }}
                                 onMouseEnter={(e) => {

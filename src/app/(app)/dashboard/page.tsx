@@ -348,6 +348,7 @@ export default function DashboardPage() {
                     {/* ═══ QUICK STATS ROW — Glassmorphic Chips ═══ */}
                     <motion.div
                         variants={staggerContainer}
+                        data-tour="dashboard-stats"
                         style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 'var(--space-3)' }}
                     >
                         <GlassStatCard
@@ -363,7 +364,7 @@ export default function DashboardPage() {
                     </motion.div>
 
                     {/* ═══ QUICK ACTIONS — Glass Pill Buttons ═══ */}
-                    <motion.div variants={fadeUp} transition={{ duration: 0.5, delay: 0.1 }}>
+                    <motion.div variants={fadeUp} transition={{ duration: 0.5, delay: 0.1 }} data-tour="quick-actions">
                         <div style={{ display: 'flex', gap: 'var(--space-2)', justifyContent: 'space-between' }}>
                             {[
                                 { label: 'Add Expense', icon: <Plus size={13} />, href: '/transactions/new' },
@@ -548,7 +549,7 @@ export default function DashboardPage() {
                     </motion.div>
 
                     {/* ═══ QUICK ADD EXPENSE ═══ */}
-                    <motion.div variants={fadeUp} transition={{ duration: 0.5, delay: 0.3 }}>
+                    <motion.div variants={fadeUp} transition={{ duration: 0.5, delay: 0.3 }} data-tour="add-expense">
                         <Button
                             variant="primary"
                             fullWidth

@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 import styles from './modal.module.css';
@@ -14,6 +15,7 @@ interface ModalProps {
     children: React.ReactNode;
     footer?: React.ReactNode;
     showCloseButton?: boolean;
+    transparentOverlay?: boolean;
 }
 
 export default function Modal({
@@ -24,7 +26,14 @@ export default function Modal({
     children,
     footer,
     showCloseButton = true,
+    transparentOverlay = false,
 }: ModalProps) {
+    const [mounted, setMounted] = useState(false);
+
+    useEffect(() => {
+        setMounted(true);
+    }, []);
+
     // Close on Escape
     const handleKeyDown = useCallback(
         (e: KeyboardEvent) => {
@@ -44,7 +53,9 @@ export default function Modal({
         };
     }, [isOpen, handleKeyDown]);
 
-    return (
+    if (!mounted) return null;
+
+    return createPortal(
         <AnimatePresence>
             {isOpen && (
                 <motion.div
@@ -54,6 +65,7 @@ export default function Modal({
                     exit={{ opacity: 0 }}
                     transition={{ duration: 0.2 }}
                     onClick={onClose}
+                    style={transparentOverlay ? { background: 'transparent', backdropFilter: 'none' } : undefined}
                 >
                     <motion.div
                         className={cn(styles.modal, styles[size])}
@@ -78,6 +90,8 @@ export default function Modal({
                     </motion.div>
                 </motion.div>
             )}
-        </AnimatePresence>
+        </AnimatePresence>,
+        document.body
     );
 }
+

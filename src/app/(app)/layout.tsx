@@ -29,6 +29,7 @@ import { useHaptics } from '@/hooks/useHaptics';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import GlobalSearch from '@/components/ui/GlobalSearch';
 import { signOut } from 'next-auth/react';
+import DbKeepAlive from '@/components/providers/DbKeepAlive';
 import styles from './app.module.css';
 import { cn } from '@/lib/utils';
 
@@ -89,6 +90,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     return (
         <div className={styles.appShell}>
             <OfflineIndicator />
+            <DbKeepAlive />
             <OnboardingTour />
 
             {/* ── Animated Sidebar Overlay ── */}
@@ -317,41 +319,42 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                         const isActive = pathname.startsWith(item.href);
                         const Icon = item.icon;
                         return (
-                            <motion.button
-                                key={item.href}
-                                className={cn(
-                                    styles.bottomNavItem,
-                                    isActive && styles.bottomNavItemActive
-                                )}
-                                onClick={() => {
-                                    haptics.light();
-                                    router.push(item.href);
-                                }}
-                                whileTap={{ scale: 0.85 }}
-                            >
-                                <motion.div
-                                    className={styles.bottomNavIconWrap}
-                                    animate={isActive ? { y: -2, scale: 1.1 } : { y: 0, scale: 1 }}
-                                    transition={{ type: 'spring', damping: 18, stiffness: 350 }}
+                            <div key={item.href} data-tour={item.href} style={{ display: 'contents' }}>
+                                <motion.button
+                                    className={cn(
+                                        styles.bottomNavItem,
+                                        isActive && styles.bottomNavItemActive
+                                    )}
+                                    onClick={() => {
+                                        haptics.light();
+                                        router.push(item.href);
+                                    }}
+                                    whileTap={{ scale: 0.85 }}
                                 >
-                                    <Icon size={22} strokeWidth={isActive ? 2.5 : 1.8} />
+                                    <motion.div
+                                        className={styles.bottomNavIconWrap}
+                                        animate={isActive ? { y: -2, scale: 1.1 } : { y: 0, scale: 1 }}
+                                        transition={{ type: 'spring', damping: 18, stiffness: 350 }}
+                                    >
+                                        <Icon size={22} strokeWidth={isActive ? 2.5 : 1.8} />
+                                        {isActive && (
+                                            <motion.div
+                                                className={styles.bottomNavDot}
+                                                layoutId="bottomNavDot"
+                                                transition={{ type: 'spring', damping: 25, stiffness: 400 }}
+                                            />
+                                        )}
+                                    </motion.div>
+                                    <span className={styles.bottomNavLabel}>{item.label}</span>
                                     {isActive && (
                                         <motion.div
-                                            className={styles.bottomNavDot}
-                                            layoutId="bottomNavDot"
-                                            transition={{ type: 'spring', damping: 25, stiffness: 400 }}
+                                            className={styles.bottomNavActivePill}
+                                            layoutId="bottomNavActive"
+                                            transition={{ type: 'spring', damping: 25, stiffness: 350 }}
                                         />
                                     )}
-                                </motion.div>
-                                <span className={styles.bottomNavLabel}>{item.label}</span>
-                                {isActive && (
-                                    <motion.div
-                                        className={styles.bottomNavActivePill}
-                                        layoutId="bottomNavActive"
-                                        transition={{ type: 'spring', damping: 25, stiffness: 350 }}
-                                    />
-                                )}
-                            </motion.button>
+                                </motion.button>
+                            </div>
                         );
                     })}
                 </div>

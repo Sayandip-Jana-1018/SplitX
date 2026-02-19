@@ -1,6 +1,6 @@
 # ⚡ AutoSplit — Smart Expense Splitting & Settlement
 
-> A premium, full-stack expense-splitting web app built with **Next.js 16**, **Prisma**, **PostgreSQL (Neon)**, and **NextAuth v5**. Features glassmorphic UI, AI-powered receipt scanning, Gemini AI chat assistant, debt simplification, real-time analytics, smart notifications, and 12 color themes.
+> A premium, full-stack expense-splitting web app built with **Next.js 16**, **Prisma**, **PostgreSQL (Neon)**, and **NextAuth v5**. Features glassmorphic UI, AI-powered receipt scanning (Tesseract OCR + OpenAI Vision), Gemini AI chat assistant, real-time group chat with avatars, debt simplification, real-time analytics, smart notifications, and 12 color themes.
 
 ---
 
@@ -220,7 +220,8 @@ erDiagram
 | **Group Management** | Create groups, invite via link/code, manage members with admin roles |
 | **Trip Scoping** | Organize expenses within trips per group with date ranges and currency |
 | **Split Types** | Equal, percentage, custom, and item-based splitting |
-| **Settlements** | Track who owes whom, mark as completed, with UPI deep-links |
+| **Settlements** | Track who owes whom, mark as completed, with UPI deep-links and auto-sync |
+| **Settlement Security** | Self-settlement block, 60s duplicate check, membership verification, soft-delete filters |
 | **Debt Simplification** | Dual algorithm: greedy netting + optimized exact-match pruning (auto-picks fewer transfers) |
 | **Analytics Dashboard** | 6-month spending trends, category breakdown, budget vs actual comparison, smart AI insights |
 | **Budget Tracking** | Set monthly budgets per category, compare against actual spending |
@@ -230,8 +231,14 @@ erDiagram
 | Feature | Description |
 |---|---|
 | **🤖 AI Chat Assistant** | Gemini-powered conversational assistant — ask about spending, debts, groups in natural language |
-| **Receipt Scanner (OCR)** | Tesseract.js-powered scanner extracts amount, merchant, payment method from GPay/PhonePe/Paytm screenshots |
+| **Receipt Scanner (OCR)** | Dual-mode scanner: **Basic** (Tesseract.js, on-device) and **Advanced** (OpenAI Vision API, cloud-based with itemized receipt parsing) |
+| **Advanced Receipt AI** | GPT-4o-mini Vision extracts merchant, date, individual items with quantities, taxes, subtotal, total, and auto-categorizes |
+| **Smart Receipt Split** | After advanced scan, split receipt items among group members — per-item assignment with proportional tax distribution |
+| **Settlement Chat Messages** | Auto-post payment messages in group chat when settlements are completed, with green accent styling |
+| **Scan Mode Toggle** | Premium pill-style toggle (⚡ Basic / ✨ AI Scan) with mode description and dynamic privacy notes |
 | **Live Camera Capture** | getUserMedia viewfinder with real-time scan guide overlay |
+| **Group Chat** | Real-time group messaging with sender avatars, date separators, payment reminders, and system messages |
+| **Chat Avatars** | Profile photos displayed for all messages — both own (right side) and others (left side) |
 | **Clipboard Paste** | Auto-detect UPI transaction text from clipboard |
 | **Transaction Parser** | Regex engine parses UPI/bank SMS into structured data |
 | **Smart Notifications** | Real-time notification panel with type-based icons, unread badges, mark-all-read, 30s auto-polling |
@@ -254,8 +261,10 @@ erDiagram
 | **Offline Indicator** | Detects network loss and shows a banner |
 | **Empty States** | Animated empty-state illustrations with contextual CTAs |
 | **Amount Pad** | GPay-style digit-by-digit number pad bottom sheet |
-| **Receipt Gallery** | Browse scanned receipt thumbnails in a 2-column grid |
+| **Receipt Gallery** | Browse scanned receipt thumbnails in a 2-column grid with member filter and full-size overlay |
+| **Group Receipt Gallery** | Per-group receipt gallery page with masonry grid, payer filter, and zoomed view with expense details |
 | **QR Code Invites** | Generate QR codes for group invitations |
+| **Centered Split UI** | Split-among member avatars center-aligned with clean multi-line wrapping |
 
 ### System & Admin
 | Feature | Description |
@@ -279,6 +288,7 @@ erDiagram
 | **Icons** | Lucide React |
 | **Charts** | Recharts 3 |
 | **OCR** | Tesseract.js 7 |
+| **Vision AI** | OpenAI GPT-4o-mini (Vision) |
 | **QR Codes** | qrcode.react |
 | **AI** | Google Gemini 2.0 Flash (with smart local fallback) |
 | **Auth** | NextAuth v5 (beta-30) with credentials + Google + GitHub providers |
@@ -317,6 +327,7 @@ src/
 │   │   ├── budgets/              # GET (by month) / POST (upsert per category)
 │   │   ├── analytics/            # Enhanced analytics with AI insights
 │   │   ├── ai/chat/              # Gemini-powered AI assistant
+│   │   ├── receipt-scan/         # OpenAI Vision receipt scanner
 │   │   └── admin/health/         # System diagnostics endpoint
 │   ├── invite/                   # Public invite accept page
 │   ├── join/                     # Group join flow
@@ -385,6 +396,9 @@ GITHUB_SECRET="your-github-secret"
 
 # AI (optional — works with local fallback)
 GEMINI_API_KEY="your-gemini-api-key"
+
+# OpenAI Vision (optional — for advanced receipt scanning)
+OPENAI_API_KEY="your-openai-api-key"
 ```
 
 ### 3. Database Setup
@@ -443,6 +457,7 @@ npm start
 | `POST` | `/api/budgets` | Create/update budget for a category |
 | `GET` | `/api/analytics` | Enhanced analytics (trends, categories, budget comparison, insights) |
 | `POST` | `/api/ai/chat` | AI assistant — send message, get contextual response |
+| `POST` | `/api/receipt-scan` | Advanced receipt scan via OpenAI Vision (returns items, taxes, total) |
 | `GET` | `/api/admin/health` | System health diagnostics |
 
 ---

@@ -26,11 +26,28 @@ export async function GET() {
             include: {
                 members: { include: { user: { select: { id: true, name: true, image: true } } } },
                 _count: { select: { trips: true } },
+                trips: {
+                    select: {
+                        transactions: {
+                            where: { deletedAt: null },
+                            select: { amount: true },
+                        },
+                    },
+                },
             },
             orderBy: { updatedAt: 'desc' },
         });
 
-        return NextResponse.json(groups);
+        // Compute totalSpent per group from all trip transactions
+        const enriched = groups.map(({ trips, ...g }) => ({
+            ...g,
+            totalSpent: trips.reduce(
+                (sum, t) => sum + t.transactions.reduce((s, txn) => s + txn.amount, 0),
+                0
+            ),
+        }));
+
+        return NextResponse.json(enriched);
     } catch (error) {
         return NextResponse.json({ error: 'Failed to fetch groups' }, { status: 500 });
     }

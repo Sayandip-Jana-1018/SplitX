@@ -10,7 +10,9 @@ type NotificationType =
     | 'payment_reminder'
     | 'new_expense'
     | 'settlement_completed'
-    | 'group_activity';
+    | 'group_activity'
+    | 'group_invite'
+    | 'group_invite_accepted';
 
 interface CreateNotificationParams {
     userId: string;

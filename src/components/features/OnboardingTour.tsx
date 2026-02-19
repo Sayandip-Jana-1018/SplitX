@@ -37,34 +37,34 @@ const TOUR_STEPS: TourStep[] = [
         position: 'top',
     },
     {
-        target: '[aria-label="Add expense"]',
+        target: '[data-tour="add-expense"]',
         title: '📸 Receipt Scanner',
         description: 'Tap the + button and scan any UPI receipt, GPay screenshot, or bill. AI extracts amounts, merchants & payment methods automatically.',
         position: 'top',
     },
     {
-        target: '[href="/transactions"]',
+        target: '[data-tour="/transactions"]',
         title: '📅 Activity Timeline',
         description: 'Toggle between list and timeline views. The timeline groups your expenses by day with a beautiful vertical feed.',
-        position: 'right',
+        position: 'top',
     },
     {
-        target: '[href="/groups"]',
+        target: '[data-tour="/groups"]',
         title: '⚡ Simplify Debts',
         description: 'Groups now show a "Simplify Debts" section — an algorithm finds the minimum transfers needed to settle all balances.',
-        position: 'right',
+        position: 'top',
     },
     {
-        target: '[href="/settlements"]',
+        target: '[data-tour="/settlements"]',
         title: '🔔 Smart Notifications',
         description: 'A notification banner shows pending settlements. One tap takes you to the settle-up page.',
-        position: 'right',
+        position: 'top',
     },
     {
-        target: '[href="/dashboard"]',
+        target: '[data-tour="/dashboard"]',
         title: '🔄 Pull to Refresh',
         description: 'Swipe down on the dashboard to refresh all your data with a smooth animation. Works on mobile!',
-        position: 'right',
+        position: 'top',
     },
 ];
 
@@ -81,8 +81,14 @@ export default function OnboardingTour() {
         try {
             const seen = localStorage.getItem(STORAGE_KEY);
             if (!seen) {
-                // Delay to allow page to render
-                timerRef.current = window.setTimeout(() => setActive(true), 600);
+                // Delay to allow page to render, then find first visible step
+                timerRef.current = window.setTimeout(() => {
+                    const firstVisible = TOUR_STEPS.findIndex(s => document.querySelector(s.target));
+                    if (firstVisible >= 0) {
+                        setStep(firstVisible);
+                        setActive(true);
+                    }
+                }, 800);
             }
         } catch {
             // localStorage unavailable
@@ -112,16 +118,25 @@ export default function OnboardingTour() {
         } catch { /* noop */ }
     }, []);
 
+    // Find next step that has a visible target element
     const next = useCallback(() => {
-        if (step < TOUR_STEPS.length - 1) {
-            setStep(s => s + 1);
-        } else {
-            dismiss();
+        let nextStep = step + 1;
+        while (nextStep < TOUR_STEPS.length) {
+            const el = document.querySelector(TOUR_STEPS[nextStep].target);
+            if (el) { setStep(nextStep); return; }
+            nextStep++;
         }
+        dismiss(); // No more visible steps
     }, [step, dismiss]);
 
+    // Find previous step that has a visible target element
     const prev = useCallback(() => {
-        if (step > 0) setStep(s => s - 1);
+        let prevStep = step - 1;
+        while (prevStep >= 0) {
+            const el = document.querySelector(TOUR_STEPS[prevStep].target);
+            if (el) { setStep(prevStep); return; }
+            prevStep--;
+        }
     }, [step]);
 
     // Escape to close
@@ -143,19 +158,18 @@ export default function OnboardingTour() {
 
     // Tooltip position relative to spotlight — always clamped to viewport
     const getTooltipStyle = (): React.CSSProperties => {
-        const tooltipW = Math.min(280, window.innerWidth - 32);
-        const tooltipH = 160; // estimated tooltip height
         const vw = window.innerWidth;
         const vh = window.innerHeight;
         const pad = 12;
         const edgePad = 16;
+        const tooltipW = Math.min(280, vw - edgePad * 2);
+        const tooltipH = 160; // estimated tooltip height
 
         if (!spotlightRect) {
-            return { top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: tooltipW };
+            return { top: '50%', left: edgePad, right: edgePad, maxWidth: tooltipW, margin: '0 auto', transform: 'translateY(-50%)' };
         }
 
         const centerX = spotlightRect.left + spotlightRect.width / 2;
-        const clampLeft = (x: number) => Math.max(edgePad, Math.min(x, vw - tooltipW - edgePad));
 
         // Try preferred position, fall back if it won't fit
         const pos = currentStep.position || 'bottom';
@@ -163,7 +177,7 @@ export default function OnboardingTour() {
         let left: number;
 
         if (pos === 'bottom' || pos === 'top') {
-            left = clampLeft(centerX - tooltipW / 2);
+            left = Math.max(edgePad, Math.min(centerX - tooltipW / 2, vw - tooltipW - edgePad));
 
             if (pos === 'bottom') {
                 top = spotlightRect.bottom + pad;
@@ -184,7 +198,7 @@ export default function OnboardingTour() {
 
             // If overflows right, place below the element instead
             if (left + tooltipW > vw - edgePad) {
-                left = clampLeft(centerX - tooltipW / 2);
+                left = Math.max(edgePad, Math.min(centerX - tooltipW / 2, vw - tooltipW - edgePad));
                 top = spotlightRect.bottom + pad;
                 if (top + tooltipH > vh - edgePad) {
                     top = Math.max(edgePad, spotlightRect.top - pad - tooltipH);
@@ -197,7 +211,7 @@ export default function OnboardingTour() {
 
             // If overflows left, place below the element instead
             if (left < edgePad) {
-                left = clampLeft(centerX - tooltipW / 2);
+                left = Math.max(edgePad, Math.min(centerX - tooltipW / 2, vw - tooltipW - edgePad));
                 top = spotlightRect.bottom + pad;
                 if (top + tooltipH > vh - edgePad) {
                     top = Math.max(edgePad, spotlightRect.top - pad - tooltipH);
@@ -209,7 +223,10 @@ export default function OnboardingTour() {
         top = Math.max(edgePad, Math.min(top, vh - tooltipH - edgePad));
         left = Math.max(edgePad, Math.min(left, vw - tooltipW - edgePad));
 
-        return { top, left, width: tooltipW };
+        // Compute safe width that can never overflow right edge
+        const safeWidth = Math.min(tooltipW, vw - left - edgePad);
+
+        return { top, left, width: safeWidth };
     };
 
     return (
@@ -281,14 +298,13 @@ export default function OnboardingTour() {
                         style={{
                             position: 'fixed',
                             ...getTooltipStyle(),
-                            maxWidth: 'calc(100vw - 32px)',
-                            overflow: 'hidden',
+                            boxSizing: 'border-box',
                             background: 'var(--surface-popover, rgba(255, 255, 255, 0.98))',
                             backdropFilter: 'blur(24px)',
                             WebkitBackdropFilter: 'blur(24px)',
                             border: '1px solid var(--border-default, rgba(0,0,0,0.08))',
                             borderRadius: 16,
-                            padding: '20px',
+                            padding: '14px 16px',
                             boxShadow: '0 16px 48px rgba(0,0,0,0.15)',
                             textAlign: 'center',
                         }}
@@ -317,10 +333,10 @@ export default function OnboardingTour() {
                             {currentStep.description}
                         </div>
 
-                        {/* Controls */}
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        {/* Controls — fully centered */}
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
                             {/* Step dots */}
-                            <div style={{ display: 'flex', gap: 5 }}>
+                            <div style={{ display: 'flex', gap: 5, justifyContent: 'center' }}>
                                 {TOUR_STEPS.map((_, i) => (
                                     <div
                                         key={i}
@@ -336,7 +352,8 @@ export default function OnboardingTour() {
                                 ))}
                             </div>
 
-                            <div style={{ display: 'flex', gap: 8 }}>
+                            {/* Buttons */}
+                            <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
                                 {step > 0 && (
                                     <button
                                         onClick={prev}

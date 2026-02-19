@@ -17,32 +17,35 @@ interface CardProps extends Omit<HTMLAttributes<HTMLDivElement>, 'onAnimationSta
 
 const Card = forwardRef<HTMLDivElement, CardProps>(
     ({ children, padding = 'normal', interactive, glass, elevated, glow, className, ...props }, ref) => {
-        const Component = interactive ? motion.div : 'div';
-        const motionProps = interactive
-            ? {
-                whileHover: { y: -2, scale: 1.005 },
-                whileTap: { scale: 0.995 },
-                transition: { type: 'spring', stiffness: 300, damping: 20 },
-            }
-            : {};
+        const classes = cn(
+            styles.card,
+            styles[padding],
+            interactive && styles.interactive,
+            glass && styles.glass,
+            elevated && styles.elevated,
+            glow && styles.glow,
+            className
+        );
+
+        if (interactive) {
+            return (
+                <motion.div
+                    ref={ref}
+                    className={classes}
+                    whileHover={{ y: -2, scale: 1.005 }}
+                    whileTap={{ scale: 0.995 }}
+                    transition={{ type: 'spring' as const, stiffness: 300, damping: 20 }}
+                    {...(props as HTMLMotionProps<"div">)}
+                >
+                    {children}
+                </motion.div>
+            );
+        }
 
         return (
-            <Component
-                ref={ref}
-                className={cn(
-                    styles.card,
-                    styles[padding],
-                    interactive && styles.interactive,
-                    glass && styles.glass,
-                    elevated && styles.elevated,
-                    glow && styles.glow,
-                    className
-                )}
-                {...motionProps}
-                {...(props as HTMLMotionProps<"div">)}
-            >
+            <div ref={ref} className={classes} {...props}>
                 {children}
-            </Component>
+            </div>
         );
     }
 );

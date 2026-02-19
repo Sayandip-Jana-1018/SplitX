@@ -29,7 +29,7 @@ export async function GET(
 
         // Get all transactions + splits
         const transactions = await prisma.transaction.findMany({
-            where: { tripId: { in: tripIds } },
+            where: { tripId: { in: tripIds }, deletedAt: null },
             include: {
                 payer: { select: { id: true, name: true, image: true } },
                 splits: {
@@ -58,7 +58,8 @@ export async function GET(
         const recorded = await prisma.settlement.findMany({
             where: {
                 tripId: { in: tripIds },
-                status: 'completed',
+                status: { in: ['completed', 'confirmed'] },
+                deletedAt: null,
             },
         });
 

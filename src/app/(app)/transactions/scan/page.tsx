@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Camera,
@@ -16,6 +17,9 @@ import {
     Smartphone,
     ImageIcon,
     Zap,
+    Cpu,
+    Globe,
+    Users,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Button from '@/components/ui/Button';
@@ -24,14 +28,25 @@ import Badge from '@/components/ui/Badge';
 import { PaymentIcon, CategoryIcon, PAYMENT_ICONS } from '@/components/ui/Icons';
 import { formatCurrency, cn } from '@/lib/utils';
 import { parseTransactionText, type ParsedTransaction } from '@/lib/transactionParser';
+import SplitByItems from '@/components/features/SplitByItems';
 
 type ScanState = 'idle' | 'loading' | 'result' | 'error';
+type ScanMode = 'basic' | 'advanced';
+
+interface AdvancedResult {
+    merchant: string | null;
+    date: string | null;
+    items: { name: string; quantity: number; price: number }[];
+    subtotal: number;
+    taxes: Record<string, number>;
+    total: number;
+    category: string;
+    confidence: number;
+}
 
 /* ── Premium glass styles ── */
 const glass = {
     background: 'var(--bg-glass)',
-    backdropFilter: 'blur(20px) saturate(1.6)',
-    WebkitBackdropFilter: 'blur(20px) saturate(1.6)',
     border: '1px solid var(--border-glass)',
 };
 
@@ -67,16 +82,23 @@ export default function ScanReceiptPage() {
     const [scanState, setScanState] = useState<ScanState>('idle');
     const [progress, setProgress] = useState(0);
     const [parsed, setParsed] = useState<ParsedTransaction | null>(null);
+    const [advancedResult, setAdvancedResult] = useState<AdvancedResult | null>(null);
     const [preview, setPreview] = useState<string | null>(null);
     const [errorMsg, setErrorMsg] = useState('');
     const [saving, setSaving] = useState(false);
     const [showCamera, setShowCamera] = useState(false);
+    const [scanMode, setScanMode] = useState<ScanMode>('basic');
+    const [mounted, setMounted] = useState(false);
+    const pendingFileRef = useRef<string | null>(null); // base64 for advanced
+    const [showSplitByItems, setShowSplitByItems] = useState(false);
+
+    useEffect(() => { setMounted(true); }, []);
 
     /* ── Live Camera via getUserMedia ── */
     const openLiveCamera = useCallback(async () => {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } },
+                video: { facingMode: 'environment', width: { ideal: 1080 }, height: { ideal: 1920 } },
             });
             streamRef.current = stream;
             setShowCamera(true);
@@ -135,39 +157,85 @@ export default function ScanReceiptPage() {
 
         // Show preview
         const reader = new FileReader();
-        reader.onload = (e) => setPreview(e.target?.result as string);
+        reader.onload = (e) => {
+            const base64 = e.target?.result as string;
+            setPreview(base64);
+            pendingFileRef.current = base64;
+        };
         reader.readAsDataURL(file);
 
+        if (scanMode === 'advanced') {
+            // Wait for reader to finish, then call API
+            reader.onloadend = () => {
+                handleAdvancedScan(reader.result as string);
+            };
+        } else {
+            setScanState('loading');
+            setProgress(0);
+
+            try {
+                const Tesseract = await import('tesseract.js');
+                const result = await Tesseract.recognize(file, 'eng', {
+                    logger: (m: { status: string; progress: number }) => {
+                        if (m.status === 'recognizing text') {
+                            setProgress(Math.round(m.progress * 100));
+                        }
+                    },
+                });
+
+                const text = result.data.text;
+                if (!text.trim()) {
+                    setErrorMsg('Could not extract any text from this image. Try a clearer screenshot with better lighting.');
+                    setScanState('error');
+                    return;
+                }
+
+                const parsedResult = parseTransactionText(text);
+                setParsed(parsedResult);
+                setScanState('result');
+            } catch (err) {
+                console.error('OCR Error:', err);
+                setErrorMsg('OCR processing failed. Check your connection and try again.');
+                setScanState('error');
+            }
+        }
+    }, [scanMode]);
+
+    const handleAdvancedScan = async (base64Image: string) => {
         setScanState('loading');
         setProgress(0);
+        // Simulate progress for better UX
+        const progressInterval = setInterval(() => {
+            setProgress(p => Math.min(p + 3, 90));
+        }, 300);
 
         try {
-            // Dynamic import to avoid SSR issues
-            const Tesseract = await import('tesseract.js');
-            const result = await Tesseract.recognize(file, 'eng', {
-                logger: (m: { status: string; progress: number }) => {
-                    if (m.status === 'recognizing text') {
-                        setProgress(Math.round(m.progress * 100));
-                    }
-                },
+            const res = await fetch('/api/receipt-scan', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image: base64Image }),
             });
 
-            const text = result.data.text;
-            if (!text.trim()) {
-                setErrorMsg('Could not extract any text from this image. Try a clearer screenshot with better lighting.');
+            clearInterval(progressInterval);
+            setProgress(100);
+
+            if (!res.ok) {
+                const err = await res.json();
+                setErrorMsg(err.error || 'Advanced scan failed. Please try again.');
                 setScanState('error');
                 return;
             }
 
-            const parsedResult = parseTransactionText(text);
-            setParsed(parsedResult);
+            const data: AdvancedResult = await res.json();
+            setAdvancedResult(data);
             setScanState('result');
         } catch (err) {
-            console.error('OCR Error:', err);
-            setErrorMsg('OCR processing failed. Check your connection and try again.');
+            clearInterval(progressInterval);
+            console.error('Advanced scan error:', err);
+            setErrorMsg('Failed to connect to AI service. Check your connection and try again.');
             setScanState('error');
         }
-    }, []);
+    };
 
     const handleDrop = useCallback((e: React.DragEvent) => {
         e.preventDefault();
@@ -179,20 +247,27 @@ export default function ScanReceiptPage() {
         setScanState('idle');
         setProgress(0);
         setParsed(null);
+        setAdvancedResult(null);
         setPreview(null);
         setErrorMsg('');
-        // Reset file inputs too
+        pendingFileRef.current = null;
         if (cameraRef.current) cameraRef.current.value = '';
         if (galleryRef.current) galleryRef.current.value = '';
     };
 
     const handleSaveToExpense = async () => {
-        if (!parsed) return;
         setSaving(true);
         const params = new URLSearchParams();
-        if (parsed.amount) params.set('amount', String(parsed.amount / 100));
-        if (parsed.merchant) params.set('title', parsed.merchant);
-        if (parsed.method) params.set('method', parsed.method);
+        if (scanMode === 'advanced' && advancedResult) {
+            if (advancedResult.total) params.set('amount', String(advancedResult.total / 100));
+            if (advancedResult.merchant) params.set('title', advancedResult.merchant);
+            if (advancedResult.category) params.set('category', advancedResult.category);
+            params.set('method', 'cash');
+        } else if (parsed) {
+            if (parsed.amount) params.set('amount', String(parsed.amount / 100));
+            if (parsed.merchant) params.set('title', parsed.merchant);
+            if (parsed.method) params.set('method', parsed.method);
+        }
         router.push(`/transactions/new?${params.toString()}`);
     };
 
@@ -242,6 +317,7 @@ export default function ScanReceiptPage() {
                         {...fadeUp}
                         style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}
                     >
+
                         {/* ── Hero Upload Zone ── */}
                         <motion.div
                             whileHover={{ scale: 1.01 }}
@@ -278,6 +354,41 @@ export default function ScanReceiptPage() {
                                 background: 'linear-gradient(90deg, transparent, rgba(var(--accent-500-rgb), 0.2), transparent)',
                                 pointerEvents: 'none',
                             }} />
+
+                            {/* ── Toggle (Inside) ── */}
+                            <div style={{
+                                display: 'flex', gap: 4, background: 'rgba(var(--accent-500-rgb), 0.08)',
+                                padding: 4, borderRadius: 'var(--radius-full)', marginBottom: 'var(--space-2)',
+                                border: '1px solid rgba(var(--accent-500-rgb), 0.1)',
+                                position: 'relative', zIndex: 10
+                            }} onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+                                {(['basic', 'advanced'] as const).map((mode) => (
+                                    <button
+                                        key={mode}
+                                        onClick={() => setScanMode(mode)}
+                                        style={{
+                                            padding: '6px 16px', borderRadius: 'var(--radius-full)', border: 'none',
+                                            background: scanMode === mode ? 'var(--accent-500)' : 'transparent',
+                                            color: scanMode === mode ? 'white' : 'var(--fg-secondary)',
+                                            fontSize: 'var(--text-xs)', fontWeight: 600, cursor: 'pointer',
+                                            boxShadow: scanMode === mode ? '0 2px 8px rgba(var(--accent-500-rgb), 0.3)' : 'none',
+                                            transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: 6
+                                        }}
+                                    >
+                                        {mode === 'basic' ? '⚡ Basic' : '✨ AI Scan'}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* Mode description text */}
+                            <div style={{
+                                fontSize: '10px', color: 'var(--fg-muted)', opacity: 0.8,
+                                marginBottom: 8, marginTop: -4, textAlign: 'center', maxWidth: 220
+                            }}>
+                                {scanMode === 'basic'
+                                    ? '🔒 On-device OCR • Fast • No internet needed'
+                                    : '🧠 OpenAI Vision AI • Accurate items & taxes'}
+                            </div>
 
                             <motion.div
                                 animate={{ y: [0, -8, 0] }}
@@ -450,7 +561,9 @@ export default function ScanReceiptPage() {
                         }}>
                             <ShieldCheck size={12} style={{ color: 'var(--color-success)', flexShrink: 0 }} />
                             <span style={{ fontSize: 'var(--text-xs)', color: 'var(--fg-muted)' }}>
-                                All processing happens on your device — nothing leaves your phone
+                                {scanMode === 'basic'
+                                    ? 'All processing happens on your device — nothing leaves your phone'
+                                    : 'Image is sent securely to OpenAI for processing'}
                             </span>
                         </div>
                     </motion.div>
@@ -526,7 +639,9 @@ export default function ScanReceiptPage() {
                                 fontSize: 'var(--text-xs)', color: 'var(--fg-tertiary)',
                                 marginBottom: 'var(--space-4)',
                             }}>
-                                AI is reading text from your image
+                                {scanMode === 'advanced'
+                                    ? 'AI Vision is analyzing items, taxes & totals'
+                                    : 'AI is reading text from your image'}
                             </p>
 
                             {/* Premium progress bar */}
@@ -562,7 +677,7 @@ export default function ScanReceiptPage() {
                 {/* ═══════════════════════════════════════════ */}
                 {/* ═══ RESULT STATE — Premium Data Card ═══ */}
                 {/* ═══════════════════════════════════════════ */}
-                {scanState === 'result' && parsed && (
+                {scanState === 'result' && (scanMode === 'basic' ? parsed : advancedResult) && (
                     <motion.div
                         key="result"
                         {...fadeUp}
@@ -582,112 +697,135 @@ export default function ScanReceiptPage() {
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                 <Sparkles size={16} style={{ color: 'var(--accent-400)' }} />
                                 <span style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--fg-primary)' }}>
-                                    Extracted Data
+                                    {scanMode === 'advanced' ? 'AI Vision Result' : 'Extracted Data'}
                                 </span>
                             </div>
-                            <Badge variant={confidenceVariant(parsed.confidence)} size="sm">
-                                {confidenceLabel(parsed.confidence)} · {Math.round(parsed.confidence * 100)}%
+                            <Badge variant={confidenceVariant(
+                                scanMode === 'advanced' ? (advancedResult?.confidence || 0) : (parsed?.confidence || 0)
+                            )} size="sm">
+                                {confidenceLabel(
+                                    scanMode === 'advanced' ? (advancedResult?.confidence || 0) : (parsed?.confidence || 0)
+                                )} · {Math.round(
+                                    (scanMode === 'advanced' ? (advancedResult?.confidence || 0) : (parsed?.confidence || 0)) * 100
+                                )}%
                             </Badge>
                         </motion.div>
 
-                        {/* ── Main Data Card ── */}
-                        <motion.div
-                            initial={{ opacity: 0, y: 16 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.1 }}
-                        >
-                            <div style={{
-                                ...glass,
-                                borderRadius: 'var(--radius-2xl)',
-                                overflow: 'hidden',
-                                boxShadow: parsed.confidence >= 0.7
-                                    ? '0 0 30px rgba(var(--accent-500-rgb), 0.1), var(--shadow-card)'
-                                    : 'var(--shadow-card)',
-                                position: 'relative',
-                            }}>
-                                {/* Top glow edge */}
-                                <div style={{
-                                    position: 'absolute', top: 0, left: '10%', right: '10%', height: 1,
-                                    background: 'linear-gradient(90deg, transparent, rgba(var(--accent-500-rgb), 0.3), transparent)',
-                                    pointerEvents: 'none',
-                                }} />
-
-                                {/* Amount hero */}
-                                <div style={{
-                                    padding: 'var(--space-5) var(--space-4) var(--space-3)',
-                                    background: 'linear-gradient(135deg, rgba(var(--accent-500-rgb), 0.06), transparent)',
-                                    textAlign: 'center',
-                                }}>
-                                    <p style={{
-                                        fontSize: 'var(--text-xs)', color: 'var(--fg-tertiary)',
-                                        fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em',
-                                        marginBottom: 4,
-                                    }}>Amount Detected</p>
-                                    <p style={{
-                                        fontSize: 'clamp(1.8rem, 8vw, 2.5rem)',
-                                        fontWeight: 800,
-                                        background: parsed.amount
-                                            ? 'linear-gradient(135deg, var(--fg-primary), var(--accent-400))'
-                                            : 'linear-gradient(135deg, var(--color-error), #f87171)',
-                                        WebkitBackgroundClip: 'text',
-                                        WebkitTextFillColor: 'transparent',
-                                        backgroundClip: 'text',
-                                    }}>
-                                        {parsed.amount ? formatCurrency(parsed.amount) : '—'}
-                                    </p>
-                                </div>
-
-                                {/* Detail rows */}
-                                <div style={{ padding: 'var(--space-3) var(--space-4) var(--space-4)' }}>
-                                    <div style={{
-                                        display: 'grid', gridTemplateColumns: '1fr 1fr',
-                                        gap: 'var(--space-3)',
-                                    }}>
-                                        {/* Merchant */}
-                                        <div style={{
-                                            background: 'rgba(var(--accent-500-rgb), 0.04)',
-                                            borderRadius: 'var(--radius-lg)',
-                                            padding: 'var(--space-3)',
-                                        }}>
-                                            <p style={{
-                                                fontSize: 'var(--text-xs)', color: 'var(--fg-tertiary)',
-                                                fontWeight: 600, marginBottom: 4,
-                                            }}>Merchant</p>
-                                            <p style={{
-                                                fontSize: 'var(--text-sm)', fontWeight: 600,
-                                                color: 'var(--fg-primary)',
-                                                wordBreak: 'break-word',
-                                            }}>
-                                                {parsed.merchant || '—'}
-                                            </p>
-                                        </div>
-
-                                        {/* Payment Method */}
-                                        <div style={{
-                                            background: 'rgba(var(--accent-500-rgb), 0.04)',
-                                            borderRadius: 'var(--radius-lg)',
-                                            padding: 'var(--space-3)',
-                                        }}>
-                                            <p style={{
-                                                fontSize: 'var(--text-xs)', color: 'var(--fg-tertiary)',
-                                                fontWeight: 600, marginBottom: 4,
-                                            }}>Method</p>
-                                            {parsed.method ? (
-                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                                                    <PaymentIcon method={parsed.method} size={18} />
-                                                    <span style={{ fontWeight: 600, fontSize: 'var(--text-sm)', color: 'var(--fg-primary)' }}>
-                                                        {PAYMENT_ICONS[parsed.method]?.label || parsed.method}
+                        {/* ═══ ADVANCED RESULT ═══ */}
+                        {scanMode === 'advanced' && advancedResult && (
+                            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+                                <div style={{ ...glass, borderRadius: 'var(--radius-2xl)', overflow: 'hidden', boxShadow: '0 0 30px rgba(var(--accent-500-rgb), 0.1), var(--shadow-card)', position: 'relative' }}>
+                                    <div style={{ position: 'absolute', top: 0, left: '10%', right: '10%', height: 1, background: 'linear-gradient(90deg, transparent, rgba(var(--accent-500-rgb), 0.3), transparent)', pointerEvents: 'none' }} />
+                                    {/* Merchant & Date */}
+                                    <div style={{ padding: 'var(--space-5) var(--space-4) var(--space-3)', background: 'linear-gradient(135deg, rgba(var(--accent-500-rgb), 0.06), transparent)', textAlign: 'center' }}>
+                                        <p style={{ fontSize: 'var(--text-lg)', fontWeight: 800, color: 'var(--fg-primary)', marginBottom: 4 }}>
+                                            {advancedResult.merchant || 'Receipt'}
+                                        </p>
+                                        {advancedResult.date && (
+                                            <p style={{ fontSize: 'var(--text-xs)', color: 'var(--fg-tertiary)', fontWeight: 500 }}>{advancedResult.date}</p>
+                                        )}
+                                    </div>
+                                    {/* Items */}
+                                    {advancedResult.items.length > 0 && (
+                                        <div style={{ padding: '0 var(--space-4)' }}>
+                                            <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--fg-tertiary)', padding: 'var(--space-2) 0', borderBottom: '1px solid var(--border-glass)', display: 'flex', justifyContent: 'space-between' }}>
+                                                <span>Item</span><span>Price</span>
+                                            </div>
+                                            {advancedResult.items.map((item, idx) => (
+                                                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: idx < advancedResult.items.length - 1 ? '1px solid rgba(var(--accent-500-rgb), 0.05)' : 'none' }}>
+                                                    <div style={{ flex: 1 }}>
+                                                        <span style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--fg-primary)' }}>{item.name}</span>
+                                                        {item.quantity > 1 && <span style={{ fontSize: 'var(--text-xs)', color: 'var(--fg-tertiary)', marginLeft: 6 }}>×{item.quantity}</span>}
+                                                    </div>
+                                                    <span style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--fg-primary)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', marginLeft: 12 }}>
+                                                        {formatCurrency(item.price * item.quantity)}
                                                     </span>
-                                                </span>
-                                            ) : (
-                                                <span style={{ color: 'var(--fg-muted)', fontSize: 'var(--text-sm)' }}>—</span>
-                                            )}
+                                                </div>
+                                            ))}
                                         </div>
+                                    )}
+                                    {/* Subtotal, Taxes, Total */}
+                                    <div style={{ padding: 'var(--space-3) var(--space-4) var(--space-4)', borderTop: '1px solid var(--border-glass)', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                        {advancedResult.subtotal > 0 && (
+                                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                <span style={{ fontSize: 'var(--text-xs)', color: 'var(--fg-tertiary)', fontWeight: 500 }}>Subtotal</span>
+                                                <span style={{ fontSize: 'var(--text-xs)', color: 'var(--fg-secondary)', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>{formatCurrency(advancedResult.subtotal)}</span>
+                                            </div>
+                                        )}
+                                        {Object.entries(advancedResult.taxes).map(([taxName, taxAmount]) => (
+                                            <div key={taxName} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                <span style={{ fontSize: 'var(--text-xs)', color: 'var(--fg-tertiary)', fontWeight: 500 }}>{taxName}</span>
+                                                <span style={{ fontSize: 'var(--text-xs)', color: 'var(--fg-secondary)', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>{formatCurrency(taxAmount)}</span>
+                                            </div>
+                                        ))}
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8, borderTop: '1px dashed rgba(var(--accent-500-rgb), 0.15)' }}>
+                                            <span style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--fg-primary)' }}>Total</span>
+                                            <span style={{ fontSize: 'clamp(1.2rem, 5vw, 1.6rem)', fontWeight: 800, background: 'linear-gradient(135deg, var(--fg-primary), var(--accent-400))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
+                                                {formatCurrency(advancedResult.total)}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </motion.div>
+                        )}
 
-                                        {/* UPI Ref */}
-                                        {parsed.upiRef && (
+                        {/* ═══ BASIC RESULT ═══ */}
+                        {scanMode === 'basic' && parsed && (<>
+                            {/* ── Main Data Card ── */}
+                            <motion.div
+                                initial={{ opacity: 0, y: 16 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.1 }}
+                            >
+                                <div style={{
+                                    ...glass,
+                                    borderRadius: 'var(--radius-2xl)',
+                                    overflow: 'hidden',
+                                    boxShadow: parsed.confidence >= 0.7
+                                        ? '0 0 30px rgba(var(--accent-500-rgb), 0.1), var(--shadow-card)'
+                                        : 'var(--shadow-card)',
+                                    position: 'relative',
+                                }}>
+                                    {/* Top glow edge */}
+                                    <div style={{
+                                        position: 'absolute', top: 0, left: '10%', right: '10%', height: 1,
+                                        background: 'linear-gradient(90deg, transparent, rgba(var(--accent-500-rgb), 0.3), transparent)',
+                                        pointerEvents: 'none',
+                                    }} />
+
+                                    {/* Amount hero */}
+                                    <div style={{
+                                        padding: 'var(--space-5) var(--space-4) var(--space-3)',
+                                        background: 'linear-gradient(135deg, rgba(var(--accent-500-rgb), 0.06), transparent)',
+                                        textAlign: 'center',
+                                    }}>
+                                        <p style={{
+                                            fontSize: 'var(--text-xs)', color: 'var(--fg-tertiary)',
+                                            fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em',
+                                            marginBottom: 4,
+                                        }}>Amount Detected</p>
+                                        <p style={{
+                                            fontSize: 'clamp(1.8rem, 8vw, 2.5rem)',
+                                            fontWeight: 800,
+                                            background: parsed.amount
+                                                ? 'linear-gradient(135deg, var(--fg-primary), var(--accent-400))'
+                                                : 'linear-gradient(135deg, var(--color-error), #f87171)',
+                                            WebkitBackgroundClip: 'text',
+                                            WebkitTextFillColor: 'transparent',
+                                            backgroundClip: 'text',
+                                        }}>
+                                            {parsed.amount ? formatCurrency(parsed.amount) : '—'}
+                                        </p>
+                                    </div>
+
+                                    {/* Detail rows */}
+                                    <div style={{ padding: 'var(--space-3) var(--space-4) var(--space-4)' }}>
+                                        <div style={{
+                                            display: 'grid', gridTemplateColumns: '1fr 1fr',
+                                            gap: 'var(--space-3)',
+                                        }}>
+                                            {/* Merchant */}
                                             <div style={{
-                                                gridColumn: '1 / -1',
                                                 background: 'rgba(var(--accent-500-rgb), 0.04)',
                                                 borderRadius: 'var(--radius-lg)',
                                                 padding: 'var(--space-3)',
@@ -695,89 +833,189 @@ export default function ScanReceiptPage() {
                                                 <p style={{
                                                     fontSize: 'var(--text-xs)', color: 'var(--fg-tertiary)',
                                                     fontWeight: 600, marginBottom: 4,
-                                                }}>UPI Reference</p>
+                                                }}>Merchant</p>
                                                 <p style={{
                                                     fontSize: 'var(--text-sm)', fontWeight: 600,
-                                                    fontFamily: 'var(--font-mono)',
                                                     color: 'var(--fg-primary)',
-                                                    letterSpacing: '0.05em',
+                                                    wordBreak: 'break-word',
                                                 }}>
-                                                    {parsed.upiRef}
+                                                    {parsed.merchant || '—'}
                                                 </p>
                                             </div>
-                                        )}
+
+                                            {/* Payment Method */}
+                                            <div style={{
+                                                background: 'rgba(var(--accent-500-rgb), 0.04)',
+                                                borderRadius: 'var(--radius-lg)',
+                                                padding: 'var(--space-3)',
+                                            }}>
+                                                <p style={{
+                                                    fontSize: 'var(--text-xs)', color: 'var(--fg-tertiary)',
+                                                    fontWeight: 600, marginBottom: 4,
+                                                }}>Method</p>
+                                                {parsed.method ? (
+                                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                                        <PaymentIcon method={parsed.method} size={18} />
+                                                        <span style={{ fontWeight: 600, fontSize: 'var(--text-sm)', color: 'var(--fg-primary)' }}>
+                                                            {PAYMENT_ICONS[parsed.method]?.label || parsed.method}
+                                                        </span>
+                                                    </span>
+                                                ) : (
+                                                    <span style={{ color: 'var(--fg-muted)', fontSize: 'var(--text-sm)' }}>—</span>
+                                                )}
+                                            </div>
+
+                                            {/* UPI Ref */}
+                                            {parsed.upiRef && (
+                                                <div style={{
+                                                    gridColumn: '1 / -1',
+                                                    background: 'rgba(var(--accent-500-rgb), 0.04)',
+                                                    borderRadius: 'var(--radius-lg)',
+                                                    padding: 'var(--space-3)',
+                                                }}>
+                                                    <p style={{
+                                                        fontSize: 'var(--text-xs)', color: 'var(--fg-tertiary)',
+                                                        fontWeight: 600, marginBottom: 4,
+                                                    }}>UPI Reference</p>
+                                                    <p style={{
+                                                        fontSize: 'var(--text-sm)', fontWeight: 600,
+                                                        fontFamily: 'var(--font-mono)',
+                                                        color: 'var(--fg-primary)',
+                                                        letterSpacing: '0.05em',
+                                                    }}>
+                                                        {parsed.upiRef}
+                                                    </p>
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        </motion.div>
+                            </motion.div>
 
-                        {/* ── Raw Text (collapsible) ── */}
-                        <details style={{ cursor: 'pointer' }}>
-                            <summary style={{
-                                fontSize: 'var(--text-xs)', color: 'var(--fg-tertiary)',
-                                display: 'flex', alignItems: 'center', gap: 6,
-                                padding: 'var(--space-2) 0',
-                                fontWeight: 600,
-                            }}>
-                                <FileText size={12} />
-                                View raw OCR text
-                            </summary>
-                            <div style={{
-                                ...glass,
-                                borderRadius: 'var(--radius-lg)',
-                                padding: 'var(--space-3)',
-                                marginTop: 4,
-                            }}>
-                                <pre style={{
-                                    fontSize: 'var(--text-xs)',
-                                    color: 'var(--fg-secondary)',
-                                    whiteSpace: 'pre-wrap',
-                                    wordBreak: 'break-word',
-                                    fontFamily: 'var(--font-mono)',
-                                    maxHeight: 150, overflow: 'auto',
-                                    margin: 0,
+                            {/* ── Raw Text (collapsible) ── */}
+                            <details style={{ cursor: 'pointer' }}>
+                                <summary style={{
+                                    fontSize: 'var(--text-xs)', color: 'var(--fg-tertiary)',
+                                    display: 'flex', alignItems: 'center', gap: 6,
+                                    padding: 'var(--space-2) 0',
+                                    fontWeight: 600,
                                 }}>
-                                    {parsed.rawText}
-                                </pre>
-                            </div>
-                        </details>
+                                    <FileText size={12} />
+                                    View raw OCR text
+                                </summary>
+                                <div style={{
+                                    ...glass,
+                                    borderRadius: 'var(--radius-lg)',
+                                    padding: 'var(--space-3)',
+                                    marginTop: 4,
+                                }}>
+                                    <pre style={{
+                                        fontSize: 'var(--text-xs)',
+                                        color: 'var(--fg-secondary)',
+                                        whiteSpace: 'pre-wrap',
+                                        wordBreak: 'break-word',
+                                        fontFamily: 'var(--font-mono)',
+                                        maxHeight: 150, overflow: 'auto',
+                                        margin: 0,
+                                    }}>
+                                        {parsed.rawText}
+                                    </pre>
+                                </div>
+                            </details>
+                        </>)}
 
                         {/* ── Actions ── */}
                         <motion.div
                             initial={{ opacity: 0, y: 12 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: 0.2 }}
-                            style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}
+                            style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}
                         >
-                            <motion.button
-                                whileHover={{ scale: 1.02 }}
-                                whileTap={{ scale: 0.97 }}
-                                onClick={handleSaveToExpense}
-                                disabled={saving}
-                                style={{
-                                    width: '100%',
-                                    padding: 'var(--space-4)',
-                                    borderRadius: 'var(--radius-xl)',
-                                    background: 'linear-gradient(135deg, var(--accent-500), var(--accent-600))',
-                                    color: 'white',
-                                    fontWeight: 700,
-                                    fontSize: 'var(--text-sm)',
-                                    border: 'none',
-                                    cursor: 'pointer',
-                                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                                    boxShadow: '0 4px 20px rgba(var(--accent-500-rgb), 0.3)',
-                                    opacity: saving ? 0.7 : 1,
-                                }}
-                            >
-                                {saving ? (
-                                    <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} />
-                                ) : (
-                                    <Check size={18} />
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
+                                {/* Split by Items - Special Feature */}
+                                {scanMode === 'advanced' && advancedResult && advancedResult.items.length > 0 && (
+                                    <motion.button
+                                        whileHover={{ scale: 1.02 }}
+                                        whileTap={{ scale: 0.97 }}
+                                        onClick={() => setShowSplitByItems(true)}
+                                        style={{
+                                            gridColumn: '1 / -1',
+                                            ...glass,
+                                            borderRadius: 'var(--radius-xl)',
+                                            padding: 'var(--space-4)',
+                                            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                            cursor: 'pointer',
+                                            border: '1px solid rgba(16, 185, 129, 0.3)',
+                                            background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(16, 185, 129, 0.02))',
+                                            textAlign: 'left'
+                                        }}
+                                    >
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                            <div style={{
+                                                width: 40, height: 40, borderRadius: 'var(--radius-lg)',
+                                                background: 'linear-gradient(135deg, #10b981, #059669)',
+                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                boxShadow: '0 4px 12px rgba(16, 185, 129, 0.25)',
+                                            }}>
+                                                <Users size={20} style={{ color: 'white' }} />
+                                            </div>
+                                            <div>
+                                                <span style={{ display: 'block', fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--fg-primary)' }}>
+                                                    Split by Items
+                                                </span>
+                                                <span style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'var(--fg-tertiary)' }}>
+                                                    Assign {advancedResult.items.length} items to friends
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div style={{
+                                            width: 28, height: 28, borderRadius: '50%',
+                                            background: 'rgba(16, 185, 129, 0.1)',
+                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        }}>
+                                            <Users size={14} style={{ color: '#10b981' }} />
+                                        </div>
+                                    </motion.button>
                                 )}
-                                {saving ? 'Opening...' : 'Add as Expense'}
-                            </motion.button>
 
-                            <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                                {/* Add as Expense - Primary Action */}
+                                <motion.button
+                                    whileHover={{ scale: 1.02 }}
+                                    whileTap={{ scale: 0.97 }}
+                                    onClick={handleSaveToExpense}
+                                    disabled={saving}
+                                    style={{
+                                        gridColumn: '1 / -1',
+                                        padding: 'var(--space-4)',
+                                        borderRadius: 'var(--radius-xl)',
+                                        background: 'linear-gradient(135deg, var(--accent-500), var(--accent-600))',
+                                        color: 'white',
+                                        border: 'none',
+                                        cursor: 'pointer',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+                                        boxShadow: '0 8px 20px rgba(var(--accent-500-rgb), 0.3)',
+                                        opacity: saving ? 0.7 : 1,
+                                        position: 'relative', overflow: 'hidden'
+                                    }}
+                                >
+                                    <div style={{
+                                        position: 'absolute', inset: 0,
+                                        background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent)',
+                                        transform: 'skewX(-20deg) translateX(-150%)',
+                                        animation: 'shimmer 3s infinite'
+                                    }} />
+                                    {saving ? (
+                                        <Loader2 size={20} style={{ animation: 'spin 1s linear infinite' }} />
+                                    ) : (
+                                        <Check size={20} />
+                                    )}
+                                    <span style={{ fontSize: 'var(--text-base)', fontWeight: 700 }}>
+                                        {saving ? 'Saving...' : 'Add as Expense'}
+                                    </span>
+                                </motion.button>
+                            </div>
+
+                            <div style={{ display: 'flex', gap: 'var(--space-3)', marginTop: 4 }}>
                                 <motion.button
                                     whileHover={{ scale: 1.02 }}
                                     whileTap={{ scale: 0.95 }}
@@ -787,30 +1025,33 @@ export default function ScanReceiptPage() {
                                         padding: 'var(--space-3)',
                                         borderRadius: 'var(--radius-lg)',
                                         ...glass,
+                                        background: 'var(--bg-surface)',
                                         color: 'var(--fg-secondary)',
                                         fontWeight: 600,
                                         fontSize: 'var(--text-sm)',
+                                        border: '1px solid var(--border-secondary)',
                                         cursor: 'pointer',
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                                     }}
                                 >
-                                    <RotateCcw size={14} />
+                                    <RotateCcw size={16} />
                                     Scan Another
                                 </motion.button>
                                 <motion.button
                                     whileHover={{ scale: 1.05 }}
                                     whileTap={{ scale: 0.9 }}
-                                    onClick={reset}
+                                    onClick={reset} // Should this be router.back() or close? Context implies reset/close.
                                     style={{
-                                        width: 44, height: 44,
+                                        width: 48, height: 48,
                                         borderRadius: 'var(--radius-lg)',
-                                        ...glass,
+                                        background: 'rgba(239, 68, 68, 0.08)',
+                                        border: '1px solid rgba(239, 68, 68, 0.15)',
                                         color: 'var(--color-error)',
                                         cursor: 'pointer',
                                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                                     }}
                                 >
-                                    <X size={18} />
+                                    <X size={20} />
                                 </motion.button>
                             </div>
                         </motion.div>
@@ -878,105 +1119,137 @@ export default function ScanReceiptPage() {
                 )}
             </AnimatePresence>
 
-            {/* ═══ LIVE CAMERA VIEWFINDER OVERLAY ═══ */}
-            <AnimatePresence>
-                {showCamera && (
-                    <motion.div
-                        key="camera-overlay"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        style={{
-                            position: 'fixed', inset: 0, zIndex: 9999,
-                            background: 'rgba(0,0,0,0.95)',
-                            display: 'flex', flexDirection: 'column',
-                            alignItems: 'center', justifyContent: 'center',
-                        }}
-                    >
-                        {/* Close button */}
-                        <motion.button
-                            whileTap={{ scale: 0.85 }}
-                            onClick={closeCamera}
+            {/* ═══ LIVE CAMERA VIEWFINDER — rendered via Portal to escape transform context ═══ */}
+            {mounted && createPortal(
+                <AnimatePresence>
+                    {showCamera && (
+                        <motion.div
+                            key="camera-overlay"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
                             style={{
-                                position: 'absolute', top: 16, right: 16, zIndex: 10,
-                                width: 44, height: 44, borderRadius: '50%',
-                                background: 'rgba(255,255,255,0.15)',
-                                backdropFilter: 'blur(12px)',
-                                border: '1px solid rgba(255,255,255,0.2)',
-                                color: 'white', display: 'flex', alignItems: 'center',
-                                justifyContent: 'center', cursor: 'pointer',
+                                position: 'fixed', inset: 0, zIndex: 99999,
+                                background: '#000',
+                                display: 'flex', flexDirection: 'column',
+                                overflow: 'hidden',
                             }}
                         >
-                            <X size={20} />
-                        </motion.button>
-
-                        {/* Title */}
-                        <div style={{
-                            position: 'absolute', top: 20, left: 0, right: 0,
-                            textAlign: 'center', color: 'white', fontWeight: 700,
-                            fontSize: 'var(--text-base)', zIndex: 5,
-                        }}>
-                            📸 Scan Receipt
-                        </div>
-
-                        {/* Video + Scan guide wrapper */}
-                        <div style={{
-                            position: 'relative',
-                            width: '100%', maxWidth: 500,
-                            margin: '0 auto',
-                        }}>
-                            <video
-                                ref={videoRef}
-                                autoPlay
-                                playsInline
-                                muted
-                                style={{
-                                    width: '100%', height: 'auto',
-                                    borderRadius: 'var(--radius-2xl)',
-                                    objectFit: 'cover',
-                                    display: 'block',
-                                    border: '2px solid rgba(var(--accent-500-rgb), 0.3)',
-                                    boxShadow: '0 0 40px rgba(var(--accent-500-rgb), 0.15)',
-                                }}
-                            />
-                            {/* Scan guide — positioned INSIDE the video wrapper */}
+                            {/* ── Top bar ── */}
                             <div style={{
-                                position: 'absolute', top: '50%', left: '50%',
-                                transform: 'translate(-50%, -50%)',
-                                width: '75%', maxWidth: 280,
-                                aspectRatio: '4/3',
-                                border: '2px dashed rgba(var(--accent-500-rgb), 0.5)',
-                                borderRadius: 'var(--radius-xl)',
-                                pointerEvents: 'none',
-                                boxShadow: '0 0 0 4000px rgba(0,0,0,0.25)',
-                            }} />
-                        </div>
+                                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                padding: '16px 20px',
+                                paddingTop: 'calc(env(safe-area-inset-top, 16px) + 8px)',
+                                flexShrink: 0,
+                            }}>
+                                <span style={{ color: 'white', fontWeight: 700, fontSize: 15 }}>
+                                    📸 Scan Receipt
+                                </span>
+                                <motion.button
+                                    whileTap={{ scale: 0.85 }}
+                                    onClick={closeCamera}
+                                    style={{
+                                        width: 36, height: 36, borderRadius: '50%',
+                                        background: 'rgba(255,255,255,0.12)',
+                                        border: '1px solid rgba(255,255,255,0.15)',
+                                        color: 'white', display: 'flex', alignItems: 'center',
+                                        justifyContent: 'center', cursor: 'pointer',
+                                    }}
+                                >
+                                    <X size={18} />
+                                </motion.button>
+                            </div>
 
-                        {/* Capture button */}
-                        <motion.button
-                            whileTap={{ scale: 0.85 }}
-                            onClick={captureFrame}
-                            style={{
-                                marginTop: 'var(--space-6)',
-                                width: 72, height: 72, borderRadius: '50%',
-                                background: 'linear-gradient(135deg, var(--accent-500), var(--accent-600))',
-                                border: '4px solid rgba(255,255,255,0.3)',
-                                cursor: 'pointer',
-                                boxShadow: '0 4px 24px rgba(var(--accent-500-rgb), 0.5)',
+                            {/* ── Video area — takes all available space ── */}
+                            <div style={{
+                                flex: 1, position: 'relative',
                                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            }}
-                        >
-                            <Camera size={28} style={{ color: 'white' }} />
-                        </motion.button>
-                        <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 'var(--text-xs)', marginTop: 8 }}>
-                            Tap to capture
-                        </p>
-                    </motion.div>
-                )}
-            </AnimatePresence>
+                                padding: '0 16px', overflow: 'hidden',
+                                minHeight: 0,
+                            }}>
+                                <video
+                                    ref={videoRef}
+                                    autoPlay
+                                    playsInline
+                                    muted
+                                    style={{
+                                        width: '100%', height: '100%',
+                                        borderRadius: 20,
+                                        objectFit: 'cover',
+                                        display: 'block',
+                                        border: '2px solid rgba(var(--accent-500-rgb), 0.25)',
+                                    }}
+                                />
+                                {/* Scan guide — portrait for receipt scanning */}
+                                <div style={{
+                                    position: 'absolute', top: '50%', left: '50%',
+                                    transform: 'translate(-50%, -50%)',
+                                    width: '70%', maxWidth: 280,
+                                    aspectRatio: '3/4',
+                                    border: '2px dashed rgba(var(--accent-500-rgb), 0.45)',
+                                    borderRadius: 16,
+                                    pointerEvents: 'none',
+                                    boxShadow: '0 0 0 4000px rgba(0,0,0,0.3)',
+                                }} />
+                            </div>
+
+                            {/* ── Bottom controls ── */}
+                            <div style={{
+                                display: 'flex', flexDirection: 'column', alignItems: 'center',
+                                padding: '20px 16px',
+                                paddingBottom: 'calc(env(safe-area-inset-bottom, 16px) + 20px)',
+                                flexShrink: 0, gap: 8,
+                            }}>
+                                <motion.button
+                                    whileTap={{ scale: 0.85 }}
+                                    onClick={captureFrame}
+                                    style={{
+                                        width: 68, height: 68, borderRadius: '50%',
+                                        background: 'linear-gradient(135deg, var(--accent-500), var(--accent-600))',
+                                        border: '4px solid rgba(255,255,255,0.3)',
+                                        cursor: 'pointer',
+                                        boxShadow: '0 4px 24px rgba(var(--accent-500-rgb), 0.5)',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    }}
+                                >
+                                    <Camera size={26} style={{ color: 'white' }} />
+                                </motion.button>
+                                <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11, margin: 0 }}>
+                                    Tap to capture
+                                </p>
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>,
+                document.body
+            )}
 
             {/* Hidden canvas for frame capture */}
             <canvas ref={canvasRef} style={{ display: 'none' }} />
+
+            {/* Split by Items Modal */}
+            {advancedResult && (
+                <SplitByItems
+                    isOpen={showSplitByItems}
+                    onClose={() => setShowSplitByItems(false)}
+                    items={advancedResult.items}
+                    taxes={advancedResult.taxes}
+                    subtotal={advancedResult.subtotal}
+                    total={advancedResult.total}
+                    merchant={advancedResult.merchant}
+                    onCreateExpense={(splits, title, total) => {
+                        setShowSplitByItems(false);
+                        // Navigate to add expense with pre-filled split data
+                        const params = new URLSearchParams({
+                            title,
+                            amount: String(total / 100), // Convert paise to rupees for input field
+                            category: advancedResult.category || 'food',
+                            splitData: JSON.stringify(splits),
+                        });
+                        router.push(`/transactions/new?${params.toString()}`);
+                    }}
+                />
+            )}
         </div>
     );
 }

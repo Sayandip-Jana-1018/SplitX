@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db';
+import { Prisma } from '@prisma/client';
 import { isFeatureEnabled } from '@/lib/featureFlags';
 
 // ═══════════════════════════════════════════════════════════════
@@ -30,7 +31,7 @@ export async function createAuditLog(params: AuditLogParams) {
                 action: params.action,
                 entityType: params.entityType,
                 entityId: params.entityId,
-                details: params.details ?? undefined,
+                details: params.details as Prisma.InputJsonValue | undefined,
             },
         });
     } catch (error) {

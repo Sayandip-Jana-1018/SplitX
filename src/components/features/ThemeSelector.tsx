@@ -13,6 +13,7 @@ export default function ThemeSelector() {
     const [focusedIndex, setFocusedIndex] = useState(-1);
     const [isMobile, setIsMobile] = useState(false);
     const [showShimmer, setShowShimmer] = useState(true);
+    const [mounted, setMounted] = useState(false);
     const wrapperRef = useRef<HTMLDivElement>(null);
     const listRef = useRef<HTMLDivElement>(null);
 
@@ -23,6 +24,9 @@ export default function ThemeSelector() {
             return () => clearTimeout(t);
         }
     }, [open, showShimmer]);
+
+    // Mark as mounted (prevents hydration mismatch for theme-dependent content)
+    useEffect(() => { setMounted(true); }, []);
 
     // Detect mobile viewport
     useEffect(() => {
@@ -219,6 +223,7 @@ export default function ThemeSelector() {
                 whileTap={{ scale: 0.9, rotate: 180 }}
                 transition={{ type: 'spring', stiffness: 300, damping: 15 }}
                 onClick={toggleTheme}
+                suppressHydrationWarning
                 style={{
                     width: 34,
                     height: 34,
@@ -236,18 +241,20 @@ export default function ThemeSelector() {
                 }}
                 aria-label="Toggle dark/light mode"
             >
-                <AnimatePresence mode="wait" initial={false}>
-                    <motion.span
-                        key={theme}
-                        initial={{ opacity: 0, rotate: -90, scale: 0 }}
-                        animate={{ opacity: 1, rotate: 0, scale: 1 }}
-                        exit={{ opacity: 0, rotate: 90, scale: 0 }}
-                        transition={{ duration: 0.2 }}
-                        style={{ display: 'flex' }}
-                    >
-                        {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
-                    </motion.span>
-                </AnimatePresence>
+                {mounted ? (
+                    <AnimatePresence mode="wait" initial={false}>
+                        <motion.span
+                            key={theme}
+                            initial={{ opacity: 0, rotate: -90, scale: 0 }}
+                            animate={{ opacity: 1, rotate: 0, scale: 1 }}
+                            exit={{ opacity: 0, rotate: 90, scale: 0 }}
+                            transition={{ duration: 0.2 }}
+                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        >
+                            {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+                        </motion.span>
+                    </AnimatePresence>
+                ) : null}
             </motion.button>
 
             {/* Palette picker button */}

@@ -2,17 +2,17 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowRightLeft, Check, ExternalLink, Share2, Download, GitBranch, Inbox, Sparkles } from 'lucide-react';
+import { ArrowRightLeft, Check, Download, Share2, GitBranch, Inbox, Sparkles, CreditCard, Bell } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import Avatar from '@/components/ui/Avatar';
 import Badge from '@/components/ui/Badge';
 import Modal from '@/components/ui/Modal';
 import SettlementGraph from '@/components/features/SettlementGraph';
+import UpiPaymentModal from '@/components/features/UpiPaymentModal';
 import { useToast } from '@/components/ui/Toast';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { formatCurrency } from '@/lib/utils';
 import { exportAsText, shareSettlement } from '@/lib/export';
-import { openUpiPayment, generateReminder } from '@/lib/upi';
 import { SettlementSkeleton } from '@/components/ui/Skeleton';
 
 /* ── Glassmorphic styles ── */
@@ -29,7 +29,7 @@ const glass: React.CSSProperties = {
 
 /* ── Types ── */
 interface UserRef { id: string; name: string | null; image?: string | null }
-interface ComputedTransfer { from: string; to: string; amount: number; fromName?: string; toName?: string; fromImage?: string | null; toImage?: string | null }
+interface ComputedTransfer { from: string; to: string; amount: number; fromName?: string; toName?: string; fromImage?: string | null; toImage?: string | null; toUpiId?: string | null }
 interface RecordedSettlement {
     id: string; fromId: string; toId: string; amount: number;
     status: string; method: string | null; note: string | null;
@@ -55,6 +55,7 @@ export default function SettlementsPage() {
     const [showGraph, setShowGraph] = useState(false);
     const [confirmSettle, setConfirmSettle] = useState<{ from: string; to: string; amount: number } | null>(null);
     const [settling, setSettling] = useState(false);
+    const [upiModal, setUpiModal] = useState<{ open: boolean; amount: number; payeeName: string; payeeUpiId?: string; settlementId?: string }>({ open: false, amount: 0, payeeName: '' });
 
     const fetchSettlements = useCallback(async () => {
         try {
@@ -119,10 +120,11 @@ export default function SettlementsPage() {
         from: { name: memberNames[t.from] || t.fromName || t.from, id: t.from, image: t.fromImage || memberImages[t.from] || null },
         to: { name: memberNames[t.to] || t.toName || t.to, id: t.to, image: t.toImage || memberImages[t.to] || null },
         amount: t.amount, status: 'pending' as const,
+        toUpiId: t.toUpiId || null,
     }));
 
     const settledSettlements = recorded
-        .filter(r => r.status === 'completed')
+        .filter(r => ['completed', 'confirmed', 'paid_pending'].includes(r.status))
         .map(r => ({
             id: r.id,
             from: { name: r.from.name || 'Unknown', id: r.fromId, image: r.from.image || null },
@@ -352,100 +354,131 @@ export default function SettlementsPage() {
                                     e.currentTarget.style.boxShadow = '';
                                 }}
                             >
-                                <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', alignItems: 'center', textAlign: 'center' }}>
-                                    {/* Transfer direction */}
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                                        <Avatar name={settlement.from.name} image={settlement.from.image} size="sm" />
-                                        <div style={{ flex: 1 }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--text-sm)' }}>
-                                                <span style={{
-                                                    fontWeight: 700,
-                                                    color: isSender ? 'var(--color-error)' : 'var(--fg-primary)',
-                                                }}>
-                                                    {isSender ? 'You' : settlement.from.name}
-                                                </span>
-                                                <ArrowRightLeft size={13} style={{ color: 'var(--fg-muted)' }} />
-                                                <span style={{
-                                                    fontWeight: 700,
-                                                    color: isReceiver ? 'var(--color-success)' : 'var(--fg-primary)',
-                                                }}>
-                                                    {isReceiver ? 'You' : settlement.to.name}
-                                                </span>
-                                            </div>
-                                        </div>
-                                        <div style={{ textAlign: 'right' }}>
-                                            <span style={{
-                                                fontSize: 'var(--text-lg)', fontWeight: 800,
-                                                background: isSender
-                                                    ? 'linear-gradient(135deg, var(--color-error), #fca5a5)'
-                                                    : isReceiver
-                                                        ? 'linear-gradient(135deg, var(--color-success), #6ee7b7)'
-                                                        : 'linear-gradient(135deg, var(--fg-primary), var(--fg-secondary))',
-                                                WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
-                                            }}>
-                                                {formatCurrency(settlement.amount)}
-                                            </span>
-                                        </div>
+                                {/* Transfer direction — centered row */}
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--space-3)', marginBottom: (!isSettled || isSettled) ? 'var(--space-3)' : 0 }}>
+                                    <Avatar name={settlement.from.name} image={settlement.from.image} size="sm" />
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--text-sm)' }}>
+                                        <span style={{
+                                            fontWeight: 700,
+                                            color: isSender ? 'var(--color-error)' : 'var(--fg-primary)',
+                                        }}>
+                                            {isSender ? 'You' : settlement.from.name}
+                                        </span>
+                                        <ArrowRightLeft size={13} style={{ color: 'var(--fg-muted)' }} />
+                                        <span style={{
+                                            fontWeight: 700,
+                                            color: isReceiver ? 'var(--color-success)' : 'var(--fg-primary)',
+                                        }}>
+                                            {isReceiver ? 'You' : settlement.to.name}
+                                        </span>
                                     </div>
+                                    <span style={{
+                                        fontSize: 'var(--text-lg)', fontWeight: 800,
+                                        background: isSender
+                                            ? 'linear-gradient(135deg, var(--color-error), #fca5a5)'
+                                            : isReceiver
+                                                ? 'linear-gradient(135deg, var(--color-success), #6ee7b7)'
+                                                : 'linear-gradient(135deg, var(--fg-primary), var(--fg-secondary))',
+                                        WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+                                    }}>
+                                        {formatCurrency(settlement.amount)}
+                                    </span>
+                                </div>
 
-                                    {/* Actions */}
-                                    {!isSettled && (
-                                        <div style={{ display: 'flex', gap: 'var(--space-2)', justifyContent: 'center', width: '100%', marginLeft: 'var(--space-10)' }}>
-                                            {isSender && (
-                                                <>
-                                                    <Button size="sm" leftIcon={<ExternalLink size={13} />}
-                                                        style={{
-                                                            background: 'linear-gradient(135deg, var(--accent-500), var(--accent-600))',
-                                                            boxShadow: '0 4px 16px rgba(var(--accent-500-rgb), 0.25)',
-                                                        }}
-                                                        onClick={() => openUpiPayment({
-                                                            upiId: 'user@okaxis',
+                                {/* Actions — centered via text-align since buttons are inline-flex */}
+                                {!isSettled && (
+                                    <div style={{ textAlign: 'center', width: '100%' }}>
+                                        {isSender && (
+                                            <Button size="sm" leftIcon={<CreditCard size={13} />}
+                                                style={{
+                                                    background: 'linear-gradient(135deg, #4CAF50, #2E7D32)',
+                                                    boxShadow: '0 4px 16px rgba(76,175,80,0.25)',
+                                                }}
+                                                onClick={async () => {
+                                                    if (!activeTripId) { toast('No active trip', 'error'); return; }
+                                                    try {
+                                                        // Create settlement record first to get a real DB ID
+                                                        const res = await fetch('/api/settlements', {
+                                                            method: 'POST',
+                                                            headers: { 'Content-Type': 'application/json' },
+                                                            body: JSON.stringify({
+                                                                tripId: activeTripId,
+                                                                toUserId: settlement.to.id,
+                                                                amount: settlement.amount,
+                                                                method: 'upi',
+                                                            }),
+                                                        });
+                                                        if (!res.ok) {
+                                                            const err = await res.json().catch(() => ({}));
+                                                            toast(err.error || 'Failed to create settlement', 'error');
+                                                            return;
+                                                        }
+                                                        const created = await res.json();
+                                                        setUpiModal({
+                                                            open: true,
+                                                            amount: settlement.amount,
                                                             payeeName: settlement.to.name,
-                                                            amount: settlement.amount / 100,
-                                                            note: `AutoSplit: ${settlement.from.name} → ${settlement.to.name}`
-                                                        })}
-                                                    >
-                                                        Pay via UPI
-                                                    </Button>
-                                                    <Button size="sm" variant="ghost" iconOnly
-                                                        onClick={() => setConfirmSettle({ from: settlement.from.id, to: settlement.to.id, amount: settlement.amount })}
-                                                        style={{ borderRadius: 'var(--radius-lg)' }}
-                                                    >
-                                                        <Check size={15} />
-                                                    </Button>
-                                                </>
-                                            )}
-                                            {isReceiver && (
-                                                <>
-                                                    <Button size="sm" variant="outline"
-                                                        leftIcon={<Share2 size={13} />}
-                                                        onClick={() => {
-                                                            const msg = generateReminder('You', settlement.from.name, settlement.amount / 100);
-                                                            navigator.clipboard.writeText(msg);
-                                                            toast('Reminder copied', 'success');
-                                                        }}
-                                                    >
-                                                        Remind
-                                                    </Button>
-                                                    <Button size="sm" variant="ghost" iconOnly
-                                                        onClick={() => setConfirmSettle({ from: settlement.from.id, to: settlement.to.id, amount: settlement.amount })}
-                                                    >
-                                                        <Check size={15} />
-                                                    </Button>
-                                                </>
-                                            )}
-                                            {!isSender && !isReceiver && (
-                                                <Badge variant="accent">Between others</Badge>
-                                            )}
-                                        </div>
-                                    )}
+                                                            payeeUpiId: settlement.toUpiId || undefined,
+                                                            settlementId: created.id,
+                                                        });
+                                                    } catch {
+                                                        toast('Network error', 'error');
+                                                    }
+                                                }}
+                                            >
+                                                Pay via UPI
+                                            </Button>
+                                        )}
+                                        {isReceiver && (
+                                            <Button size="sm" variant="outline"
+                                                leftIcon={<Bell size={13} />}
+                                                onClick={async () => {
+                                                    try {
+                                                        const res = await fetch('/api/notifications', {
+                                                            method: 'POST',
+                                                            headers: { 'Content-Type': 'application/json' },
+                                                            body: JSON.stringify({
+                                                                userId: settlement.from.id,
+                                                                type: 'payment_reminder',
+                                                                title: 'Payment Reminder',
+                                                                body: `${settlement.to.name} is reminding you to pay ${formatCurrency(settlement.amount)}`,
+                                                                link: '/settlements',
+                                                            }),
+                                                        });
+                                                        if (res.ok) {
+                                                            toast('Reminder sent!', 'success');
+                                                        } else {
+                                                            toast('Failed to send reminder', 'error');
+                                                        }
+                                                    } catch {
+                                                        toast('Network error', 'error');
+                                                    }
+                                                }}
+                                            >
+                                                Remind
+                                            </Button>
+                                        )}
+                                        {(isSender || isReceiver) && (
+                                            <Button size="sm" variant="ghost" iconOnly
+                                                onClick={() => setConfirmSettle({ from: settlement.from.id, to: settlement.to.id, amount: settlement.amount })}
+                                                style={{ borderRadius: 'var(--radius-lg)' }}
+                                            >
+                                                <Check size={15} />
+                                            </Button>
+                                        )}
+                                        {!isSender && !isReceiver && (
+                                            <Badge variant="accent">Between others</Badge>
+                                        )}
+                                    </div>
+                                )}
 
-                                    {isSettled && (
+                                {isSettled && (
+                                    <div style={{ display: 'flex', justifyContent: 'center' }}>
                                         <Badge variant="success" size="sm">
                                             <Check size={11} /> Settled
                                         </Badge>
-                                    )}
-                                </div>
+                                    </div>
+                                )}
                             </div>
                         </motion.div>
                     );
@@ -535,6 +568,21 @@ export default function SettlementsPage() {
                     </div>
                 )}
             </Modal>
+
+            {/* UPI Payment Modal */}
+            <UpiPaymentModal
+                isOpen={upiModal.open}
+                onClose={() => setUpiModal({ open: false, amount: 0, payeeName: '' })}
+                settlementId={upiModal.settlementId}
+                amount={upiModal.amount}
+                payeeName={upiModal.payeeName}
+                payeeUpiId={upiModal.payeeUpiId}
+                onPaymentComplete={() => {
+                    setUpiModal({ open: false, amount: 0, payeeName: '' });
+                    setLoading(true);
+                    fetchSettlements();
+                }}
+            />
         </div>
     );
 }

@@ -20,6 +20,10 @@ import {
     Link2,
     UserMinus,
     Trash2,
+    UserPlus,
+    Send,
+    MessageCircle,
+    CreditCard,
 } from 'lucide-react';
 import { useRouter, useParams } from 'next/navigation';
 import Button from '@/components/ui/Button';
@@ -30,6 +34,17 @@ import Modal from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { useToast } from '@/components/ui/Toast';
 import { formatCurrency, timeAgo, cn } from '@/lib/utils';
+import { QRCodeSVG } from 'qrcode.react';
+import GroupChat from '@/components/features/GroupChat';
+import UpiPaymentModal from '@/components/features/UpiPaymentModal';
+
+/* ── Types ── */
+interface ContactForInvite {
+    id: string;
+    name: string;
+    email: string;
+    linkedUser: { id: string; name: string | null; image: string | null } | null;
+}
 
 /* ── Types ── */
 interface MemberData {
@@ -82,7 +97,7 @@ const CATEGORY_EMOJI: Record<string, string> = {
     other: '📦',
 };
 
-type Tab = 'overview' | 'members' | 'activity';
+type Tab = 'overview' | 'members' | 'activity' | 'chat';
 
 export default function GroupDetailPage() {
     const router = useRouter();
@@ -104,6 +119,11 @@ export default function GroupDetailPage() {
     >([]);
     const [memberToRemove, setMemberToRemove] = useState<MemberData | null>(null);
     const [removingMember, setRemovingMember] = useState(false);
+    const [showContactPicker, setShowContactPicker] = useState(false);
+    const [inviteContacts, setInviteContacts] = useState<ContactForInvite[]>([]);
+    const [loadingContacts, setLoadingContacts] = useState(false);
+    const [sendingContactInvite, setSendingContactInvite] = useState<string | null>(null);
+    const [upiModal, setUpiModal] = useState<{ open: boolean; settlementId: string; amount: number; payeeName: string }>({ open: false, settlementId: '', amount: 0, payeeName: '' });
     const { toast } = useToast();
 
     const fetchGroup = useCallback(async () => {
@@ -135,6 +155,46 @@ export default function GroupDetailPage() {
         navigator.clipboard.writeText(link);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
+    };
+
+    // ── Invite from contacts ──
+    const openContactPicker = async () => {
+        setShowContactPicker(true);
+        setLoadingContacts(true);
+        try {
+            const res = await fetch('/api/contacts');
+            if (res.ok) {
+                const data = await res.json();
+                // Only show linked contacts who are ON the app
+                setInviteContacts(data.filter((c: ContactForInvite) => c.linkedUser));
+            }
+        } catch {
+            toast('Failed to load contacts', 'error');
+        } finally {
+            setLoadingContacts(false);
+        }
+    };
+
+    const sendContactInvite = async (contact: ContactForInvite) => {
+        if (!group || !contact.linkedUser) return;
+        setSendingContactInvite(contact.linkedUser.id);
+        try {
+            const res = await fetch('/api/invitations', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ groupId: group.id, inviteeId: contact.linkedUser.id }),
+            });
+            const data = await res.json();
+            if (res.ok) {
+                toast(`Invited ${contact.name}!`, 'success');
+            } else {
+                toast(data.error || 'Failed to invite', 'error');
+            }
+        } catch {
+            toast('Network error', 'error');
+        } finally {
+            setSendingContactInvite(null);
+        }
     };
 
     if (loading) {
@@ -175,80 +235,155 @@ export default function GroupDetailPage() {
     const recentTransactions = allTransactions.slice(0, 5);
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-            {/* ── Header ── */}
-            <motion.div layoutId={`group-${group.id}`} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                <button
-                    onClick={() => router.push('/groups')}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', paddingTop: 'var(--space-2)' }}>
+            {/* ── Hero Section: Header + Trip ── */}
+            <div style={{
+                position: 'relative',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 'var(--space-4)',
+            }}>
+                {/* Back & Share — floating on sides */}
+                <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    width: '100%',
+                    position: 'absolute',
+                    top: 2,
+                    left: 0,
+                    right: 0,
+                    zIndex: 2,
+                }}>
+                    <button
+                        onClick={() => router.push('/groups')}
+                        style={{
+                            border: 'none',
+                            background: 'rgba(var(--accent-500-rgb), 0.06)',
+                            cursor: 'pointer',
+                            color: 'var(--fg-secondary)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: 6,
+                            borderRadius: 'var(--radius-md)',
+                            transition: 'all 0.15s',
+                        }}
+                    >
+                        <ArrowLeft size={18} />
+                    </button>
+                    <Button size="sm" variant="ghost" iconOnly onClick={() => setShowInvite(true)}>
+                        <Share2 size={18} />
+                    </Button>
+                </div>
+
+                {/* Group identity — centered */}
+                <motion.div
+                    layoutId={`group-${group.id}`}
                     style={{
-                        border: 'none',
-                        background: 'none',
-                        cursor: 'pointer',
-                        color: 'var(--fg-secondary)',
                         display: 'flex',
-                        padding: 4,
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        textAlign: 'center',
+                        paddingTop: 'var(--space-2)',
                     }}
                 >
-                    <ArrowLeft size={20} />
-                </button>
-                <span style={{ fontSize: 28 }}>{group.emoji}</span>
-                <div style={{ flex: 1 }}>
-                    <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 700 }}>{group.name}</h2>
-                    <p style={{ fontSize: 'var(--text-xs)', color: 'var(--fg-tertiary)' }}>
+                    <span style={{
+                        fontSize: 36,
+                        lineHeight: 1,
+                        marginBottom: 'var(--space-2)',
+                        filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.08))',
+                    }}>{group.emoji}</span>
+                    <h2 style={{
+                        fontSize: 'var(--text-xl)',
+                        fontWeight: 800,
+                        letterSpacing: '-0.02em',
+                        margin: 0,
+                    }}>{group.name}</h2>
+                    <p style={{
+                        fontSize: 'var(--text-xs)',
+                        color: 'var(--fg-tertiary)',
+                        marginTop: 4,
+                        fontWeight: 500,
+                    }}>
                         {members.length} members · Created {new Date(group.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
                     </p>
-                </div>
-                <Button size="sm" variant="ghost" iconOnly onClick={() => setShowInvite(true)}>
-                    <Share2 size={18} />
-                </Button>
-            </motion.div>
+                </motion.div>
 
-            {/* ── Trip Summary Card ── */}
-            {activeTrip ? (
-                <Card padding="normal" glow>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-3)' }}>
-                        <Calendar size={16} style={{ color: 'var(--accent-500)' }} />
-                        <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600 }}>{activeTrip.title}</div>
-                            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--fg-tertiary)' }}>
-                                {activeTrip.startDate ? new Date(activeTrip.startDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '—'} → {activeTrip.endDate ? new Date(activeTrip.endDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '—'}
+                {/* Trip Summary — unified card */}
+                {activeTrip ? (
+                    <Card padding="normal" glow>
+                        <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 'var(--space-2)',
+                            marginBottom: 'var(--space-4)',
+                        }}>
+                            <div style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 6,
+                                padding: '4px 10px',
+                                borderRadius: 'var(--radius-full)',
+                                background: 'rgba(var(--accent-500-rgb), 0.06)',
+                                fontSize: 'var(--text-xs)',
+                                color: 'var(--fg-secondary)',
+                                fontWeight: 600,
+                            }}>
+                                <Calendar size={12} style={{ color: 'var(--accent-500)' }} />
+                                {activeTrip.startDate ? new Date(activeTrip.startDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '—'}
+                                {' → '}
+                                {activeTrip.endDate ? new Date(activeTrip.endDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '—'}
+                            </div>
+                            <Badge variant="accent" size="sm">{activeTrip.isActive ? 'Active' : 'Closed'}</Badge>
+                        </div>
+                        <div style={{
+                            display: 'grid',
+                            gridTemplateColumns: '1fr 1fr',
+                            gap: 'var(--space-3)',
+                        }}>
+                            <div style={{
+                                textAlign: 'center',
+                                padding: 'var(--space-3)',
+                                borderRadius: 'var(--radius-lg)',
+                                background: 'rgba(var(--accent-500-rgb), 0.03)',
+                            }}>
+                                <p style={{ fontSize: 10, color: 'var(--fg-muted)', marginBottom: 6, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Spent</p>
+                                <p style={{ fontSize: 'var(--text-xl)', fontWeight: 800, letterSpacing: '-0.02em' }}>{formatCurrency(group.totalSpent)}</p>
+                            </div>
+                            <div style={{
+                                textAlign: 'center',
+                                padding: 'var(--space-3)',
+                                borderRadius: 'var(--radius-lg)',
+                                background: 'rgba(var(--accent-500-rgb), 0.03)',
+                            }}>
+                                <p style={{ fontSize: 10, color: 'var(--fg-muted)', marginBottom: 6, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Per Person</p>
+                                <p style={{ fontSize: 'var(--text-xl)', fontWeight: 800, letterSpacing: '-0.02em' }}>{formatCurrency(members.length > 0 ? Math.round(group.totalSpent / members.length) : 0)}</p>
                             </div>
                         </div>
-                        <Badge variant="accent" size="sm">{activeTrip.isActive ? 'Active' : 'Closed'}</Badge>
-                    </div>
-                    <div style={{
-                        display: 'grid',
-                        gridTemplateColumns: '1fr 1fr',
-                        gap: 'var(--space-3)',
-                    }}>
-                        <div>
-                            <p style={{ fontSize: 'var(--text-xs)', color: 'var(--fg-tertiary)', marginBottom: 2 }}>Total Spent</p>
-                            <p style={{ fontSize: 'var(--text-xl)', fontWeight: 700 }}>{formatCurrency(group.totalSpent)}</p>
+                    </Card>
+                ) : (
+                    <Card padding="normal">
+                        <div style={{ textAlign: 'center', padding: 'var(--space-4)' }}>
+                            <Calendar size={32} style={{ color: 'var(--fg-muted)', marginBottom: 'var(--space-2)' }} />
+                            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--fg-tertiary)', marginBottom: 'var(--space-3)' }}>No active trip yet</p>
+                            <Button size="sm" leftIcon={<Plus size={14} />} onClick={() => setShowCreateTrip(true)}>Create Trip</Button>
                         </div>
-                        <div>
-                            <p style={{ fontSize: 'var(--text-xs)', color: 'var(--fg-tertiary)', marginBottom: 2 }}>Per Person</p>
-                            <p style={{ fontSize: 'var(--text-xl)', fontWeight: 700 }}>{formatCurrency(members.length > 0 ? Math.round(group.totalSpent / members.length) : 0)}</p>
-                        </div>
-                    </div>
-                </Card>
-            ) : (
-                <Card padding="normal">
-                    <div style={{ textAlign: 'center', padding: 'var(--space-4)' }}>
-                        <Calendar size={32} style={{ color: 'var(--fg-muted)', marginBottom: 'var(--space-2)' }} />
-                        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--fg-tertiary)', marginBottom: 'var(--space-3)' }}>No active trip yet</p>
-                        <Button size="sm" leftIcon={<Plus size={14} />} onClick={() => setShowCreateTrip(true)}>Create Trip</Button>
-                    </div>
-                </Card>
-            )}
+                    </Card>
+                )}
+            </div>
 
             {/* ── Tabs ── */}
             <div style={{
                 display: 'flex',
                 background: 'var(--bg-tertiary)',
                 borderRadius: 'var(--radius-lg)',
-                padding: 3,
+                padding: 4,
+                marginTop: 'var(--space-1)',
             }}>
-                {(['overview', 'members', 'activity'] as const).map((t) => (
+                {(['overview', 'members', 'activity', 'chat'] as const).map((t) => (
                     <button
                         key={t}
                         onClick={() => setTab(t)}
@@ -266,7 +401,7 @@ export default function GroupDetailPage() {
                             transition: 'all 0.2s',
                         }}
                     >
-                        {t.charAt(0).toUpperCase() + t.slice(1)}
+                        {t === 'chat' ? '💬 Chat' : t.charAt(0).toUpperCase() + t.slice(1)}
                     </button>
                 ))}
             </div>
@@ -280,14 +415,14 @@ export default function GroupDetailPage() {
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -8 }}
                         transition={{ duration: 0.2 }}
-                        style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}
+                        style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}
                     >
                         {/* Balances */}
                         <div>
-                            <h3 style={{ fontSize: 'var(--text-sm)', fontWeight: 600, marginBottom: 'var(--space-2)', color: 'var(--fg-secondary)' }}>
+                            <h3 style={{ fontSize: 'var(--text-sm)', fontWeight: 700, marginBottom: 'var(--space-3)', color: 'var(--fg-secondary)', letterSpacing: '-0.01em' }}>
                                 Balances
                             </h3>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
                                 {members.map((member) => {
                                     const balance = group.balances[member.userId] || 0;
                                     const isCurrentUser = member.userId === group.currentUserId;
@@ -360,6 +495,28 @@ export default function GroupDetailPage() {
                                                     }}>
                                                         {formatCurrency(s.amount)}
                                                     </span>
+                                                    {s.from === group.currentUserId && (
+                                                        <button
+                                                            onClick={() => setUpiModal({ open: true, settlementId: `${s.from}-${s.to}`, amount: s.amount, payeeName: s.toName })}
+                                                            style={{
+                                                                padding: '4px 10px',
+                                                                background: 'linear-gradient(135deg, #4CAF50, #2E7D32)',
+                                                                color: '#fff',
+                                                                border: 'none',
+                                                                borderRadius: 8,
+                                                                fontSize: 11,
+                                                                fontWeight: 600,
+                                                                cursor: 'pointer',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                gap: 4,
+                                                                flexShrink: 0,
+                                                            }}
+                                                        >
+                                                            <CreditCard size={12} />
+                                                            Pay
+                                                        </button>
+                                                    )}
                                                 </div>
                                             </Card>
                                         </motion.div>
@@ -368,14 +525,55 @@ export default function GroupDetailPage() {
                             </div>
                         )}
 
+                        {/* Quick Actions */}
+                        <div style={{
+                            display: 'flex', gap: 'var(--space-2)',
+                            marginBottom: 'var(--space-2)',
+                        }}>
+                            <button
+                                onClick={() => router.push(`/groups/${groupId}/receipts`)}
+                                style={{
+                                    flex: 1, padding: '10px 14px',
+                                    borderRadius: 'var(--radius-lg)',
+                                    background: 'var(--bg-glass)',
+                                    backdropFilter: 'blur(12px)',
+                                    border: '1px solid var(--border-glass)',
+                                    cursor: 'pointer',
+                                    display: 'flex', alignItems: 'center', gap: 8,
+                                    color: 'var(--fg-secondary)',
+                                    fontSize: 'var(--text-sm)', fontWeight: 600,
+                                    transition: 'all 0.2s',
+                                }}
+                            >
+                                📷 Receipts
+                            </button>
+                            <button
+                                onClick={() => router.push('/settlements')}
+                                style={{
+                                    flex: 1, padding: '10px 14px',
+                                    borderRadius: 'var(--radius-lg)',
+                                    background: 'var(--bg-glass)',
+                                    backdropFilter: 'blur(12px)',
+                                    border: '1px solid var(--border-glass)',
+                                    cursor: 'pointer',
+                                    display: 'flex', alignItems: 'center', gap: 8,
+                                    color: 'var(--fg-secondary)',
+                                    fontSize: 'var(--text-sm)', fontWeight: 600,
+                                    transition: 'all 0.2s',
+                                }}
+                            >
+                                💸 Settlements
+                            </button>
+                        </div>
+
                         {/* Recent Transactions */}
                         <div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-2)' }}>
-                                <h3 style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--fg-secondary)' }}>Recent</h3>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-3)' }}>
+                                <h3 style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--fg-secondary)', letterSpacing: '-0.01em' }}>Recent</h3>
                                 <Button variant="ghost" size="sm" onClick={() => setTab('activity')}>View All</Button>
                             </div>
                             {recentTransactions.length > 0 ? (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
                                     {recentTransactions.map((txn) => (
                                         <Card key={txn.id} interactive padding="compact">
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
@@ -403,7 +601,7 @@ export default function GroupDetailPage() {
                         </div>
 
                         {/* Quick Actions */}
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)', marginTop: 'var(--space-1)' }}>
                             <Button fullWidth leftIcon={<Plus size={16} />} onClick={() => router.push('/transactions/new')}>
                                 Add Expense
                             </Button>
@@ -492,7 +690,12 @@ export default function GroupDetailPage() {
                             );
                         })}
                         <Button fullWidth variant="outline" leftIcon={<Users size={16} />} onClick={() => setShowInvite(true)}>
-                            Invite Members
+                            Invite via Link
+                        </Button>
+                        <Button fullWidth variant="secondary" leftIcon={<UserPlus size={16} />} onClick={openContactPicker}
+                            style={{ marginTop: 'var(--space-1)' }}
+                        >
+                            Invite from Contacts
                         </Button>
                     </motion.div>
                 )}
@@ -537,14 +740,66 @@ export default function GroupDetailPage() {
                         )}
                     </motion.div>
                 )}
+
+                {tab === 'chat' && (
+                    <motion.div
+                        key="chat"
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -8 }}
+                        transition={{ duration: 0.2 }}
+                    >
+                        <GroupChat
+                            groupId={groupId}
+                            currentUserId={group.currentUserId}
+                            members={group.members}
+                            balances={group.balances}
+                            onPayRequest={(settlementId, amount, payeeName) =>
+                                setUpiModal({ open: true, settlementId, amount, payeeName })
+                            }
+                        />
+                    </motion.div>
+                )}
             </AnimatePresence>
+
+            {/* UPI Payment Modal */}
+            <UpiPaymentModal
+                isOpen={upiModal.open}
+                onClose={() => setUpiModal({ open: false, settlementId: '', amount: 0, payeeName: '' })}
+                settlementId={upiModal.settlementId}
+                amount={upiModal.amount}
+                payeeName={upiModal.payeeName}
+                onPaymentComplete={() => {
+                    setUpiModal({ open: false, settlementId: '', amount: 0, payeeName: '' });
+                    fetchGroup();
+                }}
+            />
 
             {/* ── Invite Modal ── */}
             <Modal isOpen={showInvite} onClose={() => setShowInvite(false)} title="Invite to Group" size="small">
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', textAlign: 'center' }}>
                     <p style={{ color: 'var(--fg-secondary)', fontSize: 'var(--text-sm)' }}>
-                        Share this link with friends to invite them:
+                        Share this link or scan the QR code:
                     </p>
+
+                    {/* QR Code */}
+                    <div style={{
+                        display: 'flex', justifyContent: 'center',
+                        padding: 'var(--space-3)',
+                        background: '#fff',
+                        borderRadius: 'var(--radius-lg)',
+                        width: 'fit-content', margin: '0 auto',
+                    }}>
+                        <QRCodeSVG
+                            value={`${typeof window !== 'undefined' ? window.location.origin : ''}/join/${group.inviteCode}`}
+                            size={160}
+                            level="M"
+                            bgColor="#ffffff"
+                            fgColor="#1a1a2e"
+                        />
+                    </div>
+
+                    {/* Link row */}
                     <div style={{
                         display: 'flex',
                         gap: 'var(--space-2)',
@@ -584,7 +839,7 @@ export default function GroupDetailPage() {
                                 window.open(`sms:?body=${msg}`, '_blank');
                             }}
                         >
-                            📱 SMS
+                            💬 SMS
                         </Button>
                         <Button fullWidth variant="ghost" size="sm"
                             onClick={() => {
@@ -594,9 +849,62 @@ export default function GroupDetailPage() {
                                 window.open(`mailto:?subject=${subject}&body=${body}`, '_blank');
                             }}
                         >
-                            📧 Email
+                            ✉️ Email
                         </Button>
                     </div>
+                </div>
+            </Modal>
+
+            {/* ── Contact Picker Modal ── */}
+            <Modal isOpen={showContactPicker} onClose={() => setShowContactPicker(false)} title="Invite from Contacts" size="small">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                    {loadingContacts ? (
+                        <div style={{ textAlign: 'center', padding: 'var(--space-6)' }}>
+                            <Loader2 size={24} style={{ color: 'var(--accent-500)', animation: 'spin 1s linear infinite', margin: '0 auto' }} />
+                            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--fg-tertiary)', marginTop: 'var(--space-2)' }}>Loading contacts...</p>
+                        </div>
+                    ) : inviteContacts.length === 0 ? (
+                        <div style={{ textAlign: 'center', padding: 'var(--space-6)' }}>
+                            <Users size={32} style={{ color: 'var(--fg-muted)', margin: '0 auto var(--space-2)' }} />
+                            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--fg-tertiary)' }}>No contacts on the app yet</p>
+                        </div>
+                    ) : (
+                        <>
+                            <p style={{ fontSize: 'var(--text-xs)', color: 'var(--fg-tertiary)', marginBottom: 'var(--space-1)' }}>
+                                Select a contact to invite to {group.name}:
+                            </p>
+                            {inviteContacts.map((contact) => {
+                                const isAlreadyMember = group.members.some(m => m.userId === contact.linkedUser?.id);
+                                const isSending = sendingContactInvite === contact.linkedUser?.id;
+                                return (
+                                    <button
+                                        key={contact.id}
+                                        onClick={() => !isAlreadyMember && !isSending && sendContactInvite(contact)}
+                                        disabled={isAlreadyMember || isSending}
+                                        style={{
+                                            display: 'flex', alignItems: 'center', gap: 'var(--space-3)',
+                                            padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-lg)',
+                                            border: '1px solid var(--border-default)', background: 'var(--bg-secondary)',
+                                            cursor: isAlreadyMember ? 'not-allowed' : 'pointer',
+                                            color: 'var(--fg-primary)', fontSize: 'var(--text-sm)', fontWeight: 600,
+                                            transition: 'all 0.15s ease', opacity: isAlreadyMember ? 0.5 : 1,
+                                            textAlign: 'left', width: '100%',
+                                        }}
+                                    >
+                                        <Avatar name={contact.name} image={contact.linkedUser?.image} size="sm" />
+                                        <span style={{ flex: 1 }}>{contact.name}</span>
+                                        {isAlreadyMember ? (
+                                            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--fg-tertiary)' }}>Already in</span>
+                                        ) : isSending ? (
+                                            <Loader2 size={16} style={{ color: 'var(--accent-500)', animation: 'spin 1s linear infinite' }} />
+                                        ) : (
+                                            <Send size={14} style={{ color: 'var(--accent-500)' }} />
+                                        )}
+                                    </button>
+                                );
+                            })}
+                        </>
+                    )}
                 </div>
             </Modal>
 

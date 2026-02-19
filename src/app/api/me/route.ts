@@ -11,7 +11,7 @@ export async function GET() {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const user = await prisma.user.findUnique({
+        let user = await prisma.user.findUnique({
             where: { email: session.user.email },
             select: {
                 id: true,
@@ -26,6 +26,32 @@ export async function GET() {
 
         if (!user) {
             return NextResponse.json({ error: 'User not found' }, { status: 404 });
+        }
+
+        // Auto-sync: if session has image/name but DB doesn't, persist it
+        // This fixes cases where DB was unreachable during OAuth sign-in
+        const needsSync: Record<string, string> = {};
+        if (!user.image && session.user.image) needsSync.image = session.user.image;
+        if (!user.name && session.user.name) needsSync.name = session.user.name;
+
+        if (Object.keys(needsSync).length > 0) {
+            try {
+                user = await prisma.user.update({
+                    where: { email: session.user.email },
+                    data: needsSync,
+                    select: {
+                        id: true,
+                        name: true,
+                        email: true,
+                        image: true,
+                        phone: true,
+                        upiId: true,
+                        createdAt: true,
+                    },
+                });
+            } catch {
+                // If sync fails, return existing data — not critical
+            }
         }
 
         return NextResponse.json(user);

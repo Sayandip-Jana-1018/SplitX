@@ -8,6 +8,7 @@ import Button from '@/components/ui/Button';
 import Modal from '@/components/ui/Modal';
 import Avatar from '@/components/ui/Avatar';
 import { useToast } from '@/components/ui/Toast';
+import { PaymentIcon } from '@/components/ui/Icons';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { CATEGORIES, PAYMENT_METHODS, formatCurrency, toPaise, cn } from '@/lib/utils';
 import { z } from 'zod';
@@ -44,15 +45,37 @@ export default function QuickAddPage() {
     const [showMethods, setShowMethods] = useState(false);
     const [showGroups, setShowGroups] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [selectedMembers, setSelectedMembers] = useState<Set<string>>(new Set());
+
+    // Custom split state
+    const [splitType, setSplitType] = useState<'equal' | 'custom'>('equal');
+    const [customSplits, setCustomSplits] = useState<{ userId: string; amount: number }[]>([]);
 
     // Pre-fill from URL params (from scan page)
     useEffect(() => {
         const paramAmount = searchParams.get('amount');
         const paramTitle = searchParams.get('title');
         const paramMethod = searchParams.get('method');
+        const paramSplitData = searchParams.get('splitData');
+
         if (paramAmount) setAmount(paramAmount);
         if (paramTitle) setTitle(paramTitle);
         if (paramMethod) setMethod(paramMethod);
+
+        if (paramSplitData) {
+            try {
+                const splits = JSON.parse(paramSplitData);
+                if (Array.isArray(splits) && splits.length > 0) {
+                    setCustomSplits(splits);
+                    setSplitType('custom');
+                    // Sync selected members with the custom split
+                    const memberIds = new Set(splits.map((s: { userId: string }) => s.userId));
+                    setSelectedMembers(memberIds);
+                }
+            } catch (e) {
+                console.error("Failed to parse split data", e);
+            }
+        }
     }, [searchParams]);
 
     // Fetch groups on mount
@@ -110,6 +133,12 @@ export default function QuickAddPage() {
                         image: m.user.image || null,
                     }));
                     setMembers(memberList);
+
+                    // Only default select all if NOT using custom split from URL
+                    if (splitType !== 'custom') {
+                        setSelectedMembers(new Set(memberList.map((m: { id: string }) => m.id)));
+                    }
+
                     // Default payer to current user
                     if (currentUser && memberList.some((m: { id: string }) => m.id === currentUser.id)) {
                         setPayerId(currentUser.id);
@@ -122,12 +151,44 @@ export default function QuickAddPage() {
             }
         }
         loadGroupDetail();
-    }, [selectedGroupId, currentUser]);
+    }, [selectedGroupId, currentUser, splitType]); // Added splitType to deps to prevent overwriting custom split
 
     const numericAmount = parseFloat(amount) || 0;
-    const splitPerPerson = members.length > 0
-        ? formatCurrency(toPaise(numericAmount / members.length))
+    const selectedCount = selectedMembers.size;
+    const splitPerPerson = selectedCount > 0
+        ? formatCurrency(toPaise(numericAmount / selectedCount))
         : '₹0';
+
+    // Calculate custom amount for a member if custom split is active
+    const getMemberAmount = (memberId: string) => {
+        if (splitType !== 'custom') return null;
+        const split = customSplits.find(s => s.userId === memberId);
+        return split ? formatCurrency(split.amount) : '₹0';
+    };
+
+    const toggleMember = useCallback((memberId: string) => {
+        // If in custom mode, switching members resets to equal mode because we lose the custom data context
+        if (splitType === 'custom') {
+            if (window.confirm("Changing members will potentialy reset the custom items split. Continue to 'Equal Split'?")) {
+                setSplitType('equal');
+                setCustomSplits([]);
+            } else {
+                return;
+            }
+        }
+
+        setSelectedMembers(prev => {
+            const next = new Set(prev);
+            if (next.has(memberId)) {
+                // Don't allow deselecting the payer or going below 1 selected
+                if (memberId === payerId || next.size <= 1) return prev;
+                next.delete(memberId);
+            } else {
+                next.add(memberId);
+            }
+            return next;
+        });
+    }, [payerId, splitType]);
 
     const handleNumPad = useCallback((key: string) => {
         if (key === 'del') {
@@ -186,17 +247,25 @@ export default function QuickAddPage() {
 
         setSaving(true);
         try {
+            const payload: any = {
+                tripId,
+                title: effectiveTitle,
+                amount: toPaise(numericAmount),
+                category,
+                method,
+                splitType,
+            };
+
+            if (splitType === 'custom') {
+                payload.splits = customSplits;
+            } else {
+                payload.splitAmong = Array.from(selectedMembers);
+            }
+
             const res = await fetch('/api/transactions', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    tripId,
-                    title: effectiveTitle,
-                    amount: toPaise(numericAmount),
-                    category,
-                    method,
-                    splitType: 'equal',
-                }),
+                body: JSON.stringify(payload),
             });
 
             if (res.ok) {
@@ -297,15 +366,134 @@ export default function QuickAddPage() {
                 </button>
             </div>
 
+            {/* ── Split Among Toggle ── */}
+            {members.length > 1 && (
+                <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 'var(--space-4)', // Increased from space-2 for better breathing room
+                    marginTop: 'var(--space-2)',
+                    marginBottom: 'var(--space-2)',
+                }}>
+                    <span style={{
+                        fontSize: 'var(--text-xs)',
+                        color: 'var(--fg-tertiary)',
+                        fontWeight: 600,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.08em',
+                        textAlign: 'center',
+                        opacity: 0.8
+                    }}>
+                        {splitType === 'custom' ? 'Split by Items (Custom)' : 'Split among'}
+                    </span>
+                    <div style={{
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        justifyContent: 'center',
+                        gap: 10, // Increased gap between pills (was 6)
+                    }}>
+                        {members.map((member) => {
+                            const isSelected = selectedMembers.has(member.id);
+                            const isPayer = member.id === payerId;
+                            const customAmount = getMemberAmount(member.id);
+
+                            return (
+                                <motion.button
+                                    key={member.id}
+                                    whileTap={{ scale: 0.95 }}
+                                    onClick={() => toggleMember(member.id)}
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 8, // Increased internal gap
+                                        padding: '6px 12px 6px 6px', // More breathing room inside pill
+                                        borderRadius: 'var(--radius-full)',
+                                        border: isSelected
+                                            ? '1.5px solid var(--accent-500)'
+                                            : '1.5px solid var(--border-default)',
+                                        background: isSelected
+                                            ? 'rgba(var(--accent-500-rgb), 0.08)' // Slightly more visible background
+                                            : 'var(--bg-surface)', // Explicit surface color
+                                        cursor: isPayer ? 'default' : 'pointer',
+                                        opacity: isSelected ? 1 : 0.6,
+                                        transition: 'all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1)',
+                                        boxShadow: isSelected ? '0 2px 8px rgba(var(--accent-500-rgb), 0.15)' : 'none', // Subtle lift for selected
+                                    }}
+                                >
+                                    <Avatar name={member.name} image={member.image} size="sm" /> {/* Bumped up to size="sm" for better visibility */}
+                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1.1 }}>
+                                        <span style={{
+                                            fontSize: 'var(--text-sm)', // Slightly larger text
+                                            fontWeight: isSelected ? 600 : 500,
+                                            textDecoration: isSelected ? 'none' : 'line-through',
+                                            color: isSelected ? 'var(--fg-primary)' : 'var(--fg-tertiary)',
+                                        }}>
+                                            {member.id === currentUser?.id ? 'You' : member.name.split(' ')[0]}
+                                        </span>
+                                        {/* Show quantity or small numeric value if custom split */}
+                                        {splitType === 'custom' && isSelected && (
+                                            <span style={{
+                                                fontSize: 10,
+                                                fontWeight: 600,
+                                                color: 'var(--accent-600)',
+                                                marginTop: 2
+                                            }}>
+                                                {customAmount}
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    {isPayer && (
+                                        <span style={{
+                                            fontSize: 9,
+                                            background: 'var(--accent-500)',
+                                            color: '#fff',
+                                            padding: '2px 6px',
+                                            borderRadius: 'var(--radius-full)',
+                                            fontWeight: 700,
+                                            letterSpacing: '0.02em',
+                                            marginLeft: 2,
+                                        }}>PAID</span>
+                                    )}
+                                </motion.button>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+
             {/* ── Split Info ── */}
-            {numericAmount > 0 && members.length > 0 && (
+            {numericAmount > 0 && selectedCount > 0 && (
                 <motion.div
                     className={styles.splitInfo}
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
+                    style={{ marginTop: 'var(--space-2)' }} // Add slight adjustment
                 >
-                    Split equally: <span className={styles.splitAmount}>{splitPerPerson}</span> / person
-                    ({members.length} people)
+                    {splitType === 'custom' ? (
+                        <>
+                            <span style={{ color: 'var(--accent-500)', fontWeight: 600 }}>Item-based split</span>
+                            {' '} · {selectedCount} people
+                            <button
+                                onClick={() => {
+                                    setSplitType('equal');
+                                    setCustomSplits([]);
+                                }}
+                                style={{
+                                    marginLeft: 8, fontSize: 'var(--text-xs)',
+                                    textDecoration: 'underline', color: 'var(--fg-tertiary)',
+                                    background: 'none', border: 'none', cursor: 'pointer'
+                                }}
+                            >
+                                Reset to Equal
+                            </button>
+                        </>
+                    ) : (
+                        <>
+                            Split equally: <span className={styles.splitAmount}>{splitPerPerson}</span> / person
+                            ({selectedCount} of {members.length} people)
+                        </>
+                    )}
                 </motion.div>
             )}
 
@@ -346,6 +534,7 @@ export default function QuickAddPage() {
                 onClose={() => setShowGroups(false)}
                 title="Select Group"
                 size="small"
+                transparentOverlay
             >
                 <div className={styles.payerGrid}>
                     {groups.map((g) => (
@@ -374,6 +563,7 @@ export default function QuickAddPage() {
                 onClose={() => setShowCategories(false)}
                 title="Category"
                 size="small"
+                transparentOverlay
             >
                 <div className={styles.categoryGrid}>
                     {Object.entries(CATEGORIES).map(([key, val]) => (
@@ -399,6 +589,7 @@ export default function QuickAddPage() {
                 onClose={() => setShowPayers(false)}
                 title="Who paid?"
                 size="small"
+                transparentOverlay
             >
                 <div className={styles.payerGrid}>
                     {members.map((member) => (
@@ -429,6 +620,7 @@ export default function QuickAddPage() {
                 onClose={() => setShowMethods(false)}
                 title="Payment Method"
                 size="small"
+                transparentOverlay
             >
                 <div className={styles.payerGrid}>
                     {Object.entries(PAYMENT_METHODS).map(([key, val]) => (
@@ -441,7 +633,7 @@ export default function QuickAddPage() {
                             whileTap={{ scale: 0.97 }}
                             onClick={() => { setMethod(key); setShowMethods(false); }}
                         >
-                            <span style={{ fontSize: 24 }}>{val.emoji}</span>
+                            <PaymentIcon method={key} size={22} />
                             <span className={styles.payerName}>{val.label}</span>
                             {method === key && (
                                 <Check size={16} style={{ marginLeft: 'auto', color: 'var(--accent-500)' }} />

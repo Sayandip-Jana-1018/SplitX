@@ -25,7 +25,7 @@ const glass: React.CSSProperties = {
 
 export default function SettingsPage() {
     const { theme, palette, setTheme, setPalette } = useThemeContext();
-    const { user, loading: userLoading } = useCurrentUser();
+    const { user, loading: userLoading, refresh: refreshUser } = useCurrentUser();
     const { toast } = useToast();
 
     const [editingProfile, setEditingProfile] = useState(false);
@@ -54,13 +54,15 @@ export default function SettingsPage() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     name: editName.trim(),
-                    phone: editPhone.trim() || undefined,
-                    upiId: editUpiId.trim() || undefined,
+                    phone: editPhone.trim(),
+                    upiId: editUpiId.trim(),
                 }),
             });
             if (res.ok) {
                 toast('Profile updated', 'success');
                 setEditingProfile(false);
+                // Refresh cached user so data persists across navigations
+                await refreshUser();
             } else {
                 toast('Failed to update', 'error');
             }
@@ -114,7 +116,7 @@ export default function SettingsPage() {
         : '...';
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', maxWidth: 500, width: '100%', margin: '0 auto' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', maxWidth: 500, width: '100%', margin: '0 auto' }} suppressHydrationWarning>
 
             {/* ═══ PROFILE CARD — Glassmorphic with glow ring ═══ */}
             <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.5, delay: 0.05 }}>
@@ -235,7 +237,7 @@ export default function SettingsPage() {
                                     <div style={{ fontSize: 'var(--text-xs)', color: 'var(--fg-tertiary)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                         {user?.email || ''}
                                     </div>
-                                    <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--fg-muted)', marginTop: 2 }}>
+                                    <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--fg-muted)', marginTop: 2 }} suppressHydrationWarning>
                                         Member since {memberSince}
                                     </div>
                                 </div>

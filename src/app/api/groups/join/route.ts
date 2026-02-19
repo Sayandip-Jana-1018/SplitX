@@ -54,6 +54,24 @@ export async function POST(req: Request) {
             },
         });
 
+        // Notify all existing members about the new joiner
+        const existingMemberIds = group.members
+            .map(m => m.userId)
+            .filter(id => id !== user.id);
+
+        if (existingMemberIds.length > 0) {
+            const joinerName = user.name || user.email?.split('@')[0] || 'Someone';
+            await prisma.notification.createMany({
+                data: existingMemberIds.map(memberId => ({
+                    userId: memberId,
+                    type: 'member_joined',
+                    title: 'New member joined',
+                    body: `${joinerName} joined "${group.name}"`,
+                    link: `/groups/${group.id}`,
+                })),
+            });
+        }
+
         return NextResponse.json({
             message: 'Joined successfully',
             groupId: group.id,

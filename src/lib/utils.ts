@@ -115,9 +115,9 @@ export const CATEGORIES: Record<string, { label: string; emoji: string }> = {
 /** Payment method labels and icons */
 export const PAYMENT_METHODS: Record<string, { label: string; emoji: string }> = {
     cash: { label: 'Cash', emoji: '💵' },
-    gpay: { label: 'Google Pay', emoji: '📱' },
-    phonepe: { label: 'PhonePe', emoji: '📱' },
-    paytm: { label: 'Paytm', emoji: '📱' },
+    gpay: { label: 'Google Pay', emoji: '🔵' },
+    phonepe: { label: 'PhonePe', emoji: '🟣' },
+    paytm: { label: 'Paytm', emoji: '🔷' },
     upi_other: { label: 'Other UPI', emoji: '📲' },
     card: { label: 'Card', emoji: '💳' },
 };

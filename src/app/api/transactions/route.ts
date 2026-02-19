@@ -3,6 +3,20 @@ import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { z } from 'zod';
 
+// Category labels for notification messages
+const CATEGORY_LABELS: Record<string, string> = {
+    general: 'General',
+    food: 'Food & Drinks',
+    transport: 'Transport',
+    shopping: 'Shopping',
+    tickets: 'Tickets & Entry',
+    fuel: 'Fuel',
+    medical: 'Medical',
+    entertainment: 'Entertainment',
+    stay: 'Accommodation',
+    other: 'Other',
+};
+
 const CreateTransactionSchema = z.object({
     tripId: z.string().cuid(),
     title: z.string().min(1).max(100),
@@ -11,6 +25,7 @@ const CreateTransactionSchema = z.object({
     method: z.string().default('cash'),
     description: z.string().optional(),
     splitType: z.enum(['equal', 'percentage', 'custom']).default('equal'),
+    splitAmong: z.array(z.string()).optional(), // subset of member IDs to split among
     splits: z.array(z.object({
         userId: z.string().cuid(),
         amount: z.number().int().nonnegative(),
@@ -118,16 +133,25 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'Trip not found or access denied' }, { status: 404 });
         }
 
-        const { title, amount, category, method, description, splitType, splits } = parsed.data;
+        const { title, amount, category, method, description, splitType, splitAmong, splits } = parsed.data;
 
         // Calculate splits
         let splitData: { userId: string; amount: number }[] = [];
 
         if (splitType === 'equal') {
-            const memberIds: string[] = trip.group.members.map((m: { userId: string }) => m.userId);
-            const perPerson = Math.floor(amount / memberIds.length);
-            const remainder = amount - perPerson * memberIds.length;
-            splitData = memberIds.map((id: string, i: number) => ({
+            // Use splitAmong if provided, otherwise all group members
+            const allMemberIds: string[] = trip.group.members.map((m: { userId: string }) => m.userId);
+            const targetIds = splitAmong && splitAmong.length > 0
+                ? allMemberIds.filter(id => splitAmong.includes(id))
+                : allMemberIds;
+
+            if (targetIds.length === 0) {
+                return NextResponse.json({ error: 'At least one member must be included in the split' }, { status: 400 });
+            }
+
+            const perPerson = Math.floor(amount / targetIds.length);
+            const remainder = amount - perPerson * targetIds.length;
+            splitData = targetIds.map((id: string, i: number) => ({
                 userId: id,
                 amount: perPerson + (i === 0 ? remainder : 0),
             }));
@@ -159,8 +183,34 @@ export async function POST(req: Request) {
             },
         });
 
+        // Send notifications to other group members
+        try {
+            const otherMemberIds = trip.group.members
+                .map((m: { userId: string }) => m.userId)
+                .filter((id: string) => id !== user.id);
+
+            if (otherMemberIds.length > 0) {
+                const payerName = user.name || 'Someone';
+                const categoryLabel = CATEGORY_LABELS[category] || category;
+                const amountFormatted = `₹${(amount / 100).toLocaleString('en-IN')}`;
+
+                await prisma.notification.createMany({
+                    data: otherMemberIds.map((memberId: string) => ({
+                        userId: memberId,
+                        type: 'new_expense',
+                        title: `${payerName} added an expense`,
+                        body: `${amountFormatted} for ${categoryLabel} — "${title}" in ${trip.group.name}`,
+                        link: `/groups/${trip.group.id}`,
+                    })),
+                });
+            }
+        } catch {
+            // Notification failure shouldn't block the transaction
+        }
+
         return NextResponse.json(transaction, { status: 201 });
     } catch (error) {
         return NextResponse.json({ error: 'Failed to create transaction' }, { status: 500 });
     }
 }
+

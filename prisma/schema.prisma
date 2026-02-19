@@ -50,6 +50,16 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  email     String
+  token     String   @unique
+  expires   DateTime
+  createdAt DateTime @default(now())
+
+  @@unique([email, token])
+}
+
 // ── App Models ───────────────────────────────────────────────
 
 model User {
@@ -75,11 +85,16 @@ model User {
   contacts       Contact[]      @relation("UserContacts")
   linkedContacts Contact[]      @relation("LinkedContacts")
 
+  // Invitation relations
+  invitationsSent     GroupInvitation[] @relation("InvitationsSent")
+  invitationsReceived GroupInvitation[] @relation("InvitationsReceived")
+
   // Phase 2 relations
   notifications  Notification[]
   budgets        Budget[]
   auditLogs      AuditLog[]
   chatMessages   ChatMessage[]
+  groupMessages  GroupMessage[] @relation("GroupMessagesSent")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -92,9 +107,11 @@ model Group {
   inviteCode  String   @unique @default(cuid())
   ownerId     String
 
-  owner   User          @relation("GroupOwner", fields: [ownerId], references: [id])
-  members GroupMember[]
-  trips   Trip[]
+  owner       User              @relation("GroupOwner", fields: [ownerId], references: [id])
+  members     GroupMember[]
+  trips       Trip[]
+  invitations GroupInvitation[]
+  messages    GroupMessage[]
 
   deletedAt DateTime? // soft delete
   createdAt DateTime @default(now())
@@ -149,6 +166,7 @@ model Transaction {
   trip   Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
   payer  User @relation("Payer", fields: [payerId], references: [id])
   splits SplitItem[]
+  messages GroupMessage[]
 
   date      DateTime  @default(now())
   deletedAt DateTime? // soft delete
@@ -169,18 +187,20 @@ model SplitItem {
 }
 
 model Settlement {
-  id     String @id @default(cuid())
-  tripId String
-  fromId String // debtor
-  toId   String // creditor
-  amount Int    // in paise
-  status String @default("pending") // "pending" | "completed" | "cancelled"
-  method String?
-  note   String?
+  id        String @id @default(cuid())
+  tripId    String
+  fromId    String // debtor
+  toId      String // creditor
+  amount    Int    // in paise
+  status    String @default("pending") // "pending" | "initiated" | "paid_pending" | "confirmed" | "completed" | "cancelled"
+  method    String?
+  note      String?
+  utrNumber String? // UPI transaction reference for soft verification
 
-  trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
-  from User @relation("SettleFrom", fields: [fromId], references: [id])
-  to   User @relation("SettleTo", fields: [toId], references: [id])
+  trip     Trip           @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  from     User           @relation("SettleFrom", fields: [fromId], references: [id])
+  to       User           @relation("SettleTo", fields: [toId], references: [id])
+  messages GroupMessage[]
 
   deletedAt DateTime? // soft delete
   createdAt DateTime  @default(now())
@@ -204,6 +224,25 @@ model Contact {
   addedAt DateTime @default(now())
 
   @@unique([ownerId, email])
+}
+
+// ── Group Invitations ────────────────────────────────────────
+
+model GroupInvitation {
+  id        String   @id @default(cuid())
+  groupId   String
+  inviterId String
+  inviteeId String
+  status    String   @default("pending") // "pending" | "accepted" | "declined"
+
+  group   Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  inviter User  @relation("InvitationsSent", fields: [inviterId], references: [id])
+  invitee User  @relation("InvitationsReceived", fields: [inviteeId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([groupId, inviteeId])
 }
 
 // ── Phase 2: Notifications ──────────────────────────────────
@@ -262,4 +301,28 @@ model ChatMessage {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
+}
+
+// ── Phase 2: Group Chat ─────────────────────────────────────
+
+model GroupMessage {
+  id        String   @id @default(cuid())
+  groupId   String
+  senderId  String
+  content   String   @db.Text
+  type      String   @default("text") // "text" | "payment_reminder" | "expense_added" | "system"
+
+  // For payment_reminder type: link to the settlement
+  settlementId  String?
+  // For expense_added type: link to the transaction
+  transactionId String?
+
+  group       Group        @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  sender      User         @relation("GroupMessagesSent", fields: [senderId], references: [id])
+  settlement  Settlement?  @relation(fields: [settlementId], references: [id])
+  transaction Transaction? @relation(fields: [transactionId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([groupId, createdAt])
 }

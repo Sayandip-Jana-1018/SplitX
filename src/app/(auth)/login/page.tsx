@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { signIn } from 'next-auth/react';
 import { motion } from 'framer-motion';
-import { Mail, Lock, LogIn } from 'lucide-react';
+import { Mail, Lock, LogIn, Eye, EyeOff } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Button from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -16,6 +16,7 @@ export default function LoginPage() {
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -125,15 +126,35 @@ export default function LoginPage() {
                             required
                         />
 
-                        <Input
-                            label="Password"
-                            type="password"
-                            placeholder="••••••••"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            leftIcon={<Lock size={18} />}
-                            required
-                        />
+                        <div style={{ position: 'relative' }}>
+                            <Input
+                                label="Password"
+                                type={showPassword ? 'text' : 'password'}
+                                placeholder="••••••••"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                leftIcon={<Lock size={18} />}
+                                required
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setShowPassword(!showPassword)}
+                                style={{
+                                    position: 'absolute', right: 12, top: 34,
+                                    background: 'none', border: 'none',
+                                    color: 'var(--fg-tertiary)', cursor: 'pointer',
+                                    padding: 4, display: 'flex',
+                                }}
+                            >
+                                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                            </button>
+                        </div>
+
+                        <div style={{ textAlign: 'center', marginTop: -4, marginBottom: 4 }}>
+                            <a href="/forgot-password" className={styles.link} style={{ fontSize: 'var(--text-xs)', opacity: 0.8 }}>
+                                Forgot password?
+                            </a>
+                        </div>
 
                         <Button
                             type="submit"
