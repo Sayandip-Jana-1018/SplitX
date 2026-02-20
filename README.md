@@ -1,4 +1,4 @@
-# ⚡ AutoSplit — Smart Expense Splitting & Settlement
+# ⚡ SplitX — Smart Expense Splitting & Settlement
 
 > A premium, full-stack expense-splitting web app built with **Next.js 16**, **Prisma**, **PostgreSQL (Neon)**, and **NextAuth v5**. Features glassmorphic UI, AI-powered receipt scanning (Tesseract OCR + OpenAI Vision), Gemini AI chat assistant, real-time group chat with avatars, debt simplification, real-time analytics, smart notifications, and 12 color themes.
 
@@ -370,8 +370,8 @@ src/
 ### 1. Clone & Install
 
 ```bash
-git clone https://github.com/your-username/AutoSplit.git
-cd AutoSplit
+git clone https://github.com/your-username/SplitX.git
+cd SplitX
 npm install
 ```
 
@@ -464,7 +464,7 @@ npm start
 
 ## 🧮 Debt Simplification Algorithm
 
-AutoSplit uses a **dual-algorithm approach** to minimize settlement transfers:
+SplitX uses a **dual-algorithm approach** to minimize settlement transfers:
 
 ### Algorithm 1: Greedy Netting
 1. Compute each member's **net balance** (total paid − total owed)
@@ -484,7 +484,7 @@ The engine runs both algorithms and **automatically picks the one with fewer tra
 
 ## 🎨 Theming System
 
-AutoSplit uses a **CSS custom properties** design system with HSL-based color tokens:
+SplitX uses a **CSS custom properties** design system with HSL-based color tokens:
 
 - **12 accent palettes**: `rose`, `ocean`, `emerald`, `violet`, `amber`, `slate`, `coral`, `teal`, `indigo`, `lime`, `fuchsia`, `cyan`
 - **Dark / Light modes** with automatic system detection

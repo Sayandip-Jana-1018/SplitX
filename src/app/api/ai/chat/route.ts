@@ -234,7 +234,7 @@ export async function POST(req: Request) {
 
         // ── Build comprehensive context ──
         const contextStr = `
-═══ AUTOSPLIT AI CONTEXT ═══
+═══ SplitX AI CONTEXT ═══
 User: ${user.name || 'Unknown'}
 
 ── NET BALANCE ──
@@ -316,7 +316,7 @@ Note: All amounts shown are in ₹ (INR). Internally stored in paise (100 paise 
 
 /** Call Gemini API */
 async function callGemini(apiKey: string, context: string, message: string): Promise<string> {
-    const systemPrompt = `You are AutoSplit AI, the intelligent financial assistant inside AutoSplit — a premium expense-splitting app for groups and trips.
+    const systemPrompt = `You are SplitX AI, the intelligent financial assistant inside SplitX — a premium expense-splitting app for groups and trips.
 
 Your capabilities:
 - Answer questions about who owes whom with exact amounts
@@ -484,7 +484,7 @@ function generateLocalResponse(
             : ctx.netBalance < -1
                 ? `You owe ₹${(Math.abs(ctx.netBalance) / 100).toFixed(2)} overall.`
                 : 'All settled up!';
-        return `Hey ${ctx.userName}! 👋 I'm your AutoSplit AI assistant.\n\n${netStr}\n\nTry asking:\n• "Who owes me?"\n• "My spending breakdown"\n• "Show my balance"\n• "Recent transactions"\n• "How to settle up?"`;
+        return `Hey ${ctx.userName}! 👋 I'm your SplitX AI assistant.\n\n${netStr}\n\nTry asking:\n• "Who owes me?"\n• "My spending breakdown"\n• "Show my balance"\n• "Recent transactions"\n• "How to settle up?"`;
     }
 
     // Default

@@ -43,8 +43,8 @@ export default function GroupInvite({ groupName, inviteCode, emoji = '✈️' }:
         if (navigator.share) {
             try {
                 await navigator.share({
-                    title: `Join ${groupName} on AutoSplit`,
-                    text: `${emoji} You've been invited to "${groupName}" on AutoSplit! Track expenses together.`,
+                    title: `Join ${groupName} on SplitX`,
+                    text: `${emoji} You've been invited to "${groupName}" on SplitX! Track expenses together.`,
                     url: inviteUrl,
                 });
             } catch {

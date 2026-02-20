@@ -42,7 +42,7 @@ export default function HighlightOCR() {
                         Never type a long restaurant bill again.
                     </h2>
                     <p className={styles.sectionSubtitle}>
-                        Drop an image of any paper receipt. AutoSplit&apos;s OCR instantly recognizes line-items, prices, and even obscure tax brackets.
+                        Drop an image of any paper receipt. SplitX&apos;s OCR instantly recognizes line-items, prices, and even obscure tax brackets.
                     </p>
                     <ul className={styles.highlightList}>
                         <li><span className={styles.highlightEmoji}>📊</span> Splits line items accurately including percentages</li>

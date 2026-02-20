@@ -68,7 +68,7 @@ const TOUR_STEPS: TourStep[] = [
     },
 ];
 
-const STORAGE_KEY = 'autosplit-tour-seen';
+const STORAGE_KEY = 'SplitX-tour-seen';
 
 export default function OnboardingTour() {
     const [active, setActive] = useState(false);

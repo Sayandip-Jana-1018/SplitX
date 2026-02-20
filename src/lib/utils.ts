@@ -1,5 +1,5 @@
 /**
- * AutoSplit — Utility Functions
+ * SplitX — Utility Functions
  */
 
 /** Format paise to rupee string: 45000 → "₹450.00" */

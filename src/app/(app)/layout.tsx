@@ -124,7 +124,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                         {/* Header */}
                         <motion.div className={styles.sidebarLogo} variants={navItemVariants}>
                             <div className={styles.sidebarLogoIcon}>⚡</div>
-                            <span className="gradient-text-animated" style={{ fontWeight: 800, fontSize: 20 }}>AutoSplit</span>
+                            <span className="gradient-text-animated" style={{ fontWeight: 800, fontSize: 20 }}>SplitX</span>
                             <motion.button
                                 className={styles.sidebarClose}
                                 onClick={() => setSidebarOpen(false)}
@@ -203,7 +203,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 <div className={styles.sidebarMesh} />
                 <div className={styles.sidebarLogo}>
                     <div className={styles.sidebarLogoIcon}>⚡</div>
-                    <span className="gradient-text-animated" style={{ fontWeight: 800, fontSize: 20 }}>AutoSplit</span>
+                    <span className="gradient-text-animated" style={{ fontWeight: 800, fontSize: 20 }}>SplitX</span>
                 </div>
                 <nav className={styles.sidebarNav}>
                     <span className={styles.sidebarSection}>

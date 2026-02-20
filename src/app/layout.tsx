@@ -4,7 +4,7 @@ import { ThemeProvider } from '@/components/providers/ThemeProvider';
 import { ToastProvider } from '@/components/ui/Toast';
 
 export const metadata: Metadata = {
-  title: 'AutoSplit ~ Smart Expense',
+  title: 'SplitX ~ Smart Expense',
   description:
     'Track group expenses effortlessly. Split bills, settle debts, and never argue about money again. Supports cash + UPI payments.',
   keywords: ['expense splitter', 'trip expenses', 'split bills', 'group payments', 'UPI'],
@@ -13,13 +13,13 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
-    title: 'AutoSplit',
+    title: 'SplitX',
   },
   icons: [
     { rel: 'icon', url: '/icons/icon.svg', type: 'image/svg+xml' },
   ],
   openGraph: {
-    title: 'AutoSplit ~ Smart Expense',
+    title: 'SplitX ~ Smart Expense',
     description: 'Track group expenses effortlessly. Split bills, settle debts, and never argue about money again.',
     type: 'website',
   },

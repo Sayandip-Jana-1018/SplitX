@@ -237,7 +237,7 @@ export default function ContactsPage() {
 
     const shareViaEmail = () => {
         if (!shareData || !shareContact) return;
-        const subject = encodeURIComponent('Join me on AutoSplit!');
+        const subject = encodeURIComponent('Join me on SplitX!');
         const body = encodeURIComponent(shareData.message);
         window.open(`mailto:${shareContact.email}?subject=${subject}&body=${body}`, '_blank');
     };

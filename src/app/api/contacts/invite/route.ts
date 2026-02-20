@@ -54,7 +54,7 @@ export async function POST(req: Request) {
             inviteUrl,
             contactEmail: contact.email,
             contactName: contact.name,
-            message: `Hey ${contact.name}! Join me on AutoSplit to split expenses easily. Click here: ${inviteUrl}`,
+            message: `Hey ${contact.name}! Join me on SplitX to split expenses easily. Click here: ${inviteUrl}`,
         });
     } catch (error) {
         console.error('Invite error:', error);

@@ -17,8 +17,8 @@ const stagger: Variants = {
 
 const FAQS = [
     {
-        q: "Is AutoSplit really completely free?",
-        a: "Yes. AutoSplit is a side-project originally built to solve my own friend group's annoyances. There are no paywalls, premium tiers, or hidden fees.",
+        q: "Is SplitX really completely free?",
+        a: "Yes. SplitX is a side-project originally built to solve my own friend group's annoyances. There are no paywalls, premium tiers, or hidden fees.",
     },
     {
         q: "How does Auto-Capture work?",
@@ -30,7 +30,7 @@ const FAQS = [
     },
     {
         q: "Does it work without the internet?",
-        a: "Yes! AutoSplit is a Progressive Web App (PWA). You can install it to your home screen, log expenses offline on a mountain, and it will sync once you reconnect.",
+        a: "Yes! SplitX is a Progressive Web App (PWA). You can install it to your home screen, log expenses offline on a mountain, and it will sync once you reconnect.",
     },
 ];
 

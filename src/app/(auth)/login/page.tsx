@@ -69,7 +69,7 @@ export default function LoginPage() {
                 >
                     <div className={styles.logo}>
                         <div className={styles.logoIcon}>⚡</div>
-                        AutoSplit
+                        SplitX
                     </div>
 
                     <h1 className={styles.title}>Welcome back</h1>

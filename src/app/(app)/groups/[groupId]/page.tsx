@@ -821,7 +821,7 @@ export default function GroupDetailPage() {
                     <Button fullWidth variant="secondary" leftIcon={<Share2 size={16} />}
                         onClick={() => {
                             const link = `${window.location.origin}/join/${group.inviteCode}`;
-                            const msg = encodeURIComponent(`Hey! Join our group "${group.name}" on AutoSplit to split expenses. Click here: ${link}`);
+                            const msg = encodeURIComponent(`Hey! Join our group "${group.name}" on SplitX to split expenses. Click here: ${link}`);
                             window.open(`https://wa.me/?text=${msg}`, '_blank');
                         }}
                     >
@@ -831,7 +831,7 @@ export default function GroupDetailPage() {
                         <Button fullWidth variant="ghost" size="sm"
                             onClick={() => {
                                 const link = `${window.location.origin}/join/${group.inviteCode}`;
-                                const msg = encodeURIComponent(`Hey! Join our group "${group.name}" on AutoSplit: ${link}`);
+                                const msg = encodeURIComponent(`Hey! Join our group "${group.name}" on SplitX: ${link}`);
                                 window.open(`sms:?body=${msg}`, '_blank');
                             }}
                         >
@@ -840,8 +840,8 @@ export default function GroupDetailPage() {
                         <Button fullWidth variant="ghost" size="sm"
                             onClick={() => {
                                 const link = `${window.location.origin}/join/${group.inviteCode}`;
-                                const subject = encodeURIComponent(`Join ${group.name} on AutoSplit`);
-                                const body = encodeURIComponent(`Hey! Join our group "${group.name}" on AutoSplit to split expenses.\n\nClick here: ${link}`);
+                                const subject = encodeURIComponent(`Join ${group.name} on SplitX`);
+                                const body = encodeURIComponent(`Hey! Join our group "${group.name}" on SplitX to split expenses.\n\nClick here: ${link}`);
                                 window.open(`mailto:?subject=${subject}&body=${body}`, '_blank');
                             }}
                         >

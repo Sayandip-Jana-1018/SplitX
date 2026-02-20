@@ -51,7 +51,7 @@ export default function ReceiptGalleryPage() {
                 // Also check localStorage for locally stored receipt thumbnails
                 const localReceipts: Record<string, string> = {};
                 try {
-                    const stored = localStorage.getItem('autosplit_receipts');
+                    const stored = localStorage.getItem('SplitX_receipts');
                     if (stored) {
                         const parsed = JSON.parse(stored);
                         Object.assign(localReceipts, parsed);

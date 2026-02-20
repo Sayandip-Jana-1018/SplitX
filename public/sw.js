@@ -1,4 +1,4 @@
-const CACHE_NAME = 'autosplit-v1';
+const CACHE_NAME = 'SplitX-v1';
 const STATIC_ASSETS = [
     '/',
     '/dashboard',

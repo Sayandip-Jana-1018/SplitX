@@ -24,7 +24,7 @@ const testimonials = [
         initial: 'A',
     },
     {
-        text: "We used to use Splitwise, but the ads were unbearable. AutoSplit is fast, gorgeous, and the one-tap UPI payments are game changers.",
+        text: "We used to use Splitwise, but the ads were unbearable. SplitX is fast, gorgeous, and the one-tap UPI payments are game changers.",
         name: 'Priya Sharma',
         role: 'Event Organizer',
         color: '#ec4899',
@@ -60,7 +60,7 @@ export default function Testimonials() {
         >
             <div className={styles.sectionHeader}>
                 <motion.h2 className={styles.sectionTitle} variants={fadeInUp}>
-                    Groups love AutoSplit.
+                    Groups love SplitX.
                 </motion.h2>
                 <motion.p className={styles.sectionSubtitle} variants={fadeInUp}>
                     Hear what real users have to say.

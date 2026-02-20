@@ -1,7 +1,7 @@
 {
-  "name": "AutoSplit",
-  "short_name": "AutoSplit",
-  "description": "Track every rupee — cash or UPI — across group trips. AutoSplit calculates who owes whom with minimal transfers.",
+  "name": "SplitX",
+  "short_name": "SplitX",
+  "description": "Track every rupee — cash or UPI — across group trips. SplitX calculates who owes whom with minimal transfers.",
   "start_url": "/dashboard",
   "display": "standalone",
   "background_color": "#0a0b0e",

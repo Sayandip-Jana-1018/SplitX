@@ -19,7 +19,7 @@ const features = [
     {
         icon: Zap,
         title: 'Silent Auto-Capture',
-        desc: 'Connect your SMS or UPI notifications. Whenever you make a payment for the trip, AutoSplit reads the alert and logs the expense instantly.',
+        desc: 'Connect your SMS or UPI notifications. Whenever you make a payment for the trip, SplitX reads the alert and logs the expense instantly.',
         gradient: 'linear-gradient(135deg, #f59e0b, #ef4444)',
         span: true,
     },
@@ -33,14 +33,14 @@ const features = [
     {
         icon: Smartphone,
         title: 'Offline Capable PWA',
-        desc: 'Install AutoSplit directly to your home screen. It works natively even without an internet connection on a hike.',
+        desc: 'Install SplitX directly to your home screen. It works natively even without an internet connection on a hike.',
         gradient: 'linear-gradient(135deg, #64748b, #334155)',
         span: false,
     },
     {
         icon: Shield,
         title: 'Privacy First Infrastructure',
-        desc: 'Your financial data stays yours. AutoSplit relies on localized Edge networking and strict row-level security. No ads, no trackers.',
+        desc: 'Your financial data stays yours. SplitX relies on localized Edge networking and strict row-level security. No ads, no trackers.',
         gradient: 'linear-gradient(135deg, #10b981, #06b6d4)',
         span: true,
     },

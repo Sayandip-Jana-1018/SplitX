@@ -1,5 +1,5 @@
 /**
- * AutoSplit — Settlement Algorithm
+ * SplitX — Settlement Algorithm
  * Greedy Min-Transfer Netting + Graph-Optimized Settlement
  *
  * Calculates who owes whom using minimal number of transfers.

@@ -285,7 +285,7 @@ export default function AIChatPanel() {
                                     color: 'var(--fg-primary)',
                                     letterSpacing: '-0.02em',
                                 }}>
-                                    AutoSplit AI
+                                    SplitX AI
                                 </h3>
                                 <p style={{
                                     fontSize: 11,

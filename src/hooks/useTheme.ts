@@ -24,8 +24,8 @@ export interface ColorPalette {
     swatches: string[];
 }
 
-const THEME_KEY = 'autosplit-theme';
-const PALETTE_KEY = 'autosplit-palette';
+const THEME_KEY = 'SplitX-theme';
+const PALETTE_KEY = 'SplitX-palette';
 
 export const COLOR_PALETTES: ColorPalette[] = [
     {

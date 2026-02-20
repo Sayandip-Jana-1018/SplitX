@@ -54,7 +54,7 @@ export default function Footer() {
             </div>
 
             <div className={styles.footerBottom}>
-                <p>© 2026 AutoSplit. Built for friends who hate Math.</p>
+                <p>© 2026 SplitX. Built for friends who hate Math.</p>
             </div>
         </footer>
     );

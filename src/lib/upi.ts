@@ -27,7 +27,7 @@ export function generateUpiLink({
     upiId,
     payeeName,
     amount,
-    note = 'AutoSplit Settlement',
+    note = 'SplitX Settlement',
     currency = 'INR',
 }: UpiPayParams): string {
     const params = new URLSearchParams({
@@ -53,7 +53,7 @@ export function getAppSpecificLinks(params: UpiPayParams) {
             pn: params.payeeName,
             am: params.amount.toFixed(2),
             cu: params.currency || 'INR',
-            tn: params.note || 'AutoSplit Settlement',
+            tn: params.note || 'SplitX Settlement',
         }).toString()}`,
         paytm: base, // Paytm supports standard upi:// scheme
     };
@@ -76,7 +76,7 @@ export function generateReminder(
     amount: number,
     upiId?: string
 ): string {
-    let msg = `Hey ${toName}! 👋\n\nYou owe ${fromName} ₹${amount.toLocaleString('en-IN')} from our trip expenses on AutoSplit.`;
+    let msg = `Hey ${toName}! 👋\n\nYou owe ${fromName} ₹${amount.toLocaleString('en-IN')} from our trip expenses on SplitX.`;
     if (upiId) {
         msg += `\n\nPay via UPI: ${upiId}`;
     }

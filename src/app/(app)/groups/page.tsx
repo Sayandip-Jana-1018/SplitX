@@ -410,7 +410,7 @@ export default function GroupsPage() {
                                     onClick={async () => {
                                         if (navigator.share) {
                                             try {
-                                                await navigator.share({ title: 'Join my group on AutoSplit', text: 'Join my expense-splitting group!', url: inviteLink });
+                                                await navigator.share({ title: 'Join my group on SplitX', text: 'Join my expense-splitting group!', url: inviteLink });
                                             } catch { /* user cancelled */ }
                                         } else {
                                             handleCopy();

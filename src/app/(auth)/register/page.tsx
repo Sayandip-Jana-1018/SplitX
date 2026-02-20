@@ -86,7 +86,7 @@ export default function RegisterPage() {
                 >
                     <div className={styles.logo}>
                         <div className={styles.logoIcon}>⚡</div>
-                        AutoSplit
+                        SplitX
                     </div>
 
                     <h1 className={styles.title}>Create account</h1>

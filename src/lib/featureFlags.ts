@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════
-// AutoSplit — Feature Flags
+// SplitX — Feature Flags
 // Toggle features on/off without code changes.
 // ═══════════════════════════════════════════════════════════════
 

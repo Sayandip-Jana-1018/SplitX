@@ -41,7 +41,7 @@ export default function Navbar() {
             <div className={styles.navInner}>
                 <Link href="/" className={styles.logo}>
                     <div className={styles.logoIcon}>⚡</div>
-                    {!isMobile && <span className={styles.logoText}>AutoSplit</span>}
+                    {!isMobile && <span className={styles.logoText}>SplitX</span>}
                 </Link>
                 <div className={styles.navActions}>
                     <ThemeSelector />

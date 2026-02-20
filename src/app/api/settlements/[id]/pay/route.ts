@@ -60,8 +60,8 @@ export async function POST(
 
         // Generate UPI deep link
         const amountInRupees = (settlement.amount / 100).toFixed(2);
-        const payeeName = encodeURIComponent(settlement.to.name || 'AutoSplit User');
-        const note = encodeURIComponent(`AutoSplit settlement`);
+        const payeeName = encodeURIComponent(settlement.to.name || 'SplitX User');
+        const note = encodeURIComponent(`SplitX settlement`);
         const upiUrl = `upi://pay?pa=${settlement.to.upiId}&pn=${payeeName}&am=${amountInRupees}&cu=INR&tn=${note}`;
 
         // Update settlement status to "initiated"

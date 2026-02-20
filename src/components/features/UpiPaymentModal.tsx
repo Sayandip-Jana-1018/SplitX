@@ -54,8 +54,8 @@ export default function UpiPaymentModal({
     const generateLocalLink = (upiId: string) => {
         const amountInRupees = (amount / 100).toFixed(2);
         const params = new URLSearchParams({
-            pa: upiId, pn: payeeName || 'AutoSplit User',
-            am: amountInRupees, cu: 'INR', tn: 'AutoSplit settlement',
+            pa: upiId, pn: payeeName || 'SplitX User',
+            am: amountInRupees, cu: 'INR', tn: 'SplitX settlement',
         });
         return `upi://pay?${params.toString()}`;
     };

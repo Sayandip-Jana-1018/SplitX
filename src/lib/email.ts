@@ -2,7 +2,7 @@ import { Resend } from 'resend';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-const FROM_EMAIL = process.env.EMAIL_FROM || 'AutoSplit <onboarding@resend.dev>';
+const FROM_EMAIL = process.env.EMAIL_FROM || 'SplitX <onboarding@resend.dev>';
 
 /**
  * Send a password reset email with a styled HTML template.
@@ -13,7 +13,7 @@ export async function sendPasswordResetEmail(email: string, token: string) {
     await resend.emails.send({
         from: FROM_EMAIL,
         to: email,
-        subject: 'Reset your AutoSplit password',
+        subject: 'Reset your SplitX password',
         html: `
 <!DOCTYPE html>
 <html>
@@ -27,7 +27,7 @@ export async function sendPasswordResetEmail(email: string, token: string) {
         <div style="text-align:center;margin-bottom:32px;">
             <div style="display:inline-flex;align-items:center;gap:8px;">
                 <div style="width:36px;height:36px;background:linear-gradient(135deg,#6366f1,#8b5cf6);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;">⚡</div>
-                <span style="font-size:20px;font-weight:800;color:#fff;">AutoSplit</span>
+                <span style="font-size:20px;font-weight:800;color:#fff;">SplitX</span>
             </div>
         </div>
 
@@ -52,7 +52,7 @@ export async function sendPasswordResetEmail(email: string, token: string) {
 
         <!-- Footer -->
         <p style="text-align:center;font-size:11px;color:#475569;margin-top:24px;">
-            © ${new Date().getFullYear()} AutoSplit · Expense splitting made easy
+            © ${new Date().getFullYear()} SplitX · Expense splitting made easy
         </p>
     </div>
 </body>

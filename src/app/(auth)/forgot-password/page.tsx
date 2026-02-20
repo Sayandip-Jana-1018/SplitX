@@ -67,7 +67,7 @@ export default function ForgotPasswordPage() {
                 >
                     <div className={styles.logo}>
                         <div className={styles.logoIcon}>⚡</div>
-                        AutoSplit
+                        SplitX
                     </div>
 
                     {sent ? (
