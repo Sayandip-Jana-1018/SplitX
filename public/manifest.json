@@ -2,7 +2,7 @@
   "name": "SplitX",
   "short_name": "SplitX",
   "description": "Track every rupee — cash or UPI — across group trips. SplitX calculates who owes whom with minimal transfers.",
-  "start_url": "/dashboard",
+  "start_url": "/",
   "display": "standalone",
   "background_color": "#0a0b0e",
   "theme_color": "#3b82f6",
