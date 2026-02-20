@@ -292,19 +292,18 @@ export default function DashboardPage() {
                                             Net Balance
                                         </div>
                                         <div style={{
-                                            fontSize: 'var(--text-4xl)', fontWeight: 800,
-                                            background: netBalance >= 0
-                                                ? 'linear-gradient(135deg, var(--color-success), #6ee7b7)'
-                                                : 'linear-gradient(135deg, var(--color-error), #fca5a5)',
-                                            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+                                            fontSize: 'var(--text-3xl)', fontWeight: 800,
+                                            color: netBalance >= 0 ? 'var(--color-success)' : 'var(--fg-primary)',
                                             lineHeight: 1.1,
                                         }}>
-                                            {netBalance >= 0 ? '+' : ''}{formatCurrency(Math.abs(netBalance))}
+                                            {netBalance >= 0 ? '+' : '-'}{formatCurrency(Math.abs(netBalance))}
                                         </div>
                                         <div style={{
-                                            fontSize: 'var(--text-xs)', color: 'var(--fg-tertiary)', marginTop: 6,
+                                            fontSize: 'var(--text-xs)',
+                                            color: netBalance > 0 ? 'var(--color-success)' : netBalance < 0 ? 'var(--color-error)' : 'var(--fg-tertiary)',
+                                            marginTop: 6, fontWeight: 500,
                                         }}>
-                                            {netBalance > 0 ? 'You\'re owed overall' : netBalance < 0 ? 'You owe overall' : 'All settled up!'}
+                                            {netBalance > 0 ? 'You\'re owed overall' : netBalance < 0 ? 'You owe overall' : 'All settled up! ✨'}
                                         </div>
                                     </div>
 
