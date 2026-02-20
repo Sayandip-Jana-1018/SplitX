@@ -11,7 +11,7 @@ const SettleSchema = z.object({
     note: z.string().optional(),
 });
 
-// GET /api/settlements?tripId=xxx — get computed settlements for a trip (or all trips if omitted)
+// GET /api/settlements?tripId=xxx — get computed settlements for a trip (or ALL trips if omitted)
 export async function GET(req: Request) {
     try {
         const session = await auth();
@@ -20,16 +20,21 @@ export async function GET(req: Request) {
         }
 
         const { searchParams } = new URL(req.url);
-        let tripId = searchParams.get('tripId');
+        const tripId = searchParams.get('tripId');
 
-        // If no tripId, auto-detect from user's groups
-        if (!tripId) {
-            const user = await prisma.user.findUnique({ where: { email: session.user.email } });
-            if (!user) return NextResponse.json({ computed: [], recorded: [], balances: {} });
+        const user = await prisma.user.findUnique({ where: { email: session.user.email } });
+        if (!user) return NextResponse.json({ computed: [], recorded: [], balances: {} });
 
+        // Determine which trip IDs to aggregate
+        let tripIds: string[] = [];
+
+        if (tripId) {
+            // Specific trip requested
+            tripIds = [tripId];
+        } else {
+            // Aggregate across ALL trips from ALL the user's groups
             const trips = await prisma.trip.findMany({
                 where: {
-                    isActive: true,
                     group: {
                         OR: [
                             { ownerId: user.id },
@@ -38,23 +43,21 @@ export async function GET(req: Request) {
                     },
                 },
                 select: { id: true },
-                orderBy: { createdAt: 'desc' },
-                take: 1,
             });
 
             if (trips.length === 0) {
                 return NextResponse.json({ computed: [], recorded: [], balances: {} });
             }
-            tripId = trips[0].id;
+            tripIds = trips.map(t => t.id);
         }
 
-        // Get all transactions + splits (excluding soft-deleted)
+        // Get all transactions + splits across all relevant trips (excluding soft-deleted)
         const transactions = await prisma.transaction.findMany({
-            where: { tripId, deletedAt: null },
+            where: { tripId: { in: tripIds }, deletedAt: null },
             include: { splits: true },
         });
 
-        // Calculate net balances
+        // Calculate net balances across all trips
         const balances: Record<string, number> = {};
 
         for (const txn of transactions) {
@@ -64,10 +67,10 @@ export async function GET(req: Request) {
             }
         }
 
-        // Account for recorded settlements (excluding soft-deleted)
+        // Account for recorded settlements across all trips (excluding soft-deleted)
         const completedSettlements = await prisma.settlement.findMany({
             where: {
-                tripId: tripId!,
+                tripId: { in: tripIds },
                 status: { in: ['completed', 'confirmed'] },
                 deletedAt: null,
             },
@@ -125,9 +128,9 @@ export async function GET(req: Request) {
             toUpiId: upiMap[t.to] || null,
         }));
 
-        // Get recorded settlements (excluding soft-deleted)
+        // Get recorded settlements across all trips (excluding soft-deleted)
         const recorded = await prisma.settlement.findMany({
-            where: { tripId, deletedAt: null },
+            where: { tripId: { in: tripIds }, deletedAt: null },
             include: {
                 from: { select: { id: true, name: true, image: true } },
                 to: { select: { id: true, name: true, image: true } },

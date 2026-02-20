@@ -36,6 +36,7 @@ export async function GET(
                     orderBy: { createdAt: 'desc' },
                     include: {
                         transactions: {
+                            where: { deletedAt: null },
                             include: {
                                 payer: { select: { id: true, name: true } },
                                 splits: { include: { user: { select: { id: true, name: true } } } },

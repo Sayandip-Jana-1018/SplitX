@@ -176,7 +176,8 @@ export default function DashboardPage() {
             time: (t.createdAt as string) || new Date().toISOString(),
         }));
 
-        const newTotalSpent = recentList.reduce((sum, t) => sum + t.amount, 0);
+        // Total spent = sum of totalSpent from ALL groups (pre-computed by groups API)
+        const newTotalSpent = groups.reduce((sum: number, g: Record<string, unknown>) => sum + ((g.totalSpent as number) || 0), 0);
 
         const settList: Settlement[] = pending.map((s: Record<string, unknown>) => ({
             from: (s.from as string) || '',

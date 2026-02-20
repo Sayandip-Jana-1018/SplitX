@@ -64,37 +64,42 @@ export default function SettlementsPage() {
             const groups = await groupsRes.json();
             if (!Array.isArray(groups) || groups.length === 0) { setLoading(false); return; }
 
+            // Build name + image maps from ALL group members
             const nameMap: Record<string, string> = {};
-            for (const g of groups) {
-                if (g.members) {
-                    for (const m of g.members) {
-                        const userId = m.userId || m.user?.id;
-                        const name = m.user?.name || m.name || 'Unknown';
-                        if (userId) nameMap[userId] = name;
-                    }
-                }
-            }
-            setMemberNames(nameMap);
-
-            // Build image map from group members
             const imgMap: Record<string, string | null> = {};
             for (const g of groups) {
                 if (g.members) {
                     for (const m of g.members) {
                         const userId = m.userId || m.user?.id;
-                        if (userId) imgMap[userId] = m.user?.image || null;
+                        const name = m.user?.name || m.name || 'Unknown';
+                        if (userId) {
+                            nameMap[userId] = name;
+                            imgMap[userId] = m.user?.image || null;
+                        }
                     }
                 }
             }
+            setMemberNames(nameMap);
             setMemberImages(imgMap);
 
-            const detailRes = await fetch(`/api/groups/${groups[0].id}`);
-            if (!detailRes.ok) { setLoading(false); return; }
-            const detail = await detailRes.json();
-            if (!detail.activeTrip) { setLoading(false); return; }
-            setActiveTripId(detail.activeTrip.id);
+            // Collect active trip IDs from ALL groups
+            let firstTripId = '';
+            const detailPromises = groups.map((g: { id: string }) => fetch(`/api/groups/${g.id}`).then(r => r.ok ? r.json() : null));
+            const details = await Promise.all(detailPromises);
 
-            const settRes = await fetch(`/api/settlements?tripId=${detail.activeTrip.id}`);
+            const tripIds: string[] = [];
+            for (const detail of details) {
+                if (detail?.activeTrip?.id) {
+                    tripIds.push(detail.activeTrip.id);
+                    if (!firstTripId) firstTripId = detail.activeTrip.id;
+                }
+            }
+
+            if (tripIds.length === 0) { setLoading(false); return; }
+            setActiveTripId(firstTripId);
+
+            // Fetch global settlements (the API now aggregates across all trips when no tripId is given)
+            const settRes = await fetch('/api/settlements');
             if (settRes.ok) {
                 const data: SettlementApiResponse = await settRes.json();
                 setComputed(data.computed || []);
