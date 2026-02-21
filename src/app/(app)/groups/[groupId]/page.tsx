@@ -56,6 +56,7 @@ interface TripData {
     title: string;
     startDate: string | null;
     endDate: string | null;
+    createdAt: string;
     isActive: boolean;
     transactions: TransactionData[];
 }
@@ -75,6 +76,7 @@ interface GroupDetailData {
     emoji: string;
     inviteCode: string;
     createdAt: string;
+    ownerId: string;
     members: MemberData[];
     trips: TripData[];
     activeTrip: TripData | null;
@@ -121,6 +123,8 @@ export default function GroupDetailPage() {
     const [loadingContacts, setLoadingContacts] = useState(false);
     const [sendingContactInvite, setSendingContactInvite] = useState<string | null>(null);
     const [upiModal, setUpiModal] = useState<{ open: boolean; settlementId: string; amount: number; payeeName: string }>({ open: false, settlementId: '', amount: 0, payeeName: '' });
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [deletingGroup, setDeletingGroup] = useState(false);
     const { toast } = useToast();
 
     const fetchGroup = useCallback(async () => {
@@ -276,7 +280,72 @@ export default function GroupDetailPage() {
                     <Button size="sm" variant="ghost" iconOnly onClick={() => setShowInvite(true)}>
                         <Share2 size={18} />
                     </Button>
+                    {group.currentUserId === group.ownerId && (
+                        <Button size="sm" variant="ghost" iconOnly onClick={() => setShowDeleteConfirm(true)}
+                            style={{ color: 'var(--color-error, #ef4444)' }}>
+                            <Trash2 size={18} />
+                        </Button>
+                    )}
                 </div>
+
+                {/* ── Delete Group Confirmation Modal ── */}
+                <AnimatePresence>
+                    {showDeleteConfirm && (
+                        <motion.div
+                            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                            style={{
+                                position: 'fixed', inset: 0, zIndex: 999,
+                                background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                padding: 'var(--space-4)',
+                            }}
+                            onClick={() => setShowDeleteConfirm(false)}
+                        >
+                            <motion.div
+                                initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
+                                transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+                                onClick={e => e.stopPropagation()}
+                                style={{
+                                    background: 'var(--bg-elevated)', borderRadius: 'var(--radius-2xl)',
+                                    padding: 'var(--space-5)', maxWidth: 360, width: '100%',
+                                    border: '1px solid var(--border-subtle)',
+                                    boxShadow: 'var(--shadow-xl)',
+                                }}
+                            >
+                                <h3 style={{ fontSize: 'var(--text-lg)', marginBottom: 'var(--space-2)' }}>Delete Group?</h3>
+                                <p style={{ fontSize: 'var(--text-sm)', color: 'var(--fg-secondary)', marginBottom: 'var(--space-4)' }}>
+                                    This will permanently delete <strong>{group.name}</strong>, all transactions, and cancel all pending settlements. This action cannot be undone.
+                                </p>
+                                <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                                    <Button size="sm" variant="ghost" style={{ flex: 1 }}
+                                        onClick={() => setShowDeleteConfirm(false)}>Cancel</Button>
+                                    <Button size="sm" style={{
+                                        flex: 1, background: 'linear-gradient(135deg, #ef4444, #dc2626)', color: '#fff',
+                                    }}
+                                        disabled={deletingGroup}
+                                        onClick={async () => {
+                                            setDeletingGroup(true);
+                                            try {
+                                                const res = await fetch(`/api/groups/${groupId}`, { method: 'DELETE' });
+                                                if (res.ok) {
+                                                    toast('Group deleted successfully', 'success');
+                                                    router.push('/groups');
+                                                } else {
+                                                    const err = await res.json().catch(() => ({}));
+                                                    toast(err.error || 'Failed to delete group', 'error');
+                                                }
+                                            } catch { toast('Network error', 'error'); }
+                                            finally { setDeletingGroup(false); setShowDeleteConfirm(false); }
+                                        }}
+                                    >
+                                        {deletingGroup ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                                        {deletingGroup ? 'Deleting...' : 'Delete'}
+                                    </Button>
+                                </div>
+                            </motion.div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
 
                 {/* Group identity — centered */}
                 <motion.div
@@ -333,9 +402,9 @@ export default function GroupDetailPage() {
                                 fontWeight: 600,
                             }}>
                                 <Calendar size={12} style={{ color: 'var(--accent-500)' }} />
-                                {activeTrip.startDate ? new Date(activeTrip.startDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '—'}
+                                {new Date(activeTrip.startDate || activeTrip.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
                                 {' → '}
-                                {activeTrip.endDate ? new Date(activeTrip.endDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '—'}
+                                {activeTrip.endDate ? new Date(activeTrip.endDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : 'Present'}
                             </div>
                             <Badge variant="accent" size="sm">{activeTrip.isActive ? 'Active' : 'Closed'}</Badge>
                         </div>

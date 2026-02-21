@@ -134,6 +134,15 @@ export default function SettlementsPage() {
                 }));
 
         const allP = buildPending(globalComputed, '');
+        // Resolve tripId for global settlements from per-group data
+        for (const s of allP) {
+            if (!s.tripId) {
+                const matchGroup = slideData.find(sl => sl.tripId && sl.computed.some(
+                    c => (c.from === s.from.id && c.to === s.to.id) || (c.from === s.to.id && c.to === s.from.id)
+                ));
+                if (matchGroup) s.tripId = matchGroup.tripId;
+            }
+        }
         const allS = buildSettled(globalRecorded);
 
         const active = slideData[activeSlide] || slideData[0];
