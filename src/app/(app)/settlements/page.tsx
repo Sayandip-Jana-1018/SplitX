@@ -627,13 +627,14 @@ export default function SettlementsPage() {
                                                     boxShadow: '0 4px 16px rgba(76,175,80,0.25)',
                                                 }}
                                                 onClick={async () => {
-                                                    if (!tripId) { toast('No active trip', 'error'); return; }
+                                                    const resolvedTripId = settlement.tripId || tripId;
+                                                    if (!resolvedTripId) { toast('No active trip — add an expense first', 'error'); return; }
                                                     try {
                                                         const res = await fetch('/api/settlements', {
                                                             method: 'POST',
                                                             headers: { 'Content-Type': 'application/json' },
                                                             body: JSON.stringify({
-                                                                tripId,
+                                                                tripId: resolvedTripId,
                                                                 toUserId: settlement.to.id,
                                                                 amount: settlement.amount,
                                                                 method: 'upi',
