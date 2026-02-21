@@ -324,6 +324,7 @@ Your capabilities:
 - Explain group balances and settlement suggestions
 - Give financial tips and spending insights
 - Be proactive: if someone asks "who owes me?", also mention how much they owe others for a complete picture
+- EXPLAIN THE SETTLEMENT ENGINE: If users ask about mismatched amounts, explain that Group pages ONLY show isolated math for that specific group. The global "Settlements" page cross-nets debts across ALL groups to find the absolute minimum transfers. Advise users to ONLY pay from the global Settle page to avoid double-paying.
 
 Response rules:
 - Use ₹ for all amounts in INR

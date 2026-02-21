@@ -134,12 +134,13 @@ export default function SettlementsPage() {
                 }));
 
         const allP = buildPending(globalComputed, '');
-        // Resolve tripId for global settlements from per-group data
+        // Resolve tripId for global settlements — find any group where BOTH users are members
         for (const s of allP) {
             if (!s.tripId) {
-                const matchGroup = slideData.find(sl => sl.tripId && sl.computed.some(
-                    c => (c.from === s.from.id && c.to === s.to.id) || (c.from === s.to.id && c.to === s.from.id)
-                ));
+                const matchGroup = slideData.find(sl => sl.tripId &&
+                    sl.members.some(m => m.id === s.from.id) &&
+                    sl.members.some(m => m.id === s.to.id)
+                );
                 if (matchGroup) s.tripId = matchGroup.tripId;
             }
         }
@@ -604,14 +605,14 @@ export default function SettlementsPage() {
                                             {isReceiver ? 'You' : settlement.to.name}
                                         </span>
                                     </div>
+                                    <div style={{ fontSize: 10, color: 'red' }}>tripId: {settlement.tripId || 'NONE'}</div>
                                     <span style={{
                                         fontSize: 'var(--text-lg)', fontWeight: 800,
-                                        background: isSender
-                                            ? 'linear-gradient(135deg, var(--color-error), #fca5a5)'
+                                        color: isSender
+                                            ? 'var(--color-error)'
                                             : isReceiver
-                                                ? 'linear-gradient(135deg, var(--color-success), #6ee7b7)'
-                                                : 'linear-gradient(135deg, var(--fg-primary), var(--fg-secondary))',
-                                        WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+                                                ? 'var(--color-success)'
+                                                : 'var(--fg-primary)',
                                     }}>
                                         {formatCurrency(settlement.amount)}
                                     </span>

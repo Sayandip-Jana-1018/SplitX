@@ -564,28 +564,7 @@ export default function GroupDetailPage() {
                                                     }}>
                                                         {formatCurrency(s.amount)}
                                                     </span>
-                                                    {s.from === group.currentUserId && (
-                                                        <button
-                                                            onClick={() => setUpiModal({ open: true, settlementId: `${s.from}-${s.to}`, amount: s.amount, payeeName: s.toName })}
-                                                            style={{
-                                                                padding: '4px 10px',
-                                                                background: 'linear-gradient(135deg, #4CAF50, #2E7D32)',
-                                                                color: '#fff',
-                                                                border: 'none',
-                                                                borderRadius: 8,
-                                                                fontSize: 11,
-                                                                fontWeight: 600,
-                                                                cursor: 'pointer',
-                                                                display: 'flex',
-                                                                alignItems: 'center',
-                                                                gap: 4,
-                                                                flexShrink: 0,
-                                                            }}
-                                                        >
-                                                            <CreditCard size={12} />
-                                                            Pay
-                                                        </button>
-                                                    )}
+
                                                 </div>
                                             </Card>
                                         </motion.div>
