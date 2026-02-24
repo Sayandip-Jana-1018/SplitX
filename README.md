@@ -1,6 +1,6 @@
 # ⚡ SplitX — Smart Expense Splitting & Settlement
 
-> A premium, full-stack expense-splitting web app built with **Next.js 16**, **Prisma**, **PostgreSQL (Neon)**, and **NextAuth v5**. Features glassmorphic UI, AI-powered receipt scanning (Tesseract OCR + OpenAI Vision), Gemini AI chat assistant, real-time group chat with avatars, debt simplification, real-time analytics, smart notifications, and 12 color themes.
+> A production-grade, full-stack expense-splitting web app built with **Next.js 16**, **Prisma**, **PostgreSQL (Neon)**, and **NextAuth v5**. Features glassmorphic UI, AI-powered receipt scanning (Tesseract OCR + OpenAI Vision), Gemini AI chat assistant, real-time group chat with avatars, debt simplification, real-time analytics, smart notifications, backend security hardening, and 12 color themes.
 
 ---
 
@@ -221,9 +221,9 @@ erDiagram
 | **Group Deletion** | Owner-only soft delete with atomic cascade — soft-deletes all transactions, cancels pending settlements, notifies all members |
 | **Member Removal** | Owner/admin removes member → equal splits auto-recalculated, orphaned SplitItems cleaned, all members notified |
 | **Trip Scoping** | Organize expenses within trips per group with date ranges and currency |
-| **Split Types** | Equal, percentage, custom, and item-based splitting |
-| **Settlements** | Track who owes whom, mark as completed, with UPI deep-links and auto-sync |
-| **Settlement Security** | Self-settlement block, 60s duplicate check, membership verification, soft-delete filters |
+| **Split Types** | Equal, percentage, custom, and item-based splitting — backend validates split sums equal total and all user IDs are group members |
+| **Settlements** | Track who owes whom, centered card layout with "Pay via UPI" and subtle "Mark Settled" text link for cash/offline payments |
+| **Settlement Security** | Self-settlement block, 60s duplicate check (pending + initiated + completed), sender + recipient membership verification, soft-delete filters |
 | **UPI Payment Notifications** | All group members notified on UPI payment — receiver gets ✅, others get 💸 |
 | **Transaction Edit Notifications** | All group members notified when any expense is edited (✏️) |
 | **Debt Simplification** | Dual algorithm: greedy netting + optimized exact-match pruning (auto-picks fewer transfers) |
@@ -246,7 +246,7 @@ erDiagram
 | **Chat Avatars** | Profile photos displayed for all messages — both own (right side) and others (left side) |
 | **Clipboard Paste** | Auto-detect UPI transaction text from clipboard |
 | **Transaction Parser** | Regex engine parses UPI/bank SMS into structured data |
-| **Smart Notifications** | Real-time notification panel with type-based icons, unread badges, mark-all-read, 30s auto-polling |
+| **Smart Notifications** | Real-time notification panel with type-based icons, unread badges, mark-all-read, 30s auto-polling — sender/recipient must share a group (anti-spam) |
 | **Smart Insights** | AI-generated spending insights: overspend alerts, savings detection, trend change analysis |
 | **Global Search** | Search across transactions, groups, and members |
 
@@ -279,8 +279,10 @@ erDiagram
 | **Feature Flags** | Toggle features on/off without code changes |
 | **Rate Limiting Middleware** | Tiered in-memory rate limiter: 5/hr register, 10/15min auth, 30/min settlements, 120/min default |
 | **Security Headers** | HSTS, X-Frame-Options DENY, X-Content-Type-Options, Permissions-Policy (no camera/mic/geo), Referrer-Policy |
-| **Soft Deletes** | All destructive operations (group delete, transaction delete, settlement cancel) use soft deletes for data recovery |
+| **Soft Deletes** | All destructive operations (group delete, transaction delete, settlement cancel) use soft deletes; single-transaction GET also filters `deletedAt` |
 | **Permission Model** | Delete group = owner only, remove member = owner/admin only, delete/edit transaction = payer or group owner only |
+| **Input Validation** | Zod schemas on all mutations; custom splits validated (sum = total, user IDs ∈ group members); settlement recipient must be group member |
+| **Anti-Spam** | Notification POST requires sender & recipient share ≥1 group; duplicate settlement check covers pending/initiated/completed within 60s |
 
 ---
 
@@ -465,6 +467,7 @@ npm start
 |---|---|---|
 | `GET` | `/api/notifications` | List notifications with unread count |
 | `PATCH` | `/api/notifications` | Mark notification(s) as read |
+| `POST` | `/api/notifications` | Send notification to user (requires shared group membership) |
 | `GET` | `/api/budgets?month=&year=` | List budgets for a month |
 | `POST` | `/api/budgets` | Create/update budget for a category |
 | `GET` | `/api/analytics` | Enhanced analytics (trends, categories, budget comparison, insights) |

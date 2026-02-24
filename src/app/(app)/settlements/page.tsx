@@ -694,12 +694,16 @@ export default function SettlementsPage() {
                                             </Button>
                                         )}
                                         {(isSender || isReceiver) && (
-                                            <Button size="sm" variant="ghost" iconOnly
+                                            <button
                                                 onClick={() => setConfirmSettle({ from: settlement.from.id, to: settlement.to.id, amount: settlement.amount, tripId })}
-                                                style={{ borderRadius: 'var(--radius-lg)' }}
+                                                style={{
+                                                    background: 'none', border: 'none', cursor: 'pointer', padding: '2px 0',
+                                                    fontSize: 'var(--text-xs)', color: 'var(--fg-muted)',
+                                                    textDecoration: 'underline', textUnderlineOffset: 2,
+                                                }}
                                             >
-                                                <Check size={15} />
-                                            </Button>
+                                                Mark Settled
+                                            </button>
                                         )}
                                         {!isSender && !isReceiver && (
                                             <Badge variant="accent">Between others</Badge>
