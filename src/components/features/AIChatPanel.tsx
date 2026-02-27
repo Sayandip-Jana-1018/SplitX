@@ -331,10 +331,10 @@ export default function AIChatPanel() {
                         <div style={{
                             flex: 1,
                             overflowY: 'auto',
-                            padding: '14px 14px 8px',
+                            padding: '10px 12px 6px',
                             display: 'flex',
                             flexDirection: 'column',
-                            gap: 14,
+                            gap: 10,
                         }}>
                             {/* ── Empty State: Welcome + Action Grid ── */}
                             {!hasMessages && (
@@ -342,7 +342,7 @@ export default function AIChatPanel() {
                                     display: 'flex',
                                     flexDirection: 'column',
                                     flex: 1,
-                                    gap: 20,
+                                    gap: 12,
                                     justifyContent: 'center',
                                 }}>
                                     {/* Welcome text */}
@@ -351,34 +351,33 @@ export default function AIChatPanel() {
                                         padding: '0 12px',
                                     }}>
                                         <div style={{
-                                            fontSize: 32,
-                                            marginBottom: 8,
+                                            fontSize: 24,
+                                            marginBottom: 4,
                                         }}>✨</div>
                                         <h2 style={{
-                                            fontSize: 17,
+                                            fontSize: 15,
                                             fontWeight: 800,
                                             color: 'var(--fg-primary)',
-                                            marginBottom: 6,
+                                            marginBottom: 3,
                                             letterSpacing: '-0.02em',
                                         }}>
                                             How can I help?
                                         </h2>
                                         <p style={{
-                                            fontSize: 12,
+                                            fontSize: 11,
                                             color: 'var(--fg-tertiary)',
-                                            lineHeight: 1.5,
-                                            maxWidth: 260,
+                                            lineHeight: 1.4,
+                                            maxWidth: 240,
                                             margin: '0 auto',
                                         }}>
                                             I know your balances, spending, debts, and groups in real-time.
                                         </p>
                                     </div>
 
-                                    {/* Action grid */}
                                     <div style={{
                                         display: 'grid',
                                         gridTemplateColumns: '1fr 1fr',
-                                        gap: 8,
+                                        gap: 6,
                                         padding: '0 4px',
                                     }}>
                                         {QUICK_ACTIONS.map((action) => (
@@ -388,23 +387,23 @@ export default function AIChatPanel() {
                                                 whileTap={{ scale: 0.96 }}
                                                 whileHover={{ scale: 1.02 }}
                                                 style={{
-                                                    padding: '16px 12px 12px',
-                                                    borderRadius: 14,
+                                                    padding: '10px 8px 8px',
+                                                    borderRadius: 12,
                                                     background: 'var(--bg-secondary)',
                                                     border: '1px solid var(--border-subtle)',
                                                     cursor: 'pointer',
                                                     display: 'flex',
                                                     flexDirection: 'column',
                                                     alignItems: 'center',
-                                                    gap: 8,
+                                                    gap: 5,
                                                     textAlign: 'center',
                                                     transition: 'all 0.2s ease',
                                                 }}
                                             >
                                                 <div style={{
-                                                    width: 36,
-                                                    height: 36,
-                                                    borderRadius: 12,
+                                                    width: 30,
+                                                    height: 30,
+                                                    borderRadius: 10,
                                                     background: action.gradient,
                                                     display: 'flex',
                                                     alignItems: 'center',
@@ -414,10 +413,10 @@ export default function AIChatPanel() {
                                                     {action.icon}
                                                 </div>
                                                 <span style={{
-                                                    fontSize: 12,
+                                                    fontSize: 11,
                                                     fontWeight: 600,
                                                     color: 'var(--fg-secondary)',
-                                                    lineHeight: 1.3,
+                                                    lineHeight: 1.2,
                                                 }}>
                                                     {action.label}
                                                 </span>

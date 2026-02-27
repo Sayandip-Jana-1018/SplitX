@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
-import { motion } from 'framer-motion';
 import Image from 'next/image';
 import { formatCurrency, getAvatarColor } from '@/lib/utils';
 
@@ -190,13 +189,18 @@ export default function SettlementGraph({
         return () => { running = false; cancelAnimationFrame(animRef.current); };
     }, [membersKey, size.w, size.h, edges]);
 
-    // Drag handlers
-    const onDragStart = useCallback((idx: number) => {
+    // Pointer-based drag (raw events, no framer-motion drag — prevents carousel interference)
+    const handlePointerDown = useCallback((idx: number, e: React.PointerEvent) => {
+        e.stopPropagation();
+        e.preventDefault();
+        (e.target as HTMLElement).setPointerCapture(e.pointerId);
+
         dragIdxRef.current = idx;
         setDragIdx(idx);
         nodesRef.current[idx].fx = nodesRef.current[idx].x;
         nodesRef.current[idx].fy = nodesRef.current[idx].y;
-        iterRef.current = 0; // restart sim
+        iterRef.current = 0;
+
         // Restart animation loop
         cancelAnimationFrame(animRef.current);
         const loop = () => {
@@ -209,18 +213,22 @@ export default function SettlementGraph({
         animRef.current = requestAnimationFrame(loop);
     }, [edges, size]);
 
-    const onDrag = useCallback((idx: number, info: { point: { x: number; y: number } }) => {
+    const handlePointerMove = useCallback((idx: number, e: React.PointerEvent) => {
+        if (dragIdxRef.current !== idx) return;
+        e.stopPropagation();
         if (!containerRef.current) return;
         const rect = containerRef.current.getBoundingClientRect();
-        const x = info.point.x - rect.left;
-        const y = info.point.y - rect.top;
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
         nodesRef.current[idx].fx = Math.max(40, Math.min(size.w - 40, x));
         nodesRef.current[idx].fy = Math.max(40, Math.min(size.h - 40, y));
         nodesRef.current[idx].x = nodesRef.current[idx].fx!;
         nodesRef.current[idx].y = nodesRef.current[idx].fy!;
     }, [size]);
 
-    const onDragEnd = useCallback((idx: number) => {
+    const handlePointerUp = useCallback((idx: number, e: React.PointerEvent) => {
+        if (dragIdxRef.current !== idx) return;
+        e.stopPropagation();
         nodesRef.current[idx].fx = null;
         nodesRef.current[idx].fy = null;
         dragIdxRef.current = null;
@@ -254,6 +262,7 @@ export default function SettlementGraph({
     return (
         <div
             ref={containerRef}
+            onPointerDown={(e) => e.stopPropagation()}
             style={{
                 width: '100%',
                 height: size.h,
@@ -300,31 +309,27 @@ export default function SettlementGraph({
                     const dx = b.x - a.x;
                     const dy = b.y - a.y;
                     const len = Math.sqrt(dx * dx + dy * dy) || 1;
-                    const nr = 28; // node radius offset
+                    const nr = 28;
 
                     const sx = a.x + (dx / len) * nr;
                     const sy = a.y + (dy / len) * nr;
                     const ex = b.x - (dx / len) * (nr + 6);
                     const ey = b.y - (dy / len) * (nr + 6);
 
-                    // Perpendicular offset for curve (outward bow)
                     const mx = (sx + ex) / 2;
                     const my = (sy + ey) / 2;
-                    // Normal perpendicular vector
                     const nx = -(dy / len);
                     const ny = (dx / len);
-                    const bow = 25 + (i * 8); // stagger each edge slightly
+                    const bow = 25 + (i * 8);
                     const dir = i % 2 === 0 ? 1 : -1;
                     const cpx = mx + nx * bow * dir;
                     const cpy = my + ny * bow * dir;
 
-                    // Bezier midpoint for label
                     const tx = 0.25 * sx + 0.5 * cpx + 0.25 * ex;
                     const ty = 0.25 * sy + 0.5 * cpy + 0.25 * ey;
 
                     return (
                         <g key={`edge-${i}`}>
-                            {/* Glow underlay */}
                             <path
                                 d={`M ${sx} ${sy} Q ${cpx} ${cpy} ${ex} ${ey}`}
                                 fill="none"
@@ -332,7 +337,6 @@ export default function SettlementGraph({
                                 strokeWidth={4}
                                 opacity={0.08}
                             />
-                            {/* Main curve */}
                             <path
                                 d={`M ${sx} ${sy} Q ${cpx} ${cpy} ${ex} ${ey}`}
                                 fill="none"
@@ -342,7 +346,6 @@ export default function SettlementGraph({
                                 opacity={0.55}
                                 markerEnd={`url(#${markerId})`}
                             />
-                            {/* Amount pill */}
                             <g filter={`url(#glow-${instanceId})`}>
                                 <rect
                                     x={tx - 34}
@@ -371,42 +374,34 @@ export default function SettlementGraph({
                 })}
             </svg>
 
-            {/* HTML layer for draggable nodes */}
+            {/* HTML layer for draggable nodes — positioned directly via transform for smooth 60fps */}
             {nodes.map((node, i) => {
                 const name = node.name;
                 const color = getAvatarColor(name);
                 const initials = name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
                 const image = memberImages[name] || null;
                 const firstName = name.split(' ')[0];
+                const isDragging = dragIdx === i;
 
                 return (
-                    <motion.div
+                    <div
                         key={`node-${name}`}
-                        drag
-                        dragMomentum={false}
-                        dragElastic={0}
-                        dragConstraints={containerRef}
-                        onDragStart={() => onDragStart(i)}
-                        onDrag={(_, info) => onDrag(i, info)}
-                        onDragEnd={() => onDragEnd(i)}
-                        initial={false}
-                        animate={{
-                            x: node.x - 28,
-                            y: node.y - 28,
-                        }}
-                        transition={dragIdx === i ? { duration: 0 } : { type: 'spring', stiffness: 120, damping: 20, mass: 0.8 }}
+                        onPointerDown={(e) => handlePointerDown(i, e)}
+                        onPointerMove={(e) => handlePointerMove(i, e)}
+                        onPointerUp={(e) => handlePointerUp(i, e)}
                         style={{
                             position: 'absolute',
                             top: 0,
                             left: 0,
                             width: 56,
                             height: 56,
-                            cursor: 'grab',
-                            zIndex: dragIdx === i ? 50 : 10,
+                            transform: `translate(${node.x - 28}px, ${node.y - 28}px) scale(${isDragging ? 1.15 : 1})`,
+                            transition: isDragging ? 'transform 0s' : 'transform 0.08s ease-out',
+                            cursor: isDragging ? 'grabbing' : 'grab',
+                            zIndex: isDragging ? 50 : 10,
                             touchAction: 'none',
+                            userSelect: 'none',
                         }}
-                        whileDrag={{ scale: 1.15, cursor: 'grabbing' }}
-                        whileHover={{ scale: 1.08 }}
                     >
                         {/* Glow ring */}
                         <div style={{
@@ -427,12 +422,15 @@ export default function SettlementGraph({
                             borderRadius: '50%',
                             overflow: 'hidden',
                             border: '3px solid var(--bg-primary)',
-                            boxShadow: '0 4px 20px rgba(0,0,0,0.12), 0 0 0 1px rgba(var(--accent-500-rgb), 0.1)',
+                            boxShadow: isDragging
+                                ? '0 8px 30px rgba(0,0,0,0.2), 0 0 0 2px rgba(var(--accent-500-rgb), 0.3)'
+                                : '0 4px 20px rgba(0,0,0,0.12), 0 0 0 1px rgba(var(--accent-500-rgb), 0.1)',
                             background: image ? 'var(--bg-secondary)' : color,
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
                             position: 'relative',
+                            transition: 'box-shadow 0.2s ease',
                         }}>
                             {image ? (
                                 <Image
@@ -478,7 +476,7 @@ export default function SettlementGraph({
                         }}>
                             {firstName}
                         </div>
-                    </motion.div>
+                    </div>
                 );
             })}
         </div>
