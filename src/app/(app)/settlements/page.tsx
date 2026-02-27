@@ -86,17 +86,8 @@ export default function SettlementsPage() {
             }
         }
 
-        // Slide 0 = "All Groups" global view
+        // Groups first, Global last — so user sees simplified transfers with pay actions immediately
         const slideData = [
-            {
-                label: 'All Groups',
-                emoji: '🌐',
-                computed: globalComputed,
-                recorded: globalRecorded,
-                members: [] as { id: string; name: string; image: string | null }[],
-                tripId: '',
-                groupId: '',
-            },
             ...groups.map(g => ({
                 label: g.groupName,
                 emoji: g.groupEmoji,
@@ -106,7 +97,17 @@ export default function SettlementsPage() {
                 tripId: g.tripId,
                 groupId: g.groupId,
             })),
+            {
+                label: 'All Groups',
+                emoji: '🌐',
+                computed: globalComputed,
+                recorded: globalRecorded,
+                members: [] as { id: string; name: string; image: string | null }[],
+                tripId: '',
+                groupId: '',
+            },
         ];
+        const globalSlideIdx = slideData.length - 1;
 
         // Build pending/settled lists
         const buildPending = (computed: ComputedTransfer[], tripId: string) =>
@@ -147,8 +148,9 @@ export default function SettlementsPage() {
         const allS = buildSettled(globalRecorded);
 
         const active = slideData[activeSlide] || slideData[0];
-        const aP = activeSlide === 0 ? allP : buildPending(active.computed, active.tripId);
-        const aS = activeSlide === 0 ? allS : buildSettled(active.recorded);
+        const isGlobal = activeSlide === globalSlideIdx;
+        const aP = isGlobal ? allP : buildPending(active.computed, active.tripId);
+        const aS = isGlobal ? allS : buildSettled(active.recorded);
 
         return {
             slides: slideData,
@@ -165,6 +167,9 @@ export default function SettlementsPage() {
 
     const totalYouOwe = activePending.filter(s => s.from.id === currentUserId).reduce((sum, s) => sum + s.amount, 0);
     const totalOwedToYou = activePending.filter(s => s.to.id === currentUserId).reduce((sum, s) => sum + s.amount, 0);
+
+    // Detect global slide (always last)
+    const isGlobalSlide = activeSlide === slides.length - 1;
 
     // Carousel navigation
     const slideCount = slides.length;
@@ -378,7 +383,7 @@ export default function SettlementsPage() {
                                 onDragEnd={handleDragEnd}
                                 style={{ cursor: 'grab', touchAction: 'pan-y' }}
                             >
-                                {activeSlide === 0 ? (
+                                {isGlobalSlide ? (
                                     /* Global Summary Card */
                                     <div style={{
                                         ...glass, borderRadius: 'var(--radius-2xl)', padding: 'var(--space-4)',
@@ -623,7 +628,7 @@ export default function SettlementsPage() {
                                 {/* Actions */}
                                 {!isSettled && (
                                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, width: '100%', paddingTop: 'var(--space-4)' }}>
-                                        {activeSlide === 0 ? (
+                                        {isGlobalSlide ? (
                                             /* Global Pairwise view — informational only, no payment actions */
                                             <>
                                                 {!isSender && !isReceiver ? (
