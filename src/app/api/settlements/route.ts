@@ -246,7 +246,11 @@ export async function POST(req: Request) {
         }
 
         // ── Security: Over-settlement guard ──
-        // Calculate the actual net debt between these two users across this trip
+        // Use the user's NET BALANCE in the group (not pairwise debt) because
+        // the settlement page uses greedy netting which may route all of a user's
+        // debt through a single person (simplified transfers).
+        // e.g., if you owe ₹339 to A and ₹83 to B, greedy netting may say
+        //       "pay ₹422 to A" — so the max per-person limit = total net owed.
         try {
             const tripTxns = await prisma.transaction.findMany({
                 where: { tripId: parsed.data.tripId, deletedAt: null },
@@ -260,48 +264,49 @@ export async function POST(req: Request) {
                 },
             });
 
-            // Calculate pairwise net: how much user.id owes parsed.data.toUserId
-            let pairwiseNet = 0;
+            // Calculate net balance for the settling user
+            // Positive = they are owed, Negative = they owe
+            let userBalance = 0;
             for (const txn of tripTxns) {
-                // If toUser paid, user owes their split share to toUser
-                if (txn.payerId === parsed.data.toUserId) {
-                    const userSplit = txn.splits.find(s => s.userId === user.id);
-                    if (userSplit) pairwiseNet += userSplit.amount;
-                }
-                // If user paid, toUser owes their split share to user (reduces what user owes)
                 if (txn.payerId === user.id) {
-                    const toUserSplit = txn.splits.find(s => s.userId === parsed.data.toUserId);
-                    if (toUserSplit) pairwiseNet -= toUserSplit.amount;
+                    userBalance += txn.amount; // they paid this much
+                }
+                const userSplit = txn.splits.find(s => s.userId === user.id);
+                if (userSplit) {
+                    userBalance -= userSplit.amount; // they owe this much
                 }
             }
-            // Subtract already-settled amounts in the same direction
+            // Account for completed settlements
             for (const s of completedSetts) {
-                if (s.fromId === user.id && s.toId === parsed.data.toUserId) {
-                    pairwiseNet -= s.amount;
+                if (s.fromId === user.id) {
+                    userBalance += s.amount; // paid off debt
                 }
-                if (s.fromId === parsed.data.toUserId && s.toId === user.id) {
-                    pairwiseNet += s.amount;
+                if (s.toId === user.id) {
+                    userBalance -= s.amount; // received payment
                 }
             }
 
-            // If net is negative or zero, user doesn't owe anything to this person
-            if (pairwiseNet <= 0) {
+            // If balance >= 0, user doesn't owe anything
+            if (userBalance >= 0) {
                 return NextResponse.json(
-                    { error: `You don't owe anything to this person in this group.` },
+                    { error: `You don't owe anything in this group.` },
                     { status: 400 }
                 );
             }
 
-            // Allow small tolerance (₹1 = 100 paise) for rounding differences
-            if (parsed.data.amount > pairwiseNet + 100) {
-                const owedFormatted = `₹${(pairwiseNet / 100).toLocaleString('en-IN')}`;
+            // User's total debt = abs(negative balance)
+            const totalDebt = Math.abs(userBalance);
+
+            // Allow small tolerance (₹1 = 100 paise) for rounding
+            if (parsed.data.amount > totalDebt + 100) {
+                const owedFormatted = `₹${(totalDebt / 100).toLocaleString('en-IN')}`;
                 return NextResponse.json(
-                    { error: `Settlement amount exceeds what you owe. You owe ${owedFormatted} in this group.` },
+                    { error: `Settlement amount exceeds what you owe. Your net balance is ${owedFormatted} in this group.` },
                     { status: 400 }
                 );
             }
         } catch {
-            // If debt calculation fails, allow the settlement to proceed
+            // If balance calculation fails, allow the settlement to proceed
             // (better to allow than block a legitimate payment)
         }
 

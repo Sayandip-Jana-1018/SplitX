@@ -392,7 +392,7 @@ export default function SettlementsPage() {
                                         background: 'linear-gradient(135deg, rgba(var(--accent-500-rgb), 0.06), var(--bg-glass))',
                                     }}>
                                         <div style={{
-                                            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
                                             marginBottom: 'var(--space-2)',
                                         }}>
                                             <div style={{
@@ -547,9 +547,9 @@ export default function SettlementsPage() {
                                         {graphSettlements.length > 0 ? (
                                             <>
                                                 <div style={{
-                                                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                                    display: 'flex', flexDirection: 'column', alignItems: 'center',
                                                     marginBottom: 'var(--space-2)',
-                                                    padding: '0 var(--space-1)',
+                                                    padding: '0 var(--space-1)', gap: 4,
                                                 }}>
                                                     <span style={{
                                                         fontSize: 'var(--text-xs)', color: 'var(--fg-tertiary)',
