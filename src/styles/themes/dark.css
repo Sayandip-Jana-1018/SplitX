@@ -16,6 +16,7 @@
     --bg-elevated: #1a1a21;
     --bg-sunken: #050507;
     --bg-overlay: rgba(0, 0, 0, 0.8);
+    --voice-overlay: rgba(8, 8, 12, 0.92);
 
     /* ── Glass — accent-tinted frosted glass ── */
     --bg-glass: rgba(14, 14, 20, 0.55);

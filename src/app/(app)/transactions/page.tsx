@@ -9,6 +9,7 @@ import Button from '@/components/ui/Button';
 import { CategoryIcon, PaymentIcon, CATEGORY_ICONS, PAYMENT_ICONS } from '@/components/ui/Icons';
 import { formatCurrency, timeAgo } from '@/lib/utils';
 import { useToast } from '@/components/ui/Toast';
+import { useCurrentUser } from '@/hooks/useCurrentUser';
 
 /* ── Glassmorphic styles ── */
 const glass: React.CSSProperties = {
@@ -32,13 +33,14 @@ interface TransactionData {
     payer: { id: string; name: string | null };
     splits: { userId: string; amount: number; user: { id: string; name: string | null } }[];
     splitType?: string;
-    trip?: { group: { members: { userId: string; user: { id: string; name: string | null; image: string | null } }[] } };
+    trip?: { group: { ownerId?: string; members: { userId: string; user: { id: string; name: string | null; image: string | null } }[] } };
 }
 
 type SortKey = 'time' | 'amount';
 
 export default function TransactionsPage() {
     const router = useRouter();
+    const { user: currentUser } = useCurrentUser();
     const [transactions, setTransactions] = useState<TransactionData[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
@@ -63,6 +65,12 @@ export default function TransactionsPage() {
 
     const saveEdit = async (txnId: string) => {
         if (!editTitle.trim() || !parseFloat(editAmount)) return;
+        // Block editing custom split transactions (amounts can't be recalculated)
+        const editingTxn = transactions.find(t => t.id === txnId);
+        if (editingTxn?.splitType === 'custom') {
+            toast('Cannot edit custom split transactions. Delete and add a new one with updated amounts.', 'error');
+            return;
+        }
         setSavingEdit(true);
         try {
             const res = await fetch(`/api/transactions/${txnId}`, {
@@ -347,37 +355,96 @@ export default function TransactionsPage() {
                                                     style={{ background: 'var(--surface-input)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-lg)', padding: '10px 14px', color: 'var(--fg-primary)', fontSize: 'var(--text-sm)', outline: 'none', width: '100%' }}
                                                     placeholder="Title" />
                                                 <input value={editAmount} onChange={(e) => setEditAmount(e.target.value)} type="number" step="0.01"
-                                                    style={{ background: 'var(--surface-input)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-lg)', padding: '10px 14px', color: 'var(--fg-primary)', fontSize: 'var(--text-sm)', outline: 'none', width: '100%' }}
+                                                    readOnly={txn.splitType === 'custom'}
+                                                    style={{
+                                                        background: txn.splitType === 'custom' ? 'var(--surface-sunken)' : 'var(--surface-input)',
+                                                        border: '1px solid var(--border-default)', borderRadius: 'var(--radius-lg)',
+                                                        padding: '10px 14px', color: txn.splitType === 'custom' ? 'var(--fg-tertiary)' : 'var(--fg-primary)',
+                                                        fontSize: 'var(--text-sm)', outline: 'none', width: '100%',
+                                                        cursor: txn.splitType === 'custom' ? 'not-allowed' : 'text',
+                                                        opacity: txn.splitType === 'custom' ? 0.6 : 1,
+                                                    }}
                                                     placeholder="Amount (₹)" />
+                                                {txn.splitType === 'custom' && (
+                                                    <p style={{ fontSize: 11, color: '#eab308', fontWeight: 500, textAlign: 'center', marginTop: 4 }}>
+                                                        ⚠ Custom split edit amount can&apos;t be edited.
+                                                    </p>
+                                                )}
 
-                                                {/* Member Split Toggles */}
-                                                {(!txn.splitType || txn.splitType === 'equal') && txn.trip?.group.members && (
+                                                {/* Member Split Display with Amounts */}
+                                                {txn.trip?.group.members && (
                                                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'center', marginTop: 8, marginBottom: 8 }}>
-                                                        <div style={{ width: '100%', textAlign: 'center', fontSize: '11px', color: 'var(--fg-tertiary)' }}>Split between:</div>
-                                                        {txn.trip.group.members.map(m => {
-                                                            const isSelected = editSplitAmong.has(m.userId);
-                                                            return (
-                                                                <button
-                                                                    key={m.userId}
-                                                                    onClick={() => {
-                                                                        const next = new Set(editSplitAmong);
-                                                                        if (next.has(m.userId)) next.delete(m.userId);
-                                                                        else next.add(m.userId);
-                                                                        setEditSplitAmong(next);
-                                                                    }}
-                                                                    style={{
-                                                                        padding: '6px 12px', borderRadius: 16,
-                                                                        border: `1px solid ${isSelected ? 'var(--accent-500)' : 'var(--border-default)'}`,
-                                                                        background: isSelected ? 'var(--accent-500)' : 'var(--bg-primary)',
-                                                                        color: isSelected ? 'white' : 'var(--fg-secondary)',
-                                                                        fontSize: '12px', fontWeight: 500, cursor: 'pointer',
-                                                                        transition: 'all 0.2s',
-                                                                    }}
-                                                                >
-                                                                    {m.user.name?.split(' ')[0] || 'Unknown'}
-                                                                </button>
-                                                            );
-                                                        })}
+                                                        <div style={{ width: '100%', textAlign: 'center', fontSize: '11px', color: 'var(--fg-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                                                            <span>Split between</span>
+                                                            <span style={{
+                                                                padding: '2px 8px', borderRadius: 8,
+                                                                background: txn.splitType === 'custom' ? 'rgba(234, 179, 8, 0.12)' : 'rgba(var(--accent-500-rgb), 0.1)',
+                                                                color: txn.splitType === 'custom' ? '#eab308' : 'var(--accent-400)',
+                                                                fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.03em',
+                                                            }}>
+                                                                {txn.splitType === 'custom' ? 'Custom' : 'Equal'}
+                                                            </span>
+                                                        </div>
+                                                        {(() => {
+                                                            const isCustom = txn.splitType === 'custom';
+                                                            const editAmountPaise = Math.round(parseFloat(editAmount || '0') * 100);
+                                                            const selectedCount = editSplitAmong.size;
+                                                            const perPersonEqual = selectedCount > 0 ? Math.floor(editAmountPaise / selectedCount) : 0;
+                                                            const remainderEqual = selectedCount > 0 ? editAmountPaise - perPersonEqual * selectedCount : 0;
+                                                            const selectedArr = Array.from(editSplitAmong);
+
+                                                            return txn.trip!.group.members.map(m => {
+                                                                const isSelected = editSplitAmong.has(m.userId);
+                                                                const splitEntry = txn.splits.find(s => s.userId === m.userId);
+
+                                                                // Determine the display amount
+                                                                let displayAmount: number | null = null;
+                                                                if (isCustom && splitEntry) {
+                                                                    displayAmount = splitEntry.amount;
+                                                                } else if (!isCustom && isSelected) {
+                                                                    const idx = selectedArr.indexOf(m.userId);
+                                                                    displayAmount = perPersonEqual + (idx === 0 ? remainderEqual : 0);
+                                                                }
+
+                                                                return (
+                                                                    <button
+                                                                        key={m.userId}
+                                                                        onClick={() => {
+                                                                            if (isCustom) return; // Don't allow toggling custom splits
+                                                                            const next = new Set(editSplitAmong);
+                                                                            if (next.has(m.userId)) next.delete(m.userId);
+                                                                            else next.add(m.userId);
+                                                                            setEditSplitAmong(next);
+                                                                        }}
+                                                                        style={{
+                                                                            padding: '6px 12px', borderRadius: 16,
+                                                                            border: `1px solid ${isSelected ? 'var(--accent-500)' : 'var(--border-default)'}`,
+                                                                            background: isSelected ? 'var(--accent-500)' : 'var(--bg-primary)',
+                                                                            color: isSelected ? 'white' : 'var(--fg-secondary)',
+                                                                            fontSize: '12px', fontWeight: 500,
+                                                                            cursor: isCustom ? 'default' : 'pointer',
+                                                                            opacity: (!isCustom && !isSelected) ? 0.5 : 1,
+                                                                            transition: 'all 0.2s',
+                                                                            display: 'flex', alignItems: 'center', gap: 4,
+                                                                        }}
+                                                                    >
+                                                                        {m.user.name?.split(' ')[0] || 'Unknown'}
+                                                                        {displayAmount !== null && (
+                                                                            <span style={{
+                                                                                fontSize: '10px',
+                                                                                fontWeight: 700,
+                                                                                opacity: 0.85,
+                                                                                borderLeft: `1px solid ${isSelected ? 'rgba(255,255,255,0.3)' : 'var(--border-default)'}`,
+                                                                                paddingLeft: 5,
+                                                                                marginLeft: 2,
+                                                                            }}>
+                                                                                ₹{(displayAmount / 100).toLocaleString('en-IN')}
+                                                                            </span>
+                                                                        )}
+                                                                    </button>
+                                                                );
+                                                            });
+                                                        })()}
                                                     </div>
                                                 )}
 
@@ -454,55 +521,65 @@ export default function TransactionsPage() {
                                                 </div>
 
                                                 {/* Right Section: Amount and Actions */}
-                                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10, flexShrink: 0 }}>
-                                                    <div style={{
-                                                        fontWeight: 800, fontSize: 18,
-                                                        color: 'var(--fg-primary)', letterSpacing: '-0.5px',
-                                                    }}>
-                                                        {formatCurrency(txn.amount)}
-                                                    </div>
+                                                {(() => {
+                                                    const canEdit = currentUser && (
+                                                        currentUser.id === txn.payer.id ||
+                                                        currentUser.id === txn.trip?.group?.ownerId
+                                                    );
+                                                    return (
+                                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10, flexShrink: 0 }}>
+                                                            <div style={{
+                                                                fontWeight: 800, fontSize: 18,
+                                                                color: 'var(--fg-primary)', letterSpacing: '-0.5px',
+                                                            }}>
+                                                                {formatCurrency(txn.amount)}
+                                                            </div>
 
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                                        <button
-                                                            onClick={(e) => { e.stopPropagation(); startEdit(txn); }}
-                                                            style={{
-                                                                cursor: 'pointer',
-                                                                background: 'var(--surface-card)',
-                                                                color: 'var(--fg-secondary)',
-                                                                padding: '6px', borderRadius: 8,
-                                                                boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-                                                                border: '1px solid var(--border-subtle)',
-                                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                                transition: 'all 0.2s ease',
-                                                            }}
-                                                            onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--accent-500)'; e.currentTarget.style.borderColor = 'var(--accent-300)'; }}
-                                                            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--fg-secondary)'; e.currentTarget.style.borderColor = 'var(--border-subtle)'; }}
-                                                            title="Edit"
-                                                        >
-                                                            <Pencil size={14} />
-                                                        </button>
-                                                        <button
-                                                            onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(txn.id); }}
-                                                            disabled={deletingId === txn.id}
-                                                            style={{
-                                                                cursor: 'pointer',
-                                                                background: 'var(--surface-card)',
-                                                                color: 'var(--fg-secondary)',
-                                                                padding: '6px', borderRadius: 8,
-                                                                boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-                                                                border: '1px solid var(--border-subtle)',
-                                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                                transition: 'all 0.2s ease',
-                                                                opacity: deletingId === txn.id ? 0.3 : 1,
-                                                            }}
-                                                            onMouseEnter={(e) => { e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.borderColor = '#fca5a5'; }}
-                                                            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--fg-secondary)'; e.currentTarget.style.borderColor = 'var(--border-subtle)'; }}
-                                                            title="Delete"
-                                                        >
-                                                            <Trash2 size={14} />
-                                                        </button>
-                                                    </div>
-                                                </div>
+                                                            {canEdit ? (
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                                    <button
+                                                                        onClick={(e) => { e.stopPropagation(); startEdit(txn); }}
+                                                                        style={{
+                                                                            cursor: 'pointer',
+                                                                            background: 'var(--surface-card)',
+                                                                            color: 'var(--fg-secondary)',
+                                                                            padding: '6px', borderRadius: 8,
+                                                                            boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                                                                            border: '1px solid var(--border-subtle)',
+                                                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                                            transition: 'all 0.2s ease',
+                                                                        }}
+                                                                        onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--accent-500)'; e.currentTarget.style.borderColor = 'var(--accent-300)'; }}
+                                                                        onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--fg-secondary)'; e.currentTarget.style.borderColor = 'var(--border-subtle)'; }}
+                                                                        title="Edit"
+                                                                    >
+                                                                        <Pencil size={14} />
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(txn.id); }}
+                                                                        disabled={deletingId === txn.id}
+                                                                        style={{
+                                                                            cursor: 'pointer',
+                                                                            background: 'var(--surface-card)',
+                                                                            color: 'var(--fg-secondary)',
+                                                                            padding: '6px', borderRadius: 8,
+                                                                            boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                                                                            border: '1px solid var(--border-subtle)',
+                                                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                                            transition: 'all 0.2s ease',
+                                                                            opacity: deletingId === txn.id ? 0.3 : 1,
+                                                                        }}
+                                                                        onMouseEnter={(e) => { e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.borderColor = '#fca5a5'; }}
+                                                                        onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--fg-secondary)'; e.currentTarget.style.borderColor = 'var(--border-subtle)'; }}
+                                                                        title="Delete"
+                                                                    >
+                                                                        <Trash2 size={14} />
+                                                                    </button>
+                                                                </div>
+                                                            ) : null}
+                                                        </div>
+                                                    );
+                                                })()}
                                             </div>
                                         )}
                                     </div>

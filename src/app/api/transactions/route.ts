@@ -58,7 +58,7 @@ export async function GET(req: Request) {
                     trip: {
                         select: {
                             group: {
-                                select: { members: { include: { user: { select: { id: true, name: true, image: true } } } } }
+                                select: { ownerId: true, members: { include: { user: { select: { id: true, name: true, image: true } } } } }
                             }
                         }
                     }
@@ -97,7 +97,7 @@ export async function GET(req: Request) {
                 trip: {
                     select: {
                         group: {
-                            select: { members: { include: { user: { select: { id: true, name: true, image: true } } } } }
+                            select: { ownerId: true, members: { include: { user: { select: { id: true, name: true, image: true } } } } }
                         }
                     }
                 }

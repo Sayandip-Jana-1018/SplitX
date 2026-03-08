@@ -116,7 +116,7 @@ export default function ReceiptGalleryPage() {
                     </h1>
                     <p style={{
                         margin: '2px 0 0', fontSize: 'var(--text-xs)',
-                        color: 'var(--fg-tertiary)',
+                        color: 'var(--fg-tertiary)', textAlign: 'left',
                     }}>
                         {receipts.length} receipt{receipts.length !== 1 ? 's' : ''} captured
                     </p>

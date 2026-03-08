@@ -62,8 +62,14 @@ export default function AnalyticsPage() {
 
     /* ── Computed chart data ── */
     const categoryData = (() => {
+        const knownCategories = new Set(Object.keys(CATEGORIES));
         const map: Record<string, number> = {};
-        for (const t of transactions) { const c = t.category || 'other'; map[c] = (map[c] || 0) + t.amount; }
+        for (const t of transactions) {
+            const raw = (t.category || 'other').toLowerCase();
+            // Group unknown/custom categories under 'other'
+            const c = knownCategories.has(raw) ? raw : 'other';
+            map[c] = (map[c] || 0) + t.amount;
+        }
         return Object.entries(map).map(([key, value]) => ({
             name: CATEGORIES[key]?.label || key, value, color: CATEGORY_COLORS[key] || '#64748b',
         }));
@@ -77,15 +83,15 @@ export default function AnalyticsPage() {
     })();
 
     const memberData = (() => {
-        const paid: Record<string, { name: string; paid: number; owes: number }> = {};
+        const paid: Record<string, { name: string; paid: number; spent: number }> = {};
         for (const t of transactions) {
             const pn = t.payer?.name || 'Unknown';
-            if (!paid[t.payerId]) paid[t.payerId] = { name: pn, paid: 0, owes: 0 };
+            if (!paid[t.payerId]) paid[t.payerId] = { name: pn, paid: 0, spent: 0 };
             paid[t.payerId].paid += t.amount;
             for (const s of t.splits) {
                 const sn = s.user?.name || 'Unknown';
-                if (!paid[s.userId]) paid[s.userId] = { name: sn, paid: 0, owes: 0 };
-                paid[s.userId].owes += s.amount;
+                if (!paid[s.userId]) paid[s.userId] = { name: sn, paid: 0, spent: 0 };
+                paid[s.userId].spent += s.amount;
             }
         }
         return Object.values(paid);
@@ -163,41 +169,17 @@ export default function AnalyticsPage() {
 
                     {/* ═══ CATEGORY PIE CHART ═══ */}
                     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-                        <div style={{ ...glass, borderRadius: 'var(--radius-2xl)', padding: 'var(--space-4)' }}>
-                            <div style={{
-                                fontSize: 'var(--text-sm)', fontWeight: 700, marginBottom: 'var(--space-3)',
-                                color: 'var(--fg-primary)',
-                            }}>
-                                By Category
-                            </div>
-                            <SpendingPieChart data={categoryData} />
-                        </div>
+                        <SpendingPieChart data={categoryData} />
                     </motion.div>
 
                     {/* ═══ DAILY TREND ═══ */}
                     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
-                        <div style={{ ...glass, borderRadius: 'var(--radius-2xl)', padding: 'var(--space-4)' }}>
-                            <div style={{
-                                fontSize: 'var(--text-sm)', fontWeight: 700, marginBottom: 'var(--space-3)',
-                                color: 'var(--fg-primary)',
-                            }}>
-                                Daily Trend
-                            </div>
-                            <DailySpendingChart data={dailyData} />
-                        </div>
+                        <DailySpendingChart data={dailyData} />
                     </motion.div>
 
                     {/* ═══ MEMBER COMPARISON ═══ */}
                     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-                        <div style={{ ...glass, borderRadius: 'var(--radius-2xl)', padding: 'var(--space-4)' }}>
-                            <div style={{
-                                fontSize: 'var(--text-sm)', fontWeight: 700, marginBottom: 'var(--space-3)',
-                                color: 'var(--fg-primary)',
-                            }}>
-                                Member Comparison
-                            </div>
-                            <MemberSpendChart data={memberData} />
-                        </div>
+                        <MemberSpendChart data={memberData} />
                     </motion.div>
                 </>
             )}

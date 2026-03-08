@@ -66,6 +66,8 @@ interface Transaction {
 interface Settlement {
     from: string;
     to: string;
+    fromName: string;
+    toName: string;
     amount: number;
 }
 
@@ -183,6 +185,8 @@ export default function DashboardPage() {
         const settList: Settlement[] = pending.map((s: Record<string, unknown>) => ({
             from: (s.from as string) || '',
             to: (s.to as string) || '',
+            fromName: (s.fromName as string) || (s.from as string) || 'Unknown',
+            toName: (s.toName as string) || (s.to as string) || 'Unknown',
             amount: (s.amount as number) || 0,
         }));
 
@@ -213,7 +217,7 @@ export default function DashboardPage() {
     const isLoadingPage = loadingGroups || loadingTxns || loadingSett;
 
     return (
-        <div ref={ptrContainerRef} style={{ overflow: 'auto', position: 'relative', height: '100%' }}>
+        <div ref={ptrContainerRef} style={{ overflow: 'auto', position: 'relative', height: '100%', scrollbarWidth: 'none' }}>
             <ParticleBackground count={30} className="fixed inset-0 pointer-events-none" />
             <PullToRefreshIndicator pullDistance={ptrPullDistance} refreshing={ptrRefreshing} />
 
@@ -511,9 +515,9 @@ export default function DashboardPage() {
                                                 <div style={{ flex: 1 }}>
                                                     <span style={{ fontSize: 'var(--text-sm)', color: 'var(--fg-primary)', fontWeight: 500 }}>
                                                         {s.from === currentUserId ? (
-                                                            <>You → <strong>{s.to}</strong></>
+                                                            <>You → <strong>{s.toName}</strong></>
                                                         ) : (
-                                                            <><strong>{s.from}</strong> → You</>
+                                                            <><strong>{s.fromName}</strong> → You</>
                                                         )}
                                                     </span>
                                                 </div>

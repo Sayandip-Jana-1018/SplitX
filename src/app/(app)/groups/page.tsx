@@ -21,7 +21,7 @@ const glass: React.CSSProperties = {
     background: 'var(--bg-glass)',
     backdropFilter: 'blur(24px) saturate(1.5)',
     WebkitBackdropFilter: 'blur(24px) saturate(1.5)',
-    border: '1px solid var(--border-glass)',
+    border: '1px solid var(--border-default, rgba(0,0,0,0.06))',
     borderRadius: 'var(--radius-2xl)',
     boxShadow: 'var(--shadow-card)',
     position: 'relative',
@@ -197,20 +197,19 @@ export default function GroupsPage() {
                             transition={{ delay: i * 0.06, duration: 0.4 }}
                         >
                             <div style={{
-                                ...glass, padding: 'var(--space-4)',
+                                ...glass, padding: 0,
                                 cursor: 'pointer',
                                 textAlign: 'left',
                                 transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+                                borderLeft: '3px solid var(--accent-500)',
                             }}
                                 onMouseEnter={(e) => {
                                     e.currentTarget.style.transform = 'translateY(-3px) scale(1.005)';
                                     e.currentTarget.style.boxShadow = 'var(--shadow-card-hover)';
-                                    e.currentTarget.style.borderColor = 'rgba(var(--accent-500-rgb), 0.18)';
                                 }}
                                 onMouseLeave={(e) => {
                                     e.currentTarget.style.transform = 'translateY(0) scale(1)';
                                     e.currentTarget.style.boxShadow = '';
-                                    e.currentTarget.style.borderColor = 'var(--border-glass)';
                                 }}
                             >
                                 {/* Top light edge */}
@@ -219,13 +218,15 @@ export default function GroupsPage() {
                                     background: 'linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08), transparent)',
                                     pointerEvents: 'none',
                                 }} />
-                                <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+
+                                {/* Main content row */}
+                                <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: 'var(--space-3)', padding: '14px 16px 8px' }}>
                                     {/* Emoji with gradient bg */}
                                     <div style={{
-                                        width: 50, height: 50, borderRadius: 'var(--radius-xl)',
+                                        width: 48, height: 48, borderRadius: 'var(--radius-xl)',
                                         background: 'linear-gradient(135deg, rgba(var(--accent-500-rgb), 0.12), rgba(var(--accent-500-rgb), 0.03))',
                                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        fontSize: 26, flexShrink: 0,
+                                        fontSize: 24, flexShrink: 0,
                                         boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.06)',
                                     }}>
                                         {group.emoji}
@@ -233,22 +234,35 @@ export default function GroupsPage() {
                                     <div style={{ flex: 1, minWidth: 0 }}>
                                         <div style={{
                                             fontSize: 'var(--text-sm)', fontWeight: 700,
-                                            color: 'var(--fg-primary)', marginBottom: 3,
+                                            color: 'var(--fg-primary)', marginBottom: 2,
                                             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                                         }}>
                                             {group.name}
                                         </div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                                             <span style={{
-                                                fontSize: 'var(--text-xs)', color: 'var(--fg-tertiary)',
+                                                fontSize: 11, color: 'var(--fg-tertiary)',
                                                 display: 'flex', alignItems: 'center', gap: 3,
                                             }}>
                                                 <Users size={11} /> {group.members.length}
                                             </span>
-                                            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--fg-muted)' }}>·</span>
-                                            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--fg-tertiary)' }}>
+                                            <span style={{ fontSize: 11, color: 'var(--fg-muted)' }}>·</span>
+                                            <span style={{ fontSize: 11, color: 'var(--fg-tertiary)' }}>
                                                 {timeAgo(group.updatedAt)}
                                             </span>
+                                            {group._count?.trips ? (
+                                                <>
+                                                    <span style={{ fontSize: 11, color: 'var(--fg-muted)' }}>·</span>
+                                                    <span style={{
+                                                        fontSize: 10, fontWeight: 600,
+                                                        background: 'rgba(var(--accent-500-rgb), 0.1)',
+                                                        color: 'var(--accent-500)',
+                                                        padding: '1px 6px', borderRadius: 100,
+                                                    }}>
+                                                        {group._count.trips} trip{group._count.trips !== 1 ? 's' : ''}
+                                                    </span>
+                                                </>
+                                            ) : null}
                                         </div>
                                     </div>
                                     <div style={{ textAlign: 'right', flexShrink: 0 }}>
@@ -262,6 +276,30 @@ export default function GroupsPage() {
                                         </div>
                                         <AvatarGroup users={group.members.map(m => ({ name: m.user?.name || 'User', image: m.user?.image }))} max={3} size="xs" />
                                     </div>
+                                </div>
+
+                                {/* Bottom row: member names */}
+                                <div style={{
+                                    padding: '6px 16px 12px',
+                                    display: 'flex', alignItems: 'center', gap: 4,
+                                    flexWrap: 'wrap',
+                                }}>
+                                    {group.members.slice(0, 5).map((m, idx) => (
+                                        <span key={m.user.id} style={{
+                                            fontSize: 11, color: 'var(--fg-tertiary)',
+                                            fontWeight: 500,
+                                        }}>
+                                            {m.user.name?.split(' ')[0] || 'User'}{idx < Math.min(group.members.length, 5) - 1 ? ',' : ''}
+                                        </span>
+                                    ))}
+                                    {group.members.length > 5 && (
+                                        <span style={{
+                                            fontSize: 10, color: 'var(--accent-500)',
+                                            fontWeight: 600,
+                                        }}>
+                                            +{group.members.length - 5} more
+                                        </span>
+                                    )}
                                 </div>
                             </div>
                         </motion.a>

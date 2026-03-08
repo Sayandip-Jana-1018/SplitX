@@ -77,7 +77,11 @@ export async function POST(req: Request) {
         // 4. Get completed settlements
         const completedSettlements = allTripIds.length > 0
             ? await prisma.settlement.findMany({
-                where: { tripId: { in: allTripIds }, status: 'completed' },
+                where: {
+                    tripId: { in: allTripIds },
+                    status: { in: ['completed', 'confirmed'] },
+                    deletedAt: null,
+                },
                 include: {
                     from: { select: { id: true, name: true } },
                     to: { select: { id: true, name: true } },
@@ -149,6 +153,21 @@ export async function POST(req: Request) {
                 balanceStr = 'User is settled up in this group';
             }
 
+            // Per-member spent (fair share = sum of their splits)
+            const memberSpent: Record<string, number> = {};
+            for (const txn of groupTxns) {
+                for (const split of txn.splits) {
+                    memberSpent[split.userId] = (memberSpent[split.userId] || 0) + split.amount;
+                }
+            }
+            const memberSpentStr = group.members.map(m => {
+                const name = m.user.name || 'Unknown';
+                const spent = memberSpent[m.user.id] || 0;
+                const paid = groupTxns.filter(t => t.payerId === m.user.id).reduce((s, t) => s + t.amount, 0);
+                const bal = balances[m.user.id] || 0;
+                return `${name}: spent ₹${(spent / 100).toFixed(2)}, paid ₹${(paid / 100).toFixed(2)}, balance ${bal > 0 ? '+' : ''}₹${(bal / 100).toFixed(2)}`;
+            }).join('; ');
+
             // Per-group category breakdown
             const groupCategories = new Map<string, number>();
             for (const txn of groupTxns) {
@@ -171,6 +190,7 @@ export async function POST(req: Request) {
                 `📌 Group: "${group.name}" (${group.members.length} members: ${memberList})\n` +
                 `   Total spent: ₹${(totalGroupSpent / 100).toFixed(2)} | User paid: ₹${(userPaid / 100).toFixed(2)}\n` +
                 `   ${balanceStr}\n` +
+                `   Per-member: ${memberSpentStr}\n` +
                 `   Categories: ${groupCatStr || 'None'}\n` +
                 `   Top expenses: ${topExpenses || 'None'}`
             );
@@ -339,21 +359,23 @@ async function callGemini(apiKey: string, context: string, message: string): Pro
     const systemPrompt = `You are SplitX AI, the intelligent financial assistant inside SplitX — a premium expense-splitting app for groups and trips.
 
 Your capabilities:
-- Answer questions about who owes whom with exact amounts
-- Provide spending analytics and category breakdowns
-- Explain group balances and settlement suggestions
+- Answer questions about who owes whom with EXACT amounts (₹ in INR)
+- Provide spending analytics, category breakdowns, and per-member spending
+- Explain group balances, pairwise debts, and settlement suggestions
 - Give financial tips and spending insights
-- Be proactive: if someone asks "who owes me?", also mention how much they owe others for a complete picture
-- EXPLAIN THE SETTLEMENT ENGINE: If users ask about mismatched amounts, explain that Group pages ONLY show isolated math for that specific group. The global "Settlements" page cross-nets debts across ALL groups to find the absolute minimum transfers. Advise users to ONLY pay from the global Settle page to avoid double-paying.
+- Be proactive: if someone asks "who owes me?", also mention how much they owe others
+- EXPLAIN THE SETTLEMENT ENGINE: Group pages show isolated math for that specific group. The global Settlements page cross-nets debts across ALL groups to find the minimum transfers. Advise users to pay from the global Settle page to avoid double-paying.
 
-Response rules:
-- Use ₹ for all amounts in INR
-- Be concise but thorough (3-5 sentences max)
-- Use emoji to make responses friendly and scannable
-- When listing multiple people/amounts, use bullet points
-- Always base answers on the REAL DATA provided below — never make up numbers
-- If the data shows someone is owed money, say so clearly
-- If asked about charts/analytics, summarize the category breakdown
+Response formatting rules:
+- Use ₹ for all amounts. Round to 2 decimal places.
+- Keep responses concise but thorough (4-8 sentences or structured bullets)
+- Use emoji extensively to make it friendly and scannable
+- Use **bold** for names and amounts for readability
+- When listing people/amounts, always use bullet points (• )
+- When showing per-person data, include both "spent" (fair share) and "paid" columns
+- Always base answers on the REAL DATA provided — never make up or hallucinate numbers
+- If data is missing or zero, say so honestly
+- For balance queries, always include: net balance, who owes whom, total owed/owing
 
 Here is the user's REAL financial data:
 
@@ -367,7 +389,7 @@ ${context}`;
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     contents: [{ parts: [{ text: `${systemPrompt}\n\nUser: ${message}` }] }],
-                    generationConfig: { maxOutputTokens: 500, temperature: 0.7 },
+                    generationConfig: { maxOutputTokens: 1024, temperature: 0.6 },
                 }),
             }
         );

@@ -101,7 +101,7 @@ export function debounce<T extends (...args: unknown[]) => unknown>(
 
 /** Category labels and emojis */
 export const CATEGORIES: Record<string, { label: string; emoji: string }> = {
-    general: { label: 'General', emoji: '📦' },
+    general: { label: 'General', emoji: '🏷️' },
     food: { label: 'Food & Drinks', emoji: '🍕' },
     transport: { label: 'Transport', emoji: '🚗' },
     shopping: { label: 'Shopping', emoji: '🛍️' },
@@ -109,7 +109,7 @@ export const CATEGORIES: Record<string, { label: string; emoji: string }> = {
     fuel: { label: 'Fuel', emoji: '⛽' },
     medical: { label: 'Medical', emoji: '🏥' },
     entertainment: { label: 'Entertainment', emoji: '🎮' },
-    other: { label: 'Other', emoji: '📎' },
+    other: { label: 'Other', emoji: '✏️' },
 };
 
 /** Get Category Data (supports custom categories) */
@@ -117,7 +117,7 @@ export function getCategoryData(category: string): { label: string; emoji: strin
     if (!category) return CATEGORIES.general;
     if (CATEGORIES[category]) return CATEGORIES[category];
     // Custom category
-    return { label: category, emoji: '📌' };
+    return { label: category, emoji: '🔖' };
 }
 
 /** Payment method labels and icons */

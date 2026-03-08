@@ -46,7 +46,7 @@ const NAV_ITEMS = [
 const BOTTOM_NAV = [
     { href: '/dashboard', icon: LayoutDashboard, label: 'Home', color: '#3b82f6' },
     { href: '/groups', icon: Users, label: 'Groups', color: '#8b5cf6' },
-    { href: '/contacts', icon: Contact, label: 'Contacts', color: '#f59e0b' },
+    { href: '/analytics', icon: BarChart3, label: 'Analytics', color: '#f59e0b' },
     { href: '/transactions', icon: Receipt, label: 'Activity', color: '#10b981' },
     { href: '/settlements', icon: ArrowRightLeft, label: 'Settle', color: '#f43f5e' },
 ];
@@ -328,8 +328,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </main>
 
 
-            {/* ── AI Chat Panel ── */}
-            <AIChatPanel />
+            {/* ── AI Chat Panel (hidden on add-transaction page) ── */}
+            {!pathname.startsWith('/transactions/new') && <AIChatPanel />}
 
             {/* ── Floating Bottom Nav (mobile) ── */}
             <nav className={styles.bottomNav}>

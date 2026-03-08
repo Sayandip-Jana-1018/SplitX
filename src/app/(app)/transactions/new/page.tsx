@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useCallback, useEffect, Suspense } from 'react';
-import { motion } from 'framer-motion';
-import { Delete, Check, ChevronDown, Loader2 } from 'lucide-react';
+import { useState, useCallback, useEffect, useRef, Suspense } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Delete, Check, ChevronDown, Loader2, Mic, Plus, Minus, Equal } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Button from '@/components/ui/Button';
 import Modal from '@/components/ui/Modal';
@@ -13,6 +13,8 @@ import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { CATEGORIES, PAYMENT_METHODS, formatCurrency, toPaise, cn, getCategoryData } from '@/lib/utils';
 
 import styles from './quickadd.module.css';
+import VoiceInput from '@/components/features/VoiceInput';
+import type { VoiceParseResult } from '@/components/features/VoiceInput';
 
 interface GroupItem {
     id: string;
@@ -54,6 +56,32 @@ function QuickAddContent() {
     // Custom split state
     const [splitType, setSplitType] = useState<'equal' | 'custom'>('equal');
     const [customSplits, setCustomSplits] = useState<{ userId: string; amount: number }[]>([]);
+
+    // Flag to prevent useEffect from resetting members after voice input
+    const voiceAppliedRef = useRef(false);
+
+    // Calculator expression state
+    const [expression, setExpression] = useState('');
+    const amountInputRef = useRef<HTMLInputElement>(null);
+
+    /** Evaluate a simple expression with + and - only, left-to-right */
+    const evaluateExpression = useCallback((expr: string): number => {
+        const sanitized = expr.replace(/[^\d.+\-]/g, '').replace(/^[+\-]/, '');
+        if (!sanitized) return 0;
+        const tokens = sanitized.split(/(?=[+\-])|(?<=[+\-])/).filter(t => t.trim());
+        let total = 0;
+        let op = '+';
+        for (const tok of tokens) {
+            const trimmed = tok.trim();
+            if (trimmed === '+' || trimmed === '-') { op = trimmed; continue; }
+            const num = parseFloat(trimmed);
+            if (isNaN(num)) continue;
+            total = op === '+' ? total + num : total - num;
+        }
+        return Math.max(0, Math.round(total * 100) / 100);
+    }, []);
+
+    const hasOperator = expression.includes('+') || expression.includes('-');
 
     // Pre-fill from URL params (from scan page)
     useEffect(() => {
@@ -137,19 +165,23 @@ function QuickAddContent() {
                     }));
                     setMembers(memberList);
 
-                    // Only default select all if NOT using custom split from URL
-                    if (splitType !== 'custom') {
-                        setSelectedMembers(new Set(memberList.map((m: { id: string }) => m.id)));
-                    } else if (customSplits.length > 0) {
-                        // If it IS custom, make sure only the people in customSplits are selected
-                        setSelectedMembers(new Set(customSplits.map(s => s.userId)));
-                    }
+                    // Skip default selections if voice input was just applied
+                    if (voiceAppliedRef.current) {
+                        voiceAppliedRef.current = false;
+                    } else {
+                        // Default member selection
+                        if (splitType !== 'custom') {
+                            setSelectedMembers(new Set(memberList.map((m: { id: string }) => m.id)));
+                        } else if (customSplits.length > 0) {
+                            setSelectedMembers(new Set(customSplits.map(s => s.userId)));
+                        }
 
-                    // Default payer to current user
-                    if (currentUser && memberList.some((m: { id: string }) => m.id === currentUser.id)) {
-                        setPayerId(currentUser.id);
-                    } else if (memberList.length > 0) {
-                        setPayerId(memberList[0].id);
+                        // Default payer to current user
+                        if (currentUser && memberList.some((m: { id: string }) => m.id === currentUser.id)) {
+                            setPayerId(currentUser.id);
+                        } else if (memberList.length > 0) {
+                            setPayerId(memberList[0].id);
+                        }
                     }
                 }
             } catch {
@@ -199,27 +231,187 @@ function QuickAddContent() {
 
     const handleNumPad = useCallback((key: string) => {
         if (key === 'del') {
-            setAmount((prev) => prev.slice(0, -1));
+            setExpression(prev => prev.slice(0, -1));
+            setAmount(prev => {
+                const newExpr = (expression || prev).slice(0, -1);
+                // If expression still has operators, don't update amount yet
+                if (newExpr.includes('+') || newExpr.includes('-')) return prev;
+                return newExpr;
+            });
+        } else if (key === '+' || key === '-') {
+            // Don't allow operators at the start or consecutive operators
+            if (!expression && !amount) return;
+            const base = expression || amount;
+            const last = base.charAt(base.length - 1);
+            if (last === '+' || last === '-' || last === '.') return;
+            setExpression(base + key);
+        } else if (key === '=') {
+            // Evaluate the expression
+            const expr = expression || amount;
+            if (!expr) return;
+            const result = evaluateExpression(expr);
+            const resultStr = result % 1 === 0 ? result.toString() : result.toFixed(2);
+            setAmount(resultStr);
+            setExpression('');
         } else if (key === '.') {
-            if (!amount.includes('.')) {
-                setAmount((prev) => (prev || '0') + '.');
-            }
+            const base = expression || amount;
+            // Find the last number segment (after last operator)
+            const lastOpIdx = Math.max(base.lastIndexOf('+'), base.lastIndexOf('-'));
+            const lastSegment = lastOpIdx >= 0 ? base.substring(lastOpIdx + 1) : base;
+            if (lastSegment.includes('.')) return;
+            const newVal = (base || '0') + '.';
+            if (expression) setExpression(newVal);
+            else setAmount(newVal);
         } else {
-            const parts = amount.split('.');
+            // Digit
+            const base = expression || amount;
+            const lastOpIdx = Math.max(base.lastIndexOf('+'), base.lastIndexOf('-'));
+            const lastSegment = lastOpIdx >= 0 ? base.substring(lastOpIdx + 1) : base;
+            const parts = lastSegment.split('.');
             if (parts[1] && parts[1].length >= 2) return;
             if (!parts[1] && parts[0] && parts[0].length >= 7) return;
-            setAmount((prev) => {
-                if (prev === '0' && key !== '.') return key;
-                return prev + key;
-            });
+            const newVal = (() => {
+                if (!base && key === '0') return '0';
+                if (base === '0' && key !== '.') return key;
+                return base + key;
+            })();
+            if (expression) setExpression(newVal);
+            else setAmount(newVal);
         }
         if (navigator.vibrate) navigator.vibrate(10);
-    }, [amount]);
+    }, [amount, expression, evaluateExpression]);
+
+    /** Handle keyboard input in the amount field */
+    const handleAmountInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+        const raw = e.target.value;
+        // Allow digits, decimal, +, -
+        const cleaned = raw.replace(/[^\d.+\-]/g, '');
+        if (cleaned.includes('+') || cleaned.includes('-')) {
+            setExpression(cleaned);
+        } else {
+            setExpression('');
+            setAmount(cleaned);
+        }
+    }, []);
 
     const catData = getCategoryData(category);
 
+    /** Handle voice parsing result — auto-fill the form */
+    const handleVoiceResult = useCallback((result: VoiceParseResult) => {
+        // Set amount
+        if (result.amount > 0) {
+            const amtStr = result.amount % 1 === 0
+                ? result.amount.toString()
+                : result.amount.toFixed(2);
+            setAmount(amtStr);
+            setExpression('');
+        }
+
+        // Set title
+        if (result.title && result.title !== 'Expense') {
+            setTitle(result.title);
+        }
+
+        // Set category from voice
+        if (result.category) {
+            setCategory(result.category);
+        }
+
+        // Show warnings (e.g. unrecognized members)
+        if (result.warnings && result.warnings.length > 0) {
+            for (const w of result.warnings) {
+                toast(w, 'error');
+            }
+        }
+
+        // Match member names to IDs
+        if (result.members && result.members.length > 0) {
+            const matchedIds = new Set<string>();
+            const matchedSplits: { userId: string; amount: number }[] = [];
+
+            for (const vm of result.members) {
+                const nameLower = vm.name.toLowerCase();
+                const matched = members.find(m => {
+                    const mLower = m.name.toLowerCase();
+                    return mLower === nameLower
+                        || mLower.startsWith(nameLower)
+                        || nameLower.startsWith(mLower.split(' ')[0])
+                        || mLower.split(' ')[0] === nameLower;
+                });
+
+                if (matched) {
+                    matchedIds.add(matched.id);
+                    if (vm.amount && vm.amount > 0) {
+                        matchedSplits.push({
+                            userId: matched.id,
+                            amount: toPaise(vm.amount),
+                        });
+                    }
+                }
+            }
+
+            // Only update if we found matches
+            if (matchedIds.size > 0) {
+                // Set voice flag BEFORE changing splitType/customSplits to prevent useEffect reset
+                voiceAppliedRef.current = true;
+
+                setSelectedMembers(matchedIds);
+
+                // Set payer: try to match result.payer, otherwise use first mentioned member
+                let assignedPayerId = Array.from(matchedIds)[0];
+                if (result.payer) {
+                    const payerLower = result.payer.toLowerCase();
+                    const payerMatch = members.find(m => {
+                        const mLower = m.name.toLowerCase();
+                        return mLower === payerLower || mLower.startsWith(payerLower) || payerLower.startsWith(mLower.split(' ')[0]);
+                    });
+                    if (payerMatch) {
+                        assignedPayerId = payerMatch.id;
+                        // Special case: if payer wasn't in the split list, we might want to still add them as payer
+                        // But since they paid, they are involved in the transaction.
+                    }
+                }
+                
+                if (assignedPayerId) {
+                    setPayerId(assignedPayerId);
+                }
+
+                // Set split type
+                if (result.splitType === 'custom' && matchedSplits.length > 0) {
+                    setSplitType('custom');
+                    // Auto-calculate remainder for last member if needed
+                    const totalPaise = toPaise(result.amount);
+                    const allocatedPaise = matchedSplits.reduce((s, sp) => s + sp.amount, 0);
+                    const memberArr = Array.from(matchedIds);
+                    const unassigned = memberArr.filter(
+                        id => !matchedSplits.find(s => s.userId === id)
+                    );
+
+                    if (unassigned.length > 0 && allocatedPaise < totalPaise) {
+                        const remainder = totalPaise - allocatedPaise;
+                        const per = Math.floor(remainder / unassigned.length);
+                        const leftover = remainder - per * unassigned.length;
+                        unassigned.forEach((id, i) => {
+                            matchedSplits.push({
+                                userId: id,
+                                amount: per + (i === unassigned.length - 1 ? leftover : 0),
+                            });
+                        });
+                    }
+
+                    setCustomSplits(matchedSplits);
+                } else {
+                    setSplitType('equal');
+                    setCustomSplits([]);
+                }
+            }
+        }
+
+        toast('Voice input applied! Review and submit.', 'success');
+    }, [members, toast]);
+
     const handleSave = async () => {
-        // Use category label as fallback title
+        // Category input IS the title now
         const effectiveTitle = title.trim() || catData.label;
 
         if (!numericAmount || numericAmount <= 0) {
@@ -350,28 +542,97 @@ function QuickAddContent() {
                 </button>
             </div>
 
-            {/* ── Amount Display ── */}
-            <div className={styles.amountDisplay}>
-                <span className={styles.currencySign}>₹</span>
-                <motion.div
-                    className={cn(styles.amountValue, !amount && styles.placeholder)}
-                    key={amount || 'placeholder'}
-                    initial={{ scale: 0.95, opacity: 0.5 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-                >
-                    {amount || '0'}
-                </motion.div>
+            {/* ── Amount Card (Glassmorphic) ── */}
+            <div className={styles.amountCard}>
+                <div className={styles.amountCardGlow} />
+
+                <div className={styles.amountDisplay}>
+                    <span className={styles.currencySign}>₹</span>
+                    <input
+                        ref={amountInputRef}
+                        className={styles.amountInput}
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="0"
+                        value={expression || amount}
+                        onChange={handleAmountInputChange}
+                        onBlur={() => {
+                            // Auto-evaluate expression on blur
+                            if (hasOperator && expression) {
+                                const result = evaluateExpression(expression);
+                                const resultStr = result % 1 === 0 ? result.toString() : result.toFixed(2);
+                                setAmount(resultStr);
+                                setExpression('');
+                            }
+                        }}
+                        aria-label="Amount"
+                    />
+                    <motion.button
+                        className={styles.voiceBtn}
+                        whileTap={{ scale: 0.9 }}
+                        onClick={() => {
+                            // Voice input — handled by VoiceInput component below
+                            const event = new CustomEvent('openVoiceInput');
+                            window.dispatchEvent(event);
+                        }}
+                        aria-label="Voice input"
+                    >
+                        <Mic size={20} />
+                    </motion.button>
+                </div>
+
+                {/* Expression preview */}
+                <AnimatePresence>
+                    {hasOperator && expression && (
+                        <motion.div
+                            className={styles.expressionPreview}
+                            initial={{ opacity: 0, y: -4 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -4 }}
+                        >
+                            = ₹{evaluateExpression(expression).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                        </motion.div>
+                    )}
+                </AnimatePresence>
             </div>
 
-            {/* ── Title ── */}
-            <input
-                className={styles.titleInput}
-                placeholder="What was this for?"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                maxLength={100}
-            />
+            {/* ── Category name pill (compact centered) ── */}
+            <div style={{ display: 'flex', justifyContent: 'center' }}>
+                <div style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 5,
+                    padding: '6px 14px 6px 10px',
+                    borderRadius: 100,
+                    border: '1.5px solid var(--border-subtle)',
+                    background: 'var(--surface-card, rgba(255,255,255,0.03))',
+                    transition: 'border-color 0.2s',
+                }}>
+                    <span style={{ fontSize: 16, flexShrink: 0 }}>{catData.emoji}</span>
+                    <input
+                        placeholder="Lunch, Uber..."
+                        value={title}
+                        onChange={(e) => {
+                            setTitle(e.target.value);
+                            const lower = e.target.value.toLowerCase().trim();
+                            const matched = Object.entries(CATEGORIES).find(([, v]) =>
+                                v.label.toLowerCase() === lower ||
+                                v.label.toLowerCase().startsWith(lower)
+                            );
+                            if (matched && lower.length >= 3) {
+                                setCategory(matched[0]);
+                            } else if (lower && !CATEGORIES[lower]) {
+                                setCategory(e.target.value.trim());
+                            }
+                        }}
+                        maxLength={40}
+                        style={{
+                            border: 'none', outline: 'none', background: 'transparent',
+                            fontSize: 13, fontWeight: 500, color: 'var(--fg-primary)',
+                            textAlign: 'center', width: 110, minWidth: 70,
+                            caretColor: 'var(--accent-500)',
+                        }}
+                    />
+                </div>
+            </div>
 
             {/* ── Meta Row: Category / Payer / Method chips ── */}
             <div className={styles.metaRow}>
@@ -398,26 +659,26 @@ function QuickAddContent() {
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
-                    gap: 'var(--space-4)',
-                    marginTop: 'var(--space-2)',
-                    marginBottom: 'var(--space-2)',
+                    gap: 8,
+                    marginTop: 0,
+                    marginBottom: 0,
                 }}>
                     <span style={{
-                        fontSize: 'var(--text-xs)',
+                        fontSize: 10,
                         color: 'var(--fg-tertiary)',
-                        fontWeight: 600,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.08em',
-                        textAlign: 'center',
-                        opacity: 0.8
+                        fontWeight: 700,
+                        textTransform: 'uppercase' as const,
+                        letterSpacing: '0.1em',
+                        textAlign: 'center' as const,
+                        opacity: 0.7
                     }}>
                         {splitType === 'custom' ? 'Split by Items (Custom)' : 'Split among'}
                     </span>
                     <div style={{
                         display: 'flex',
-                        flexWrap: 'wrap',
+                        flexWrap: 'wrap' as const,
                         justifyContent: 'center',
-                        gap: 10, // Increased gap between pills (was 6)
+                        gap: 8,
                     }}>
                         {members.map((member) => {
                             const isSelected = selectedMembers.has(member.id);
@@ -494,7 +755,7 @@ function QuickAddContent() {
                 <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    style={{ marginTop: 'var(--space-2)', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', alignItems: 'center' }}
+                    style={{ marginTop: 0, display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center' }}
                 >
                     {/* Equal / Custom toggle */}
                     <div style={{
@@ -684,19 +945,33 @@ function QuickAddContent() {
                 </motion.div>
             )}
 
-            {/* ── Numpad ── */}
+            {/* ── Numpad (4-column with calculator) ── */}
             <div className={styles.numpad}>
-                {['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'del'].map((key) => (
+                {['1', '2', '3', '+', '4', '5', '6', '-', '7', '8', '9', 'del', '.', '0', '00', '='].map((key) => (
                     <motion.button
                         key={key}
                         className={cn(
                             styles.numKey,
+                            (key === '+' || key === '-') && styles.numKeyOperator,
                             key === 'del' && styles.numKeyDelete,
+                            key === '=' && styles.numKeyEquals,
                         )}
                         whileTap={{ scale: 0.92 }}
-                        onClick={() => handleNumPad(key)}
+                        onClick={() => {
+                            if (key === '00') {
+                                handleNumPad('0');
+                                handleNumPad('0');
+                            } else {
+                                handleNumPad(key);
+                            }
+                        }}
+                        aria-label={key === 'del' ? 'Delete' : key === '=' ? 'Calculate' : key}
                     >
-                        {key === 'del' ? <Delete size={22} /> : key}
+                        {key === 'del' ? <Delete size={20} /> :
+                         key === '+' ? <Plus size={20} /> :
+                         key === '-' ? <Minus size={20} /> :
+                         key === '=' ? <Equal size={20} /> :
+                         key}
                     </motion.button>
                 ))}
             </div>
@@ -714,6 +989,14 @@ function QuickAddContent() {
                     Add Expense · {numericAmount > 0 ? formatCurrency(toPaise(numericAmount)) : '₹0'}
                 </Button>
             </div>
+
+            {/* ── Voice Input Overlay ── */}
+            <VoiceInput
+                memberNames={members.map(m => m.name)}
+                members={members.map(m => ({ name: m.name, image: m.image }))}
+                groupName={selectedGroup?.name || 'Group'}
+                onResult={handleVoiceResult}
+            />
 
             {/* ── Group Picker Modal ── */}
             <Modal
@@ -799,13 +1082,8 @@ function QuickAddContent() {
                                 )}
                                 whileTap={{ scale: 0.93 }}
                                 onClick={() => {
-                                    if (key === 'other') {
-                                        setIsCustomCategory(true);
-                                        setCustomCatValue('');
-                                    } else {
-                                        setCategory(key);
-                                        setShowCategories(false);
-                                    }
+                                    setCategory(key);
+                                    setShowCategories(false);
                                 }}
                             >
                                 <span className={styles.categoryEmoji}>{val.emoji}</span>
