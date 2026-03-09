@@ -28,7 +28,13 @@ export function usePullToRefresh({ onRefresh, threshold = 80, disabled = false }
         const dy = e.touches[0].clientY - startY.current;
         if (dy > 0) {
             setPullDistance(Math.min(dy * 0.5, threshold * 1.5));
-            if (dy > 10) e.preventDefault();
+            if (dy > 10) {
+                if (e.cancelable) e.preventDefault();
+            }
+        } else {
+            // Cancel pull-to-refresh immediately if scrolling up
+            setPulling(false);
+            setPullDistance(0);
         }
     }, [pulling, disabled, refreshing, threshold]);
 

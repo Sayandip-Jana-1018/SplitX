@@ -47,13 +47,14 @@ graph TB
         BudgetAPI["GET/POST /api/budgets"]
         AnalyticsAPI["GET /api/analytics"]
         AIChatAPI["POST /api/ai/chat"]
+        AIVoiceAPI["POST /api/ai/parse-voice"]
         HealthAPI["GET /api/admin/health"]
     end
 
     subgraph Backend["⚙️ Backend Services"]
         PrismaORM["Prisma ORM"]
         AuthLib["NextAuth v5"]
-        Parser["Transaction Parser<br/>(OCR + regex)"]
+        Parser["Transaction Parser<br/>(OCR + regex + voice)"]
         SettleLib["Settlement Engine<br/>(Greedy + Optimized)"]
         NotifLib["Notification Engine"]
         AuditLib["Audit Logger"]
@@ -237,6 +238,7 @@ erDiagram
 | Feature | Description |
 |---|---|
 | **🤖 AI Chat Assistant** | Gemini-powered conversational assistant — ask about spending, debts, groups in natural language |
+| **🎙️ AI Voice Input** | Talk naturally to add expenses (e.g., "I paid 500 for pizza for Sneh and Ankit at Domino's"). Extracts amount, title, merchant, category, and assigns the correct payer/participants instantly. |
 | **Receipt Scanner (OCR)** | Dual-mode scanner: **Basic** (Tesseract.js, on-device) and **Advanced** (OpenAI Vision API, cloud-based with itemized receipt parsing) |
 | **Advanced Receipt AI** | GPT-4o-mini Vision extracts merchant, date, individual items with quantities, taxes, subtotal, total, and auto-categorizes |
 | **Smart Receipt Split** | Interactive itemized splitting: scan a receipt, then drag/tap to assign items to specific members with auto-calculated taxes |
@@ -304,7 +306,8 @@ erDiagram
 | **OCR** | Tesseract.js 7 |
 | **Vision AI** | OpenAI GPT-4o-mini (Vision) |
 | **QR Codes** | qrcode.react |
-| **AI** | Google Gemini 2.0 Flash (with smart local fallback) |
+| **AI Text/Chat** | Google Gemini 2.0 Flash (with smart local fallback) |
+| **Speech-to-Text** | Web Speech API (SpeechRecognition) |
 | **Auth** | NextAuth v5 (beta-30) with credentials + Google + GitHub providers |
 | **ORM** | Prisma 6 |
 | **Database** | PostgreSQL on Neon |
@@ -341,6 +344,7 @@ src/
 │   │   ├── budgets/              # GET (by month) / POST (upsert per category)
 │   │   ├── analytics/            # Enhanced analytics with AI insights
 │   │   ├── ai/chat/              # Gemini-powered AI assistant
+│   │   ├── ai/parse-voice/       # Gemini-powered voice transaction parser
 │   │   ├── receipt-scan/         # OpenAI Vision receipt scanner
 │   │   └── admin/health/         # System diagnostics endpoint
 │   ├── invite/                   # Public invite accept page
@@ -357,6 +361,7 @@ src/
 │   ├── db.ts                     # Prisma client singleton
 │   ├── settlement.ts             # Dual settlement algorithm (greedy + optimized)
 │   ├── transactionParser.ts      # UPI/SMS regex parser
+│   ├── voiceParser.ts            # Local fallback parser for voice input
 │   ├── export.ts                 # CSV/JSON export
 │   ├── upi.ts                    # UPI deep-link generator
 │   ├── validators.ts             # Zod schemas
@@ -477,6 +482,7 @@ npm start
 | `POST` | `/api/budgets` | Create/update budget for a category |
 | `GET` | `/api/analytics` | Enhanced analytics (trends, categories, budget comparison, insights) |
 | `POST` | `/api/ai/chat` | AI assistant — send message, get contextual response |
+| `POST` | `/api/ai/parse-voice`| Parse natural language transcripts into structured transaction objects |
 | `POST` | `/api/receipt-scan` | Advanced receipt scan via OpenAI Vision (returns items, taxes, total) |
 | `GET` | `/api/admin/health` | System health diagnostics |
 

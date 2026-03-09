@@ -36,6 +36,7 @@ export async function GET(req: Request) {
             const trips = await prisma.trip.findMany({
                 where: {
                     group: {
+                        deletedAt: null,
                         OR: [
                             { ownerId: user.id },
                             { members: { some: { userId: user.id } } },
