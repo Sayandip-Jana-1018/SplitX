@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
+import { deduplicateTranscript } from '@/lib/deduplicateTranscript';
 
 /**
  * POST /api/ai/parse-voice — Parse voice transcript into structured transaction data.
@@ -38,16 +39,23 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'No group members provided' }, { status: 400 });
         }
 
+        // Clean transcript: deduplicate repeated words/phrases from mobile speech engines
+        const cleanedTranscript = deduplicateTranscript(transcript.trim());
+
+        if (!cleanedTranscript) {
+            return NextResponse.json({ error: 'No usable speech detected' }, { status: 400 });
+        }
+
         const apiKey = process.env.GEMINI_API_KEY;
 
         if (!apiKey) {
             // Local fallback: simple regex-based parsing
-            const result = parseTranscriptLocally(transcript, memberNames);
+            const result = parseTranscriptLocally(cleanedTranscript, memberNames);
             return NextResponse.json(result);
         }
 
         // Use Gemini for intelligent parsing
-        const result = await parseWithGemini(apiKey, transcript, memberNames, groupName);
+        const result = await parseWithGemini(apiKey, cleanedTranscript, memberNames, groupName);
         return NextResponse.json(result);
     } catch (error) {
         console.error('Voice parse error:', error);
