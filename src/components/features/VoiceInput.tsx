@@ -134,6 +134,9 @@ export default function VoiceInput({ memberNames, members, groupName, onResult }
 
     const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
     const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const resultIndexRef = useRef(0);
+    const stateRef = useRef<VoiceState>('idle');
+    const finalTextRef = useRef('');
 
     // Listen for external trigger (from mic button in page)
     useEffect(() => {
@@ -141,6 +144,11 @@ export default function VoiceInput({ memberNames, members, groupName, onResult }
         window.addEventListener('openVoiceInput', handler);
         return () => window.removeEventListener('openVoiceInput', handler);
     }, []);
+
+    // Keep stateRef in sync
+    useEffect(() => {
+        stateRef.current = state;
+    }, [state]);
 
     // Start recognition when overlay opens
     useEffect(() => {
@@ -168,30 +176,39 @@ export default function VoiceInput({ memberNames, members, groupName, onResult }
             recognition.lang = 'en-IN';
             recognition.maxAlternatives = 1;
 
+            // Reset tracking state
+            resultIndexRef.current = 0;
+            finalTextRef.current = '';
+
             recognition.onstart = () => {
                 setState('listening');
                 setInterimText('');
                 setFinalText('');
+                finalTextRef.current = '';
                 if (navigator.vibrate) navigator.vibrate(50);
             };
 
             recognition.onresult = (event: SpeechRecognitionEvent) => {
                 let interim = '';
-                let final = '';
+                let newFinal = '';
 
-                for (let i = 0; i < event.results.length; i++) {
+                // Only process results from the last-known index onward
+                // to avoid re-processing old final results on mobile
+                for (let i = resultIndexRef.current; i < event.results.length; i++) {
                     const result = event.results[i];
                     if (result.isFinal) {
-                        final += result[0].transcript + ' ';
+                        newFinal += result[0].transcript + ' ';
+                        // Advance the index past this finalized result
+                        resultIndexRef.current = i + 1;
                     } else {
                         interim += result[0].transcript;
                     }
                 }
 
-                setFinalText(prev => {
-                    const combined = prev ? prev.trim() + ' ' + final.trim() : final.trim();
-                    return combined.trim();
-                });
+                if (newFinal) {
+                    finalTextRef.current = (finalTextRef.current + ' ' + newFinal).trim();
+                    setFinalText(finalTextRef.current);
+                }
                 setInterimText(interim);
 
                 // Reset silence timer
@@ -209,15 +226,15 @@ export default function VoiceInput({ memberNames, members, groupName, onResult }
                     setErrorMsg('Microphone access denied. Please allow microphone access in your browser settings.');
                 } else if (event.error === 'no-speech') {
                     // Keep listening, don't error out immediately
-                } else {
+                } else if (event.error !== 'aborted') {
                     setState('error');
                     setErrorMsg(`Voice recognition error: ${event.error}. Please try again.`);
                 }
             };
 
             recognition.onend = () => {
-                // If we were still listening (not manually stopped), process
-                if (state === 'listening') {
+                // Use the ref to avoid stale closure over state
+                if (stateRef.current === 'listening') {
                     processTranscript();
                 }
             };
@@ -243,7 +260,8 @@ export default function VoiceInput({ memberNames, members, groupName, onResult }
     }, []);
 
     const processTranscript = useCallback(async () => {
-        const transcript = (finalText + ' ' + interimText).trim();
+        // Use refs instead of state to avoid stale closures
+        const transcript = finalTextRef.current.trim();
         if (!transcript) {
             setState('error');
             setErrorMsg('No speech detected. Please try again and speak clearly.');
@@ -274,7 +292,7 @@ export default function VoiceInput({ memberNames, members, groupName, onResult }
             setState('error');
             setErrorMsg('Could not understand the expense. Please try again.');
         }
-    }, [finalText, interimText, memberNames, groupName]);
+    }, [memberNames, groupName]);
 
     const handleDone = useCallback(() => {
         stopListening();
@@ -303,6 +321,8 @@ export default function VoiceInput({ memberNames, members, groupName, onResult }
         setState('idle');
         setInterimText('');
         setFinalText('');
+        finalTextRef.current = '';
+        resultIndexRef.current = 0;
         setParsedResult(null);
         setErrorMsg('');
         startListening();
@@ -333,14 +353,15 @@ export default function VoiceInput({ memberNames, members, groupName, onResult }
                 style={{
                     position: 'fixed',
                     inset: 0,
-                    zIndex: 9999,
+                    zIndex: 10000,
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    background: 'var(--voice-overlay, rgba(var(--bg-primary-rgb, 0, 0, 0), 0.92))',
-                    backdropFilter: 'blur(24px) saturate(1.5)',
-                    WebkitBackdropFilter: 'blur(24px) saturate(1.5)',
+                    background: 'var(--voice-overlay, rgba(var(--bg-primary-rgb, 15, 15, 20), 0.97))',
+                    backdropFilter: 'blur(40px) saturate(1.4)',
+                    WebkitBackdropFilter: 'blur(40px) saturate(1.4)',
+                    overflow: 'hidden',
                 }}
             >
                 {/* Close button */}
@@ -455,8 +476,10 @@ export default function VoiceInput({ memberNames, members, groupName, onResult }
 
                         {/* Live transcript */}
                         <div style={{
-                            minHeight: 60, maxWidth: '100%',
+                            minHeight: 60, maxHeight: 180, maxWidth: '100%',
                             textAlign: 'center', padding: '0 16px',
+                            overflowY: 'auto',
+                            WebkitOverflowScrolling: 'touch',
                         }}>
                             {finalText && (
                                 <motion.p
