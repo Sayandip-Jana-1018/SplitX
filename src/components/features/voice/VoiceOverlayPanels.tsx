@@ -60,23 +60,23 @@ export function ListeningPanel({ finalText, interimText, onDone }: ListeningPane
                         style={{
                             position: 'absolute', inset: 0,
                             borderRadius: '50%',
-                            border: '2px solid rgba(139, 92, 246, 0.35)',
+                            border: '2px solid rgba(var(--accent-500-rgb, 139, 92, 246), 0.35)',
                         }}
                     />
                 ))}
                 <motion.div
                     animate={{
                         boxShadow: [
-                            '0 0 30px rgba(139, 92, 246, 0.15)',
-                            '0 0 60px rgba(139, 92, 246, 0.3)',
-                            '0 0 30px rgba(139, 92, 246, 0.15)',
+                            '0 0 30px rgba(var(--accent-500-rgb, 139, 92, 246), 0.15)',
+                            '0 0 60px rgba(var(--accent-500-rgb, 139, 92, 246), 0.3)',
+                            '0 0 30px rgba(var(--accent-500-rgb, 139, 92, 246), 0.15)',
                         ],
                     }}
                     transition={{ duration: 2, repeat: Infinity }}
                     style={{
                         position: 'absolute', inset: 15,
                         borderRadius: '50%',
-                        background: 'linear-gradient(135deg, #8b5cf6, #6d28d9)',
+                        background: 'linear-gradient(135deg, var(--accent-500, #8b5cf6), var(--accent-600, #6d28d9))',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                     }}
                 >
@@ -90,7 +90,7 @@ export function ListeningPanel({ finalText, interimText, onDone }: ListeningPane
                     animate={{ opacity: [0.4, 1, 0.4] }}
                     transition={{ duration: 2.5, repeat: Infinity }}
                     style={{
-                        color: '#a78bfa', fontSize: 13,
+                        color: 'var(--accent-400, #a78bfa)', fontSize: 13,
                         fontWeight: 700, letterSpacing: '0.15em',
                         textTransform: 'uppercase',
                         marginBottom: 6,
@@ -98,7 +98,7 @@ export function ListeningPanel({ finalText, interimText, onDone }: ListeningPane
                 >
                     Listening
                 </motion.p>
-                <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: 12, fontWeight: 400 }}>
+                <p style={{ color: 'var(--fg-tertiary)', fontSize: 12, fontWeight: 400 }}>
                     Speak naturally — I&apos;ll stop when you pause
                 </p>
             </motion.div>
@@ -117,7 +117,7 @@ export function ListeningPanel({ finalText, interimText, onDone }: ListeningPane
                         }}
                         style={{
                             width: 3, borderRadius: 2,
-                            background: 'linear-gradient(180deg, #a78bfa, #7c3aed)',
+                            background: 'linear-gradient(180deg, var(--accent-400, #a78bfa), var(--accent-600, #7c3aed))',
                             opacity: 0.6 + Math.sin(i * 0.5) * 0.3,
                         }}
                     />
@@ -135,7 +135,7 @@ export function ListeningPanel({ finalText, interimText, onDone }: ListeningPane
                         initial={{ opacity: 0, y: 8 }}
                         animate={{ opacity: 1, y: 0 }}
                         style={{
-                            color: '#fff', fontSize: 20,
+                            color: 'var(--fg-primary)', fontSize: 20,
                             fontWeight: 500, lineHeight: 1.5,
                             marginBottom: 6,
                         }}
@@ -147,9 +147,9 @@ export function ListeningPanel({ finalText, interimText, onDone }: ListeningPane
                     <motion.p
                         key={interimText}
                         initial={{ opacity: 0 }}
-                        animate={{ opacity: 0.45 }}
+                        animate={{ opacity: 0.55 }}
                         style={{
-                            color: '#d4d4d8', fontSize: 17,
+                            color: 'var(--fg-tertiary)', fontSize: 17,
                             fontStyle: 'italic', lineHeight: 1.4,
                         }}
                     >
@@ -157,7 +157,7 @@ export function ListeningPanel({ finalText, interimText, onDone }: ListeningPane
                     </motion.p>
                 )}
                 {!finalText && !interimText && (
-                    <p style={{ color: 'rgba(255,255,255,0.2)', fontSize: 15, fontStyle: 'italic' }}>
+                    <p style={{ color: 'var(--fg-muted)', fontSize: 15, fontStyle: 'italic' }}>
                         Say something like &quot;Split 500 for pizza between Sneh and Ankit&quot;
                     </p>
                 )}
@@ -170,9 +170,9 @@ export function ListeningPanel({ finalText, interimText, onDone }: ListeningPane
                 whileHover={{ scale: 1.02 }}
                 style={{
                     padding: '14px 36px', borderRadius: 50,
-                    background: 'rgba(139, 92, 246, 0.15)',
-                    border: '1px solid rgba(139, 92, 246, 0.3)',
-                    color: '#e0d4fd', fontSize: 15, fontWeight: 600,
+                    background: 'var(--surface-card)',
+                    border: '1px solid var(--border-default)',
+                    color: 'var(--fg-primary)', fontSize: 15, fontWeight: 600,
                     cursor: 'pointer',
                     display: 'flex', alignItems: 'center', gap: 10,
                     transition: 'all 0.2s ease',
@@ -184,7 +184,7 @@ export function ListeningPanel({ finalText, interimText, onDone }: ListeningPane
 
             {/* Hint */}
             <p style={{
-                color: 'rgba(255,255,255,0.2)', fontSize: 11,
+                color: 'var(--fg-muted)', fontSize: 11,
                 textAlign: 'center', maxWidth: 300,
                 lineHeight: 1.6, marginTop: 4,
             }}>
@@ -219,19 +219,19 @@ export function ProcessingPanel({ transcript }: ProcessingPanelProps) {
                 transition={{ duration: 1.2, repeat: Infinity, ease: 'linear' }}
                 style={{
                     width: 56, height: 56, borderRadius: 28,
-                    border: '3px solid rgba(139, 92, 246, 0.15)',
-                    borderTopColor: '#8b5cf6',
+                    border: '3px solid var(--border-default)',
+                    borderTopColor: 'var(--accent-500, #8b5cf6)',
                 }}
             />
             <div style={{ textAlign: 'center' }}>
                 <p style={{
-                    color: '#e4e4e7', fontSize: 17,
+                    color: 'var(--fg-primary)', fontSize: 17,
                     fontWeight: 600, marginBottom: 8,
                 }}>
                     Understanding your expense...
                 </p>
                 <p style={{
-                    color: 'rgba(255,255,255,0.35)', fontSize: 13,
+                    color: 'var(--fg-tertiary)', fontSize: 13,
                     maxWidth: 280, lineHeight: 1.5,
                 }}>
                     &quot;{(transcript || '').slice(0, 80)}{(transcript || '').length > 80 ? '...' : ''}&quot;
@@ -268,11 +268,11 @@ export function ResultPanel({ result, members, onRetry, onAccept }: ResultPanelP
             {/* Card */}
             <div style={{
                 width: '100%',
-                background: 'linear-gradient(180deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.03) 100%)',
-                border: '1px solid rgba(255,255,255,0.08)',
+                background: 'var(--surface-card)',
+                border: '1px solid var(--border-default)',
                 borderRadius: 24,
                 padding: '28px 22px 22px',
-                boxShadow: '0 20px 60px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05)',
+                boxShadow: 'var(--shadow-lg)',
             }}>
                 {/* Success icon */}
                 <motion.div
@@ -281,7 +281,7 @@ export function ResultPanel({ result, members, onRetry, onAccept }: ResultPanelP
                     transition={{ type: 'spring', damping: 12, stiffness: 200, delay: 0.1 }}
                     style={{
                         width: 52, height: 52, borderRadius: 26,
-                        background: 'linear-gradient(135deg, #22c55e, #15803d)',
+                        background: 'linear-gradient(135deg, var(--color-success, #22c55e), #15803d)',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         boxShadow: '0 0 30px rgba(34, 197, 94, 0.25)',
                         margin: '0 auto 18px',
@@ -298,12 +298,12 @@ export function ResultPanel({ result, members, onRetry, onAccept }: ResultPanelP
                     style={{ textAlign: 'center', marginBottom: 18 }}
                 >
                     <p style={{
-                        color: 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: 700,
+                        color: 'var(--fg-tertiary)', fontSize: 11, fontWeight: 700,
                         textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6,
                     }}>Amount</p>
                     <p style={{
                         fontSize: 36, fontWeight: 800, letterSpacing: '-0.02em',
-                        background: 'linear-gradient(135deg, #a78bfa, #7c3aed)',
+                        background: 'linear-gradient(135deg, var(--accent-400, #a78bfa), var(--accent-600, #7c3aed))',
                         WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
                         backgroundClip: 'text',
                     }}>
@@ -324,17 +324,17 @@ export function ResultPanel({ result, members, onRetry, onAccept }: ResultPanelP
                     {result.title && (
                         <span style={{
                             padding: '6px 16px', borderRadius: 12,
-                            background: 'rgba(255,255,255,0.06)',
-                            border: '1px solid rgba(255,255,255,0.08)',
-                            color: '#f4f4f5', fontSize: 14, fontWeight: 500,
+                            background: 'var(--bg-tertiary)',
+                            border: '1px solid var(--border-default)',
+                            color: 'var(--fg-primary)', fontSize: 14, fontWeight: 500,
                         }}>{result.title}</span>
                     )}
                     {result.category && (
                         <span style={{
                             padding: '6px 14px', borderRadius: 12,
-                            background: 'rgba(255,255,255,0.04)',
-                            border: '1px solid rgba(255,255,255,0.06)',
-                            color: 'rgba(255,255,255,0.55)', fontSize: 12, fontWeight: 600,
+                            background: 'var(--bg-tertiary)',
+                            border: '1px solid var(--border-subtle)',
+                            color: 'var(--fg-secondary)', fontSize: 12, fontWeight: 600,
                         }}>{result.category}</span>
                     )}
                 </motion.div>
@@ -349,10 +349,14 @@ export function ResultPanel({ result, members, onRetry, onAccept }: ResultPanelP
                     <span style={{
                         padding: '5px 16px', borderRadius: 20,
                         background: result.splitType === 'equal'
-                            ? 'rgba(139, 92, 246, 0.12)' : 'rgba(249, 115, 22, 0.12)',
+                            ? 'rgba(var(--accent-500-rgb, 139, 92, 246), 0.12)'
+                            : 'rgba(249, 115, 22, 0.12)',
                         border: `1px solid ${result.splitType === 'equal'
-                            ? 'rgba(139, 92, 246, 0.25)' : 'rgba(249, 115, 22, 0.25)'}`,
-                        color: result.splitType === 'equal' ? '#a78bfa' : '#fb923c',
+                            ? 'rgba(var(--accent-500-rgb, 139, 92, 246), 0.25)'
+                            : 'rgba(249, 115, 22, 0.25)'}`,
+                        color: result.splitType === 'equal'
+                            ? 'var(--accent-500, #8b5cf6)'
+                            : '#f97316',
                         fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
                         letterSpacing: '0.08em',
                     }}>
@@ -371,19 +375,19 @@ export function ResultPanel({ result, members, onRetry, onAccept }: ResultPanelP
                             gap: 8, marginBottom: 16,
                         }}
                     >
-                        <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: 12, fontWeight: 500 }}>Paid by</span>
+                        <span style={{ color: 'var(--fg-tertiary)', fontSize: 12, fontWeight: 500 }}>Paid by</span>
                         <div style={{
                             display: 'flex', alignItems: 'center', gap: 6,
                             padding: '4px 12px 4px 4px', borderRadius: 20,
-                            background: 'rgba(255,255,255,0.06)',
-                            border: '1px solid rgba(255,255,255,0.08)',
+                            background: 'var(--bg-tertiary)',
+                            border: '1px solid var(--border-default)',
                         }}>
                             <MemberAvatar
                                 name={result.payer}
                                 image={findMemberInfo(result.payer, members)?.image}
                                 size={20}
                             />
-                            <span style={{ color: '#f4f4f5', fontSize: 13, fontWeight: 600 }}>
+                            <span style={{ color: 'var(--fg-primary)', fontSize: 13, fontWeight: 600 }}>
                                 {result.payer}
                             </span>
                         </div>
@@ -391,7 +395,7 @@ export function ResultPanel({ result, members, onRetry, onAccept }: ResultPanelP
                 )}
 
                 {/* Divider */}
-                <div style={{ height: 1, background: 'rgba(255,255,255,0.06)', margin: '0 -4px 14px' }} />
+                <div style={{ height: 1, background: 'var(--border-default)', margin: '0 -4px 14px' }} />
 
                 {/* Members */}
                 <motion.div
@@ -401,7 +405,7 @@ export function ResultPanel({ result, members, onRetry, onAccept }: ResultPanelP
                     style={{ display: 'flex', flexDirection: 'column', gap: 8 }}
                 >
                     <p style={{
-                        color: 'rgba(255,255,255,0.3)', fontSize: 10,
+                        color: 'var(--fg-tertiary)', fontSize: 10,
                         fontWeight: 700, textTransform: 'uppercase',
                         letterSpacing: '0.12em', textAlign: 'center', marginBottom: 4,
                     }}>Members ({result.members.length})</p>
@@ -417,24 +421,24 @@ export function ResultPanel({ result, members, onRetry, onAccept }: ResultPanelP
                                 style={{
                                     display: 'flex', alignItems: 'center', gap: 12,
                                     padding: '12px 14px', borderRadius: 16,
-                                    background: 'rgba(255,255,255,0.04)',
-                                    border: '1px solid rgba(255,255,255,0.06)',
+                                    background: 'var(--bg-tertiary)',
+                                    border: '1px solid var(--border-subtle)',
                                 }}
                             >
                                 <MemberAvatar name={m.name} image={memberInfo?.image} size={38} />
-                                <span style={{ flex: 1, color: '#f4f4f5', fontSize: 15, fontWeight: 600 }}>
+                                <span style={{ flex: 1, color: 'var(--fg-primary)', fontSize: 15, fontWeight: 600 }}>
                                     {m.name}
                                 </span>
                                 {m.amount && m.amount > 0 && (
                                     <span style={{
-                                        color: '#a78bfa', fontSize: 15, fontWeight: 700,
+                                        color: 'var(--accent-500, #8b5cf6)', fontSize: 15, fontWeight: 700,
                                         fontFeatureSettings: "'tnum'",
                                     }}>
                                         ₹{m.amount.toLocaleString('en-IN')}
                                     </span>
                                 )}
                                 {m.confidence < 0.6 && (
-                                    <span style={{ fontSize: 10, color: '#eab308', fontWeight: 600, flexShrink: 0 }}>
+                                    <span style={{ fontSize: 10, color: 'var(--color-warning, #eab308)', fontWeight: 600, flexShrink: 0 }}>
                                         ⚠ Verify
                                     </span>
                                 )}
@@ -455,11 +459,11 @@ export function ResultPanel({ result, members, onRetry, onAccept }: ResultPanelP
                             <div key={i} style={{
                                 display: 'flex', alignItems: 'center', gap: 8,
                                 padding: '8px 12px', borderRadius: 10,
-                                background: 'rgba(234, 179, 8, 0.08)',
-                                border: '1px solid rgba(234, 179, 8, 0.15)',
+                                background: 'var(--color-warning-bg, rgba(234, 179, 8, 0.08))',
+                                border: '1px solid var(--color-warning-border, rgba(234, 179, 8, 0.15))',
                             }}>
-                                <AlertCircle size={13} style={{ color: '#eab308', flexShrink: 0 }} />
-                                <p style={{ color: '#eab308', fontSize: 11, fontWeight: 500, lineHeight: 1.4 }}>{w}</p>
+                                <AlertCircle size={13} style={{ color: 'var(--color-warning)', flexShrink: 0 }} />
+                                <p style={{ color: 'var(--color-warning)', fontSize: 11, fontWeight: 500, lineHeight: 1.4 }}>{w}</p>
                             </div>
                         ))}
                     </motion.div>
@@ -474,13 +478,13 @@ export function ResultPanel({ result, members, onRetry, onAccept }: ResultPanelP
                         style={{
                             display: 'flex', alignItems: 'center', gap: 8,
                             padding: '8px 14px', borderRadius: 12,
-                            background: 'rgba(234, 179, 8, 0.06)',
-                            border: '1px solid rgba(234, 179, 8, 0.12)',
+                            background: 'var(--color-warning-bg, rgba(234, 179, 8, 0.06))',
+                            border: '1px solid var(--color-warning-border, rgba(234, 179, 8, 0.12))',
                             marginTop: 12,
                         }}
                     >
-                        <AlertCircle size={14} style={{ color: '#eab308', flexShrink: 0 }} />
-                        <p style={{ color: '#eab308', fontSize: 11, fontWeight: 500, lineHeight: 1.4 }}>
+                        <AlertCircle size={14} style={{ color: 'var(--color-warning)', flexShrink: 0 }} />
+                        <p style={{ color: 'var(--color-warning)', fontSize: 11, fontWeight: 500, lineHeight: 1.4 }}>
                             Low confidence — please review before submitting
                         </p>
                     </motion.div>
@@ -499,9 +503,9 @@ export function ResultPanel({ result, members, onRetry, onAccept }: ResultPanelP
                     whileTap={{ scale: 0.95 }}
                     style={{
                         flex: 1, padding: '15px 20px', borderRadius: 50,
-                        background: 'rgba(255,255,255,0.06)',
-                        border: '1px solid rgba(255,255,255,0.1)',
-                        color: '#d4d4d8', fontSize: 14, fontWeight: 600,
+                        background: 'var(--surface-card)',
+                        border: '1px solid var(--border-default)',
+                        color: 'var(--fg-secondary)', fontSize: 14, fontWeight: 600,
                         cursor: 'pointer',
                         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                     }}
@@ -513,12 +517,12 @@ export function ResultPanel({ result, members, onRetry, onAccept }: ResultPanelP
                     whileTap={{ scale: 0.95 }}
                     style={{
                         flex: 2, padding: '15px 20px', borderRadius: 50,
-                        background: 'linear-gradient(135deg, #8b5cf6, #6d28d9)',
+                        background: 'linear-gradient(135deg, var(--accent-500, #8b5cf6), var(--accent-600, #6d28d9))',
                         border: 'none',
                         color: '#fff', fontSize: 15, fontWeight: 700,
                         cursor: 'pointer',
                         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                        boxShadow: '0 4px 24px rgba(139, 92, 246, 0.35)',
+                        boxShadow: 'var(--shadow-glow)',
                     }}
                 >
                     <Check size={16} /> Use This
@@ -527,7 +531,7 @@ export function ResultPanel({ result, members, onRetry, onAccept }: ResultPanelP
 
             {/* Raw transcript */}
             <p style={{
-                color: 'rgba(255,255,255,0.2)', fontSize: 11,
+                color: 'var(--fg-muted)', fontSize: 11,
                 textAlign: 'center', fontStyle: 'italic',
                 maxWidth: 300, marginTop: 16, lineHeight: 1.5,
             }}>
@@ -566,16 +570,16 @@ export function ErrorPanel({ message, onRetry, onClose }: ErrorPanelProps) {
                 transition={{ type: 'spring', damping: 12 }}
                 style={{
                     width: 60, height: 60, borderRadius: 30,
-                    background: 'rgba(239, 68, 68, 0.1)',
-                    border: '2px solid rgba(239, 68, 68, 0.2)',
+                    background: 'var(--color-error-bg, rgba(239, 68, 68, 0.1))',
+                    border: '2px solid var(--color-error-border, rgba(239, 68, 68, 0.2))',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}
             >
-                <AlertCircle size={30} color="#ef4444" />
+                <AlertCircle size={30} color="var(--color-error, #ef4444)" />
             </motion.div>
 
             <p style={{
-                color: '#f4f4f5', fontSize: 16,
+                color: 'var(--fg-primary)', fontSize: 16,
                 fontWeight: 600, textAlign: 'center', lineHeight: 1.5,
             }}>
                 {message || 'Something went wrong'}
@@ -587,12 +591,12 @@ export function ErrorPanel({ message, onRetry, onClose }: ErrorPanelProps) {
                     whileTap={{ scale: 0.95 }}
                     style={{
                         padding: '13px 30px', borderRadius: 50,
-                        background: 'linear-gradient(135deg, #8b5cf6, #6d28d9)',
+                        background: 'linear-gradient(135deg, var(--accent-500, #8b5cf6), var(--accent-600, #6d28d9))',
                         border: 'none',
                         color: '#fff', fontSize: 14, fontWeight: 600,
                         cursor: 'pointer',
                         display: 'flex', alignItems: 'center', gap: 6,
-                        boxShadow: '0 4px 24px rgba(139, 92, 246, 0.25)',
+                        boxShadow: 'var(--shadow-glow)',
                     }}
                 >
                     <RotateCcw size={14} /> Try Again
@@ -602,10 +606,10 @@ export function ErrorPanel({ message, onRetry, onClose }: ErrorPanelProps) {
                     whileTap={{ scale: 0.95 }}
                     style={{
                         padding: '13px 30px', borderRadius: 50,
-                        background: 'rgba(255,255,255,0.06)',
-                        border: '1px solid rgba(255,255,255,0.1)',
-                        color: '#d4d4d8', fontSize: 14, fontWeight: 600,
-                        cursor: 'pointer',
+                        background: 'var(--surface-card)',
+                        border: '1px solid var(--border-default)',
+                        color: 'var(--fg-secondary)',
+                        fontSize: 14, fontWeight: 600, cursor: 'pointer',
                     }}
                 >
                     Cancel

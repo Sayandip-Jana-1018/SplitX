@@ -28,7 +28,7 @@ export function MemberAvatar({
                 style={{
                     width: size, height: size, borderRadius: size / 2,
                     objectFit: 'cover',
-                    border: '2px solid rgba(255,255,255,0.08)',
+                    border: '2px solid var(--border-default)',
                     flexShrink: 0,
                 }}
             />

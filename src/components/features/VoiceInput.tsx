@@ -113,7 +113,7 @@ export default function VoiceInput({ memberNames, members, groupName, onResult }
                     flexDirection: 'column',
                     alignItems: 'center',
                     justifyContent: 'flex-start',
-                    background: 'linear-gradient(180deg, #0c0c14 0%, #12121e 40%, #0e0e18 100%)',
+                    background: 'var(--bg-primary)',
                     overflowY: 'auto',
                     overflowX: 'hidden',
                     WebkitOverflowScrolling: 'touch',
@@ -131,12 +131,11 @@ export default function VoiceInput({ memberNames, members, groupName, onResult }
                         top: 'calc(env(safe-area-inset-top, 12px) + 12px)',
                         right: 16,
                         width: 40, height: 40, borderRadius: 20,
-                        background: 'rgba(255,255,255,0.06)',
-                        border: '1px solid rgba(255,255,255,0.1)',
-                        color: 'rgba(255,255,255,0.5)',
+                        background: 'var(--surface-card)',
+                        border: '1px solid var(--border-default)',
+                        color: 'var(--fg-tertiary)',
                         cursor: 'pointer',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        backdropFilter: 'blur(8px)',
                     }}
                 >
                     <X size={18} />
