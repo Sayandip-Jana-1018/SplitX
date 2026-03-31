@@ -35,6 +35,20 @@ interface LayoutBounds {
     left: number;
 }
 
+interface EdgeLayout {
+    settlement: Settlement;
+    gradientId: string;
+    routePathId: string;
+    sx: number;
+    sy: number;
+    ex: number;
+    ey: number;
+    cpx: number;
+    cpy: number;
+    pillX: number;
+    pillY: number;
+}
+
 function getLayoutBounds(compact: boolean, width: number): LayoutBounds {
     const narrow = width <= 390;
 
@@ -51,6 +65,117 @@ function getLayoutBounds(compact: boolean, width: number): LayoutBounds {
 
 function clamp(value: number, min: number, max: number) {
     return Math.max(min, Math.min(max, value));
+}
+
+function buildEdgeLayouts(params: {
+    settlements: Settlement[];
+    members: string[];
+    nodes: NodeState[];
+    bounds: LayoutBounds;
+    width: number;
+    height: number;
+    instanceId: string;
+}) {
+    const layouts: EdgeLayout[] = [];
+    const pillMinX = params.bounds.left + 40;
+    const pillMaxX = params.width - params.bounds.right - 40;
+    const pillMinY = params.bounds.top + 18;
+    const pillMaxY = params.height - params.bounds.bottom - 18;
+
+    for (let index = 0; index < params.settlements.length; index++) {
+        const settlement = params.settlements[index];
+        const fromIdx = params.members.indexOf(settlement.from);
+        const toIdx = params.members.indexOf(settlement.to);
+        if (fromIdx === -1 || toIdx === -1) continue;
+
+        const fromNode = params.nodes[fromIdx];
+        const toNode = params.nodes[toIdx];
+        if (!fromNode || !toNode) continue;
+
+        const dx = toNode.x - fromNode.x;
+        const dy = toNode.y - fromNode.y;
+        const len = Math.sqrt(dx * dx + dy * dy) || 1;
+        const nodeRadius = 34;
+
+        const sx = fromNode.x + (dx / len) * nodeRadius;
+        const sy = fromNode.y + (dy / len) * nodeRadius;
+        const ex = toNode.x - (dx / len) * (nodeRadius + 8);
+        const ey = toNode.y - (dy / len) * (nodeRadius + 8);
+
+        const mx = (sx + ex) / 2;
+        const my = (sy + ey) / 2;
+        const nx = -(dy / len);
+        const ny = dx / len;
+        const bow = 24 + (index % 3) * 10;
+        const dir = index % 2 === 0 ? 1 : -1;
+        const cpx = mx + nx * bow * dir;
+        const cpy = my + ny * bow * dir;
+
+        const tx = 0.25 * sx + 0.5 * cpx + 0.25 * ex;
+        const ty = 0.25 * sy + 0.5 * cpy + 0.25 * ey;
+        const pillLift = 26 + (index % 2) * 10;
+        let pillX = tx + nx * pillLift * dir;
+        let pillY = ty + ny * pillLift * dir;
+
+        const distanceFromSource = Math.hypot(pillX - fromNode.x, pillY - fromNode.y);
+        const distanceFromTarget = Math.hypot(pillX - toNode.x, pillY - toNode.y);
+        const nearestNodeDistance = Math.min(distanceFromSource, distanceFromTarget);
+
+        if (nearestNodeDistance < 96) {
+            const extraLift = 96 - nearestNodeDistance;
+            pillX += nx * extraLift * dir;
+            pillY += ny * extraLift * dir;
+        }
+
+        layouts.push({
+            settlement,
+            gradientId: `edge-gradient-${params.instanceId}-${index}`,
+            routePathId: `edge-route-${params.instanceId}-${index}`,
+            sx,
+            sy,
+            ex,
+            ey,
+            cpx,
+            cpy,
+            pillX: clamp(pillX, pillMinX, pillMaxX),
+            pillY: clamp(pillY, pillMinY, pillMaxY),
+        });
+    }
+
+    for (let iteration = 0; iteration < 18; iteration++) {
+        let moved = false;
+
+        for (let i = 0; i < layouts.length; i++) {
+            for (let j = i + 1; j < layouts.length; j++) {
+                const a = layouts[i];
+                const b = layouts[j];
+                const dx = b.pillX - a.pillX;
+                const dy = b.pillY - a.pillY;
+                const overlapX = 78 - Math.abs(dx);
+                const overlapY = 34 - Math.abs(dy);
+
+                if (overlapX <= 0 || overlapY <= 0) continue;
+
+                moved = true;
+
+                if (overlapX < overlapY) {
+                    const direction = dx === 0 ? (i % 2 === 0 ? -1 : 1) : Math.sign(dx);
+                    const push = overlapX / 2 + 2;
+                    a.pillX = clamp(a.pillX - direction * push, pillMinX, pillMaxX);
+                    b.pillX = clamp(b.pillX + direction * push, pillMinX, pillMaxX);
+                } else {
+                    const direction = dy === 0 ? (i % 2 === 0 ? -1 : 1) : Math.sign(dy);
+                    const push = overlapY / 2 + 2;
+                    a.pillY = clamp(a.pillY - direction * push, pillMinY, pillMaxY);
+                    b.pillY = clamp(b.pillY + direction * push, pillMinY, pillMaxY);
+                }
+            }
+        }
+
+        if (!moved) break;
+    }
+
+    return layouts;
 }
 
 function initNodes(members: string[], w: number, h: number, bounds: LayoutBounds): NodeState[] {
@@ -206,6 +331,18 @@ export default function SettlementGraph({
     const totalAmount = useMemo(
         () => settlements.reduce((sum, settlement) => sum + settlement.amount, 0),
         [settlements],
+    );
+    const edgeLayouts = useMemo(
+        () => buildEdgeLayouts({
+            settlements,
+            members,
+            nodes,
+            bounds,
+            width: size.w,
+            height: size.h,
+            instanceId,
+        }),
+        [bounds, instanceId, members, nodes, settlements, size.h, size.w],
     );
     useEffect(() => {
         function onResize() {
@@ -604,59 +741,11 @@ export default function SettlementGraph({
                         <feDropShadow dx="0" dy="10" stdDeviation="12" floodColor="rgba(15,23,42,0.12)" />
                     </filter>
                 </defs>
-                {settlements.map((settlement, index) => {
-                    const fromIdx = members.indexOf(settlement.from);
-                    const toIdx = members.indexOf(settlement.to);
-                    if (fromIdx === -1 || toIdx === -1) return null;
-
-                    const fromNode = nodes[fromIdx];
-                    const toNode = nodes[toIdx];
-                    if (!fromNode || !toNode) return null;
-
-                    const dx = toNode.x - fromNode.x;
-                    const dy = toNode.y - fromNode.y;
-                    const len = Math.sqrt(dx * dx + dy * dy) || 1;
-                    const nodeRadius = 34;
-
-                    const sx = fromNode.x + (dx / len) * nodeRadius;
-                    const sy = fromNode.y + (dy / len) * nodeRadius;
-                    const ex = toNode.x - (dx / len) * (nodeRadius + 8);
-                    const ey = toNode.y - (dy / len) * (nodeRadius + 8);
-
-                    const mx = (sx + ex) / 2;
-                    const my = (sy + ey) / 2;
-                    const nx = -(dy / len);
-                    const ny = dx / len;
-                    const bow = 24 + (index % 3) * 10;
-                    const dir = index % 2 === 0 ? 1 : -1;
-                    const cpx = mx + nx * bow * dir;
-                    const cpy = my + ny * bow * dir;
-
-                    const tx = 0.25 * sx + 0.5 * cpx + 0.25 * ex;
-                    const ty = 0.25 * sy + 0.5 * cpy + 0.25 * ey;
-                    const pillLift = 24 + (index % 2) * 10;
-                    let liftedTx = tx + nx * pillLift * dir;
-                    let liftedTy = ty + ny * pillLift * dir;
-
-                    const distanceFromSource = Math.hypot(liftedTx - fromNode.x, liftedTy - fromNode.y);
-                    const distanceFromTarget = Math.hypot(liftedTx - toNode.x, liftedTy - toNode.y);
-                    const nearestNodeDistance = Math.min(distanceFromSource, distanceFromTarget);
-
-                    if (nearestNodeDistance < 92) {
-                        const extraLift = 92 - nearestNodeDistance;
-                        liftedTx += nx * extraLift * dir;
-                        liftedTy += ny * extraLift * dir;
-                    }
-
-                    const clampedTx = clamp(liftedTx, bounds.left + 40, size.w - bounds.right - 40);
-                    const clampedTy = clamp(liftedTy, bounds.top + 18, size.h - bounds.bottom - 18);
-                    const gradientId = `edge-gradient-${instanceId}-${index}`;
-                    const routePathId = `edge-route-${instanceId}-${index}`;
-
+                {edgeLayouts.map((layout, index) => {
                     return (
-                        <g key={`edge-${settlement.from}-${settlement.to}-${index}`}>
+                        <g key={`edge-${layout.settlement.from}-${layout.settlement.to}-${index}`}>
                             <defs>
-                                <linearGradient id={gradientId} x1={sx} y1={sy} x2={ex} y2={ey} gradientUnits="userSpaceOnUse">
+                                <linearGradient id={layout.gradientId} x1={layout.sx} y1={layout.sy} x2={layout.ex} y2={layout.ey} gradientUnits="userSpaceOnUse">
                                     <stop offset="0%" stopColor="rgba(var(--accent-500-rgb), 0.18)" />
                                     <stop offset="48%" stopColor="rgba(var(--accent-500-rgb), 0.72)" />
                                     <stop offset="100%" stopColor="rgba(var(--accent-500-rgb), 0.34)" />
@@ -664,8 +753,8 @@ export default function SettlementGraph({
                             </defs>
 
                             <path
-                                id={routePathId}
-                                d={`M ${sx} ${sy} Q ${cpx} ${cpy} ${ex} ${ey}`}
+                                id={layout.routePathId}
+                                d={`M ${layout.sx} ${layout.sy} Q ${layout.cpx} ${layout.cpy} ${layout.ex} ${layout.ey}`}
                                 fill="none"
                                 stroke="rgba(var(--accent-500-rgb), 0.08)"
                                 strokeWidth={8}
@@ -674,9 +763,9 @@ export default function SettlementGraph({
                                 style={{ animationDelay: `${index * 0.12}s` }}
                             />
                             <path
-                                d={`M ${sx} ${sy} Q ${cpx} ${cpy} ${ex} ${ey}`}
+                                d={`M ${layout.sx} ${layout.sy} Q ${layout.cpx} ${layout.cpy} ${layout.ex} ${layout.ey}`}
                                 fill="none"
-                                stroke={`url(#${gradientId})`}
+                                stroke={`url(#${layout.gradientId})`}
                                 strokeWidth={2.8}
                                 strokeDasharray="8 7"
                                 markerEnd={`url(#${markerId})`}
@@ -699,7 +788,7 @@ export default function SettlementGraph({
                                     begin={`${0.9 + index * 0.2}s`}
                                     repeatCount="indefinite"
                                     rotate="auto"
-                                    path={`M ${sx} ${sy} Q ${cpx} ${cpy} ${ex} ${ey}`}
+                                    path={`M ${layout.sx} ${layout.sy} Q ${layout.cpx} ${layout.cpy} ${layout.ex} ${layout.ey}`}
                                 />
                             </circle>
 
@@ -714,7 +803,7 @@ export default function SettlementGraph({
                                     begin={`${1.4 + index * 0.22}s`}
                                     repeatCount="indefinite"
                                     rotate="auto"
-                                    path={`M ${sx} ${sy} Q ${cpx} ${cpy} ${ex} ${ey}`}
+                                    path={`M ${layout.sx} ${layout.sy} Q ${layout.cpx} ${layout.cpy} ${layout.ex} ${layout.ey}`}
                                 />
                             </circle>
 
@@ -723,8 +812,8 @@ export default function SettlementGraph({
                                 style={{ animationDelay: `${0.24 + index * 0.14}s, ${1.2 + index * 0.14}s` }}
                             >
                                 <rect
-                                    x={clampedTx - 34}
-                                    y={clampedTy - 14}
+                                    x={layout.pillX - 34}
+                                    y={layout.pillY - 14}
                                     width={68}
                                     height={28}
                                     rx={14}
@@ -733,15 +822,15 @@ export default function SettlementGraph({
                                     strokeWidth={1}
                                 />
                                 <text
-                                    x={clampedTx}
-                                    y={clampedTy + 4}
+                                    x={layout.pillX}
+                                    y={layout.pillY + 4}
                                     textAnchor="middle"
                                     fontSize="12.5"
                                     fontWeight="800"
                                     fill="var(--accent-600)"
                                     style={{ fontFamily: 'var(--font-display)' }}
                                 >
-                                    {formatCurrency(settlement.amount)}
+                                    {formatCurrency(layout.settlement.amount)}
                                 </text>
                             </g>
                         </g>
