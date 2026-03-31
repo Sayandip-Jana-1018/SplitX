@@ -180,7 +180,7 @@
 .heroTitle {
     font-size: clamp(2.9rem, 10vw, 5.8rem);
     font-weight: 800;
-    line-height: 0.98;
+    line-height: 1.02;
     color: var(--fg-primary);
     margin-bottom: 18px;
     letter-spacing: -0.05em;
@@ -188,13 +188,50 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 6px;
+    gap: 2px;
     text-wrap: balance;
+    padding-bottom: 0.1em;
+}
+
+.heroTitleRow {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 2px;
+}
+
+.heroTitleBrand {
+    color: var(--fg-primary);
+}
+
+.heroTitleOrb {
+    width: 42px;
+    height: 42px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent-500);
+    background: linear-gradient(180deg, rgba(var(--accent-500-rgb), 0.14), rgba(var(--accent-500-rgb), 0.06));
+    border: 1px solid rgba(var(--accent-500-rgb), 0.14);
+    box-shadow: 0 16px 28px rgba(var(--accent-500-rgb), 0.12);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+}
+
+.heroTitleOrbLeft {
+    transform: translateY(4px);
+}
+
+.heroTitleOrbRight {
+    transform: translateY(-4px);
 }
 
 .heroTitleTop {
     display: block;
     color: var(--fg-primary);
+    margin-bottom: 2px;
 }
 
 .heroGradient {
@@ -204,6 +241,8 @@
     -webkit-text-fill-color: transparent;
     background-size: 200% auto;
     animation: shine 5s linear infinite;
+    display: block;
+    padding-bottom: 0.04em;
 }
 
 @keyframes shine {
@@ -1649,6 +1688,15 @@
     .heroTitle {
         font-size: clamp(3.6rem, 8vw, 5.8rem);
         gap: 8px;
+    }
+
+    .heroTitleRow {
+        gap: 16px;
+    }
+
+    .heroTitleOrb {
+        width: 46px;
+        height: 46px;
     }
 
     .heroLead,

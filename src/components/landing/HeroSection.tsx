@@ -3,7 +3,7 @@
 import { useRef } from 'react';
 import { motion, useScroll, useTransform, Variants } from 'framer-motion';
 import Link from 'next/link';
-import { ArrowRight, Sparkles } from 'lucide-react';
+import { ArrowRight, Sparkles, Wallet } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import styles from '@/app/landing.module.css';
 
@@ -87,8 +87,17 @@ export default function HeroSection() {
                 </motion.div>
 
                 <motion.h1 className={styles.heroTitle} variants={fadeInUp}>
-                    <span className={styles.heroTitleTop}>SplitX ~ Split expenses</span>
-                    <span className={styles.heroGradient}>Keep the vibe.</span>
+                    <span className={styles.heroTitleRow}>
+                        <span className={`${styles.heroTitleOrb} ${styles.heroTitleOrbLeft}`}>
+                            <Sparkles size={18} />
+                        </span>
+                        <span className={styles.heroTitleBrand}>SplitX</span>
+                        <span className={`${styles.heroTitleOrb} ${styles.heroTitleOrbRight}`}>
+                            <Wallet size={18} />
+                        </span>
+                    </span>
+                    <span className={styles.heroTitleTop}>Split expenses</span>
+                    <span className={styles.heroGradient}>Keep the Vibe.</span>
                 </motion.h1>
 
                 <motion.p className={styles.heroLead} variants={fadeInUp}>
