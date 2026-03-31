@@ -3,7 +3,6 @@
 import { useRef } from 'react';
 import { motion, useScroll, useTransform, Variants } from 'framer-motion';
 import Link from 'next/link';
-import Image from 'next/image';
 import { ArrowRight, Sparkles } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import styles from '@/app/landing.module.css';
@@ -88,7 +87,8 @@ export default function HeroSection() {
                 </motion.div>
 
                 <motion.h1 className={styles.heroTitle} variants={fadeInUp}>
-                    Split expenses, <span className={styles.heroGradient}>keep the vibe.</span>
+                    <span className={styles.heroTitleTop}>SplitX ~ Split expenses</span>
+                    <span className={styles.heroGradient}>Keep the vibe.</span>
                 </motion.h1>
 
                 <motion.p className={styles.heroLead} variants={fadeInUp}>
@@ -121,16 +121,6 @@ export default function HeroSection() {
                 >
                     <div className={styles.heroVideoAura} />
                     <div className={styles.heroVideoFrame}>
-                        <div className={styles.heroVideoBrand}>
-                            <Image
-                                src="/icons/icon-192.png"
-                                alt="SplitX"
-                                width={26}
-                                height={26}
-                                className={styles.heroVideoBrandIcon}
-                            />
-                            <span className={styles.heroVideoBrandText}>SplitX</span>
-                        </div>
                         <video
                             className={styles.heroVideo}
                             src="/video.mp4"
