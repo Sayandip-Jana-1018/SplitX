@@ -634,8 +634,22 @@ export default function SettlementGraph({
 
                     const tx = 0.25 * sx + 0.5 * cpx + 0.25 * ex;
                     const ty = 0.25 * sy + 0.5 * cpy + 0.25 * ey;
-                    const clampedTx = clamp(tx, bounds.left + 40, size.w - bounds.right - 40);
-                    const clampedTy = clamp(ty, bounds.top + 18, size.h - bounds.bottom - 18);
+                    const pillLift = 24 + (index % 2) * 10;
+                    let liftedTx = tx + nx * pillLift * dir;
+                    let liftedTy = ty + ny * pillLift * dir;
+
+                    const distanceFromSource = Math.hypot(liftedTx - fromNode.x, liftedTy - fromNode.y);
+                    const distanceFromTarget = Math.hypot(liftedTx - toNode.x, liftedTy - toNode.y);
+                    const nearestNodeDistance = Math.min(distanceFromSource, distanceFromTarget);
+
+                    if (nearestNodeDistance < 92) {
+                        const extraLift = 92 - nearestNodeDistance;
+                        liftedTx += nx * extraLift * dir;
+                        liftedTy += ny * extraLift * dir;
+                    }
+
+                    const clampedTx = clamp(liftedTx, bounds.left + 40, size.w - bounds.right - 40);
+                    const clampedTy = clamp(liftedTy, bounds.top + 18, size.h - bounds.bottom - 18);
                     const gradientId = `edge-gradient-${instanceId}-${index}`;
                     const routePathId = `edge-route-${instanceId}-${index}`;
 
