@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { z } from 'zod';
+import { createAuditLog } from '@/lib/auditLog';
+import { serializeTransactionAuditSnapshot } from '@/lib/auditPayloads';
 
 const UpdateTransactionSchema = z.object({
     title: z.string().min(1).max(100).optional(),
@@ -96,8 +98,9 @@ export async function PUT(
                 ],
             },
             include: {
+                payer: { select: { id: true, name: true } },
                 trip: { include: { group: { include: { members: true } } } },
-                splits: true,
+                splits: { include: { user: { select: { id: true, name: true } } } },
             },
         });
 
@@ -152,6 +155,47 @@ export async function PUT(
                 trip: { include: { group: { include: { members: true } } } },
             },
         });
+
+        if (full) {
+            await createAuditLog({
+                userId: user.id,
+                action: 'update',
+                entityType: 'transaction',
+                entityId: full.id,
+                details: {
+                    groupId: full.trip.group.id,
+                    tripId: full.tripId,
+                    before: serializeTransactionAuditSnapshot({
+                        id: existing.id,
+                        tripId: existing.tripId,
+                        tripTitle: existing.trip.title,
+                        title: existing.title,
+                        amount: existing.amount,
+                        splitType: existing.splitType,
+                        payerId: existing.payerId,
+                        payerName: existing.payer.name,
+                        createdAt: existing.createdAt,
+                        updatedAt: existing.updatedAt,
+                        deletedAt: existing.deletedAt,
+                        splits: existing.splits,
+                    }),
+                    after: serializeTransactionAuditSnapshot({
+                        id: full.id,
+                        tripId: full.tripId,
+                        tripTitle: full.trip.title,
+                        title: full.title,
+                        amount: full.amount,
+                        splitType: full.splitType,
+                        payerId: full.payerId,
+                        payerName: full.payer.name,
+                        createdAt: full.createdAt,
+                        updatedAt: full.updatedAt,
+                        deletedAt: full.deletedAt,
+                        splits: full.splits,
+                    }),
+                },
+            });
+        }
 
         // Notify all group members about the edit
         if (full?.trip?.group?.members) {
@@ -212,6 +256,8 @@ export async function DELETE(
                 ],
             },
             include: {
+                payer: { select: { id: true, name: true } },
+                splits: { include: { user: { select: { id: true, name: true } } } },
                 trip: {
                     include: {
                         group: {
@@ -232,6 +278,32 @@ export async function DELETE(
         await prisma.transaction.update({
             where: { id },
             data: { deletedAt: new Date() },
+        });
+
+        await createAuditLog({
+            userId: user.id,
+            action: 'delete',
+            entityType: 'transaction',
+            entityId: transaction.id,
+            details: {
+                groupId: transaction.trip.group.id,
+                tripId: transaction.tripId,
+                before: serializeTransactionAuditSnapshot({
+                    id: transaction.id,
+                    tripId: transaction.tripId,
+                    tripTitle: transaction.trip.title,
+                    title: transaction.title,
+                    amount: transaction.amount,
+                    splitType: transaction.splitType,
+                    payerId: transaction.payerId,
+                    payerName: transaction.payer.name,
+                    createdAt: transaction.createdAt,
+                    updatedAt: transaction.updatedAt,
+                    deletedAt: transaction.deletedAt,
+                    splits: transaction.splits,
+                }),
+                after: null,
+            },
         });
 
         // 2. Best-effort to clean up old "added" notification

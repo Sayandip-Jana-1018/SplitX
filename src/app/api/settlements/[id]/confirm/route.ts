@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
+import { createAuditLog } from '@/lib/auditLog';
+import { serializeSettlementAuditSnapshot } from '@/lib/auditPayloads';
 
 // POST /api/settlements/:id/confirm — Payer confirms "I've Paid" → immediately completes settlement
 export async function POST(
@@ -56,6 +58,47 @@ export async function POST(
                 status: 'completed',
                 ...(utrNumber ? { utrNumber } : {}),
                 method: 'upi',
+            },
+        });
+
+        await createAuditLog({
+            userId: user.id,
+            action: 'update',
+            entityType: 'settlement',
+            entityId: settlement.id,
+            details: {
+                groupId: settlement.trip.groupId,
+                tripId: settlement.tripId,
+                before: serializeSettlementAuditSnapshot({
+                    id: settlement.id,
+                    tripId: settlement.tripId,
+                    fromId: settlement.fromId,
+                    fromName: settlement.from.name,
+                    toId: settlement.toId,
+                    toName: settlement.to.name,
+                    amount: settlement.amount,
+                    status: settlement.status,
+                    method: settlement.method,
+                    note: settlement.note,
+                    createdAt: settlement.createdAt,
+                    updatedAt: settlement.updatedAt,
+                    deletedAt: settlement.deletedAt,
+                }),
+                after: serializeSettlementAuditSnapshot({
+                    id: updated.id,
+                    tripId: updated.tripId,
+                    fromId: settlement.fromId,
+                    fromName: settlement.from.name,
+                    toId: settlement.toId,
+                    toName: settlement.to.name,
+                    amount: updated.amount,
+                    status: updated.status,
+                    method: updated.method,
+                    note: updated.note,
+                    createdAt: updated.createdAt,
+                    updatedAt: updated.updatedAt,
+                    deletedAt: updated.deletedAt,
+                }),
             },
         });
 

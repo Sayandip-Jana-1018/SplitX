@@ -23,6 +23,11 @@ const glass: React.CSSProperties = {
     overflow: 'hidden',
 };
 
+interface BeforeInstallPromptEvent extends Event {
+    prompt: () => Promise<void>;
+    userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
+}
+
 export default function SettingsPage() {
     const { theme, palette, setTheme, setPalette } = useThemeContext();
     const { user, loading: userLoading, refresh: refreshUser } = useCurrentUser();
@@ -38,8 +43,32 @@ export default function SettingsPage() {
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [deletingAccount, setDeletingAccount] = useState(false);
     const [exportingData, setExportingData] = useState(false);
+    const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+    const [isInstalled, setIsInstalled] = useState(false);
 
     useEffect(() => { setMounted(true); }, []);
+
+    useEffect(() => {
+        const handleBeforeInstallPrompt = (event: Event) => {
+            event.preventDefault();
+            setInstallPrompt(event as BeforeInstallPromptEvent);
+        };
+
+        const handleAppInstalled = () => {
+            setInstallPrompt(null);
+            setIsInstalled(true);
+            toast('SplitX installed successfully!', 'success');
+        };
+
+        setIsInstalled(window.matchMedia('(display-mode: standalone)').matches);
+        window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+        window.addEventListener('appinstalled', handleAppInstalled);
+
+        return () => {
+            window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+            window.removeEventListener('appinstalled', handleAppInstalled);
+        };
+    }, [toast]);
 
     useEffect(() => {
         if (user) {
@@ -118,7 +147,7 @@ export default function SettingsPage() {
     const handleExportData = async () => {
         setExportingData(true);
         try {
-            const res = await fetch('/api/me');
+            const res = await fetch('/api/me/export');
             if (res.ok) {
                 const data = await res.json();
                 const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -136,6 +165,31 @@ export default function SettingsPage() {
             toast('Network error', 'error');
         } finally {
             setExportingData(false);
+        }
+    };
+
+    const handleInstallApp = async () => {
+        if (!installPrompt) {
+            if (isInstalled) {
+                toast('SplitX is already installed on this device.', 'info');
+            } else {
+                toast('Use your browser menu to install SplitX on this device.', 'info');
+            }
+            return;
+        }
+
+        try {
+            await installPrompt.prompt();
+            const choice = await installPrompt.userChoice;
+            if (choice.outcome === 'accepted') {
+                toast('Install prompt accepted.', 'success');
+            } else {
+                toast('Install prompt dismissed.', 'info');
+            }
+        } catch {
+            toast('Unable to show the install prompt right now.', 'error');
+        } finally {
+            setInstallPrompt(null);
         }
     };
 
@@ -164,6 +218,13 @@ export default function SettingsPage() {
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', maxWidth: 500, width: '100%', margin: '0 auto' }} suppressHydrationWarning>
+            <div className="page-hero" style={{ paddingTop: 'var(--space-2)' }}>
+                <div className="page-kicker">Personalize SplitX</div>
+                <h2 className="page-hero-title">Make the app feel like yours</h2>
+                <p className="page-hero-subtitle">
+                    Update your profile, theme, export preferences, and install settings from one calm, centered control room.
+                </p>
+            </div>
 
             {/* ═══ PROFILE CARD — Glassmorphic with glow ring ═══ */}
             <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.5, delay: 0.05 }}>
@@ -276,7 +337,7 @@ export default function SettingsPage() {
                                     </label>
                                 </div>
                                 <div style={{ flex: 1, minWidth: 0 }}>
-                                    <div style={{
+                                    <div className="font-display" style={{
                                         fontSize: 'var(--text-base)', fontWeight: 700, color: 'var(--fg-primary)',
                                     }}>
                                         {user?.name || 'User'}
@@ -374,8 +435,8 @@ export default function SettingsPage() {
             {/* ═══ NOTIFICATIONS ═══ */}
             <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
                 <GlassSection title="Notifications" icon={<Bell size={16} />}>
-                    <GlassRow label="Push Notifications" subtitle="Coming soon" disabled />
-                    <GlassRow label="Expense Reminders" subtitle="Coming soon" disabled />
+                    <GlassRow label="Expense updates" subtitle="Delivered in your in-app notification feed" disabled />
+                    <GlassRow label="Payment reminders" subtitle="Manage reminders directly from settlements" disabled />
                 </GlassSection>
             </motion.div>
 
@@ -396,7 +457,20 @@ export default function SettingsPage() {
             <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
                 <GlassSection title="App" icon={<Smartphone size={16} />}>
                     <GlassRow label="Version" subtitle="1.0.0 (MVP)" disabled />
-                    <GlassRow label="Install as App (PWA)" action />
+                    <div onClick={handleInstallApp} style={{ cursor: 'pointer' }}>
+                        <GlassRow
+                            label={isInstalled ? 'Installed as App' : 'Install as App (PWA)'}
+                            subtitle={
+                                isInstalled
+                                    ? 'SplitX is already installed on this device'
+                                    : installPrompt
+                                        ? 'Ready to install with one tap'
+                                        : 'If no prompt appears, use your browser install option'
+                            }
+                            action={!isInstalled}
+                            disabled={false}
+                        />
+                    </div>
                 </GlassSection>
             </motion.div>
 
@@ -496,7 +570,7 @@ function GlassSection({ title, icon, children }: {
                 borderBottom: '1px solid var(--border-subtle)',
             }} suppressHydrationWarning>
                 <span style={{ color: 'var(--accent-400)' }}>{icon}</span>
-                <span style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--fg-primary)' }}>{title}</span>
+                <span className="section-heading" style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--fg-primary)' }}>{title}</span>
             </div>
             {children}
         </div>

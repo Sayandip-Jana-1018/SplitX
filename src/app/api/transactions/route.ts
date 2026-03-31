@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { z } from 'zod';
+import { createAuditLog } from '@/lib/auditLog';
+import { serializeTransactionAuditSnapshot } from '@/lib/auditPayloads';
 
 // Category labels for notification messages
 const CATEGORY_LABELS: Record<string, string> = {
@@ -218,6 +220,33 @@ export async function POST(req: Request) {
             include: {
                 splits: { include: { user: { select: { id: true, name: true } } } },
                 payer: { select: { id: true, name: true } },
+                trip: { select: { id: true, title: true } },
+            },
+        });
+
+        await createAuditLog({
+            userId: user.id,
+            action: 'create',
+            entityType: 'transaction',
+            entityId: transaction.id,
+            details: {
+                groupId: trip.group.id,
+                tripId: trip.id,
+                before: null,
+                after: serializeTransactionAuditSnapshot({
+                    id: transaction.id,
+                    tripId: transaction.trip.id,
+                    tripTitle: transaction.trip.title,
+                    title,
+                    amount: transaction.amount,
+                    splitType: transaction.splitType,
+                    payerId: transaction.payerId,
+                    payerName: transaction.payer.name,
+                    createdAt: transaction.createdAt,
+                    updatedAt: transaction.updatedAt,
+                    deletedAt: transaction.deletedAt,
+                    splits: transaction.splits,
+                }),
             },
         });
 

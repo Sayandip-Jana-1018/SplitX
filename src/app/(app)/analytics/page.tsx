@@ -1,17 +1,22 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Loader2, Inbox } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Inbox, Loader2, TrendingUp } from 'lucide-react';
 import dynamic from 'next/dynamic';
-
-const SpendingPieChart = dynamic(() => import('@/components/charts/SpendingCharts').then(mod => mod.SpendingPieChart), { ssr: false });
-const DailySpendingChart = dynamic(() => import('@/components/charts/SpendingCharts').then(mod => mod.DailySpendingChart), { ssr: false });
-const MemberSpendChart = dynamic(() => import('@/components/charts/SpendingCharts').then(mod => mod.MemberSpendChart), { ssr: false });
-import { CATEGORIES, formatCurrency } from '@/lib/utils';
 import ErrorState from '@/components/ui/ErrorState';
+import { formatCurrency } from '@/lib/utils';
+import { isFeatureEnabled } from '@/lib/featureFlags';
 
-/* ── Glassmorphic styles ── */
+const SpendingPieChart = dynamic(
+    () => import('@/components/charts/SpendingCharts').then((mod) => mod.SpendingPieChart),
+    { ssr: false }
+);
+const DailySpendingChart = dynamic(
+    () => import('@/components/charts/SpendingCharts').then((mod) => mod.DailySpendingChart),
+    { ssr: false }
+);
+
 const glass: React.CSSProperties = {
     background: 'var(--bg-glass)',
     backdropFilter: 'blur(24px) saturate(1.5)',
@@ -23,88 +28,80 @@ const glass: React.CSSProperties = {
     overflow: 'hidden',
 };
 
-interface Transaction {
-    id: string;
-    title: string;
-    amount: number;
-    category: string;
-    payerId: string;
-    payer: { id: string; name: string | null };
-    splits: { userId: string; amount: number; user: { id: string; name: string | null } }[];
-    createdAt: string;
+interface AnalyticsPayload {
+    data: {
+        monthlyTrend: { month: string; total: number }[];
+        categoryBreakdown: { category: string; label: string; amount: number; percentage: number }[];
+        budgetComparison: { category: string; label: string; budget: number; actual: number; overBudget: boolean }[];
+        insights: { type: string; message: string; severity: 'info' | 'warning' | 'success' }[];
+        currentMonth: string;
+        totalThisMonth: number;
+    };
 }
 
-const CATEGORY_COLORS: Record<string, string> = {
-    food: '#ef4444', transport: '#3b82f6', stay: '#8b5cf6', shopping: '#ec4899',
-    tickets: '#f59e0b', entertainment: '#06b6d4', general: '#64748b', utilities: '#22c55e',
-    groceries: '#f97316', health: '#14b8a6', education: '#a855f7', other: '#78716c',
-};
+const fallbackColors = ['#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'];
 
 export default function AnalyticsPage() {
-
-    const [transactions, setTransactions] = useState<Transaction[]>([]);
+    const [analytics, setAnalytics] = useState<AnalyticsPayload['data'] | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(false);
 
     const fetchData = async () => {
-        setError(false); setLoading(true);
+        setError(false);
+        setLoading(true);
         try {
-            const res = await fetch('/api/transactions?limit=200');
-            if (res.ok) {
-                const data = await res.json();
-                setTransactions(Array.isArray(data) ? data : []);
-            } else setError(true);
-        } catch { setError(true); }
-        finally { setLoading(false); }
+            const endpoint = isFeatureEnabled('analyticsUiV2') ? '/api/analytics' : '/api/analytics';
+            const res = await fetch(endpoint);
+            if (!res.ok) {
+                setError(true);
+                return;
+            }
+            const payload: AnalyticsPayload = await res.json();
+            setAnalytics(payload.data);
+        } catch {
+            setError(true);
+        } finally {
+            setLoading(false);
+        }
     };
 
-    useEffect(() => { fetchData(); }, []);
+    useEffect(() => {
+        fetchData();
+    }, []);
 
-    /* ── Computed chart data ── */
-    const categoryData = (() => {
-        const knownCategories = new Set(Object.keys(CATEGORIES));
-        const map: Record<string, number> = {};
-        for (const t of transactions) {
-            const raw = (t.category || 'other').toLowerCase();
-            // Group unknown/custom categories under 'other'
-            const c = knownCategories.has(raw) ? raw : 'other';
-            map[c] = (map[c] || 0) + t.amount;
-        }
-        return Object.entries(map).map(([key, value]) => ({
-            name: CATEGORIES[key]?.label || key, value, color: CATEGORY_COLORS[key] || '#64748b',
+    const categoryChartData = useMemo(() => {
+        if (!analytics) return [];
+        return analytics.categoryBreakdown.map((item, index) => ({
+            name: item.label,
+            value: item.amount,
+            color: fallbackColors[index % fallbackColors.length],
         }));
-    })();
+    }, [analytics]);
 
-    const dailyData = (() => {
-        const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-        const map: Record<string, number> = {}; for (const d of days) map[d] = 0;
-        for (const t of transactions) { map[days[new Date(t.createdAt).getDay()]] += t.amount; }
-        return days.map(day => ({ day, amount: map[day] }));
-    })();
+    const monthlyChartData = useMemo(() => {
+        if (!analytics) return [];
+        return analytics.monthlyTrend.map((item) => {
+            const [year, month] = item.month.split('-');
+            const label = new Date(Number(year), Number(month) - 1, 1).toLocaleDateString('en-IN', { month: 'short' });
+            return { day: label, amount: item.total };
+        });
+    }, [analytics]);
 
-    const memberData = (() => {
-        const paid: Record<string, { name: string; paid: number; spent: number }> = {};
-        for (const t of transactions) {
-            const pn = t.payer?.name || 'Unknown';
-            if (!paid[t.payerId]) paid[t.payerId] = { name: pn, paid: 0, spent: 0 };
-            paid[t.payerId].paid += t.amount;
-            for (const s of t.splits) {
-                const sn = s.user?.name || 'Unknown';
-                if (!paid[s.userId]) paid[s.userId] = { name: sn, paid: 0, spent: 0 };
-                paid[s.userId].spent += s.amount;
-            }
-        }
-        return Object.values(paid);
-    })();
-
-    const totalSpent = transactions.reduce((s, t) => s + t.amount, 0);
+    const previousMonthTotal = analytics?.monthlyTrend.at(-2)?.total || 0;
+    const totalThisMonth = analytics?.totalThisMonth || 0;
+    const monthlyDelta = previousMonthTotal
+        ? Math.round(((totalThisMonth - previousMonthTotal) / previousMonthTotal) * 100)
+        : null;
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }} suppressHydrationWarning>
-            {/* ═══ HEADER ═══ */}
-            <p style={{ color: 'var(--fg-tertiary)', fontSize: 'var(--text-xs)' }} suppressHydrationWarning>
-                Spending breakdown from your transactions
-            </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }} suppressHydrationWarning>
+            <div className="page-hero" style={{ paddingTop: 'var(--space-2)' }}>
+                <div className="page-kicker">Insight Studio</div>
+                <h2 className="page-hero-title">See the story behind every rupee</h2>
+                <p className="page-hero-subtitle" suppressHydrationWarning>
+                    Trends, budgets, and trust-building insights now come straight from your analytics API so the page stays fast and consistent.
+                </p>
+            </div>
 
             {loading ? (
                 <div style={{
@@ -115,7 +112,7 @@ export default function AnalyticsPage() {
                 </div>
             ) : error ? (
                 <ErrorState onRetry={fetchData} variant="network" />
-            ) : transactions.length === 0 ? (
+            ) : !analytics || analytics.monthlyTrend.length === 0 ? (
                 <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}>
                     <div style={{
                         ...glass, borderRadius: 'var(--radius-2xl)',
@@ -130,13 +127,12 @@ export default function AnalyticsPage() {
                         }}>
                             <Inbox size={26} />
                         </div>
-                        <div style={{ fontWeight: 600, color: 'var(--fg-primary)', marginBottom: 4 }}>No transactions yet</div>
-                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--fg-tertiary)' }}>Add expenses to see your spending analytics</div>
+                        <div style={{ fontWeight: 600, color: 'var(--fg-primary)', marginBottom: 4 }}>No analytics yet</div>
+                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--fg-tertiary)' }}>Add expenses this month to unlock trends and insights.</div>
                     </div>
                 </motion.div>
             ) : (
                 <>
-                    {/* ═══ TOTAL SPENT HERO ═══ */}
                     <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.05 }}>
                         <div style={{
                             ...glass, borderRadius: 'var(--radius-2xl)', padding: 'var(--space-4)',
@@ -145,41 +141,150 @@ export default function AnalyticsPage() {
                             textAlign: 'center',
                         }}>
                             <div style={{
-                                position: 'absolute', top: 0, left: '15%', right: '15%', height: 1,
-                                background: 'linear-gradient(90deg, transparent, rgba(var(--accent-500-rgb), 0.15), transparent)',
-                                pointerEvents: 'none',
-                            }} />
-                            <div style={{ position: 'relative', zIndex: 1 }}>
-                                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--fg-tertiary)', fontWeight: 600, marginBottom: 4 }}>
-                                    Total Analyzed
-                                </div>
-                                <div style={{
-                                    fontSize: 'var(--text-2xl)', fontWeight: 800,
-                                    background: 'linear-gradient(135deg, var(--accent-400), var(--accent-500))',
-                                    WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
-                                }}>
-                                    {formatCurrency(totalSpent)}
-                                </div>
-                                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--fg-muted)', marginTop: 4 }}>
-                                    from {transactions.length} transactions
-                                </div>
+                                fontSize: 'var(--text-xs)',
+                                color: 'var(--fg-tertiary)',
+                                fontWeight: 700,
+                                marginBottom: 4,
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.08em',
+                            }}>
+                                This Month
+                            </div>
+                            <div className="font-display" style={{
+                                fontSize: 'var(--text-3xl)', fontWeight: 800,
+                                background: 'linear-gradient(135deg, var(--accent-400), var(--accent-500))',
+                                WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+                            }}>
+                                {formatCurrency(totalThisMonth)}
+                            </div>
+                            <div style={{ marginTop: 8, fontSize: 'var(--text-xs)', color: 'var(--fg-secondary)' }}>
+                                {monthlyDelta === null
+                                    ? `Tracking started in ${analytics.currentMonth}`
+                                    : monthlyDelta >= 0
+                                        ? `${monthlyDelta}% higher than last month`
+                                        : `${Math.abs(monthlyDelta)}% lower than last month`}
                             </div>
                         </div>
                     </motion.div>
 
-                    {/* ═══ CATEGORY PIE CHART ═══ */}
                     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-                        <SpendingPieChart data={categoryData} />
+                        <DailySpendingChart
+                            data={monthlyChartData}
+                            title="Monthly Trend"
+                            emoji="📆"
+                        />
                     </motion.div>
 
-                    {/* ═══ DAILY TREND ═══ */}
                     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
-                        <DailySpendingChart data={dailyData} />
+                        <SpendingPieChart data={categoryChartData} />
                     </motion.div>
 
-                    {/* ═══ MEMBER COMPARISON ═══ */}
                     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-                        <MemberSpendChart data={memberData} />
+                        <div style={{ ...glass, padding: 'var(--space-4)' }}>
+                            <div className="section-heading" style={{
+                                fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--fg-primary)',
+                                marginBottom: 'var(--space-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                            }}>
+                                <TrendingUp size={16} />
+                                Smart Insights
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                                {analytics.insights.length > 0 ? analytics.insights.map((insight, index) => (
+                                    <div
+                                        key={`${insight.type}-${index}`}
+                                        style={{
+                                            padding: '12px 14px',
+                                            borderRadius: 'var(--radius-lg)',
+                                            background: insight.severity === 'warning'
+                                                ? 'rgba(245, 158, 11, 0.08)'
+                                                : insight.severity === 'success'
+                                                    ? 'rgba(34, 197, 94, 0.08)'
+                                                    : 'rgba(var(--accent-500-rgb), 0.08)',
+                                            border: insight.severity === 'warning'
+                                                ? '1px solid rgba(245, 158, 11, 0.16)'
+                                                : insight.severity === 'success'
+                                                    ? '1px solid rgba(34, 197, 94, 0.16)'
+                                                    : '1px solid rgba(var(--accent-500-rgb), 0.12)',
+                                            display: 'flex',
+                                            alignItems: 'flex-start',
+                                            gap: 10,
+                                        }}
+                                    >
+                                        {insight.severity === 'warning' ? (
+                                            <AlertTriangle size={16} style={{ color: '#f59e0b', flexShrink: 0, marginTop: 1 }} />
+                                        ) : insight.severity === 'success' ? (
+                                            <CheckCircle2 size={16} style={{ color: '#22c55e', flexShrink: 0, marginTop: 1 }} />
+                                        ) : (
+                                            <TrendingUp size={16} style={{ color: 'var(--accent-500)', flexShrink: 0, marginTop: 1 }} />
+                                        )}
+                                        <span style={{ fontSize: 'var(--text-sm)', color: 'var(--fg-secondary)', lineHeight: 1.5 }}>
+                                            {insight.message}
+                                        </span>
+                                    </div>
+                                )) : (
+                                    <div style={{ fontSize: 'var(--text-sm)', color: 'var(--fg-tertiary)' }}>
+                                        No notable insights yet. Keep adding expenses and budgets for better signals.
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </motion.div>
+
+                    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
+                        <div style={{ ...glass, padding: 'var(--space-4)' }}>
+                            <div className="section-heading" style={{
+                                fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--fg-primary)',
+                                marginBottom: 'var(--space-3)',
+                                textAlign: 'center',
+                            }}>
+                                Budget Comparison
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+                                {analytics.budgetComparison.length > 0 ? analytics.budgetComparison.map((budget) => {
+                                    const ratio = budget.budget > 0 ? Math.min((budget.actual / budget.budget) * 100, 100) : 0;
+                                    return (
+                                        <div key={budget.category} style={{
+                                            padding: '12px 14px',
+                                            borderRadius: 'var(--radius-lg)',
+                                            background: 'rgba(var(--accent-500-rgb), 0.04)',
+                                            border: '1px solid rgba(var(--accent-500-rgb), 0.08)',
+                                        }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 8 }}>
+                                                <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--fg-primary)' }}>
+                                                    {budget.label}
+                                                </div>
+                                                <div style={{
+                                                    fontSize: 'var(--text-xs)',
+                                                    color: budget.overBudget ? 'var(--color-error)' : 'var(--color-success)',
+                                                    fontWeight: 700,
+                                                }}>
+                                                    {formatCurrency(budget.actual)} / {formatCurrency(budget.budget)}
+                                                </div>
+                                            </div>
+                                            <div style={{
+                                                height: 8,
+                                                borderRadius: 999,
+                                                overflow: 'hidden',
+                                                background: 'rgba(var(--accent-500-rgb), 0.08)',
+                                            }}>
+                                                <div style={{
+                                                    height: '100%',
+                                                    width: `${ratio}%`,
+                                                    borderRadius: 999,
+                                                    background: budget.overBudget
+                                                        ? 'linear-gradient(90deg, #ef4444, #f97316)'
+                                                        : 'linear-gradient(90deg, var(--accent-500), var(--accent-600))',
+                                                }} />
+                                            </div>
+                                        </div>
+                                    );
+                                }) : (
+                                    <div style={{ fontSize: 'var(--text-sm)', color: 'var(--fg-tertiary)' }}>
+                                        No budgets set for this month yet.
+                                    </div>
+                                )}
+                            </div>
+                        </div>
                     </motion.div>
                 </>
             )}

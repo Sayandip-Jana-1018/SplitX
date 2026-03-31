@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { z } from 'zod';
+import { createAuditLog } from '@/lib/auditLog';
+import { serializeSettlementAuditSnapshot } from '@/lib/auditPayloads';
 
 const SettleSchema = z.object({
     tripId: z.string().cuid(),
@@ -328,6 +330,35 @@ export async function POST(req: Request) {
             include: {
                 from: { select: { name: true } },
                 to: { select: { name: true } },
+                trip: { select: { id: true, title: true, groupId: true } },
+            },
+        });
+
+        await createAuditLog({
+            userId: user.id,
+            action: 'create',
+            entityType: 'settlement',
+            entityId: settlement.id,
+            details: {
+                groupId: trip.group.id,
+                tripId: trip.id,
+                status: settlement.status,
+                after: serializeSettlementAuditSnapshot({
+                    id: settlement.id,
+                    tripId: settlement.trip.id,
+                    tripTitle: settlement.trip.title,
+                    fromId: user.id,
+                    fromName: settlement.from.name,
+                    toId: parsed.data.toUserId,
+                    toName: settlement.to.name,
+                    amount: settlement.amount,
+                    status: settlement.status,
+                    method: settlement.method,
+                    note: settlement.note,
+                    createdAt: settlement.createdAt,
+                    updatedAt: settlement.updatedAt,
+                    deletedAt: settlement.deletedAt,
+                }),
             },
         });
 

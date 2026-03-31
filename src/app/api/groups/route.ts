@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { z } from 'zod';
+import { createAuditLog } from '@/lib/auditLog';
 
 const CreateGroupSchema = z.object({
     name: z.string().min(1).max(50),
@@ -87,6 +88,18 @@ export async function POST(req: Request) {
                         currency: 'INR',
                     },
                 },
+            },
+        });
+
+        await createAuditLog({
+            userId: user.id,
+            action: 'create',
+            entityType: 'group',
+            entityId: group.id,
+            details: {
+                groupId: group.id,
+                name: group.name,
+                emoji: group.emoji,
             },
         });
 

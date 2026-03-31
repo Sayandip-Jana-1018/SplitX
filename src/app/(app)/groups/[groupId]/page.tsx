@@ -21,6 +21,7 @@ import {
     Trash2,
     UserPlus,
     Send,
+    GitBranch,
 } from 'lucide-react';
 import { useRouter, useParams } from 'next/navigation';
 import Button from '@/components/ui/Button';
@@ -31,6 +32,7 @@ import Modal from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { useToast } from '@/components/ui/Toast';
 import { formatCurrency, timeAgo } from '@/lib/utils';
+import { isFeatureEnabled } from '@/lib/featureFlags';
 import { QRCodeSVG } from 'qrcode.react';
 import GroupChat from '@/components/features/GroupChat';
 import UpiPaymentModal from '@/components/features/UpiPaymentModal';
@@ -85,6 +87,12 @@ interface GroupDetailData {
     currentUserId: string;
 }
 
+interface BalanceJourneyMeta {
+    currentBalance: number;
+    changeCountThisWeek: number;
+    currentRouteSummary: string;
+}
+
 /* ── Category Emojis ── */
 const CATEGORY_EMOJI: Record<string, string> = {
     food: '🍕',
@@ -125,13 +133,17 @@ export default function GroupDetailPage() {
     const [upiModal, setUpiModal] = useState<{ open: boolean; settlementId: string; amount: number; payeeName: string }>({ open: false, settlementId: '', amount: 0, payeeName: '' });
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [deletingGroup, setDeletingGroup] = useState(false);
+    const [journeyMeta, setJourneyMeta] = useState<BalanceJourneyMeta | null>(null);
     const { toast } = useToast();
 
     const fetchGroup = useCallback(async () => {
         try {
-            const [groupRes, balancesRes] = await Promise.all([
+            const [groupRes, balancesRes, journeyRes] = await Promise.all([
                 fetch(`/api/groups/${groupId}`),
                 fetch(`/api/groups/${groupId}/balances`),
+                isFeatureEnabled('balanceJourney')
+                    ? fetch(`/api/groups/${groupId}/balance-history?limit=1`)
+                    : Promise.resolve(null),
             ]);
             if (groupRes.ok) {
                 const data = await groupRes.json();
@@ -141,6 +153,16 @@ export default function GroupDetailPage() {
                     const bData = await balancesRes.json();
                     data.balances = bData.balances || data.balances;
                     setSuggestedSettlements(bData.settlements || []);
+                }
+                if (journeyRes?.ok) {
+                    const journeyData = await journeyRes.json();
+                    setJourneyMeta({
+                        currentBalance: journeyData.currentBalance || 0,
+                        changeCountThisWeek: journeyData.changeCountThisWeek || 0,
+                        currentRouteSummary: journeyData.currentRouteSummary || 'All settled up',
+                    });
+                } else {
+                    setJourneyMeta(null);
                 }
                 setGroup(data);
             }
@@ -378,7 +400,10 @@ export default function GroupDetailPage() {
                         marginBottom: 'var(--space-2)',
                         filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.08))',
                     }}>{group.emoji}</span>
-                    <h2 style={{
+                    <div className="page-kicker" style={{ marginBottom: 'var(--space-2)' }}>
+                        Shared balances that stay transparent
+                    </div>
+                    <h2 className="font-display" style={{
                         fontSize: 'var(--text-xl)',
                         fontWeight: 800,
                         letterSpacing: '-0.02em',
@@ -502,9 +527,92 @@ export default function GroupDetailPage() {
                     >
                         {/* Balances */}
                         <div>
-                            <h3 style={{ fontSize: 'var(--text-sm)', fontWeight: 700, marginBottom: 'var(--space-3)', color: 'var(--fg-secondary)', letterSpacing: '-0.01em' }}>
-                                Balances
-                            </h3>
+                            <div style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                gap: 'var(--space-3)',
+                                marginBottom: 'var(--space-3)',
+                            }}>
+                                <h3 style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--fg-secondary)', letterSpacing: '-0.01em' }}>
+                                    Balances
+                                </h3>
+                                {isFeatureEnabled('balanceJourney') && (
+                                    <button
+                                        onClick={() => router.push(`/groups/${groupId}/journey`)}
+                                        style={{
+                                            border: '1px solid rgba(var(--accent-500-rgb), 0.12)',
+                                            background: 'rgba(var(--accent-500-rgb), 0.08)',
+                                            color: 'var(--accent-500)',
+                                            borderRadius: 'var(--radius-full)',
+                                            padding: '6px 10px',
+                                            fontSize: 'var(--text-xs)',
+                                            fontWeight: 700,
+                                            cursor: 'pointer',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: 6,
+                                        }}
+                                    >
+                                        <GitBranch size={12} />
+                                        Balance Journey
+                                    </button>
+                                )}
+                            </div>
+                            {isFeatureEnabled('balanceJourney') && journeyMeta && (
+                                <Card padding="normal" glow style={{ marginBottom: 'var(--space-3)' }}>
+                                    <div style={{
+                                        display: 'flex',
+                                        alignItems: 'flex-start',
+                                        justifyContent: 'space-between',
+                                        gap: 'var(--space-3)',
+                                    }}>
+                                        <div style={{ flex: 1 }}>
+                                            <div style={{
+                                                fontSize: 'var(--text-xs)',
+                                                color: 'var(--fg-tertiary)',
+                                                textTransform: 'uppercase',
+                                                letterSpacing: '0.06em',
+                                                fontWeight: 700,
+                                                marginBottom: 6,
+                                            }}>
+                                                Why your number changed
+                                            </div>
+                                            <div style={{
+                                                fontSize: 'var(--text-lg)',
+                                                fontWeight: 800,
+                                                color: journeyMeta.currentBalance >= 0 ? 'var(--color-success)' : 'var(--color-error)',
+                                            }}>
+                                                {journeyMeta.currentBalance >= 0 ? '+' : '-'}{formatCurrency(Math.abs(journeyMeta.currentBalance))}
+                                            </div>
+                                            <p style={{
+                                                fontSize: 'var(--text-xs)',
+                                                color: 'var(--fg-secondary)',
+                                                lineHeight: 1.5,
+                                                marginTop: 'var(--space-2)',
+                                                marginBottom: 0,
+                                            }}>
+                                                {journeyMeta.currentRouteSummary}
+                                            </p>
+                                        </div>
+                                        <div style={{
+                                            minWidth: 84,
+                                            textAlign: 'center',
+                                            padding: '10px 12px',
+                                            borderRadius: 'var(--radius-xl)',
+                                            background: 'rgba(var(--accent-500-rgb), 0.08)',
+                                            border: '1px solid rgba(var(--accent-500-rgb), 0.1)',
+                                        }}>
+                                            <div style={{ fontSize: 'var(--text-lg)', fontWeight: 800, color: 'var(--accent-500)' }}>
+                                                {journeyMeta.changeCountThisWeek}
+                                            </div>
+                                            <div style={{ fontSize: '11px', color: 'var(--fg-tertiary)', fontWeight: 600 }}>
+                                                changes this week
+                                            </div>
+                                        </div>
+                                    </div>
+                                </Card>
+                            )}
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
                                 {members.map((member) => {
                                     const balance = group.balances[member.userId] || 0;
@@ -626,6 +734,25 @@ export default function GroupDetailPage() {
                             >
                                 💸 Settlements
                             </button>
+                            {isFeatureEnabled('balanceJourney') && (
+                                <button
+                                    onClick={() => router.push(`/groups/${groupId}/journey`)}
+                                    style={{
+                                        flex: 1, padding: '10px 14px',
+                                        borderRadius: 'var(--radius-lg)',
+                                        background: 'linear-gradient(135deg, rgba(var(--accent-500-rgb), 0.12), rgba(var(--accent-500-rgb), 0.05))',
+                                        backdropFilter: 'blur(12px)',
+                                        border: '1px solid rgba(var(--accent-500-rgb), 0.12)',
+                                        cursor: 'pointer',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                                        color: 'var(--accent-500)',
+                                        fontSize: 'var(--text-sm)', fontWeight: 700,
+                                        transition: 'all 0.2s',
+                                    }}
+                                >
+                                    <GitBranch size={15} /> Journey
+                                </button>
+                            )}
                         </div>
 
                         {/* Recent Transactions */}

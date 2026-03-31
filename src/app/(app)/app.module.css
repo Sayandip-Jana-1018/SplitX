@@ -378,7 +378,9 @@
 
 .headerTitle {
     font-size: var(--text-lg);
-    font-weight: var(--weight-semibold);
+    font-family: var(--font-display);
+    font-weight: var(--weight-bold);
+    letter-spacing: -0.02em;
     color: var(--fg-primary);
 }
 

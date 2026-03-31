@@ -13,6 +13,15 @@ export const featureFlags = {
     /** Advanced analytics v2 (budgets, trends, insights) */
     analyticsV2: true,
 
+    /** Explain how balances changed inside a group over time */
+    balanceJourney: true,
+
+    /** CSV export + printable report for balance journey */
+    balanceJourneyExport: true,
+
+    /** Analytics page powered by the dedicated analytics API */
+    analyticsUiV2: true,
+
     /** Smart debt optimization algorithm */
     smartSettlements: true,
 

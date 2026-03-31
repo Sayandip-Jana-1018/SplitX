@@ -1,6 +1,13 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
+import {
+    computeGroupBalances,
+    FinanceMember,
+    FinanceSettlementSnapshot,
+    FinanceTransactionSnapshot,
+    simplifyGroupBalances,
+} from '@/lib/groupFinance';
 
 // GET /api/groups/[groupId]/balances — compute balances for a specific group
 export async function GET(
@@ -14,12 +21,38 @@ export async function GET(
         }
 
         const { groupId } = await params;
+        const user = await prisma.user.findUnique({ where: { email: session.user.email } });
 
-        // Get all trips for this group
-        const trips = await prisma.trip.findMany({
-            where: { groupId },
-            select: { id: true },
+        if (!user) {
+            return NextResponse.json({ error: 'User not found' }, { status: 404 });
+        }
+
+        const group = await prisma.group.findFirst({
+            where: {
+                id: groupId,
+                deletedAt: null,
+                OR: [
+                    { ownerId: user.id },
+                    { members: { some: { userId: user.id } } },
+                ],
+            },
+            include: {
+                members: {
+                    include: {
+                        user: { select: { id: true, name: true, image: true, upiId: true } },
+                    },
+                },
+                trips: {
+                    select: { id: true, title: true },
+                },
+            },
         });
+
+        if (!group) {
+            return NextResponse.json({ error: 'Group not found or access denied' }, { status: 404 });
+        }
+
+        const trips = group.trips;
 
         if (trips.length === 0) {
             return NextResponse.json({ members: [], balances: {}, settlements: [] });
@@ -35,24 +68,12 @@ export async function GET(
                 splits: {
                     include: { user: { select: { id: true, name: true, image: true } } },
                 },
+                trip: {
+                    select: { id: true, title: true },
+                },
             },
             orderBy: { createdAt: 'desc' },
         });
-
-        // Get group members
-        const members = await prisma.groupMember.findMany({
-            where: { groupId },
-            include: { user: { select: { id: true, name: true, image: true } } },
-        });
-
-        // Calculate net balances
-        const balances: Record<string, number> = {};
-        for (const txn of transactions) {
-            balances[txn.payerId] = (balances[txn.payerId] || 0) + txn.amount;
-            for (const split of txn.splits) {
-                balances[split.userId] = (balances[split.userId] || 0) - split.amount;
-            }
-        }
 
         // Account for recorded settlements
         const recorded = await prisma.settlement.findMany({
@@ -61,55 +82,75 @@ export async function GET(
                 status: { in: ['completed', 'confirmed'] },
                 deletedAt: null,
             },
+            include: {
+                from: { select: { id: true, name: true } },
+                to: { select: { id: true, name: true } },
+                trip: { select: { id: true, title: true } },
+            },
         });
 
-        for (const s of recorded) {
-            balances[s.fromId] = (balances[s.fromId] || 0) + s.amount;
-            balances[s.toId] = (balances[s.toId] || 0) - s.amount;
-        }
+        const members: FinanceMember[] = group.members.map((member) => ({
+            id: member.user.id,
+            name: member.user.name || 'Unknown',
+            image: member.user.image || null,
+            upiId: member.user.upiId || null,
+            role: member.role,
+        }));
 
-        // Greedy netting to compute optimal settlements
-        const debtors: { id: string; name: string; amount: number }[] = [];
-        const creditors: { id: string; name: string; amount: number }[] = [];
-        const memberMap = new Map(members.map(m => [m.user.id, m.user.name || 'Unknown']));
+        const transactionSnapshots: FinanceTransactionSnapshot[] = transactions.map((transaction) => ({
+            id: transaction.id,
+            tripId: transaction.tripId,
+            tripTitle: transaction.trip.title,
+            title: transaction.title,
+            amount: transaction.amount,
+            splitType: transaction.splitType,
+            payerId: transaction.payerId,
+            payerName: transaction.payer.name || 'Unknown',
+            createdAt: transaction.createdAt,
+            updatedAt: transaction.updatedAt,
+            deletedAt: transaction.deletedAt,
+            splits: transaction.splits.map((split) => ({
+                userId: split.userId,
+                userName: split.user.name || 'Unknown',
+                amount: split.amount,
+            })),
+        }));
 
-        for (const [userId, balance] of Object.entries(balances)) {
-            if (balance < -1) { // threshold of 1 paisa to avoid floating errors
-                debtors.push({ id: userId, name: memberMap.get(userId) || 'Unknown', amount: -balance });
-            } else if (balance > 1) {
-                creditors.push({ id: userId, name: memberMap.get(userId) || 'Unknown', amount: balance });
-            }
-        }
+        const settlementSnapshots: FinanceSettlementSnapshot[] = recorded.map((settlement) => ({
+            id: settlement.id,
+            tripId: settlement.tripId,
+            tripTitle: settlement.trip.title,
+            fromId: settlement.fromId,
+            fromName: settlement.from.name || 'Unknown',
+            toId: settlement.toId,
+            toName: settlement.to.name || 'Unknown',
+            amount: settlement.amount,
+            status: settlement.status,
+            method: settlement.method,
+            note: settlement.note,
+            createdAt: settlement.createdAt,
+            updatedAt: settlement.updatedAt,
+            deletedAt: settlement.deletedAt,
+        }));
 
-        debtors.sort((a, b) => b.amount - a.amount);
-        creditors.sort((a, b) => b.amount - a.amount);
+        const balances = computeGroupBalances({
+            memberIds: members.map((member) => member.id),
+            transactions: transactionSnapshots,
+            settlements: settlementSnapshots,
+        });
 
-        const settlements: { from: string; fromName: string; to: string; toName: string; amount: number }[] = [];
-        let di = 0, ci = 0;
-        while (di < debtors.length && ci < creditors.length) {
-            const transfer = Math.min(debtors[di].amount, creditors[ci].amount);
-            if (transfer > 1) {
-                settlements.push({
-                    from: debtors[di].id,
-                    fromName: debtors[di].name,
-                    to: creditors[ci].id,
-                    toName: creditors[ci].name,
-                    amount: Math.round(transfer),
-                });
-            }
-            debtors[di].amount -= transfer;
-            creditors[ci].amount -= transfer;
-            if (debtors[di].amount < 1) di++;
-            if (creditors[ci].amount < 1) ci++;
-        }
+        const settlements = simplifyGroupBalances({
+            balances,
+            members,
+        });
 
         return NextResponse.json({
-            members: members.map(m => ({
-                id: m.user.id,
-                name: m.user.name,
-                image: m.user.image,
-                role: m.role,
-                balance: balances[m.user.id] || 0,
+            members: members.map((member) => ({
+                id: member.id,
+                name: member.name,
+                image: member.image,
+                role: member.role,
+                balance: balances[member.id] || 0,
             })),
             balances,
             settlements,

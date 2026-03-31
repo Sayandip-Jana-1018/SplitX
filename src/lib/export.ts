@@ -21,6 +21,27 @@ interface ExportSettlement {
     amount: number; // paise
 }
 
+export interface BalanceHistoryExportEntry {
+    date: string | Date;
+    eventType: string;
+    sourceLabel: string;
+    beforeBalance: number;
+    delta: number;
+    afterBalance: number;
+    counterparties: string[];
+    explanation: string;
+}
+
+export interface BalanceHistoryExportData {
+    groupName: string;
+    groupEmoji?: string;
+    userName: string;
+    currentBalance: number;
+    routeSummary: string;
+    exportDate: Date;
+    entries: BalanceHistoryExportEntry[];
+}
+
 export interface ExportData {
     groupName: string;
     tripName: string;
@@ -96,6 +117,48 @@ export function generateCSV(data: ExportData): string {
     ].join('\n');
 }
 
+export function generateBalanceHistoryCSV(data: BalanceHistoryExportData): string {
+    const headers = [
+        'Date',
+        'Event Type',
+        'Label',
+        'Before Balance',
+        'Delta',
+        'After Balance',
+        'Counterparties',
+        'Explanation',
+    ];
+
+    const rows = data.entries.map((entry) => {
+        const date =
+            entry.date instanceof Date
+                ? entry.date.toISOString()
+                : new Date(entry.date).toISOString();
+
+        return [
+            date,
+            `"${entry.eventType}"`,
+            `"${entry.sourceLabel.replace(/"/g, '""')}"`,
+            (entry.beforeBalance / 100).toFixed(2),
+            (entry.delta / 100).toFixed(2),
+            (entry.afterBalance / 100).toFixed(2),
+            `"${entry.counterparties.join(', ').replace(/"/g, '""')}"`,
+            `"${entry.explanation.replace(/"/g, '""')}"`,
+        ];
+    });
+
+    return [
+        `# Balance Journey for ${data.userName}`,
+        `# Group,${data.groupEmoji ? `${data.groupEmoji} ` : ''}${data.groupName}`,
+        `# Current Balance,${(data.currentBalance / 100).toFixed(2)}`,
+        `# Current Route,"${data.routeSummary.replace(/"/g, '""')}"`,
+        `# Exported At,${data.exportDate.toISOString()}`,
+        '',
+        headers.join(','),
+        ...rows.map((row) => row.join(',')),
+    ].join('\n');
+}
+
 /**
  * Download a file from text content
  */
@@ -125,6 +188,11 @@ export function exportAsText(data: ExportData) {
 export function exportAsCSV(data: ExportData) {
     const csv = generateCSV(data);
     downloadFile(csv, `${data.tripName}_transactions.csv`, 'text/csv');
+}
+
+export function exportBalanceHistoryAsCSV(data: BalanceHistoryExportData) {
+    const csv = generateBalanceHistoryCSV(data);
+    downloadFile(csv, `${data.groupName}_balance_journey.csv`, 'text/csv');
 }
 
 /**

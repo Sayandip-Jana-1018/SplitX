@@ -12,6 +12,7 @@ import SettlementGraph from '@/components/features/SettlementGraph';
 import UpiPaymentModal from '@/components/features/UpiPaymentModal';
 import { useToast } from '@/components/ui/Toast';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
+import { isFeatureEnabled } from '@/lib/featureFlags';
 import { formatCurrency } from '@/lib/utils';
 import { exportAsText, shareSettlement } from '@/lib/export';
 import { SettlementSkeleton } from '@/components/ui/Skeleton';
@@ -898,6 +899,20 @@ export default function SettlementsPage() {
                         >
                             <Share2 size={14} /> Share
                         </button>
+                        {!isGlobalSlide && isFeatureEnabled('balanceJourney') && activeSlideData?.groupId && (
+                            <button
+                                onClick={() => window.location.href = `/groups/${activeSlideData.groupId}/journey`}
+                                style={{
+                                    flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                                    padding: '10px', borderRadius: 'var(--radius-xl)',
+                                    ...glass, cursor: 'pointer',
+                                    color: 'var(--accent-500)', fontSize: 'var(--text-xs)', fontWeight: 700,
+                                    transition: 'all 0.2s',
+                                }}
+                            >
+                                <GitBranch size={14} /> Why this exists
+                            </button>
+                        )}
                     </div>
                 </motion.div>
             )}

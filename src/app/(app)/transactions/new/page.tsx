@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef, Suspense } from 'react';
+import { useState, useCallback, useEffect, useRef, Suspense, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Delete, Check, ChevronDown, Loader2, Mic, Plus, Minus, Equal } from 'lucide-react';
+import { Delete, Check, ChevronDown, Loader2, Mic, Plus, Minus, Equal, AlertTriangle, History, TrendingUp } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Button from '@/components/ui/Button';
 import Modal from '@/components/ui/Modal';
@@ -23,6 +23,18 @@ interface GroupItem {
     members: { user: { id: string; name: string | null; image: string | null } }[];
 }
 
+interface RecentTransaction {
+    id: string;
+    title: string;
+    amount: number;
+    createdAt: string;
+    payer: { id: string; name: string | null };
+}
+
+const EXPENSE_DRAFT_KEY = 'splitx:add-expense-draft:v1';
+const RECENT_GROUPS_KEY = 'splitx:recent-groups:v1';
+const RECENT_PAYERS_KEY = 'splitx:recent-payers:v1';
+
 function QuickAddContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -35,6 +47,10 @@ function QuickAddContent() {
     const [activeTripId, setActiveTripId] = useState<string>('');
     const [members, setMembers] = useState<{ id: string; name: string; image?: string | null }[]>([]);
     const [loadingGroups, setLoadingGroups] = useState(true);
+    const [recentTransactions, setRecentTransactions] = useState<RecentTransaction[]>([]);
+    const [recentGroupIds, setRecentGroupIds] = useState<string[]>([]);
+    const [recentPayersByGroup, setRecentPayersByGroup] = useState<Record<string, string[]>>({});
+    const [duplicateAcknowledged, setDuplicateAcknowledged] = useState(false);
 
     // Form state
     const [amount, setAmount] = useState('');
@@ -59,6 +75,7 @@ function QuickAddContent() {
 
     // Flag to prevent useEffect from resetting members after voice input
     const voiceAppliedRef = useRef(false);
+    const restoredDraftRef = useRef(false);
 
     // Calculator expression state
     const [expression, setExpression] = useState('');
@@ -131,6 +148,104 @@ function QuickAddContent() {
     }, []);
 
     useEffect(() => {
+        try {
+            const storedGroups = window.localStorage.getItem(RECENT_GROUPS_KEY);
+            const storedPayers = window.localStorage.getItem(RECENT_PAYERS_KEY);
+            if (storedGroups) {
+                setRecentGroupIds(JSON.parse(storedGroups));
+            }
+            if (storedPayers) {
+                setRecentPayersByGroup(JSON.parse(storedPayers));
+            }
+        } catch {
+            // Ignore malformed local data
+        }
+    }, []);
+
+    useEffect(() => {
+        if (loadingGroups || restoredDraftRef.current || groups.length === 0) return;
+
+        const hasUrlPrefill =
+            searchParams.has('amount') ||
+            searchParams.has('title') ||
+            searchParams.has('method') ||
+            searchParams.has('splitData') ||
+            searchParams.has('receiptUrl');
+
+        restoredDraftRef.current = true;
+        if (hasUrlPrefill) return;
+
+        try {
+            const rawDraft = window.localStorage.getItem(EXPENSE_DRAFT_KEY);
+            if (!rawDraft) return;
+
+            const draft = JSON.parse(rawDraft) as {
+                selectedGroupId?: string;
+                amount?: string;
+                title?: string;
+                category?: string;
+                method?: string;
+                payerId?: string;
+                splitType?: 'equal' | 'custom';
+                selectedMemberIds?: string[];
+                customSplits?: { userId: string; amount: number }[];
+            };
+
+            if (draft.selectedGroupId && groups.some((group) => group.id === draft.selectedGroupId)) {
+                setSelectedGroupId(draft.selectedGroupId);
+            }
+            if (draft.amount) setAmount(draft.amount);
+            if (draft.title) setTitle(draft.title);
+            if (draft.category) setCategory(draft.category);
+            if (draft.method) setMethod(draft.method);
+            if (draft.payerId) setPayerId(draft.payerId);
+            if (draft.splitType) setSplitType(draft.splitType);
+            if (draft.selectedMemberIds?.length) {
+                setSelectedMembers(new Set(draft.selectedMemberIds));
+            }
+            if (draft.customSplits?.length) {
+                setCustomSplits(draft.customSplits);
+            }
+        } catch {
+            // Ignore malformed drafts
+        }
+    }, [groups, loadingGroups, searchParams]);
+
+    useEffect(() => {
+        if (loadingGroups || !selectedGroupId) return;
+
+        const draft = {
+            selectedGroupId,
+            amount,
+            title,
+            category,
+            method,
+            payerId,
+            splitType,
+            selectedMemberIds: Array.from(selectedMembers),
+            customSplits,
+            savedAt: new Date().toISOString(),
+        };
+
+        try {
+            window.localStorage.setItem(EXPENSE_DRAFT_KEY, JSON.stringify(draft));
+        } catch {
+            // Ignore storage errors
+        }
+    }, [
+        amount,
+        category,
+        customSplits,
+        loadingGroups,
+        method,
+        payerId,
+        selectedGroupId,
+        selectedMembers,
+        splitType,
+        title,
+    ]);
+
+    useEffect(() => {
         if (!selectedGroupId) return;
         async function loadGroupDetail() {
             try {
@@ -190,6 +305,64 @@ function QuickAddContent() {
         }
         loadGroupDetail();
     }, [selectedGroupId, currentUser, splitType, customSplits]);
+
+    useEffect(() => {
+        if (!selectedGroupId) return;
+
+        setRecentGroupIds((prev) => {
+            const next = [selectedGroupId, ...prev.filter((groupId) => groupId !== selectedGroupId)].slice(0, 3);
+            try {
+                window.localStorage.setItem(RECENT_GROUPS_KEY, JSON.stringify(next));
+            } catch {
+                // Ignore storage errors
+            }
+            return next;
+        });
+    }, [selectedGroupId]);
+
+    useEffect(() => {
+        if (!selectedGroupId || !payerId) return;
+
+        setRecentPayersByGroup((prev) => {
+            const existing = prev[selectedGroupId] || [];
+            const nextForGroup = [payerId, ...existing.filter((id) => id !== payerId)].slice(0, 3);
+            const next = { ...prev, [selectedGroupId]: nextForGroup };
+            try {
+                window.localStorage.setItem(RECENT_PAYERS_KEY, JSON.stringify(next));
+            } catch {
+                // Ignore storage errors
+            }
+            return next;
+        });
+    }, [payerId, selectedGroupId]);
+
+    useEffect(() => {
+        if (!activeTripId) {
+            setRecentTransactions([]);
+            return;
+        }
+
+        let cancelled = false;
+        async function loadRecentTransactions() {
+            try {
+                const res = await fetch(`/api/transactions?tripId=${activeTripId}&limit=20`);
+                if (!res.ok) return;
+                const data = await res.json();
+                if (!cancelled) {
+                    setRecentTransactions(Array.isArray(data) ? data : []);
+                }
+            } catch {
+                if (!cancelled) {
+                    setRecentTransactions([]);
+                }
+            }
+        }
+
+        loadRecentTransactions();
+        return () => {
+            cancelled = true;
+        };
+    }, [activeTripId]);
 
     const numericAmount = parseFloat(amount) || 0;
     const selectedCount = selectedMembers.size;
@@ -295,6 +468,55 @@ function QuickAddContent() {
     }, []);
 
     const catData = getCategoryData(category);
+    const effectiveTitle = title.trim() || catData.label;
+    const selectedMemberIds = useMemo(
+        () => members.filter((member) => selectedMembers.has(member.id)).map((member) => member.id),
+        [members, selectedMembers]
+    );
+    const totalPaise = toPaise(numericAmount);
+
+    const impactPreview = useMemo(() => {
+        if (!numericAmount || selectedMemberIds.length === 0) return [];
+
+        const equalPerPerson = selectedMemberIds.length > 0 ? Math.floor(totalPaise / selectedMemberIds.length) : 0;
+        const equalRemainder = totalPaise - equalPerPerson * selectedMemberIds.length;
+
+        return selectedMemberIds
+            .map((memberId, index) => {
+                const member = members.find((item) => item.id === memberId);
+                if (!member) return null;
+
+                const share = splitType === 'custom'
+                    ? customSplits.find((split) => split.userId === memberId)?.amount || 0
+                    : equalPerPerson + (index === 0 ? equalRemainder : 0);
+
+                const delta = (memberId === payerId ? totalPaise : 0) - share;
+                return {
+                    memberId,
+                    name: memberId === currentUser?.id ? 'You' : member.name.split(' ')[0],
+                    delta,
+                };
+            })
+            .filter((entry): entry is { memberId: string; name: string; delta: number } => Boolean(entry));
+    }, [currentUser?.id, customSplits, members, numericAmount, payerId, selectedMemberIds, splitType, totalPaise]);
+
+    const duplicateCandidates = useMemo(() => {
+        if (!effectiveTitle || !numericAmount) return [];
+
+        const normalizedTitle = effectiveTitle.toLowerCase().trim();
+        const now = Date.now();
+
+        return recentTransactions.filter((transaction) => {
+            const titleMatches = transaction.title.toLowerCase().trim() === normalizedTitle;
+            const amountMatches = transaction.amount === totalPaise;
+            const withinWindow = now - new Date(transaction.createdAt).getTime() <= 3 * 24 * 60 * 60 * 1000;
+            return titleMatches && amountMatches && withinWindow;
+        }).slice(0, 2);
+    }, [effectiveTitle, numericAmount, recentTransactions, totalPaise]);
+
+    useEffect(() => {
+        setDuplicateAcknowledged(false);
+    }, [effectiveTitle, payerId, selectedGroupId, splitType, totalPaise, selectedMemberIds]);
 
     /** Handle voice parsing result — auto-fill the form */
     const handleVoiceResult = useCallback((result: VoiceParseResult) => {
@@ -411,9 +633,6 @@ function QuickAddContent() {
     }, [members, toast]);
 
     const handleSave = async () => {
-        // Category input IS the title now
-        const effectiveTitle = title.trim() || catData.label;
-
         if (!numericAmount || numericAmount <= 0) {
             toast('Amount must be greater than zero', 'error');
             return;
@@ -422,9 +641,13 @@ function QuickAddContent() {
             toast('Please select a group', 'error');
             return;
         }
+        if (duplicateCandidates.length > 0 && !duplicateAcknowledged) {
+            setDuplicateAcknowledged(true);
+            toast('Possible duplicate found. Review the warning and tap Add Expense again if this is intentional.', 'error');
+            return;
+        }
         // Validate custom splits sum to total
         if (splitType === 'custom') {
-            const totalPaise = toPaise(numericAmount);
             const selArr = Array.from(selectedMembers);
             const allocated = customSplits
                 .filter(s => selArr.includes(s.userId))
@@ -488,6 +711,11 @@ function QuickAddContent() {
             });
 
             if (res.ok) {
+                try {
+                    window.localStorage.removeItem(EXPENSE_DRAFT_KEY);
+                } catch {
+                    // Ignore storage errors
+                }
                 toast(`Expense added! ${formatCurrency(toPaise(numericAmount))} for "${effectiveTitle}"`, 'success');
                 router.push('/transactions');
             } else {
@@ -507,6 +735,14 @@ function QuickAddContent() {
         ? (payerMember.id === currentUser?.id ? `${payerMember.name} (You)` : payerMember.name)
         : 'Select';
     const methodData = PAYMENT_METHODS[method];
+    const recentGroups = recentGroupIds
+        .map((groupId) => groups.find((group) => group.id === groupId))
+        .filter((group): group is GroupItem => Boolean(group))
+        .filter((group) => group.id !== selectedGroupId);
+    const recentPayers = (recentPayersByGroup[selectedGroupId] || [])
+        .map((memberId) => members.find((member) => member.id === memberId))
+        .filter((member): member is { id: string; name: string; image?: string | null } => Boolean(member))
+        .filter((member) => member.id !== payerId);
 
     if (loadingGroups || userLoading) {
         return (
@@ -541,6 +777,41 @@ function QuickAddContent() {
                     <ChevronDown size={14} />
                 </button>
             </div>
+
+            {(recentGroups.length > 0 || selectedGroupId) && (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                    {recentGroups.length > 0 && (
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+                            {recentGroups.map((group) => (
+                                <button
+                                    key={group.id}
+                                    onClick={() => setSelectedGroupId(group.id)}
+                                    style={{
+                                        border: '1px solid var(--border-default)',
+                                        background: 'var(--bg-glass)',
+                                        color: 'var(--fg-secondary)',
+                                        borderRadius: 'var(--radius-full)',
+                                        padding: '6px 10px',
+                                        fontSize: 'var(--text-xs)',
+                                        fontWeight: 700,
+                                        cursor: 'pointer',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: 6,
+                                    }}
+                                >
+                                    <History size={12} />
+                                    <span>{group.emoji}</span>
+                                    {group.name}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                    <div style={{ fontSize: '10px', color: 'var(--fg-tertiary)', fontWeight: 600 }}>
+                        Draft saves automatically on this device
+                    </div>
+                </div>
+            )}
 
             {/* ── Amount Card (Glassmorphic) ── */}
             <div className={styles.amountCard}>
@@ -652,6 +923,33 @@ function QuickAddContent() {
                     <ChevronDown size={14} />
                 </button>
             </div>
+
+            {recentPayers.length > 0 && (
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+                    {recentPayers.map((member) => (
+                        <button
+                            key={member.id}
+                            onClick={() => setPayerId(member.id)}
+                            style={{
+                                border: '1px solid var(--border-default)',
+                                background: 'var(--bg-glass)',
+                                color: 'var(--fg-secondary)',
+                                borderRadius: 'var(--radius-full)',
+                                padding: '6px 10px',
+                                fontSize: 'var(--text-xs)',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 6,
+                            }}
+                        >
+                            <History size={12} />
+                            {member.id === currentUser?.id ? 'You' : member.name.split(' ')[0]}
+                        </button>
+                    ))}
+                </div>
+            )}
 
             {/* ── Split Among Toggle ── */}
             {members.length > 1 && (
@@ -946,6 +1244,99 @@ function QuickAddContent() {
             )}
 
             {/* ── Numpad (4-column with calculator) ── */}
+            {impactPreview.length > 0 && (
+                <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 10,
+                    padding: '14px',
+                    borderRadius: 'var(--radius-xl)',
+                    background: 'rgba(var(--accent-500-rgb), 0.05)',
+                    border: '1px solid rgba(var(--accent-500-rgb), 0.1)',
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <TrendingUp size={14} style={{ color: 'var(--accent-500)' }} />
+                        <span style={{ fontSize: 'var(--text-xs)', color: 'var(--fg-tertiary)', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                            Impact Preview
+                        </span>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {impactPreview.map((entry) => (
+                            <div
+                                key={entry.memberId}
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    gap: 12,
+                                    padding: '10px 12px',
+                                    borderRadius: 'var(--radius-lg)',
+                                    background: 'var(--bg-glass)',
+                                    border: '1px solid var(--border-glass)',
+                                }}
+                            >
+                                <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--fg-primary)' }}>
+                                    {entry.name}
+                                </div>
+                                <div style={{
+                                    fontSize: 'var(--text-xs)',
+                                    fontWeight: 700,
+                                    color: entry.delta >= 0 ? 'var(--color-success)' : 'var(--color-error)',
+                                }}>
+                                    {entry.delta >= 0 ? 'Will be owed more ' : 'Will owe more '}
+                                    {entry.delta >= 0 ? '+' : '-'}{formatCurrency(Math.abs(entry.delta))}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {duplicateCandidates.length > 0 && (
+                <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 10,
+                    padding: '14px',
+                    borderRadius: 'var(--radius-xl)',
+                    background: 'rgba(245, 158, 11, 0.08)',
+                    border: '1px solid rgba(245, 158, 11, 0.18)',
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#f59e0b' }}>
+                        <AlertTriangle size={16} />
+                        <span style={{ fontSize: 'var(--text-sm)', fontWeight: 700 }}>Possible duplicate expense</span>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {duplicateCandidates.map((transaction) => (
+                            <div
+                                key={transaction.id}
+                                style={{
+                                    padding: '10px 12px',
+                                    borderRadius: 'var(--radius-lg)',
+                                    background: 'rgba(255,255,255,0.4)',
+                                    border: '1px solid rgba(245, 158, 11, 0.12)',
+                                }}
+                            >
+                                <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--fg-primary)' }}>
+                                    {transaction.title} • {formatCurrency(transaction.amount)}
+                                </div>
+                                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--fg-secondary)', marginTop: 4 }}>
+                                    Paid by {transaction.payer.name || 'Unknown'} • {new Date(transaction.createdAt).toLocaleString('en-IN', {
+                                        day: 'numeric',
+                                        month: 'short',
+                                        hour: 'numeric',
+                                        minute: '2-digit',
+                                    })}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--fg-secondary)', lineHeight: 1.5 }}>
+                        Tap Add Expense once more only if this is a real second charge.
+                    </div>
+                </div>
+            )}
+
             <div className={styles.numpad}>
                 {['1', '2', '3', '+', '4', '5', '6', '-', '7', '8', '9', 'del', '.', '0', '00', '='].map((key) => (
                     <motion.button

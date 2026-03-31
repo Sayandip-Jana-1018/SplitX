@@ -55,6 +55,7 @@ export default function TransactionsPage() {
     const [savingEdit, setSavingEdit] = useState(false);
     const [viewMode, setViewMode] = useState<'list' | 'timeline'>('list');
     const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+    const [focusId, setFocusId] = useState<string | null>(null);
 
     const startEdit = (txn: TransactionData) => {
         setEditingId(txn.id);
@@ -63,10 +64,23 @@ export default function TransactionsPage() {
         setEditSplitAmong(new Set(txn.splits.map(s => s.userId)));
     };
 
+    const canSaveTransaction = useCallback((txn: TransactionData) => {
+        return Boolean(
+            currentUser && (
+                currentUser.id === txn.payer.id ||
+                currentUser.id === txn.trip?.group?.ownerId
+            )
+        );
+    }, [currentUser]);
+
     const saveEdit = async (txnId: string) => {
         if (!editTitle.trim() || !parseFloat(editAmount)) return;
         // Block editing custom split transactions (amounts can't be recalculated)
         const editingTxn = transactions.find(t => t.id === txnId);
+        if (!editingTxn || !canSaveTransaction(editingTxn)) {
+            toast('Only the payer or group owner can edit this expense.', 'error');
+            return;
+        }
         if (editingTxn?.splitType === 'custom') {
             toast('Cannot edit custom split transactions. Delete and add a new one with updated amounts.', 'error');
             return;
@@ -124,6 +138,21 @@ export default function TransactionsPage() {
     }, []);
 
     useEffect(() => { fetchTransactions(); }, [fetchTransactions]);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const params = new URLSearchParams(window.location.search);
+        setFocusId(params.get('focus'));
+    }, []);
+
+    useEffect(() => {
+        if (!focusId || transactions.length === 0 || editingId === focusId) return;
+
+        const focusedTransaction = transactions.find((transaction) => transaction.id === focusId);
+        if (focusedTransaction) {
+            startEdit(focusedTransaction);
+        }
+    }, [editingId, focusId, transactions]);
 
     let filtered = transactions;
     if (search) {
@@ -349,24 +378,52 @@ export default function TransactionsPage() {
                                         }}
                                     >
                                         {editingId === txn.id ? (
-                                            /* Inline edit mode */
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-                                                <input value={editTitle} onChange={(e) => setEditTitle(e.target.value)}
-                                                    style={{ background: 'var(--surface-input)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-lg)', padding: '10px 14px', color: 'var(--fg-primary)', fontSize: 'var(--text-sm)', outline: 'none', width: '100%' }}
+                                            /* Inline edit/view mode */
+                                            (() => {
+                                                const isReadOnlyView = !canSaveTransaction(txn);
+                                                const amountReadOnly = isReadOnlyView || txn.splitType === 'custom';
+
+                                                return <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+                                                    <span style={{ fontSize: 12, color: 'var(--fg-tertiary)', fontWeight: 600 }}>
+                                                        {isReadOnlyView ? 'Viewing split details' : 'Edit transaction'}
+                                                    </span>
+                                                    {isReadOnlyView && (
+                                                        <span style={{
+                                                            padding: '3px 8px',
+                                                            borderRadius: 999,
+                                                            fontSize: 10,
+                                                            fontWeight: 700,
+                                                            letterSpacing: '0.03em',
+                                                            textTransform: 'uppercase',
+                                                            background: 'rgba(var(--accent-500-rgb), 0.1)',
+                                                            color: 'var(--accent-400)',
+                                                        }}>
+                                                            Read only
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} readOnly={isReadOnlyView}
+                                                    style={{ background: isReadOnlyView ? 'var(--surface-sunken)' : 'var(--surface-input)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-lg)', padding: '10px 14px', color: isReadOnlyView ? 'var(--fg-tertiary)' : 'var(--fg-primary)', fontSize: 'var(--text-sm)', outline: 'none', width: '100%', cursor: isReadOnlyView ? 'default' : 'text', opacity: isReadOnlyView ? 0.8 : 1 }}
                                                     placeholder="Title" />
                                                 <input value={editAmount} onChange={(e) => setEditAmount(e.target.value)} type="number" step="0.01"
-                                                    readOnly={txn.splitType === 'custom'}
+                                                    readOnly={amountReadOnly}
                                                     style={{
-                                                        background: txn.splitType === 'custom' ? 'var(--surface-sunken)' : 'var(--surface-input)',
+                                                        background: amountReadOnly ? 'var(--surface-sunken)' : 'var(--surface-input)',
                                                         border: '1px solid var(--border-default)', borderRadius: 'var(--radius-lg)',
-                                                        padding: '10px 14px', color: txn.splitType === 'custom' ? 'var(--fg-tertiary)' : 'var(--fg-primary)',
+                                                        padding: '10px 14px', color: amountReadOnly ? 'var(--fg-tertiary)' : 'var(--fg-primary)',
                                                         fontSize: 'var(--text-sm)', outline: 'none', width: '100%',
-                                                        cursor: txn.splitType === 'custom' ? 'not-allowed' : 'text',
-                                                        opacity: txn.splitType === 'custom' ? 0.6 : 1,
+                                                        cursor: amountReadOnly ? 'not-allowed' : 'text',
+                                                        opacity: amountReadOnly ? 0.7 : 1,
                                                     }}
                                                     placeholder="Amount (₹)" />
+                                                {isReadOnlyView && (
+                                                    <p style={{ fontSize: 11, color: 'var(--fg-tertiary)', fontWeight: 500, textAlign: 'center', marginTop: 4 }}>
+                                                        Read only: only the payer or group owner can edit this expense.
+                                                    </p>
+                                                )}
                                                 {txn.splitType === 'custom' && (
-                                                    <p style={{ fontSize: 11, color: '#eab308', fontWeight: 500, textAlign: 'center', marginTop: 4 }}>
+                                                    <p style={{ fontSize: 11, color: isReadOnlyView ? 'var(--fg-tertiary)' : '#eab308', fontWeight: 500, textAlign: 'center', marginTop: 4 }}>
                                                         ⚠ Custom split edit amount can&apos;t be edited.
                                                     </p>
                                                 )}
@@ -410,7 +467,7 @@ export default function TransactionsPage() {
                                                                     <button
                                                                         key={m.userId}
                                                                         onClick={() => {
-                                                                            if (isCustom) return; // Don't allow toggling custom splits
+                                                                            if (isCustom || isReadOnlyView) return; // Don't allow toggling custom splits or read-only views
                                                                             const next = new Set(editSplitAmong);
                                                                             if (next.has(m.userId)) next.delete(m.userId);
                                                                             else next.add(m.userId);
@@ -422,7 +479,7 @@ export default function TransactionsPage() {
                                                                             background: isSelected ? 'var(--accent-500)' : 'var(--bg-primary)',
                                                                             color: isSelected ? 'white' : 'var(--fg-secondary)',
                                                                             fontSize: '12px', fontWeight: 500,
-                                                                            cursor: isCustom ? 'default' : 'pointer',
+                                                                            cursor: (isCustom || isReadOnlyView) ? 'default' : 'pointer',
                                                                             opacity: (!isCustom && !isSelected) ? 0.5 : 1,
                                                                             transition: 'all 0.2s',
                                                                             display: 'flex', alignItems: 'center', gap: 4,
@@ -450,13 +507,16 @@ export default function TransactionsPage() {
 
                                                 <div style={{ display: 'flex', gap: 'var(--space-2)', justifyContent: 'flex-end' }}>
                                                     <button onClick={() => setEditingId(null)} style={{ padding: '7px 14px', borderRadius: 'var(--radius-full)', background: 'var(--bg-glass)', border: '1px solid var(--border-glass)', color: 'var(--fg-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: '12px', fontWeight: 600 }}>
-                                                        <X size={13} /> Cancel
+                                                        <X size={13} /> {isReadOnlyView ? 'Close' : 'Cancel'}
                                                     </button>
-                                                    <button onClick={() => saveEdit(txn.id)} disabled={savingEdit} style={{ padding: '7px 14px', borderRadius: 'var(--radius-full)', background: 'linear-gradient(135deg, var(--accent-500), var(--accent-600))', border: 'none', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: '12px', fontWeight: 600, opacity: savingEdit ? 0.6 : 1 }}>
-                                                        <Check size={13} /> Save
-                                                    </button>
+                                                    {canSaveTransaction(txn) && (
+                                                        <button onClick={() => saveEdit(txn.id)} disabled={savingEdit} style={{ padding: '7px 14px', borderRadius: 'var(--radius-full)', background: 'linear-gradient(135deg, var(--accent-500), var(--accent-600))', border: 'none', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: '12px', fontWeight: 600, opacity: savingEdit ? 0.6 : 1 }}>
+                                                            <Check size={13} /> Save
+                                                        </button>
+                                                    )}
                                                 </div>
-                                            </div>
+                                            </div>;
+                                            })()
                                         ) : (
                                             <div style={{
                                                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -522,10 +582,8 @@ export default function TransactionsPage() {
 
                                                 {/* Right Section: Amount and Actions */}
                                                 {(() => {
-                                                    const canEdit = currentUser && (
-                                                        currentUser.id === txn.payer.id ||
-                                                        currentUser.id === txn.trip?.group?.ownerId
-                                                    );
+                                                    const canViewSplitDetails = Boolean(currentUser);
+                                                    const canEdit = canSaveTransaction(txn);
                                                     return (
                                                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10, flexShrink: 0 }}>
                                                             <div style={{
@@ -535,7 +593,7 @@ export default function TransactionsPage() {
                                                                 {formatCurrency(txn.amount)}
                                                             </div>
 
-                                                            {canEdit ? (
+                                                            {canViewSplitDetails ? (
                                                                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                                                     <button
                                                                         onClick={(e) => { e.stopPropagation(); startEdit(txn); }}
@@ -551,30 +609,32 @@ export default function TransactionsPage() {
                                                                         }}
                                                                         onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--accent-500)'; e.currentTarget.style.borderColor = 'var(--accent-300)'; }}
                                                                         onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--fg-secondary)'; e.currentTarget.style.borderColor = 'var(--border-subtle)'; }}
-                                                                        title="Edit"
+                                                                        title={canEdit ? 'Edit transaction' : 'View split details'}
                                                                     >
                                                                         <Pencil size={14} />
                                                                     </button>
-                                                                    <button
-                                                                        onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(txn.id); }}
-                                                                        disabled={deletingId === txn.id}
-                                                                        style={{
-                                                                            cursor: 'pointer',
-                                                                            background: 'var(--surface-card)',
-                                                                            color: 'var(--fg-secondary)',
-                                                                            padding: '6px', borderRadius: 8,
-                                                                            boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-                                                                            border: '1px solid var(--border-subtle)',
-                                                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                                            transition: 'all 0.2s ease',
-                                                                            opacity: deletingId === txn.id ? 0.3 : 1,
-                                                                        }}
-                                                                        onMouseEnter={(e) => { e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.borderColor = '#fca5a5'; }}
-                                                                        onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--fg-secondary)'; e.currentTarget.style.borderColor = 'var(--border-subtle)'; }}
-                                                                        title="Delete"
-                                                                    >
-                                                                        <Trash2 size={14} />
-                                                                    </button>
+                                                                    {canEdit && (
+                                                                        <button
+                                                                            onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(txn.id); }}
+                                                                            disabled={deletingId === txn.id}
+                                                                            style={{
+                                                                                cursor: 'pointer',
+                                                                                background: 'var(--surface-card)',
+                                                                                color: 'var(--fg-secondary)',
+                                                                                padding: '6px', borderRadius: 8,
+                                                                                boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                                                                                border: '1px solid var(--border-subtle)',
+                                                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                                                transition: 'all 0.2s ease',
+                                                                                opacity: deletingId === txn.id ? 0.3 : 1,
+                                                                            }}
+                                                                            onMouseEnter={(e) => { e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.borderColor = '#fca5a5'; }}
+                                                                            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--fg-secondary)'; e.currentTarget.style.borderColor = 'var(--border-subtle)'; }}
+                                                                            title="Delete"
+                                                                        >
+                                                                            <Trash2 size={14} />
+                                                                        </button>
+                                                                    )}
                                                                 </div>
                                                             ) : null}
                                                         </div>

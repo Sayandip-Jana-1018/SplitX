@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
+import { createAuditLog } from '@/lib/auditLog';
 
 // DELETE /api/groups/:groupId/members — remove a member from the group
 export async function DELETE(
@@ -132,6 +133,19 @@ export async function DELETE(
             select: { name: true },
         });
         const removedName = removedUser?.name || 'A member';
+
+        await createAuditLog({
+            userId: currentUser.id,
+            action: 'delete',
+            entityType: 'group_member',
+            entityId: `${groupId}:${userId}`,
+            details: {
+                groupId,
+                removedUserId: userId,
+                removedUserName: removedName,
+                byUserId: currentUser.id,
+            },
+        });
 
         // ── Notify the removed user ──
         try {

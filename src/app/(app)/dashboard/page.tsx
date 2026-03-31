@@ -14,6 +14,7 @@ import {
     RefreshCw,
     Wallet,
     Zap,
+    GitBranch,
 } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import { AvatarGroup } from '@/components/ui/Avatar';
@@ -27,6 +28,7 @@ import PullToRefreshIndicator from '@/components/ui/PullToRefreshIndicator';
 import TiltCard from '@/components/ui/TiltCard';
 import ParticleBackground from '@/components/ui/ParticleBackground';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
+import { isFeatureEnabled } from '@/lib/featureFlags';
 import { formatCurrency, timeAgo } from '@/lib/utils';
 import useSWR from 'swr';
 import Link from 'next/link';
@@ -213,6 +215,12 @@ export default function DashboardPage() {
     };
 
     const netBalance = stats.youAreOwed - stats.youOwe;
+    const firstGroup = Array.isArray(groupsData?.groups)
+        ? groupsData.groups[0]
+        : Array.isArray(groupsData)
+            ? groupsData[0]
+            : null;
+    const heroName = currentUser?.name?.split(' ')[0] || 'there';
 
     const isLoadingPage = loadingGroups || loadingTxns || loadingSett;
 
@@ -232,6 +240,16 @@ export default function DashboardPage() {
                     animate="animate"
                     variants={staggerContainer}
                 >
+                    <motion.div variants={fadeUp}>
+                        <div className="page-hero" style={{ paddingTop: 'var(--space-2)' }}>
+                            <div className="page-kicker">Money that makes sense</div>
+                            <h2 className="page-hero-title">{greeting.text}, {heroName}</h2>
+                            <p className="page-hero-subtitle">
+                                Follow your groups, balance changes, and recent activity in one centered view that stays easy to scan.
+                            </p>
+                        </div>
+                    </motion.div>
+
                     {/* ═══ HERO SECTION — Animated Mesh Gradient Balance Card ═══ */}
                     <motion.div
                         style={{ scale: heroScale, opacity: heroOpacity, y: heroY }}
@@ -297,7 +315,7 @@ export default function DashboardPage() {
                                         }}>
                                             Net Balance
                                         </div>
-                                        <div style={{
+                                        <div className="font-display" style={{
                                             fontSize: 'var(--text-3xl)', fontWeight: 800,
                                             color: netBalance >= 0 ? 'var(--color-success)' : 'var(--fg-primary)',
                                             lineHeight: 1.1,
@@ -393,6 +411,43 @@ export default function DashboardPage() {
                             ))}
                         </div>
                     </motion.div>
+
+                    {isFeatureEnabled('balanceJourney') && firstGroup && (
+                        <motion.div variants={fadeUp} transition={{ duration: 0.5, delay: 0.12 }}>
+                            <Link href={`/groups/${firstGroup.id}/journey`} style={{ textDecoration: 'none' }}>
+                                <div style={{
+                                    ...glassCard,
+                                    borderRadius: 'var(--radius-xl)',
+                                    padding: 'var(--space-4)',
+                                    background: 'linear-gradient(135deg, rgba(var(--accent-500-rgb), 0.12), var(--bg-glass))',
+                                }}>
+                                    <div style={{ ...glassCardInner, display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+                                        <div style={{
+                                            width: 42,
+                                            height: 42,
+                                            borderRadius: 'var(--radius-xl)',
+                                            background: 'rgba(var(--accent-500-rgb), 0.12)',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            color: 'var(--accent-400)',
+                                        }}>
+                                            <GitBranch size={18} />
+                                        </div>
+                                        <div style={{ flex: 1 }}>
+                                            <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--fg-primary)' }}>
+                                                Understand balance changes
+                                            </div>
+                                            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--fg-tertiary)', marginTop: 2, lineHeight: 1.5 }}>
+                                                Open Balance Journey for {firstGroup.name} to see why your amount moved over time.
+                                            </div>
+                                        </div>
+                                        <ArrowRight size={16} style={{ color: 'var(--fg-muted)' }} />
+                                    </div>
+                                </div>
+                            </Link>
+                        </motion.div>
+                    )}
 
                     {/* ═══ RECENT TRANSACTIONS ═══ */}
                     <motion.div variants={fadeUp} transition={{ duration: 0.5, delay: 0.15 }}>
@@ -749,10 +804,9 @@ function SectionHeader({ title, action, href }: {
             marginBottom: 'var(--space-3)',
         }}>
             <h3
-                className="gradient-text"
+                className="gradient-text section-heading"
                 style={{
-                    fontSize: 'var(--text-sm)', fontWeight: 700,
-                    textTransform: 'uppercase', letterSpacing: '0.04em',
+                    fontSize: 'var(--text-base)', fontWeight: 700,
                 }}
             >
                 {title}

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
+import { createAuditLog } from '@/lib/auditLog';
 
 // GET /api/groups/:groupId — full group detail
 export async function GET(
@@ -169,6 +170,19 @@ export async function DELETE(
                     data: { status: 'cancelled', deletedAt: new Date() },
                 });
             }
+        });
+
+        await createAuditLog({
+            userId: user.id,
+            action: 'delete',
+            entityType: 'group',
+            entityId: group.id,
+            details: {
+                groupId: group.id,
+                name: group.name,
+                memberCount: group.members.length,
+                tripIds,
+            },
         });
 
         // 4. Notify all members (non-blocking)

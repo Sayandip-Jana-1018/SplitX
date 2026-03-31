@@ -199,7 +199,15 @@ const MOCK_DAILY_DATA: DailyData[] = [
     { day: 'Sun', amount: 350000 },
 ];
 
-export function DailySpendingChart({ data = MOCK_DAILY_DATA }: { data?: DailyData[] }) {
+export function DailySpendingChart({
+    data = MOCK_DAILY_DATA,
+    title = 'Daily Spending',
+    emoji = '📈',
+}: {
+    data?: DailyData[];
+    title?: string;
+    emoji?: string;
+}) {
     const maxAmount = Math.max(...data.map(d => d.amount));
 
     return (
@@ -214,8 +222,8 @@ export function DailySpendingChart({ data = MOCK_DAILY_DATA }: { data?: DailyDat
                 color: 'var(--fg-primary)', position: 'relative', zIndex: 1,
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
             }}>
-                <span style={{ fontSize: 16 }}>📈</span>
-                Daily Spending
+                <span style={{ fontSize: 16 }}>{emoji}</span>
+                {title}
             </h4>
             <div style={{ width: '100%', height: 210, position: 'relative', zIndex: 1 }}>
                 <ResponsiveContainer minWidth={0}>

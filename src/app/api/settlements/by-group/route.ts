@@ -1,6 +1,13 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
+import {
+    computeGroupBalances,
+    FinanceMember,
+    FinanceSettlementSnapshot,
+    FinanceTransactionSnapshot,
+    simplifyGroupBalances,
+} from '@/lib/groupFinance';
 
 // GET /api/settlements/by-group — returns per-group settlement data in one call
 export async function GET() {
@@ -124,58 +131,59 @@ export async function GET() {
             const completedSettlements = settByTrip.get(tripId) || [];
             const recorded = recordedByTrip.get(tripId) || [];
 
-            // Calculate balances within this group
-            const balances: Record<string, number> = {};
-            for (const txn of transactions) {
-                balances[txn.payerId] = (balances[txn.payerId] || 0) + txn.amount;
-                for (const split of txn.splits) {
-                    balances[split.userId] = (balances[split.userId] || 0) - split.amount;
-                }
-            }
-            for (const s of completedSettlements) {
-                balances[s.fromId] = (balances[s.fromId] || 0) + s.amount;
-                balances[s.toId] = (balances[s.toId] || 0) - s.amount;
-            }
-
-            // Greedy netting (Simplify Debts) within this group
-            const debtors: { id: string; amount: number }[] = [];
-            const creditors: { id: string; amount: number }[] = [];
-            for (const [userId, balance] of Object.entries(balances)) {
-                if (balance < -1) debtors.push({ id: userId, amount: -balance });
-                else if (balance > 1) creditors.push({ id: userId, amount: balance });
-            }
-            debtors.sort((a, b) => b.amount - a.amount);
-            creditors.sort((a, b) => b.amount - a.amount);
-
-            const transfers: { from: string; to: string; amount: number }[] = [];
-            let i = 0, j = 0;
-            while (i < debtors.length && j < creditors.length) {
-                const transfer = Math.min(debtors[i].amount, creditors[j].amount);
-                if (transfer > 0) {
-                    transfers.push({ from: debtors[i].id, to: creditors[j].id, amount: transfer });
-                }
-                debtors[i].amount -= transfer;
-                creditors[j].amount -= transfer;
-                if (debtors[i].amount === 0) i++;
-                if (creditors[j].amount === 0) j++;
-            }
-
-            const computedWithNames = transfers.map(t => ({
-                from: t.from,
-                to: t.to,
-                amount: t.amount,
-                fromName: nameMap[t.from] || 'Unknown',
-                toName: nameMap[t.to] || 'Unknown',
-                fromImage: imageMap[t.from] || null,
-                toImage: imageMap[t.to] || null,
-                toUpiId: upiMap[t.to] || null,
+            const members: FinanceMember[] = group.members.map((member) => ({
+                id: member.user.id,
+                name: member.user.name || 'Unknown',
+                image: member.user.image || null,
+                upiId: member.user.upiId || null,
             }));
 
-            const members = group.members.map(m => ({
-                id: m.user.id,
-                name: m.user.name || 'Unknown',
-                image: m.user.image || null,
+            const transactionSnapshots: FinanceTransactionSnapshot[] = transactions.map((transaction) => ({
+                id: transaction.id,
+                tripId: transaction.tripId,
+                tripTitle: group.name,
+                title: transaction.title,
+                amount: transaction.amount,
+                splitType: transaction.splitType,
+                payerId: transaction.payerId,
+                payerName: nameMap[transaction.payerId] || 'Unknown',
+                createdAt: transaction.createdAt,
+                updatedAt: transaction.updatedAt,
+                deletedAt: transaction.deletedAt,
+                splits: transaction.splits.map((split) => ({
+                    userId: split.userId,
+                    userName: nameMap[split.userId] || 'Unknown',
+                    amount: split.amount,
+                })),
             }));
+
+            const settlementSnapshots: FinanceSettlementSnapshot[] = completedSettlements.map((settlement) => ({
+                id: settlement.id,
+                tripId: settlement.tripId,
+                tripTitle: group.name,
+                fromId: settlement.fromId,
+                fromName: nameMap[settlement.fromId] || 'Unknown',
+                toId: settlement.toId,
+                toName: nameMap[settlement.toId] || 'Unknown',
+                amount: settlement.amount,
+                status: settlement.status,
+                method: settlement.method,
+                note: settlement.note,
+                createdAt: settlement.createdAt,
+                updatedAt: settlement.updatedAt,
+                deletedAt: settlement.deletedAt,
+            }));
+
+            const balances = computeGroupBalances({
+                memberIds: members.map((member) => member.id),
+                transactions: transactionSnapshots,
+                settlements: settlementSnapshots,
+            });
+
+            const computedWithNames = simplifyGroupBalances({
+                balances,
+                members,
+            });
 
             perGroupResults.push({
                 groupId: group.id,
