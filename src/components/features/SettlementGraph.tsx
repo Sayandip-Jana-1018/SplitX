@@ -533,18 +533,6 @@ export default function SettlementGraph({
             <div
                 style={{
                     position: 'absolute',
-                    top: summaryHeight - 1,
-                    left: '12%',
-                    right: '12%',
-                    height: 1,
-                    background: 'linear-gradient(90deg, transparent, rgba(var(--accent-500-rgb), 0.2), transparent)',
-                    pointerEvents: 'none',
-                }}
-            />
-
-            <div
-                style={{
-                    position: 'absolute',
                     top: 14,
                     left: 16,
                     right: 16,
@@ -558,9 +546,7 @@ export default function SettlementGraph({
                 }}
             >
                 <div style={{ ...topChipStyle, color: 'var(--fg-secondary)', fontSize: 11, fontWeight: 700 }}>
-                    <span style={{ color: 'var(--accent-500)' }}>Fewest payments</span>
-                    <span style={{ opacity: 0.28 }}>•</span>
-                    <span>{settlements.length} transfers</span>
+                    <span style={{ color: 'var(--accent-500)' }}>{settlements.length} transfers</span>
                 </div>
 
                 <div style={{ ...topChipStyle, color: 'var(--fg-secondary)', fontSize: 11, fontWeight: 700 }}>

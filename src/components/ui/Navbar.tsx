@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { LogIn, UserPlus } from 'lucide-react';
@@ -8,7 +9,6 @@ import ThemeSelector from '@/components/features/ThemeSelector';
 import Button from '@/components/ui/Button';
 import styles from './Navbar.module.css';
 
-/* Shared glass-circle style — identical to ThemeSelector toggle buttons */
 const glassBtn: React.CSSProperties = {
     width: 36,
     height: 36,
@@ -40,7 +40,15 @@ export default function Navbar() {
         <nav className={styles.nav}>
             <div className={styles.navInner}>
                 <Link href="/" className={styles.logo}>
-                    <div className={styles.logoIcon}>⚡</div>
+                    <div className={styles.logoIcon}>
+                        <Image
+                            src="/icons/icon-192.png"
+                            alt="SplitX"
+                            width={22}
+                            height={22}
+                            style={{ width: 22, height: 22, borderRadius: 6 }}
+                        />
+                    </div>
                     {!isMobile && <span className={styles.logoText}>SplitX</span>}
                 </Link>
                 <div className={styles.navActions}>
@@ -48,20 +56,12 @@ export default function Navbar() {
                     {isMobile ? (
                         <>
                             <Link href="/login" aria-label="Log in" style={{ textDecoration: 'none' }}>
-                                <motion.div
-                                    whileTap={{ scale: 0.9 }}
-                                    whileHover={{ scale: 1.05 }}
-                                    style={glassBtn}
-                                >
+                                <motion.div whileTap={{ scale: 0.9 }} whileHover={{ scale: 1.05 }} style={glassBtn}>
                                     <LogIn size={18} />
                                 </motion.div>
                             </Link>
                             <Link href="/register" aria-label="Sign up" style={{ textDecoration: 'none' }}>
-                                <motion.div
-                                    whileTap={{ scale: 0.9 }}
-                                    whileHover={{ scale: 1.05 }}
-                                    style={glassBtn}
-                                >
+                                <motion.div whileTap={{ scale: 0.9 }} whileHover={{ scale: 1.05 }} style={glassBtn}>
                                     <UserPlus size={18} />
                                 </motion.div>
                             </Link>

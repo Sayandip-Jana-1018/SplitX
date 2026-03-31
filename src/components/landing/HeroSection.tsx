@@ -3,6 +3,7 @@
 import { useRef } from 'react';
 import { motion, useScroll, useTransform, Variants } from 'framer-motion';
 import Link from 'next/link';
+import Image from 'next/image';
 import { ArrowRight, Sparkles } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import styles from '@/app/landing.module.css';
@@ -87,12 +88,27 @@ export default function HeroSection() {
                 </motion.div>
 
                 <motion.h1 className={styles.heroTitle} variants={fadeInUp}>
-                    Split expenses <span className={styles.heroGradient}>without the drama.</span>
+                    Split expenses, <span className={styles.heroGradient}>keep the vibe.</span>
                 </motion.h1>
 
                 <motion.p className={styles.heroLead} variants={fadeInUp}>
                     One shared memory deserves one calm money story.
                 </motion.p>
+
+                <motion.div className={styles.heroCTAs} variants={fadeInUp}>
+                    <Link href="/register">
+                        <Button size="lg" className={styles.primaryCtaBtn}>
+                            <span className={styles.ctaBtnShine} />
+                            Start Splitting - Free
+                            <ArrowRight size={18} style={{ marginLeft: '8px' }} />
+                        </Button>
+                    </Link>
+                    <Link href="#features">
+                        <Button size="lg" variant="outline" className={styles.secondaryCtaBtn}>
+                            See Features
+                        </Button>
+                    </Link>
+                </motion.div>
 
                 <motion.div
                     className={styles.heroVideoShell}
@@ -105,9 +121,15 @@ export default function HeroSection() {
                 >
                     <div className={styles.heroVideoAura} />
                     <div className={styles.heroVideoFrame}>
-                        <div className={styles.heroVideoHud}>
-                            <span className={styles.heroVideoHudBadge}>SplitX Story Mode</span>
-                            <span className={styles.heroVideoHudText}>From confusion to clarity in seconds</span>
+                        <div className={styles.heroVideoBrand}>
+                            <Image
+                                src="/icons/icon-192.png"
+                                alt="SplitX"
+                                width={26}
+                                height={26}
+                                className={styles.heroVideoBrandIcon}
+                            />
+                            <span className={styles.heroVideoBrandText}>SplitX</span>
                         </div>
                         <video
                             className={styles.heroVideo}
@@ -131,27 +153,6 @@ export default function HeroSection() {
                     The smartest way to track group expenses on trips. Auto-capture from UPI,
                     scan receipts instantly with AI, and settle up with one tap.
                 </motion.p>
-
-                <motion.div className={styles.heroCTAs} variants={fadeInUp}>
-                    <Link href="/register">
-                        <Button size="lg" className={styles.primaryCtaBtn}>
-                            <span className={styles.ctaBtnShine} />
-                            Start Splitting - Free
-                            <ArrowRight size={18} style={{ marginLeft: '8px' }} />
-                        </Button>
-                    </Link>
-                    <Link href="#features">
-                        <Button size="lg" variant="outline" className={styles.secondaryCtaBtn}>
-                            See Features
-                        </Button>
-                    </Link>
-                </motion.div>
-
-                <motion.div className={styles.heroTrustRow} variants={fadeInUp}>
-                    <span>Track every split clearly</span>
-                    <span>Understand balance changes</span>
-                    <span>Settle in the fewest payments</span>
-                </motion.div>
             </motion.div>
         </section>
     );

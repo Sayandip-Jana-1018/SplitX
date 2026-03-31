@@ -178,12 +178,13 @@
 }
 
 .heroTitle {
-    font-size: clamp(2.4rem, 8vw, 5rem);
+    font-size: clamp(2.9rem, 10vw, 5.8rem);
     font-weight: 800;
-    line-height: 1.05;
+    line-height: 0.98;
     color: var(--fg-primary);
-    margin-bottom: 14px;
-    letter-spacing: -0.04em;
+    margin-bottom: 16px;
+    letter-spacing: -0.05em;
+    max-width: 720px;
 }
 
 .heroGradient {
@@ -202,18 +203,18 @@
 }
 
 .heroLead {
-    font-size: 1.02rem;
+    font-size: 1.04rem;
     color: var(--fg-secondary);
     line-height: 1.7;
     max-width: 520px;
-    margin-bottom: 30px;
+    margin-bottom: 24px;
 }
 
 .heroVideoShell {
     width: 100%;
-    max-width: 760px;
+    max-width: 780px;
     position: relative;
-    margin-bottom: 36px;
+    margin-bottom: 28px;
     perspective: 1400px;
     transform-style: preserve-3d;
     display: flex;
@@ -237,61 +238,55 @@
 .heroVideoFrame {
     position: relative;
     overflow: hidden;
-    border-radius: 34px;
-    padding: 18px;
+    width: 100%;
+    border-radius: 32px;
     border: 1px solid rgba(var(--accent-500-rgb), 0.14);
     background:
-        linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.38)),
-        rgba(var(--accent-500-rgb), 0.04);
+        linear-gradient(180deg, rgba(var(--accent-500-rgb), 0.08), rgba(var(--accent-500-rgb), 0.02)),
+        var(--bg-glass-strong);
     box-shadow:
-        0 28px 70px rgba(15, 23, 42, 0.16),
-        inset 0 1px 0 rgba(255, 255, 255, 0.72);
-    backdrop-filter: blur(24px) saturate(140%);
-    -webkit-backdrop-filter: blur(24px) saturate(140%);
+        0 26px 60px rgba(15, 23, 42, 0.14),
+        inset 0 1px 0 rgba(255, 255, 255, 0.4);
+    backdrop-filter: blur(18px) saturate(125%);
+    -webkit-backdrop-filter: blur(18px) saturate(125%);
 }
 
 [data-theme="dark"] .heroVideoFrame {
     background:
-        linear-gradient(180deg, rgba(15, 23, 42, 0.9), rgba(15, 23, 42, 0.64)),
-        rgba(var(--accent-500-rgb), 0.08);
+        linear-gradient(180deg, rgba(var(--accent-500-rgb), 0.12), rgba(var(--accent-500-rgb), 0.03)),
+        rgba(10, 10, 12, 0.88);
     box-shadow:
-        0 30px 80px rgba(2, 6, 23, 0.44),
-        inset 0 1px 0 rgba(255, 255, 255, 0.08);
+        0 30px 70px rgba(2, 6, 23, 0.36),
+        inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
-.heroVideoHud {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 12px;
-    margin-bottom: 16px;
-    flex-wrap: wrap;
-    text-align: center;
-}
-
-.heroVideoHudBadge {
+.heroVideoBrand {
+    position: absolute;
+    top: 14px;
+    left: 14px;
+    z-index: 2;
     display: inline-flex;
     align-items: center;
+    gap: 8px;
     border-radius: 999px;
-    padding: 7px 14px;
+    padding: 8px 12px;
     background: rgba(var(--accent-500-rgb), 0.12);
     border: 1px solid rgba(var(--accent-500-rgb), 0.14);
-    color: var(--accent-600);
-    font-size: 11px;
-    font-weight: 700;
+    color: var(--fg-primary);
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+}
+
+.heroVideoBrandIcon {
+    border-radius: 8px;
+}
+
+.heroVideoBrandText {
+    font-size: 12px;
+    font-weight: 800;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-}
-
-[data-theme="dark"] .heroVideoHudBadge {
-    color: var(--accent-300);
-}
-
-.heroVideoHudText {
-    color: var(--fg-tertiary);
-    font-size: 0.95rem;
-    max-width: 420px;
 }
 
 .heroVideo {
@@ -299,22 +294,18 @@
     width: 100%;
     aspect-ratio: 16 / 9;
     object-fit: cover;
-    border-radius: 24px;
+    border-radius: inherit;
     background:
         radial-gradient(circle at center, rgba(var(--accent-500-rgb), 0.1), transparent 50%),
         var(--bg-secondary);
-    box-shadow:
-        0 12px 32px rgba(15, 23, 42, 0.12),
-        inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
 .heroVideoOverlay {
     position: absolute;
-    inset: 18px;
-    border-radius: 24px;
+    inset: 0;
+    border-radius: inherit;
     background:
-        linear-gradient(180deg, rgba(255, 255, 255, 0.16), transparent 18%, transparent 82%, rgba(15, 23, 42, 0.18)),
-        linear-gradient(90deg, rgba(255, 255, 255, 0.08), transparent 18%, transparent 82%, rgba(255, 255, 255, 0.08));
+        linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 22%, transparent 78%, rgba(15, 23, 42, 0.16));
     pointer-events: none;
 }
 
@@ -368,35 +359,15 @@
     color: var(--fg-secondary);
     line-height: 1.7;
     max-width: 580px;
-    margin-bottom: 26px;
+    margin-bottom: 0;
 }
 
 .heroCTAs {
     display: flex;
     gap: 12px;
-    margin-bottom: 22px;
+    margin-bottom: 24px;
     flex-wrap: wrap;
     justify-content: center;
-}
-
-.heroTrustRow {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 10px;
-}
-
-.heroTrustRow span {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 8px 14px;
-    border-radius: 999px;
-    border: 1px solid rgba(var(--accent-500-rgb), 0.12);
-    background: rgba(var(--accent-500-rgb), 0.06);
-    color: var(--fg-secondary);
-    font-size: 12px;
-    font-weight: 600;
 }
 
 .primaryCtaBtn,
@@ -1695,20 +1666,12 @@
     }
 
     .heroTitle {
-        font-size: clamp(3rem, 7vw, 5rem);
+        font-size: clamp(3.6rem, 8vw, 5.8rem);
     }
 
     .heroLead,
     .heroSubtitle {
         font-size: 1.1rem;
-    }
-
-    .heroVideoFrame {
-        padding: 20px;
-    }
-
-    .heroVideoHud {
-        margin-bottom: 16px;
     }
 
     .heroVideoTags {
@@ -1792,17 +1755,7 @@
     }
 
     .heroVideoFrame {
-        padding: 22px;
         border-radius: 38px;
-    }
-
-    .heroVideo {
-        border-radius: 28px;
-    }
-
-    .heroVideoOverlay {
-        inset: 22px;
-        border-radius: 28px;
     }
 
     .heroVideoTags {
