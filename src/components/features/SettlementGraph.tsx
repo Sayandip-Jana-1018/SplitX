@@ -37,8 +37,8 @@ interface LayoutBounds {
 
 function getLayoutBounds(compact: boolean): LayoutBounds {
     return compact
-        ? { top: 44, right: 42, bottom: 56, left: 42 }
-        : { top: 52, right: 54, bottom: 62, left: 54 };
+        ? { top: 48, right: 64, bottom: 84, left: 54 }
+        : { top: 56, right: 72, bottom: 92, left: 60 };
 }
 
 function clamp(value: number, min: number, max: number) {
@@ -695,7 +695,6 @@ export default function SettlementGraph({
                             </circle>
 
                             <g
-                                filter={`url(#${pillGlowId})`}
                                 className="settlement-pill-group"
                                 style={{ animationDelay: `${0.24 + index * 0.14}s, ${1.2 + index * 0.14}s` }}
                             >
