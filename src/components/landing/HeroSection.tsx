@@ -119,11 +119,11 @@ export default function HeroSection() {
                             preload="metadata"
                         />
                         <div className={styles.heroVideoOverlay} />
-                        <div className={styles.heroVideoFooter}>
-                            <span>Friends argue less</span>
-                            <span>Balances stay clear</span>
-                            <span>Settlements feel instant</span>
-                        </div>
+                    </div>
+                    <div className={styles.heroVideoTags} aria-hidden="true">
+                        <span className={styles.heroVideoTag}>Friends argue less</span>
+                        <span className={styles.heroVideoTag}>Balances stay clear</span>
+                        <span className={styles.heroVideoTag}>Settlements feel instant</span>
                     </div>
                 </motion.div>
 

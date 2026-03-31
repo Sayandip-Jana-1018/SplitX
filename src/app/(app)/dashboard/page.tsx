@@ -138,6 +138,7 @@ export default function DashboardPage() {
             haptics.medium();
             await Promise.all([mutateGroups(), mutateTxns(), mutateSettlements()]);
         },
+        activationHeight: 132,
     });
 
     // Scroll Parallax Logic

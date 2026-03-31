@@ -120,7 +120,7 @@
 }
 
 .heroContent {
-    max-width: 900px;
+    max-width: 920px;
     width: 100%;
     padding: 0 20px;
     display: flex;
@@ -206,16 +206,19 @@
     color: var(--fg-secondary);
     line-height: 1.7;
     max-width: 520px;
-    margin-bottom: 26px;
+    margin-bottom: 30px;
 }
 
 .heroVideoShell {
     width: 100%;
     max-width: 760px;
     position: relative;
-    margin-bottom: 28px;
+    margin-bottom: 36px;
     perspective: 1400px;
     transform-style: preserve-3d;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
 
 .heroVideoAura {
@@ -258,12 +261,13 @@
 
 .heroVideoHud {
     display: flex;
+    flex-direction: column;
     align-items: center;
-    justify-content: space-between;
+    justify-content: center;
     gap: 12px;
-    margin-bottom: 14px;
+    margin-bottom: 16px;
     flex-wrap: wrap;
-    text-align: left;
+    text-align: center;
 }
 
 .heroVideoHudBadge {
@@ -287,6 +291,7 @@
 .heroVideoHudText {
     color: var(--fg-tertiary);
     font-size: 0.95rem;
+    max-width: 420px;
 }
 
 .heroVideo {
@@ -313,33 +318,46 @@
     pointer-events: none;
 }
 
-.heroVideoFooter {
-    position: absolute;
-    left: 32px;
-    right: 32px;
-    bottom: 30px;
+.heroVideoTags {
+    position: relative;
+    z-index: 2;
     display: flex;
     justify-content: center;
     gap: 10px;
     flex-wrap: wrap;
+    width: min(88%, 620px);
+    margin-top: -22px;
+    pointer-events: none;
 }
 
-.heroVideoFooter span {
+.heroVideoTag {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    padding: 8px 14px;
+    padding: 9px 16px;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.8);
-    border: 1px solid rgba(255, 255, 255, 0.44);
+    background: rgba(255, 255, 255, 0.84);
+    border: 1px solid rgba(255, 255, 255, 0.48);
     color: #1f2937;
     font-size: 11px;
     font-weight: 700;
     letter-spacing: 0.03em;
-    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.12);
+    box-shadow: 0 14px 32px rgba(15, 23, 42, 0.14);
 }
 
-[data-theme="dark"] .heroVideoFooter span {
+.heroVideoTag:nth-child(1) {
+    transform: translateY(4px);
+}
+
+.heroVideoTag:nth-child(2) {
+    transform: translateY(-6px);
+}
+
+.heroVideoTag:nth-child(3) {
+    transform: translateY(6px);
+}
+
+[data-theme="dark"] .heroVideoTag {
     background: rgba(15, 23, 42, 0.78);
     border-color: rgba(255, 255, 255, 0.08);
     color: #f8fafc;
@@ -1693,10 +1711,9 @@
         margin-bottom: 16px;
     }
 
-    .heroVideoFooter {
-        left: 40px;
-        right: 40px;
-        bottom: 34px;
+    .heroVideoTags {
+        width: min(84%, 560px);
+        margin-top: -26px;
     }
 
     .howGrid {
@@ -1786,6 +1803,11 @@
     .heroVideoOverlay {
         inset: 22px;
         border-radius: 28px;
+    }
+
+    .heroVideoTags {
+        width: min(80%, 620px);
+        margin-top: -28px;
     }
 
     .howSection {

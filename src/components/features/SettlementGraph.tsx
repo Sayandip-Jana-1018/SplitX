@@ -37,8 +37,8 @@ interface LayoutBounds {
 
 function getLayoutBounds(compact: boolean): LayoutBounds {
     return compact
-        ? { top: 98, right: 54, bottom: 78, left: 54 }
-        : { top: 116, right: 70, bottom: 88, left: 70 };
+        ? { top: 62, right: 46, bottom: 62, left: 46 }
+        : { top: 74, right: 58, bottom: 70, left: 58 };
 }
 
 function clamp(value: number, min: number, max: number) {
@@ -151,17 +151,18 @@ function simulate(
     }
 }
 
-const hudCardStyle: CSSProperties = {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 4,
-    padding: '10px 14px',
-    borderRadius: 18,
+const topChipStyle: CSSProperties = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    padding: '8px 12px',
+    borderRadius: 999,
     background: 'linear-gradient(180deg, var(--bg-glass-strong), var(--bg-glass))',
-    border: '1px solid rgba(var(--accent-500-rgb), 0.12)',
-    boxShadow: '0 18px 40px rgba(0, 0, 0, 0.08), 0 0 30px rgba(var(--accent-500-rgb), 0.06)',
-    backdropFilter: 'blur(18px)',
-    WebkitBackdropFilter: 'blur(18px)',
+    border: '1px solid rgba(var(--accent-500-rgb), 0.1)',
+    boxShadow: '0 12px 28px rgba(15, 23, 42, 0.08)',
+    backdropFilter: 'blur(16px)',
+    WebkitBackdropFilter: 'blur(16px)',
 };
 
 export default function SettlementGraph({
@@ -198,18 +199,6 @@ export default function SettlementGraph({
         () => settlements.reduce((sum, settlement) => sum + settlement.amount, 0),
         [settlements],
     );
-    const connectionCounts = useMemo(() => {
-        const map: Record<string, number> = {};
-        for (const member of members) {
-            map[member] = 0;
-        }
-        for (const settlement of settlements) {
-            map[settlement.from] = (map[settlement.from] ?? 0) + 1;
-            map[settlement.to] = (map[settlement.to] ?? 0) + 1;
-        }
-        return map;
-    }, [members, settlements]);
-
     useEffect(() => {
         function onResize() {
             if (!containerRef.current) return;
@@ -352,13 +341,13 @@ export default function SettlementGraph({
                 touchAction: 'none',
                 border: '1px solid rgba(var(--accent-500-rgb), 0.1)',
                 background: `
-                    radial-gradient(circle at 20% 16%, rgba(var(--accent-500-rgb), 0.14), transparent 28%),
-                    radial-gradient(circle at 78% 18%, rgba(244, 114, 182, 0.08), transparent 22%),
-                    radial-gradient(circle at 52% 68%, rgba(var(--accent-500-rgb), 0.08), transparent 34%),
-                    linear-gradient(180deg, rgba(var(--accent-500-rgb), 0.04), transparent 22%),
+                    radial-gradient(circle at 20% 16%, rgba(var(--accent-500-rgb), 0.1), transparent 26%),
+                    radial-gradient(circle at 78% 18%, rgba(244, 114, 182, 0.05), transparent 20%),
+                    radial-gradient(circle at 52% 68%, rgba(var(--accent-500-rgb), 0.05), transparent 30%),
+                    linear-gradient(180deg, rgba(var(--accent-500-rgb), 0.025), transparent 18%),
                     var(--bg-glass)
                 `,
-                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.32), 0 24px 60px rgba(0, 0, 0, 0.12), 0 0 50px rgba(var(--accent-500-rgb), 0.05)',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.28), 0 18px 42px rgba(0, 0, 0, 0.1), 0 0 34px rgba(var(--accent-500-rgb), 0.04)',
             }}
         >
             <style jsx>{`
@@ -536,7 +525,8 @@ export default function SettlementGraph({
                         linear-gradient(90deg, rgba(var(--accent-500-rgb), 0.03) 1px, transparent 1px)
                     `,
                     backgroundSize: compact ? '28px 28px' : '34px 34px',
-                    maskImage: 'linear-gradient(180deg, rgba(0,0,0,0.55), transparent 82%)',
+                    opacity: 0.55,
+                    maskImage: 'linear-gradient(180deg, rgba(0,0,0,0.35), transparent 78%)',
                     pointerEvents: 'none',
                 }}
             />
@@ -559,103 +549,24 @@ export default function SettlementGraph({
                     inset: 16,
                     display: 'flex',
                     justifyContent: 'space-between',
-                    alignItems: 'flex-start',
-                    gap: 10,
-                    zIndex: 2,
-                    pointerEvents: 'none',
-                    flexWrap: 'wrap',
-                }}
-            >
-                <div style={{ ...hudCardStyle, maxWidth: compact ? '100%' : 280 }}>
-                    <span
-                        style={{
-                            fontSize: 10,
-                            fontWeight: 700,
-                            letterSpacing: '0.12em',
-                            textTransform: 'uppercase',
-                            color: 'var(--accent-500)',
-                        }}
-                    >
-                        Optimized route map
-                    </span>
-                    <div
-                        className="font-display"
-                        style={{
-                            fontSize: compact ? 'var(--text-lg)' : 'var(--text-xl)',
-                            lineHeight: 1.1,
-                            fontWeight: 800,
-                            color: 'var(--fg-primary)',
-                        }}
-                    >
-                        Premium money flow
-                    </div>
-                    <span style={{ fontSize: 11, color: 'var(--fg-tertiary)', lineHeight: 1.45 }}>
-                        Drag avatars to spread the map. Curved paths show the fewest transfers needed to settle the group.
-                    </span>
-                </div>
-
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginLeft: 'auto' }}>
-                    <div style={hudCardStyle}>
-                        <span style={{ fontSize: 10, color: 'var(--fg-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700 }}>
-                            Transfers
-                        </span>
-                        <span className="font-display" style={{ fontSize: 'var(--text-lg)', fontWeight: 800, color: 'var(--fg-primary)' }}>
-                            {settlements.length}
-                        </span>
-                    </div>
-                    <div style={hudCardStyle}>
-                        <span style={{ fontSize: 10, color: 'var(--fg-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700 }}>
-                            Total to settle
-                        </span>
-                        <span className="font-display" style={{ fontSize: 'var(--text-lg)', fontWeight: 800, color: 'var(--fg-primary)' }}>
-                            {formatCurrency(totalAmount)}
-                        </span>
-                    </div>
-                </div>
-            </div>
-
-            <div
-                style={{
-                    position: 'absolute',
-                    left: 18,
-                    right: 18,
-                    bottom: 14,
-                    display: 'flex',
-                    justifyContent: 'space-between',
                     alignItems: 'center',
                     gap: 10,
-                    flexWrap: 'wrap',
                     zIndex: 2,
                     pointerEvents: 'none',
+                    flexWrap: 'wrap',
                 }}
             >
-                <div
-                    style={{
-                        padding: '8px 12px',
-                        borderRadius: 999,
-                        background: 'rgba(var(--accent-500-rgb), 0.07)',
-                        border: '1px solid rgba(var(--accent-500-rgb), 0.1)',
-                        color: 'var(--fg-secondary)',
-                        fontSize: 11,
-                        fontWeight: 600,
-                    }}
-                >
-                    {members.length} members in this settlement map
+                <div style={{ ...topChipStyle, color: 'var(--fg-secondary)', fontSize: 11, fontWeight: 700 }}>
+                    <span style={{ color: 'var(--accent-500)' }}>Fewest payments</span>
+                    <span style={{ opacity: 0.28 }}>•</span>
+                    <span>{settlements.length} transfers</span>
                 </div>
-                <div
-                    style={{
-                        padding: '8px 12px',
-                        borderRadius: 999,
-                        background: 'rgba(255,255,255,0.45)',
-                        border: '1px solid rgba(var(--accent-500-rgb), 0.08)',
-                        color: 'var(--fg-tertiary)',
-                        fontSize: 11,
-                        fontWeight: 600,
-                        backdropFilter: 'blur(14px)',
-                        WebkitBackdropFilter: 'blur(14px)',
-                    }}
-                >
-                    Fewest payments, clearest route
+
+                <div style={{ ...topChipStyle, color: 'var(--fg-secondary)', fontSize: 11, fontWeight: 700 }}>
+                    <span style={{ color: 'var(--fg-tertiary)' }}>Total</span>
+                    <span className="font-display" style={{ fontSize: 14, fontWeight: 800, color: 'var(--fg-primary)' }}>
+                        {formatCurrency(totalAmount)}
+                    </span>
                 </div>
             </div>
 
@@ -790,32 +701,20 @@ export default function SettlementGraph({
                                 style={{ animationDelay: `${0.24 + index * 0.14}s, ${1.2 + index * 0.14}s` }}
                             >
                                 <rect
-                                    x={tx - 41}
-                                    y={ty - 19}
-                                    width={82}
-                                    height={38}
-                                    rx={19}
+                                    x={tx - 34}
+                                    y={ty - 14}
+                                    width={68}
+                                    height={28}
+                                    rx={14}
                                     fill="var(--bg-glass-strong)"
                                     stroke="rgba(var(--accent-500-rgb), 0.14)"
                                     strokeWidth={1}
                                 />
                                 <text
                                     x={tx}
-                                    y={ty - 2}
+                                    y={ty + 4}
                                     textAnchor="middle"
-                                    fontSize="9.5"
-                                    letterSpacing="0.1em"
-                                    fontWeight="700"
-                                    fill="var(--fg-tertiary)"
-                                    style={{ textTransform: 'uppercase' }}
-                                >
-                                    Transfer
-                                </text>
-                                <text
-                                    x={tx}
-                                    y={ty + 12}
-                                    textAnchor="middle"
-                                    fontSize="12"
+                                    fontSize="12.5"
                                     fontWeight="800"
                                     fill="var(--accent-600)"
                                     style={{ fontFamily: 'var(--font-display)' }}
@@ -839,7 +738,6 @@ export default function SettlementGraph({
                 const image = memberImages[node.name] || null;
                 const firstName = node.name.split(' ')[0];
                 const isDragging = dragIdx === index;
-                const connectionCount = connectionCounts[node.name] ?? 0;
 
                 return (
                     <div
@@ -926,48 +824,22 @@ export default function SettlementGraph({
                             )}
                         </div>
 
-                        {connectionCount > 0 && (
-                            <div
-                                className="settlement-node-badge"
-                                style={{
-                                    position: 'absolute',
-                                    top: -2,
-                                    right: -2,
-                                    minWidth: 24,
-                                    height: 24,
-                                    borderRadius: 999,
-                                    padding: '0 7px',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    background: 'linear-gradient(135deg, var(--accent-500), var(--accent-600))',
-                                    color: 'white',
-                                    fontSize: 10,
-                                    fontWeight: 800,
-                                    border: '2px solid var(--bg-glass-strong)',
-                                    boxShadow: '0 10px 18px rgba(var(--accent-500-rgb), 0.28)',
-                                }}
-                            >
-                                {connectionCount}
-                            </div>
-                        )}
-
                         <div
                             style={{
                                 position: 'absolute',
                                 left: '50%',
-                                bottom: -30,
+                                bottom: -28,
                                 transform: 'translateX(-50%)',
                                 display: 'inline-flex',
                                 alignItems: 'center',
                                 gap: 6,
-                                maxWidth: 120,
-                                padding: '6px 12px',
+                                maxWidth: 112,
+                                padding: '5px 11px',
                                 whiteSpace: 'nowrap',
                                 borderRadius: 999,
                                 background: 'linear-gradient(180deg, var(--bg-glass-strong), var(--bg-glass))',
                                 border: '1px solid rgba(var(--accent-500-rgb), 0.1)',
-                                boxShadow: '0 14px 24px rgba(15, 23, 42, 0.09)',
+                                boxShadow: '0 10px 18px rgba(15, 23, 42, 0.08)',
                                 pointerEvents: 'none',
                             }}
                         >
@@ -985,7 +857,7 @@ export default function SettlementGraph({
                                 style={{
                                     overflow: 'hidden',
                                     textOverflow: 'ellipsis',
-                                    fontSize: 11,
+                                    fontSize: 10.5,
                                     fontWeight: 700,
                                     color: 'var(--fg-primary)',
                                 }}
