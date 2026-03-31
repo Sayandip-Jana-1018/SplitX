@@ -54,13 +54,13 @@ function getLayoutBounds(compact: boolean, width: number): LayoutBounds {
 
     if (compact) {
         return narrow
-            ? { top: 56, right: 102, bottom: 142, left: 66 }
-            : { top: 52, right: 92, bottom: 126, left: 60 };
+            ? { top: 50, right: 82, bottom: 116, left: 56 }
+            : { top: 46, right: 74, bottom: 104, left: 52 };
     }
 
     return narrow
-        ? { top: 64, right: 98, bottom: 122, left: 68 }
-        : { top: 60, right: 86, bottom: 110, left: 64 };
+        ? { top: 58, right: 82, bottom: 108, left: 60 }
+        : { top: 54, right: 76, bottom: 100, left: 56 };
 }
 
 function clamp(value: number, min: number, max: number) {
@@ -75,6 +75,7 @@ function buildEdgeLayouts(params: {
     width: number;
     height: number;
     instanceId: string;
+    compact: boolean;
 }) {
     const layouts: EdgeLayout[] = [];
     const pillMinX = params.bounds.left + 40;
@@ -113,18 +114,15 @@ function buildEdgeLayouts(params: {
 
         const tx = 0.25 * sx + 0.5 * cpx + 0.25 * ex;
         const ty = 0.25 * sy + 0.5 * cpy + 0.25 * ey;
-        const pillLift = 26 + (index % 2) * 10;
-        let pillX = tx + nx * pillLift * dir;
-        let pillY = ty + ny * pillLift * dir;
+        let pillX = tx + nx * (params.compact ? 8 : 10) * dir;
+        let pillY = ty - (params.compact ? 20 : 24);
 
         const distanceFromSource = Math.hypot(pillX - fromNode.x, pillY - fromNode.y);
         const distanceFromTarget = Math.hypot(pillX - toNode.x, pillY - toNode.y);
         const nearestNodeDistance = Math.min(distanceFromSource, distanceFromTarget);
 
-        if (nearestNodeDistance < 96) {
-            const extraLift = 96 - nearestNodeDistance;
-            pillX += nx * extraLift * dir;
-            pillY += ny * extraLift * dir;
+        if (nearestNodeDistance < 82) {
+            pillY -= 14;
         }
 
         layouts.push({
@@ -140,39 +138,6 @@ function buildEdgeLayouts(params: {
             pillX: clamp(pillX, pillMinX, pillMaxX),
             pillY: clamp(pillY, pillMinY, pillMaxY),
         });
-    }
-
-    for (let iteration = 0; iteration < 18; iteration++) {
-        let moved = false;
-
-        for (let i = 0; i < layouts.length; i++) {
-            for (let j = i + 1; j < layouts.length; j++) {
-                const a = layouts[i];
-                const b = layouts[j];
-                const dx = b.pillX - a.pillX;
-                const dy = b.pillY - a.pillY;
-                const overlapX = 78 - Math.abs(dx);
-                const overlapY = 34 - Math.abs(dy);
-
-                if (overlapX <= 0 || overlapY <= 0) continue;
-
-                moved = true;
-
-                if (overlapX < overlapY) {
-                    const direction = dx === 0 ? (i % 2 === 0 ? -1 : 1) : Math.sign(dx);
-                    const push = overlapX / 2 + 2;
-                    a.pillX = clamp(a.pillX - direction * push, pillMinX, pillMaxX);
-                    b.pillX = clamp(b.pillX + direction * push, pillMinX, pillMaxX);
-                } else {
-                    const direction = dy === 0 ? (i % 2 === 0 ? -1 : 1) : Math.sign(dy);
-                    const push = overlapY / 2 + 2;
-                    a.pillY = clamp(a.pillY - direction * push, pillMinY, pillMaxY);
-                    b.pillY = clamp(b.pillY + direction * push, pillMinY, pillMaxY);
-                }
-            }
-        }
-
-        if (!moved) break;
     }
 
     return layouts;
@@ -341,8 +306,9 @@ export default function SettlementGraph({
             width: size.w,
             height: size.h,
             instanceId,
+            compact,
         }),
-        [bounds, instanceId, members, nodes, settlements, size.h, size.w],
+        [bounds, compact, instanceId, members, nodes, settlements, size.h, size.w],
     );
     useEffect(() => {
         function onResize() {
@@ -806,33 +772,6 @@ export default function SettlementGraph({
                                     path={`M ${layout.sx} ${layout.sy} Q ${layout.cpx} ${layout.cpy} ${layout.ex} ${layout.ey}`}
                                 />
                             </circle>
-
-                            <g
-                                className="settlement-pill-group"
-                                style={{ animationDelay: `${0.24 + index * 0.14}s, ${1.2 + index * 0.14}s` }}
-                            >
-                                <rect
-                                    x={layout.pillX - 34}
-                                    y={layout.pillY - 14}
-                                    width={68}
-                                    height={28}
-                                    rx={14}
-                                    fill="var(--bg-glass-strong)"
-                                    stroke="rgba(var(--accent-500-rgb), 0.14)"
-                                    strokeWidth={1}
-                                />
-                                <text
-                                    x={layout.pillX}
-                                    y={layout.pillY + 4}
-                                    textAnchor="middle"
-                                    fontSize="12.5"
-                                    fontWeight="800"
-                                    fill="var(--accent-600)"
-                                    style={{ fontFamily: 'var(--font-display)' }}
-                                >
-                                    {formatCurrency(layout.settlement.amount)}
-                                </text>
-                            </g>
                         </g>
                     );
                 })}
@@ -944,8 +883,8 @@ export default function SettlementGraph({
                                     display: 'inline-flex',
                                     alignItems: 'center',
                                     gap: 6,
-                                    maxWidth: 112,
-                                    padding: '5px 11px',
+                                    maxWidth: 96,
+                                    padding: '4px 9px',
                                     whiteSpace: 'nowrap',
                                     borderRadius: 999,
                                     background: 'linear-gradient(180deg, var(--bg-glass-strong), var(--bg-glass))',
@@ -969,7 +908,7 @@ export default function SettlementGraph({
                                     style={{
                                         overflow: 'hidden',
                                         textOverflow: 'ellipsis',
-                                        fontSize: 10.5,
+                                        fontSize: 9.5,
                                         fontWeight: 700,
                                         color: 'var(--fg-primary)',
                                     }}
@@ -980,6 +919,38 @@ export default function SettlementGraph({
                         </div>
                     );
                 })}
+
+                {edgeLayouts.map((layout, index) => (
+                    <div
+                        key={`pill-${layout.settlement.from}-${layout.settlement.to}-${index}`}
+                        className="settlement-pill-group"
+                        style={{
+                            position: 'absolute',
+                            left: layout.pillX,
+                            top: layout.pillY,
+                            transform: 'translate(-50%, -50%)',
+                            minWidth: 68,
+                            height: 28,
+                            padding: '0 12px',
+                            borderRadius: 999,
+                            background: 'linear-gradient(180deg, var(--bg-glass-strong), rgba(255,255,255,0.94))',
+                            border: '1px solid rgba(var(--accent-500-rgb), 0.14)',
+                            boxShadow: '0 14px 26px rgba(15, 23, 42, 0.08)',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: 12.5,
+                            fontWeight: 800,
+                            color: 'var(--accent-600)',
+                            fontFamily: 'var(--font-display)',
+                            pointerEvents: 'none',
+                            zIndex: 26,
+                            animationDelay: `${0.24 + index * 0.14}s, ${1.2 + index * 0.14}s`,
+                        }}
+                    >
+                        {formatCurrency(layout.settlement.amount)}
+                    </div>
+                ))}
             </div>
         </div>
     );
