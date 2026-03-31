@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     LayoutDashboard,
+    History as HistoryIcon,
     Users,
     Receipt,
     ArrowRightLeft,
@@ -34,6 +35,7 @@ import styles from './app.module.css';
 import { cn } from '@/lib/utils';
 
 const NAV_ITEMS = [
+    { href: '/history', icon: HistoryIcon, label: 'History', emoji: 'History' },
     { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', emoji: '🏠' },
     { href: '/groups', icon: Users, label: 'Groups', emoji: '👥' },
     { href: '/contacts', icon: Contact, label: 'Contacts', emoji: '📇' },
@@ -46,6 +48,7 @@ const NAV_ITEMS = [
 const BOTTOM_NAV = [
     { href: '/dashboard', icon: LayoutDashboard, label: 'Home', color: '#3b82f6' },
     { href: '/groups', icon: Users, label: 'Groups', color: '#8b5cf6' },
+    { href: '/history', icon: HistoryIcon, label: 'History', color: '#14b8a6' },
     { href: '/analytics', icon: BarChart3, label: 'Analytics', color: '#f59e0b' },
     { href: '/transactions', icon: Receipt, label: 'Activity', color: '#10b981' },
     { href: '/settlements', icon: ArrowRightLeft, label: 'Settle', color: '#f43f5e' },
@@ -97,6 +100,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         () => NAV_ITEMS.find((item) => pathname.startsWith(item.href))?.label || 'Dashboard',
         [pathname]
     );
+    const isPrintRoute = pathname.endsWith('/journey/print');
+    const showAppChrome = !isPrintRoute;
 
     const navigateTo = (href: string) => {
         haptics.light();
@@ -106,13 +111,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
     return (
         <div className={styles.appShell}>
-            <OfflineIndicator />
+            {showAppChrome && <OfflineIndicator />}
             <DbKeepAlive />
-            <OnboardingTour />
+            {showAppChrome && <OnboardingTour />}
 
             {/* ── Animated Sidebar Overlay ── */}
             <AnimatePresence>
-                {sidebarOpen && (
+                {showAppChrome && sidebarOpen && (
                     <motion.div
                         className={styles.sidebarOverlay}
                         variants={overlayVariants}
@@ -126,7 +131,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
             {/* ── Premium Sidebar ── */}
             <AnimatePresence>
-                {sidebarOpen && (
+                {showAppChrome && sidebarOpen && (
                     <motion.aside
                         className={styles.sidebar}
                         variants={sidebarVariants}
@@ -216,7 +221,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </AnimatePresence>
 
             {/* ── Desktop Sidebar (only rendered on 1024px+) ── */}
-            {isDesktop && (
+            {showAppChrome && isDesktop && (
                 <aside className={cn(styles.sidebar, styles.desktopSidebar)}>
                     <div className={styles.sidebarMesh} />
                     <div className={styles.sidebarLogo}>
@@ -283,7 +288,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             {/* ── Main Area ── */}
             <main className={styles.main}>
                 {/* Header */}
-                <header className={styles.header} suppressHydrationWarning>
+                {showAppChrome && <header className={styles.header} suppressHydrationWarning>
                     <div className={styles.headerLeft}>
                         <motion.button
                             className={styles.menuBtn}
@@ -317,22 +322,22 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                             <Avatar name={user?.name || 'User'} image={user?.image} size="sm" />
                         </div>
                     </div>
-                </header>
+                </header>}
 
                 {/* Page content */}
-                <div className={styles.pageContent} suppressHydrationWarning>
-                    <NotificationBanner />
-                    <ClipboardBanner />
+                <div className={isPrintRoute ? styles.printPageContent : styles.pageContent} suppressHydrationWarning>
+                    {showAppChrome && <NotificationBanner />}
+                    {showAppChrome && <ClipboardBanner />}
                     {children}
                 </div>
             </main>
 
 
             {/* ── AI Chat Panel (hidden on add-transaction page) ── */}
-            {!pathname.startsWith('/transactions/new') && <AIChatPanel />}
+            {showAppChrome && !pathname.startsWith('/transactions/new') && <AIChatPanel />}
 
             {/* ── Floating Bottom Nav (mobile) ── */}
-            <nav className={styles.bottomNav}>
+            {showAppChrome && <nav className={styles.bottomNav}>
                 <div className={styles.bottomNavInner}>
                     {BOTTOM_NAV.map((item) => {
                         const isActive = pathname.startsWith(item.href);
@@ -361,7 +366,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                                         transition={{ type: 'spring', damping: 18, stiffness: 350 }}
                                     >
                                         <Icon
-                                            size={22}
+                                            size={20}
                                             strokeWidth={isActive ? 2.5 : 1.8}
                                             style={{
                                                 color: isActive ? item.color : `${item.color}80`,
@@ -397,7 +402,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                         );
                     })}
                 </div>
-            </nav>
+            </nav>}
         </div>
     );
 }

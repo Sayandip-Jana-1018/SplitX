@@ -3,7 +3,7 @@
    ═══════════════════════════════════════════════════════════════ */
 
 /* ── Google Fonts ── */
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 /* ── Design System Imports ── */
 @import '../styles/tokens.css';
@@ -46,7 +46,7 @@ html {
 }
 
 body {
-    font-family: var(--font-sans);
+    font-family: var(--font-display);
     font-size: var(--text-base);
     line-height: var(--leading-normal);
     color: var(--fg-primary);
@@ -87,7 +87,7 @@ svg {
 }
 
 button {
-    font-family: inherit;
+    font-family: var(--font-display);
     cursor: pointer;
     border: none;
     background: none;
@@ -98,7 +98,7 @@ button {
 input,
 textarea,
 select {
-    font-family: inherit;
+    font-family: var(--font-display);
     font-size: inherit;
     color: inherit;
 }
@@ -125,7 +125,7 @@ h3 {
 h4,
 h5,
 h6 {
-    font-family: var(--font-sans);
+    font-family: var(--font-display);
 }
 
 h1 {
@@ -153,6 +153,7 @@ h6 {
 }
 
 p {
+    font-family: var(--font-display);
     color: var(--fg-secondary);
     line-height: var(--leading-relaxed);
 }

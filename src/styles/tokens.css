@@ -57,7 +57,7 @@
   --shadow-glow-lg: 0 0 40px rgba(var(--accent-500-rgb), 0.4);
 
   /* ── Typography ── */
-  --font-sans: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-sans: 'Playfair Display', Georgia, 'Times New Roman', serif;
   --font-display: 'Playfair Display', Georgia, 'Times New Roman', serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
 

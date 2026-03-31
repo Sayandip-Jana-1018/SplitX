@@ -18,11 +18,10 @@ const stagger: Variants = {
 };
 
 const scaleIn: Variants = {
-    hidden: { opacity: 0, scale: 0.85, y: 30 },
+    hidden: { opacity: 0, scale: 0.9, y: 28 },
     visible: { opacity: 1, scale: 1, y: 0, transition: { duration: 0.9, ease: [0.22, 1, 0.36, 1] } },
 };
 
-/* Deterministic particle positions — avoids hydration mismatch from Math.random() */
 const PARTICLES = [
     { left: 5, top: 12, delay: 0.0, dur: 4.2, size: 3 },
     { left: 15, top: 78, delay: 2.1, dur: 5.1, size: 2 },
@@ -49,25 +48,28 @@ const PARTICLES = [
 export default function HeroSection() {
     const ref = useRef(null);
     const { scrollYProgress } = useScroll({ target: ref, offset: ['start start', 'end start'] });
-    const heroY = useTransform(scrollYProgress, [0, 1], [0, 150]);
+    const heroY = useTransform(scrollYProgress, [0, 1], [0, 140]);
     const heroOpacity = useTransform(scrollYProgress, [0, 0.6], [1, 0]);
-    const phoneRotateX = useTransform(scrollYProgress, [0, 0.5], [8, 0]);
-    const phoneRotateY = useTransform(scrollYProgress, [0, 0.5], [-4, 0]);
-    const phoneScale = useTransform(scrollYProgress, [0, 0.3], [1, 0.95]);
+    const heroMediaRotateX = useTransform(scrollYProgress, [0, 0.5], [6, 0]);
+    const heroMediaRotateY = useTransform(scrollYProgress, [0, 0.5], [-3, 0]);
+    const heroMediaScale = useTransform(scrollYProgress, [0, 0.3], [1, 0.97]);
 
     return (
         <section ref={ref} className={styles.heroSection} style={{ position: 'relative' }}>
-            {/* Floating particles */}
             <div className={styles.heroParticles}>
                 {PARTICLES.map((p, i) => (
-                    <div key={i} className={styles.particle} style={{
-                        left: `${p.left}%`,
-                        top: `${p.top}%`,
-                        animationDelay: `${p.delay}s`,
-                        animationDuration: `${p.dur}s`,
-                        width: `${p.size}px`,
-                        height: `${p.size}px`,
-                    }} />
+                    <div
+                        key={i}
+                        className={styles.particle}
+                        style={{
+                            left: `${p.left}%`,
+                            top: `${p.top}%`,
+                            animationDelay: `${p.delay}s`,
+                            animationDuration: `${p.dur}s`,
+                            width: `${p.size}px`,
+                            height: `${p.size}px`,
+                        }}
+                    />
                 ))}
             </div>
 
@@ -81,13 +83,49 @@ export default function HeroSection() {
                 <motion.div className={styles.heroBadge} variants={fadeInUp}>
                     <span className={styles.heroBadgePulse} />
                     <Sparkles size={14} className={styles.heroBadgeIcon} />
-                    <span>V-1.0 is here — Experience next-gen tracking</span>
+                    <span>V-1.0 is here - Experience next-gen tracking</span>
                 </motion.div>
 
                 <motion.h1 className={styles.heroTitle} variants={fadeInUp}>
-                    Split expenses{' '}
-                    <span className={styles.heroGradient}>without the drama.</span>
+                    Split expenses <span className={styles.heroGradient}>without the drama.</span>
                 </motion.h1>
+
+                <motion.p className={styles.heroLead} variants={fadeInUp}>
+                    One shared memory deserves one calm money story.
+                </motion.p>
+
+                <motion.div
+                    className={styles.heroVideoShell}
+                    variants={scaleIn}
+                    style={{
+                        rotateX: heroMediaRotateX,
+                        rotateY: heroMediaRotateY,
+                        scale: heroMediaScale,
+                    }}
+                >
+                    <div className={styles.heroVideoAura} />
+                    <div className={styles.heroVideoFrame}>
+                        <div className={styles.heroVideoHud}>
+                            <span className={styles.heroVideoHudBadge}>SplitX Story Mode</span>
+                            <span className={styles.heroVideoHudText}>From confusion to clarity in seconds</span>
+                        </div>
+                        <video
+                            className={styles.heroVideo}
+                            src="/video.mp4"
+                            autoPlay
+                            muted
+                            loop
+                            playsInline
+                            preload="metadata"
+                        />
+                        <div className={styles.heroVideoOverlay} />
+                        <div className={styles.heroVideoFooter}>
+                            <span>Friends argue less</span>
+                            <span>Balances stay clear</span>
+                            <span>Settlements feel instant</span>
+                        </div>
+                    </div>
+                </motion.div>
 
                 <motion.p className={styles.heroSubtitle} variants={fadeInUp}>
                     The smartest way to track group expenses on trips. Auto-capture from UPI,
@@ -98,7 +136,7 @@ export default function HeroSection() {
                     <Link href="/register">
                         <Button size="lg" className={styles.primaryCtaBtn}>
                             <span className={styles.ctaBtnShine} />
-                            Start Splitting — Free
+                            Start Splitting - Free
                             <ArrowRight size={18} style={{ marginLeft: '8px' }} />
                         </Button>
                     </Link>
@@ -109,75 +147,10 @@ export default function HeroSection() {
                     </Link>
                 </motion.div>
 
-                {/* 3D Floating Phone Mockup */}
-                <motion.div
-                    className={styles.phoneMockupWrapper}
-                    variants={scaleIn}
-                    style={{
-                        rotateX: phoneRotateX,
-                        rotateY: phoneRotateY,
-                        scale: phoneScale,
-                    }}
-                >
-                    <div className={styles.phoneMockup}>
-                        <div className={styles.phoneNotch} />
-                        <div className={styles.phoneScreen}>
-                            {/* Transaction Cards inside phone */}
-                            <motion.div
-                                className={styles.phoneCard}
-                                animate={{ y: [-3, 3, -3] }}
-                                transition={{ duration: 3.5, repeat: Infinity, ease: 'easeInOut' }}
-                            >
-                                <div className={styles.phoneCardIcon} style={{ background: 'linear-gradient(135deg, #f59e0b, #ef4444)' }}>🍕</div>
-                                <div className={styles.phoneCardInfo}>
-                                    <span className={styles.phoneCardTitle}>Dinner at BBQ Nation</span>
-                                    <span className={styles.phoneCardMeta}>Sayan paid · ₹4,500</span>
-                                </div>
-                                <div className={`${styles.phoneCardBadge} ${styles.badgeGPay}`}>GPay</div>
-                            </motion.div>
-
-                            <motion.div
-                                className={styles.phoneCard}
-                                animate={{ y: [3, -3, 3] }}
-                                transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut', delay: 0.3 }}
-                            >
-                                <div className={styles.phoneCardIcon} style={{ background: 'linear-gradient(135deg, #8b5cf6, #ec4899)' }}>🚗</div>
-                                <div className={styles.phoneCardInfo}>
-                                    <span className={styles.phoneCardTitle}>Cab to Airport</span>
-                                    <span className={styles.phoneCardMeta}>Aman paid · ₹1,200</span>
-                                </div>
-                                <div className={`${styles.phoneCardBadge} ${styles.badgeCash}`}>CASH</div>
-                            </motion.div>
-
-                            <motion.div
-                                className={styles.phoneCard}
-                                animate={{ y: [-2, 4, -2] }}
-                                transition={{ duration: 4.5, repeat: Infinity, ease: 'easeInOut', delay: 0.7 }}
-                            >
-                                <div className={styles.phoneCardIcon} style={{ background: 'linear-gradient(135deg, #06b6d4, #3b82f6)' }}>🏨</div>
-                                <div className={styles.phoneCardInfo}>
-                                    <span className={styles.phoneCardTitle}>Hotel — 2 nights</span>
-                                    <span className={styles.phoneCardMeta}>Priya paid · ₹8,900</span>
-                                </div>
-                                <div className={`${styles.phoneCardBadge} ${styles.badgePhonePe}`}>PhonePe</div>
-                            </motion.div>
-
-                            {/* Summary bar inside phone */}
-                            <div className={styles.phoneSummary}>
-                                <div className={styles.phoneSummaryItem}>
-                                    <span className={styles.phoneSummaryLabel}>Total</span>
-                                    <span className={styles.phoneSummaryValue}>₹14,600</span>
-                                </div>
-                                <div className={styles.phoneSummaryDivider} />
-                                <div className={styles.phoneSummaryItem}>
-                                    <span className={styles.phoneSummaryLabel}>Your share</span>
-                                    <span className={styles.phoneSummaryValue} style={{ color: 'var(--accent-500)' }}>₹4,867</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    {/* Glow ring behind phone */}
-                    <div className={styles.phoneGlow} />
+                <motion.div className={styles.heroTrustRow} variants={fadeInUp}>
+                    <span>Track every split clearly</span>
+                    <span>Understand balance changes</span>
+                    <span>Settle in the fewest payments</span>
                 </motion.div>
             </motion.div>
         </section>

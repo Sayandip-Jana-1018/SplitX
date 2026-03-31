@@ -230,7 +230,7 @@ erDiagram
 | **UPI Payment Notifications** | All group members notified on UPI payment — receiver gets ✅, others get 💸 |
 | **Transaction Edit Notifications** | All group members notified when any expense is edited (✏️) |
 | **Debt Simplification** | Dual algorithm: greedy netting + optimized exact-match pruning (auto-picks fewer transfers) |
-| **Per-Group Settlement Graphs** | Swipeable carousel with per-group settlement visualization + global pairwise overview with expandable group breakdowns |
+| **Per-Group Settlement Graphs** | Swipeable carousel with per-group settlement visualization, subtle animated money-flow routes, and a premium global pairwise overview |
 | **Analytics Dashboard** | API-backed monthly trends, category breakdown, budget vs actual comparison, and smart insights |
 | **Budget Tracking** | Set monthly budgets per category, compare against actual spending |
 | **CSV/JSON Export** | Export transaction data, account data, and balance-history reports for external use |
@@ -260,11 +260,11 @@ erDiagram
 | Feature | Description |
 |---|---|
 | **Glassmorphism Design** | Frosted-glass cards with blur, saturation, and gradient overlays |
-| **Colorful Bottom Navigation** | Each nav icon (Home, Groups, Contacts, Activity, Settle) has a distinct vibrant color with active/inactive states |
+| **Colorful Bottom Navigation** | Each nav icon (Home, Groups, History, Analytics, Activity, Settle) has a distinct vibrant color with active/inactive states |
 | **Enhanced Nav Blur** | 60px backdrop-filter blur with 96% opacity + gradient fade mask for seamless content transition |
 | **12 Color Themes** | Rose, Ocean, Emerald, Violet, Amber, Slate, Coral, Teal, Indigo, Lime, Fuchsia, Cyan |
 | **Dark / Light Mode** | System-aware with manual toggle; theme saved to localStorage |
-| **Editorial Typography** | Playfair Display headings paired with Plus Jakarta Sans body text for a more polished light/dark experience |
+| **Editorial Typography** | Playfair Display is used across the product for headings, UI copy, pricing, and navigation for a consistent premium feel in light and dark mode |
 | **Animated Numbers** | Counting animations on dashboard stats |
 | **Pull to Refresh** | Touch gesture with animated gradient spinner |
 | **Haptic Feedback** | Vibration API integration on buttons, navigation, and actions |
@@ -277,6 +277,7 @@ erDiagram
 | **Amount Pad** | GPay-style digit-by-digit number pad bottom sheet |
 | **Receipt Gallery** | Browse scanned receipt thumbnails in a 2-column grid with member filter and full-size overlay |
 | **Group Receipt Gallery** | Per-group receipt gallery with date-grouped card layout, payer avatars, and lightbox view |
+| **Landing Story Hero** | Hero section uses a polished brand video from `public/video.mp4`, framed in a cinematic glass stage before the supporting copy and CTAs |
 | **QR Code Invites** | Generate QR codes for group invitations |
 | **Centered Split UI** | Split-among member avatars center-aligned with clean multi-line wrapping |
 
@@ -328,6 +329,7 @@ src/
 │   ├── (app)/                    # Authenticated app shell
 │   │   ├── layout.tsx            # Sidebar, header, bottom nav, FAB, AI chat
 │   │   ├── dashboard/            # Home — stats, balance hero, quick actions
+│   │   ├── history/              # App-level Balance Journey entry and group chooser
 │   │   ├── groups/               # Group list & group detail (balances, members, activity, journey)
 │   │   ├── transactions/         # List/timeline view, new, scan, receipts
 │   │   ├── settlements/          # Settlement tracker with status management
@@ -522,7 +524,7 @@ SplitX uses a **CSS custom properties** design system with HSL-based color token
 
 - **12 accent palettes**: `rose`, `ocean`, `emerald`, `violet`, `amber`, `slate`, `coral`, `teal`, `indigo`, `lime`, `fuchsia`, `cyan`
 - **Dark / Light modes** with automatic system detection
-- **Display typography**: `Playfair Display` for major headings and `Plus Jakarta Sans` for body/UI copy
+- **Display typography**: `Playfair Display` is the primary visible font across headings, body, navigation, cards, and data UI
 - **Glassmorphism tokens**: `--bg-glass`, `--border-glass`, `--shadow-card`
 - **Spacing scale**: 4px base with `--space-1` through `--space-12`
 - **Typography scale**: `--text-2xs` through `--text-3xl`
@@ -551,6 +553,7 @@ Theme preference is persisted in `localStorage` and applied via CSS class on `<h
 - Existing transactions and confirmed settlements can still be used to derive balance changes from your current database state.
 - Historical edits or deletes that happened **before** audit logging was added cannot be reconstructed perfectly if no audit record existed at the time.
 - From this release onward, new transaction edits, deletes, settlement confirmations, group mutations, and member removals are logged more clearly for future explainability.
+- Users only see **their own** balance journey. The app-level `History` menu routes into the same self-only per-group Balance Journey rather than exposing other members' money-change trails.
 
 ---
 

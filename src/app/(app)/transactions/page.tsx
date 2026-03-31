@@ -290,7 +290,7 @@ export default function TransactionsPage() {
                             onChange={(e) => setSearch(e.target.value)}
                             style={{
                                 flex: 1, background: 'none', border: 'none', outline: 'none',
-                                fontSize: 'var(--text-sm)', color: 'var(--fg-primary)',
+                                fontSize: 'var(--text-sm)', color: 'var(--fg-primary)', fontFamily: 'var(--font-display)',
                             }}
                         />
                     </div>
@@ -544,14 +544,14 @@ export default function TransactionsPage() {
 
                                                     {/* Text Content */}
                                                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, flex: 1, minWidth: 0 }}>
-                                                        <div style={{
+                                                        <div className="font-display" style={{
                                                             fontSize: 16, fontWeight: 700,
                                                             color: 'var(--fg-primary)', letterSpacing: '-0.3px',
                                                             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                                                         }}>
                                                             {txn.title}
                                                         </div>
-                                                        <div style={{
+                                                        <div className="font-display" style={{
                                                             fontSize: 13, color: 'var(--fg-tertiary)', fontWeight: 500,
                                                             display: 'flex', gap: 6, alignItems: 'center', justifyContent: 'center',
                                                             flexWrap: 'nowrap', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
@@ -569,7 +569,7 @@ export default function TransactionsPage() {
                                                                     color: 'var(--fg-secondary)', border: '1px solid var(--border-subtle)',
                                                                 }}>
                                                                     <PaymentIcon method={txn.method} size={12} />
-                                                                    <span>{metConfig.label}</span>
+                                                                    <span className="font-display">{metConfig.label}</span>
                                                                 </div>
                                                                 {txn.splits?.length > 1 && (
                                                                     <div style={{
@@ -579,7 +579,7 @@ export default function TransactionsPage() {
                                                                         color: 'var(--fg-secondary)', border: '1px solid var(--border-subtle)',
                                                                     }}>
                                                                         <Users size={12} opacity={0.7} />
-                                                                        <span>Split with {txn.splits.length}</span>
+                                                                        <span className="font-display">Split with {txn.splits.length}</span>
                                                                     </div>
                                                                 )}
                                                             </div>
@@ -593,7 +593,7 @@ export default function TransactionsPage() {
                                                     const canEdit = canSaveTransaction(txn);
                                                     return (
                                                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10, flexShrink: 0 }}>
-                                                            <div style={{
+                                                            <div className="font-display" style={{
                                                                 fontWeight: 800, fontSize: 18,
                                                                 color: 'var(--fg-primary)', letterSpacing: '-0.5px',
                                                             }}>

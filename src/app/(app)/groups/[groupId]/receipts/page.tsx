@@ -1,19 +1,23 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-    Image as ImageIcon, X, ChevronLeft, Loader2,
-    Calendar, User, Tag, Receipt, ZoomIn,
-    Filter, ChevronDown,
+    Calendar,
+    ChevronLeft,
+    Image as ImageIcon,
+    Loader2,
+    Receipt,
+    Tag,
+    User,
+    X,
+    ZoomIn,
 } from 'lucide-react';
-import Avatar from '@/components/ui/Avatar';
-
-import { formatCurrency, timeAgo } from '@/lib/utils';
 import { useParams, useRouter } from 'next/navigation';
+import Avatar from '@/components/ui/Avatar';
+import { formatCurrency, timeAgo } from '@/lib/utils';
 
-/* ── Types ── */
 interface ReceiptEntry {
     id: string;
     title: string;
@@ -28,10 +32,15 @@ interface ReceiptEntry {
     };
 }
 
-/* ── Category emoji map ── */
 const CAT_EMOJI: Record<string, string> = {
-    food: '🍔', transport: '🚗', shopping: '🛍️', entertainment: '🎬',
-    bills: '📄', health: '💊', education: '📚', general: '📦',
+    food: 'Burger',
+    transport: 'Cab',
+    shopping: 'Shop',
+    entertainment: 'Fun',
+    bills: 'Bills',
+    health: 'Health',
+    education: 'Study',
+    general: 'General',
 };
 
 export default function ReceiptGalleryPage() {
@@ -42,361 +51,324 @@ export default function ReceiptGalleryPage() {
     const [receipts, setReceipts] = useState<ReceiptEntry[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedReceipt, setSelectedReceipt] = useState<ReceiptEntry | null>(null);
-    const [filterOpen, setFilterOpen] = useState(false);
     const [filterMember, setFilterMember] = useState<string>('all');
     const [members, setMembers] = useState<{ id: string; name: string; image: string | null }[]>([]);
 
     const fetchReceipts = useCallback(async () => {
         try {
-            const res = await fetch(`/api/groups/${groupId}/receipts`);
-            if (res.ok) {
-                const data = await res.json();
+            const response = await fetch(`/api/groups/${groupId}/receipts`);
+            if (response.ok) {
+                const data = await response.json();
                 setReceipts(data.receipts || []);
                 setMembers(data.members || []);
             }
-        } catch (e) {
-            console.error('Failed to fetch receipts:', e);
+        } catch (error) {
+            console.error('Failed to fetch receipts:', error);
         } finally {
             setLoading(false);
         }
     }, [groupId]);
 
-    useEffect(() => { fetchReceipts(); }, [fetchReceipts]);
+    useEffect(() => {
+        fetchReceipts();
+    }, [fetchReceipts]);
 
-    const filtered = filterMember === 'all'
-        ? receipts
-        : receipts.filter(r => r.payer.id === filterMember);
+    const filteredReceipts = useMemo(() => {
+        return filterMember === 'all'
+            ? receipts
+            : receipts.filter((receipt) => receipt.payer.id === filterMember);
+    }, [filterMember, receipts]);
 
-    // Group receipts by date
-    const groupedByDate = filtered.reduce<Record<string, ReceiptEntry[]>>((acc, r) => {
-        const dateKey = new Date(r.date).toLocaleDateString('en-IN', {
-            day: 'numeric', month: 'short', year: 'numeric',
-        });
-        if (!acc[dateKey]) acc[dateKey] = [];
-        acc[dateKey].push(r);
-        return acc;
-    }, {});
+    const groupedByDate = useMemo(() => {
+        return filteredReceipts.reduce<Record<string, ReceiptEntry[]>>((acc, receipt) => {
+            const dateKey = new Date(receipt.date).toLocaleDateString('en-IN', {
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric',
+            });
+            if (!acc[dateKey]) acc[dateKey] = [];
+            acc[dateKey].push(receipt);
+            return acc;
+        }, {});
+    }, [filteredReceipts]);
+
+    const totalAmount = filteredReceipts.reduce((sum, receipt) => sum + receipt.amount, 0);
 
     return (
-        <div style={{
-            minHeight: '100dvh',
-            maxWidth: 520,
-            margin: '0 auto',
-            padding: '0 16px 100px',
-        }}>
-            {/* ── Sticky Header ── */}
-            <div style={{
-                display: 'flex', alignItems: 'center', gap: 12,
-                padding: '20px 0 16px',
-                position: 'sticky', top: 0, zIndex: 10,
-                background: 'var(--bg-primary)',
-            }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', paddingBottom: 'var(--space-8)' }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
                 <button
                     onClick={() => router.back()}
                     style={{
-                        width: 36, height: 36, borderRadius: 12,
-                        background: 'var(--bg-secondary)',
-                        border: '1px solid var(--border-subtle)',
-                        cursor: 'pointer', color: 'var(--fg-secondary)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        flexShrink: 0,
+                        width: 42,
+                        height: 42,
+                        borderRadius: 'var(--radius-xl)',
+                        background: 'var(--bg-glass)',
+                        border: '1px solid var(--border-glass)',
+                        color: 'var(--fg-secondary)',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
                     }}
                 >
                     <ChevronLeft size={18} />
                 </button>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                    <h1 style={{
-                        margin: 0, fontSize: 'var(--text-lg)', fontWeight: 800,
-                        color: 'var(--fg-primary)',
-                        display: 'flex', alignItems: 'center', gap: 8,
-                        letterSpacing: '-0.02em',
-                    }}>
-                        <Receipt size={18} style={{ color: 'var(--accent-400)' }} />
-                        Receipts
-                    </h1>
-                    <p style={{
-                        margin: '2px 0 0', fontSize: 'var(--text-xs)',
-                        color: 'var(--fg-tertiary)', textAlign: 'left',
-                    }}>
-                        {receipts.length} receipt{receipts.length !== 1 ? 's' : ''} captured
-                    </p>
-                </div>
-                <button
-                    onClick={() => setFilterOpen(!filterOpen)}
-                    style={{
-                        display: 'flex', alignItems: 'center', gap: 4,
-                        padding: '7px 12px', borderRadius: 12,
-                        background: filterMember === 'all'
-                            ? 'var(--bg-secondary)'
-                            : 'rgba(var(--accent-500-rgb), 0.1)',
-                        border: `1px solid ${filterMember === 'all' ? 'var(--border-subtle)' : 'rgba(var(--accent-500-rgb), 0.2)'}`,
-                        cursor: 'pointer',
-                        color: filterMember === 'all' ? 'var(--fg-tertiary)' : 'var(--accent-500)',
-                        fontSize: 12, fontWeight: 600,
-                        transition: 'all 0.2s',
-                    }}
-                >
-                    <Filter size={13} />
-                    Filter
-                    <ChevronDown size={11} style={{
-                        transform: filterOpen ? 'rotate(180deg)' : 'none',
-                        transition: 'transform 0.2s',
-                    }} />
-                </button>
             </div>
 
-            {/* ── Filter Dropdown ── */}
-            <AnimatePresence>
-                {filterOpen && (
-                    <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        style={{ overflow: 'hidden', marginBottom: 12 }}
-                    >
-                        <div style={{
-                            display: 'flex', flexWrap: 'wrap', gap: 6,
-                            background: 'var(--bg-secondary)',
-                            border: '1px solid var(--border-subtle)',
-                            borderRadius: 16,
-                            padding: 12,
-                        }}>
-                            <button
-                                onClick={() => { setFilterMember('all'); setFilterOpen(false); }}
-                                style={{
-                                    padding: '6px 14px', borderRadius: 20,
-                                    border: 'none', cursor: 'pointer',
-                                    background: filterMember === 'all'
-                                        ? 'rgba(var(--accent-500-rgb), 0.15)'
-                                        : 'var(--bg-primary)',
-                                    color: filterMember === 'all'
-                                        ? 'var(--accent-500)'
-                                        : 'var(--fg-tertiary)',
-                                    fontSize: 12, fontWeight: 600,
-                                    transition: 'all 0.2s',
-                                }}
-                            >
-                                All
-                            </button>
-                            {members.map(m => (
-                                <button
-                                    key={m.id}
-                                    onClick={() => { setFilterMember(m.id); setFilterOpen(false); }}
-                                    style={{
-                                        display: 'flex', alignItems: 'center', gap: 5,
-                                        padding: '4px 12px 4px 4px', borderRadius: 20,
-                                        border: 'none', cursor: 'pointer',
-                                        background: filterMember === m.id
-                                            ? 'rgba(var(--accent-500-rgb), 0.15)'
-                                            : 'var(--bg-primary)',
-                                        color: filterMember === m.id
-                                            ? 'var(--accent-500)'
-                                            : 'var(--fg-tertiary)',
-                                        fontSize: 12, fontWeight: 600,
-                                        transition: 'all 0.2s',
-                                    }}
-                                >
-                                    <Avatar name={m.name} image={m.image} size="xs" />
-                                    {m.name?.split(' ')[0]}
-                                </button>
-                            ))}
-                        </div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
+            <div className="page-hero" style={{ paddingTop: 0 }}>
+                <div className="page-kicker">
+                    <Receipt size={14} />
+                    Receipt Gallery
+                </div>
+                <h1 className="page-hero-title" style={{ fontSize: 'clamp(2rem, 6vw, 2.9rem)' }}>
+                    Every receipt, beautifully organized
+                </h1>
+                <p className="page-hero-subtitle">
+                    Review captured bills, filter by member, and open any receipt in a clean full-screen preview tied to your group data.
+                </p>
+            </div>
 
-            {/* ── Content ── */}
+            <motion.div
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.35 }}
+            >
+                <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                    gap: 'var(--space-3)',
+                }}>
+                    <MetricPanel label="Captured receipts" value={String(filteredReceipts.length)} />
+                    <MetricPanel label="Visible total" value={formatCurrency(totalAmount)} accent="var(--accent-500)" />
+                </div>
+            </motion.div>
+
+            <motion.div
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.35, delay: 0.04 }}
+            >
+                <div style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    justifyContent: 'center',
+                    gap: 'var(--space-2)',
+                    padding: 'var(--space-3)',
+                    borderRadius: 'var(--radius-2xl)',
+                    background: 'linear-gradient(135deg, rgba(var(--accent-500-rgb), 0.05), var(--bg-glass))',
+                    border: '1px solid rgba(var(--accent-500-rgb), 0.08)',
+                }}>
+                    <FilterChip
+                        active={filterMember === 'all'}
+                        onClick={() => setFilterMember('all')}
+                        label="All"
+                    />
+                    {members.map((member) => (
+                        <FilterChip
+                            key={member.id}
+                            active={filterMember === member.id}
+                            onClick={() => setFilterMember(member.id)}
+                            label={member.name?.split(' ')[0] || 'Unknown'}
+                            image={member.image}
+                        />
+                    ))}
+                </div>
+            </motion.div>
+
             {loading ? (
                 <div style={{
-                    display: 'flex', flexDirection: 'column', alignItems: 'center',
-                    justifyContent: 'center', padding: 80, gap: 14,
-                    color: 'var(--fg-tertiary)',
+                    minHeight: 280,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 'var(--space-3)',
+                    textAlign: 'center',
                 }}>
-                    <Loader2 size={28} className="animate-spin" style={{ color: 'var(--accent-400)' }} />
-                    <span style={{ fontSize: 'var(--text-sm)', fontWeight: 500 }}>Loading receipts...</span>
+                    <Loader2 size={28} className="animate-spin" style={{ color: 'var(--accent-500)' }} />
+                    <div className="font-display" style={{ fontSize: 'var(--text-lg)', fontWeight: 700 }}>
+                        Loading your receipts...
+                    </div>
                 </div>
-            ) : filtered.length === 0 ? (
+            ) : filteredReceipts.length === 0 ? (
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     style={{
-                        display: 'flex', flexDirection: 'column', alignItems: 'center',
-                        justifyContent: 'center', padding: '80px 24px', gap: 16,
+                        minHeight: 360,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
                         textAlign: 'center',
+                        gap: 'var(--space-3)',
+                        padding: 'var(--space-8)',
+                        borderRadius: 'var(--radius-3xl)',
+                        background: 'linear-gradient(180deg, rgba(var(--accent-500-rgb), 0.05), transparent)',
+                        border: '1px solid rgba(var(--accent-500-rgb), 0.08)',
                     }}
                 >
                     <div style={{
-                        width: 72, height: 72, borderRadius: 20,
-                        background: 'linear-gradient(135deg, rgba(var(--accent-500-rgb), 0.1), rgba(var(--accent-500-rgb), 0.05))',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        border: '1px solid rgba(var(--accent-500-rgb), 0.1)',
+                        width: 88,
+                        height: 88,
+                        borderRadius: 'var(--radius-3xl)',
+                        background: 'rgba(var(--accent-500-rgb), 0.08)',
+                        border: '1px solid rgba(var(--accent-500-rgb), 0.12)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
                     }}>
-                        <ImageIcon size={32} style={{ color: 'var(--accent-400)' }} />
+                        <ImageIcon size={38} style={{ color: 'var(--accent-500)' }} />
                     </div>
-                    <div>
-                        <p style={{
-                            fontSize: 'var(--text-base)', fontWeight: 700,
-                            color: 'var(--fg-primary)', margin: '0 0 4px',
-                        }}>
-                            No receipts yet
-                        </p>
-                        <p style={{
-                            fontSize: 'var(--text-sm)', color: 'var(--fg-tertiary)',
-                            maxWidth: 280, margin: '0 auto', lineHeight: 1.5,
-                        }}>
-                            Scan receipts when adding expenses to build your group&apos;s receipt gallery
-                        </p>
+                    <div className="font-display" style={{ fontSize: 'var(--text-2xl)', fontWeight: 800, color: 'var(--fg-primary)' }}>
+                        No receipts yet
                     </div>
+                    <p className="page-hero-subtitle" style={{ maxWidth: 340 }}>
+                        Scan receipts while adding expenses and SplitX will turn this page into a polished gallery for your group.
+                    </p>
                 </motion.div>
             ) : (
-                /* ── Receipts grouped by date ── */
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-                    {Object.entries(groupedByDate).map(([dateLabel, dateReceipts]) => (
-                        <div key={dateLabel}>
-                            {/* Date header */}
-                            <div style={{
-                                display: 'flex', alignItems: 'center', gap: 8,
-                                marginBottom: 10, padding: '0 2px',
-                            }}>
-                                <Calendar size={13} style={{ color: 'var(--fg-muted)' }} />
-                                <span style={{
-                                    fontSize: 12, fontWeight: 700, color: 'var(--fg-tertiary)',
-                                    letterSpacing: '0.02em', textTransform: 'uppercase',
-                                }}>
-                                    {dateLabel}
-                                </span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+                    {Object.entries(groupedByDate).map(([dateLabel, dateReceipts], groupIndex) => (
+                        <motion.section
+                            key={dateLabel}
+                            initial={{ opacity: 0, y: 16 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.3, delay: groupIndex * 0.04 }}
+                            style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}
+                        >
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+                                <div style={{ flex: 1, height: 1, background: 'rgba(var(--accent-500-rgb), 0.08)' }} />
                                 <div style={{
-                                    flex: 1, height: 1,
-                                    background: 'var(--border-subtle)',
-                                }} />
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 8,
+                                    padding: '8px 14px',
+                                    borderRadius: 'var(--radius-full)',
+                                    background: 'rgba(var(--accent-500-rgb), 0.06)',
+                                    border: '1px solid rgba(var(--accent-500-rgb), 0.08)',
+                                    color: 'var(--fg-secondary)',
+                                    fontSize: 'var(--text-xs)',
+                                    fontWeight: 700,
+                                    textTransform: 'uppercase',
+                                    letterSpacing: '0.06em',
+                                }}>
+                                    <Calendar size={12} />
+                                    {dateLabel}
+                                </div>
+                                <div style={{ flex: 1, height: 1, background: 'rgba(var(--accent-500-rgb), 0.08)' }} />
                             </div>
 
-                            {/* Receipt cards for this date */}
-                            <div style={{
-                                display: 'flex', flexDirection: 'column', gap: 10,
-                            }}>
-                                {dateReceipts.map((receipt, idx) => (
-                                    <motion.div
+                            <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
+                                {dateReceipts.map((receipt, index) => (
+                                    <motion.button
                                         key={receipt.id}
                                         initial={{ opacity: 0, y: 12 }}
                                         animate={{ opacity: 1, y: 0 }}
-                                        transition={{ delay: idx * 0.03, duration: 0.25 }}
+                                        transition={{ duration: 0.25, delay: index * 0.03 }}
                                         onClick={() => setSelectedReceipt(receipt)}
-                                        whileTap={{ scale: 0.98 }}
+                                        whileTap={{ scale: 0.985 }}
                                         style={{
-                                            display: 'flex', gap: 12,
-                                            padding: 10,
-                                            borderRadius: 16,
-                                            background: 'var(--bg-secondary)',
-                                            border: '1px solid var(--border-subtle)',
-                                            cursor: 'pointer',
-                                            transition: 'all 0.2s ease',
+                                            width: '100%',
+                                            display: 'grid',
+                                            gridTemplateColumns: '92px 1fr auto',
+                                            gap: 'var(--space-3)',
                                             alignItems: 'center',
+                                            padding: 'var(--space-3)',
+                                            borderRadius: 'var(--radius-3xl)',
+                                            background: 'var(--bg-glass)',
+                                            border: '1px solid var(--border-glass)',
+                                            boxShadow: 'var(--shadow-card)',
+                                            textAlign: 'left',
+                                            cursor: 'pointer',
                                         }}
                                     >
-                                        {/* Receipt thumbnail */}
                                         <div style={{
-                                            width: 64, height: 80,
-                                            borderRadius: 10,
+                                            height: 116,
+                                            borderRadius: 'var(--radius-2xl)',
                                             overflow: 'hidden',
-                                            flexShrink: 0,
+                                            background: 'var(--bg-secondary)',
+                                            border: '1px solid rgba(var(--accent-500-rgb), 0.08)',
                                             position: 'relative',
-                                            background: 'var(--bg-primary)',
-                                            border: '1px solid var(--border-subtle)',
                                         }}>
                                             {/* eslint-disable-next-line @next/next/no-img-element */}
                                             <img
                                                 src={receipt.receiptUrl}
                                                 alt={receipt.title}
-                                                style={{
-                                                    width: '100%', height: '100%',
-                                                    objectFit: 'cover',
-                                                }}
+                                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                                                 loading="lazy"
                                             />
-                                            {/* Zoom hint */}
                                             <div style={{
-                                                position: 'absolute', inset: 0,
-                                                background: 'rgba(0,0,0,0.15)',
-                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                opacity: 0, transition: 'opacity 0.2s',
+                                                position: 'absolute',
+                                                right: 8,
+                                                bottom: 8,
+                                                width: 30,
+                                                height: 30,
+                                                borderRadius: '50%',
+                                                background: 'rgba(255,255,255,0.85)',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                color: 'var(--accent-500)',
                                             }}>
-                                                <ZoomIn size={16} style={{ color: 'white' }} />
+                                                <ZoomIn size={14} />
                                             </div>
                                         </div>
 
-                                        {/* Receipt details */}
-                                        <div style={{ flex: 1, minWidth: 0 }}>
-                                            <p style={{
-                                                margin: 0, fontSize: 14, fontWeight: 600,
+                                        <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                                            <div className="font-display" style={{
+                                                fontSize: 'var(--text-xl)',
+                                                fontWeight: 800,
                                                 color: 'var(--fg-primary)',
-                                                overflow: 'hidden', textOverflow: 'ellipsis',
+                                                overflow: 'hidden',
+                                                textOverflow: 'ellipsis',
                                                 whiteSpace: 'nowrap',
                                             }}>
                                                 {receipt.title}
-                                            </p>
-
-                                            <div style={{
-                                                display: 'flex', alignItems: 'center', gap: 6,
-                                                marginTop: 4,
-                                            }}>
-                                                <span style={{
-                                                    fontSize: 11, color: 'var(--fg-tertiary)',
-                                                    display: 'flex', alignItems: 'center', gap: 3,
-                                                }}>
-                                                    {CAT_EMOJI[receipt.category] || '📦'} {receipt.category}
-                                                </span>
-                                                <span style={{ color: 'var(--border-subtle)' }}>·</span>
-                                                <span style={{
-                                                    fontSize: 11, color: 'var(--fg-muted)',
-                                                }}>
-                                                    {timeAgo(receipt.date)}
-                                                </span>
                                             </div>
 
-                                            <div style={{
-                                                display: 'flex', alignItems: 'center', gap: 5,
-                                                marginTop: 6,
-                                            }}>
+                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                                                <InfoPill label={CAT_EMOJI[receipt.category] || 'General'} />
+                                                <InfoPill label={timeAgo(receipt.date)} />
+                                            </div>
+
+                                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: 'var(--fg-secondary)', fontSize: 'var(--text-sm)' }}>
                                                 <Avatar name={receipt.payer.name || 'U'} image={receipt.payer.image} size="xs" />
-                                                <span style={{
-                                                    fontSize: 11, color: 'var(--fg-tertiary)',
-                                                    fontWeight: 500,
-                                                }}>
-                                                    {receipt.payer.name?.split(' ')[0] || 'Unknown'}
-                                                </span>
+                                                <span>Paid by {receipt.payer.name?.split(' ')[0] || 'Unknown'}</span>
                                             </div>
                                         </div>
 
-                                        {/* Amount */}
-                                        <div style={{
-                                            textAlign: 'right', flexShrink: 0,
-                                        }}>
-                                            <span style={{
-                                                fontSize: 15, fontWeight: 800,
+                                        <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10 }}>
+                                            <div className="font-display" style={{
+                                                fontSize: 'var(--text-2xl)',
+                                                fontWeight: 800,
                                                 color: 'var(--accent-500)',
+                                                lineHeight: 1,
                                             }}>
                                                 {formatCurrency(receipt.amount)}
-                                            </span>
+                                            </div>
+                                            <div style={{
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: 6,
+                                                fontSize: 'var(--text-xs)',
+                                                color: 'var(--fg-tertiary)',
+                                                fontWeight: 700,
+                                                textTransform: 'uppercase',
+                                                letterSpacing: '0.06em',
+                                            }}>
+                                                Open
+                                            </div>
                                         </div>
-                                    </motion.div>
+                                    </motion.button>
                                 ))}
                             </div>
-                        </div>
+                        </motion.section>
                     ))}
-
-                    {/* Summary footer */}
-                    <div style={{
-                        textAlign: 'center', padding: '16px 0 8px',
-                        color: 'var(--fg-muted)', fontSize: 12, fontWeight: 500,
-                    }}>
-                        {filtered.length} receipt{filtered.length !== 1 ? 's' : ''} ·{' '}
-                        Total: {formatCurrency(filtered.reduce((s, r) => s + r.amount, 0))}
-                    </div>
                 </div>
             )}
 
-            {/* ── Full-size Receipt Lightbox (Portal for correct z-index) ── */}
             {typeof document !== 'undefined' && createPortal(
                 <AnimatePresence>
                     {selectedReceipt && (
@@ -406,110 +378,194 @@ export default function ReceiptGalleryPage() {
                             exit={{ opacity: 0 }}
                             onClick={() => setSelectedReceipt(null)}
                             style={{
-                                position: 'fixed', inset: 0, zIndex: 9999,
-                                background: 'rgba(0,0,0,0.9)',
+                                position: 'fixed',
+                                inset: 0,
+                                zIndex: 9999,
+                                background: 'rgba(10, 10, 18, 0.88)',
                                 backdropFilter: 'blur(16px)',
                                 WebkitBackdropFilter: 'blur(16px)',
-                                display: 'flex', flexDirection: 'column',
-                                alignItems: 'center', justifyContent: 'center',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
                                 padding: 20,
                             }}
                         >
-                            {/* Close button */}
-                            <button
-                                onClick={() => setSelectedReceipt(null)}
-                                style={{
-                                    position: 'absolute', top: 20, right: 20,
-                                    width: 40, height: 40, borderRadius: '50%',
-                                    background: 'rgba(255,255,255,0.1)',
-                                    border: '1px solid rgba(255,255,255,0.1)',
-                                    cursor: 'pointer',
-                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                    color: 'white', zIndex: 10,
-                                    transition: 'background 0.2s',
-                                }}
-                            >
-                                <X size={18} />
-                            </button>
-
-                            {/* Receipt image */}
-                            <motion.img
-                                initial={{ scale: 0.85, opacity: 0 }}
-                                animate={{ scale: 1, opacity: 1 }}
-                                exit={{ scale: 0.85, opacity: 0 }}
-                                transition={{ type: 'spring', damping: 20, stiffness: 250 }}
-                                src={selectedReceipt.receiptUrl}
-                                alt={selectedReceipt.title}
-                                onClick={(e) => e.stopPropagation()}
-                                style={{
-                                    maxWidth: 'min(90vw, 480px)',
-                                    maxHeight: '65vh',
-                                    borderRadius: 16,
-                                    boxShadow: '0 24px 80px rgba(0,0,0,0.6)',
-                                    objectFit: 'contain',
-                                }}
-                            />
-
-                            {/* Info card */}
                             <motion.div
-                                initial={{ y: 20, opacity: 0 }}
-                                animate={{ y: 0, opacity: 1 }}
-                                transition={{ delay: 0.1 }}
-                                onClick={(e) => e.stopPropagation()}
+                                initial={{ opacity: 0, scale: 0.92, y: 20 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.92, y: 20 }}
+                                transition={{ type: 'spring', damping: 24, stiffness: 260 }}
+                                onClick={(event) => event.stopPropagation()}
                                 style={{
-                                    marginTop: 16, padding: '14px 24px',
-                                    borderRadius: 16,
-                                    background: 'rgba(255,255,255,0.08)',
-                                    backdropFilter: 'blur(24px)',
-                                    border: '1px solid rgba(255,255,255,0.1)',
-                                    display: 'flex', alignItems: 'center', gap: 16,
-                                    color: 'white',
-                                    maxWidth: 'min(90vw, 480px)', width: '100%',
+                                    width: 'min(92vw, 760px)',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: 'var(--space-3)',
                                 }}
                             >
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                    <p style={{
-                                        margin: 0, fontSize: 15, fontWeight: 700,
-                                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                                    }}>
-                                        {selectedReceipt.title}
-                                    </p>
-                                    <div style={{
-                                        display: 'flex', alignItems: 'center', gap: 8,
-                                        marginTop: 4, fontSize: 12, opacity: 0.7,
-                                        flexWrap: 'wrap',
-                                    }}>
-                                        <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                                            <Calendar size={11} />
-                                            {new Date(selectedReceipt.date).toLocaleDateString('en-IN', {
-                                                day: 'numeric', month: 'short', year: 'numeric',
-                                            })}
-                                        </span>
-                                        <span>·</span>
-                                        <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                                            <User size={11} />
-                                            {selectedReceipt.payer.name}
-                                        </span>
-                                        <span>·</span>
-                                        <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                                            <Tag size={11} />
-                                            {selectedReceipt.category}
-                                        </span>
-                                    </div>
+                                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                                    <button
+                                        onClick={() => setSelectedReceipt(null)}
+                                        style={{
+                                            width: 42,
+                                            height: 42,
+                                            borderRadius: '50%',
+                                            background: 'rgba(255,255,255,0.12)',
+                                            border: '1px solid rgba(255,255,255,0.14)',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            color: '#fff',
+                                            cursor: 'pointer',
+                                        }}
+                                    >
+                                        <X size={18} />
+                                    </button>
                                 </div>
+
                                 <div style={{
-                                    fontSize: 20, fontWeight: 800,
-                                    color: 'var(--accent-400)',
-                                    flexShrink: 0,
+                                    borderRadius: 'var(--radius-3xl)',
+                                    overflow: 'hidden',
+                                    background: '#fff',
+                                    boxShadow: '0 30px 80px rgba(0,0,0,0.4)',
                                 }}>
-                                    {formatCurrency(selectedReceipt.amount)}
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img
+                                        src={selectedReceipt.receiptUrl}
+                                        alt={selectedReceipt.title}
+                                        style={{
+                                            width: '100%',
+                                            maxHeight: '62vh',
+                                            objectFit: 'contain',
+                                            background: '#fff',
+                                        }}
+                                    />
+                                </div>
+
+                                <div style={{
+                                    padding: '18px 22px',
+                                    borderRadius: 'var(--radius-3xl)',
+                                    background: 'rgba(255,255,255,0.1)',
+                                    border: '1px solid rgba(255,255,255,0.14)',
+                                    color: '#fff',
+                                    backdropFilter: 'blur(22px)',
+                                    WebkitBackdropFilter: 'blur(22px)',
+                                    display: 'grid',
+                                    gap: 'var(--space-2)',
+                                }}>
+                                    <div className="font-display" style={{ fontSize: 'var(--text-2xl)', fontWeight: 800 }}>
+                                        {selectedReceipt.title}
+                                    </div>
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 10, fontSize: 'var(--text-sm)' }}>
+                                        <OverlayMeta icon={<Calendar size={13} />} text={new Date(selectedReceipt.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} />
+                                        <OverlayMeta icon={<User size={13} />} text={selectedReceipt.payer.name || 'Unknown'} />
+                                        <OverlayMeta icon={<Tag size={13} />} text={selectedReceipt.category} />
+                                    </div>
+                                    <div className="font-display" style={{ fontSize: 'var(--text-2xl)', fontWeight: 800, color: '#fda4af', textAlign: 'center' }}>
+                                        {formatCurrency(selectedReceipt.amount)}
+                                    </div>
                                 </div>
                             </motion.div>
                         </motion.div>
                     )}
                 </AnimatePresence>,
-                document.body
+                document.body,
             )}
         </div>
+    );
+}
+
+function MetricPanel({
+    label,
+    value,
+    accent,
+}: {
+    label: string;
+    value: string;
+    accent?: string;
+}) {
+    return (
+        <div style={{
+            padding: '18px 16px',
+            borderRadius: 'var(--radius-2xl)',
+            background: 'var(--bg-glass)',
+            border: '1px solid var(--border-glass)',
+            textAlign: 'center',
+        }}>
+            <div style={{ fontSize: '11px', color: 'var(--fg-tertiary)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+                {label}
+            </div>
+            <div className="font-display" style={{ fontSize: 'var(--text-2xl)', fontWeight: 800, color: accent || 'var(--fg-primary)' }}>
+                {value}
+            </div>
+        </div>
+    );
+}
+
+function FilterChip({
+    active,
+    onClick,
+    label,
+    image,
+}: {
+    active: boolean;
+    onClick: () => void;
+    label: string;
+    image?: string | null;
+}) {
+    return (
+        <button
+            onClick={onClick}
+            style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: image ? '6px 14px 6px 6px' : '8px 14px',
+                borderRadius: 'var(--radius-full)',
+                border: `1px solid ${active ? 'rgba(var(--accent-500-rgb), 0.24)' : 'var(--border-glass)'}`,
+                background: active ? 'rgba(var(--accent-500-rgb), 0.12)' : 'var(--bg-glass)',
+                color: active ? 'var(--accent-500)' : 'var(--fg-secondary)',
+                fontSize: 'var(--text-sm)',
+                fontWeight: 700,
+                cursor: 'pointer',
+            }}
+        >
+            {image && <Avatar name={label} image={image} size="xs" />}
+            <span>{label}</span>
+        </button>
+    );
+}
+
+function InfoPill({ label }: { label: string }) {
+    return (
+        <span style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '6px 10px',
+            borderRadius: 'var(--radius-full)',
+            background: 'rgba(var(--accent-500-rgb), 0.06)',
+            border: '1px solid rgba(var(--accent-500-rgb), 0.08)',
+            fontSize: 'var(--text-xs)',
+            color: 'var(--fg-tertiary)',
+            fontWeight: 700,
+        }}>
+            {label}
+        </span>
+    );
+}
+
+function OverlayMeta({
+    icon,
+    text,
+}: {
+    icon: ReactNode;
+    text: string;
+}) {
+    return (
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, opacity: 0.85 }}>
+            {icon}
+            {text}
+        </span>
     );
 }
