@@ -37,8 +37,8 @@ interface LayoutBounds {
 
 function getLayoutBounds(compact: boolean): LayoutBounds {
     return compact
-        ? { top: 62, right: 46, bottom: 62, left: 46 }
-        : { top: 74, right: 58, bottom: 70, left: 58 };
+        ? { top: 44, right: 42, bottom: 56, left: 42 }
+        : { top: 52, right: 54, bottom: 62, left: 54 };
 }
 
 function clamp(value: number, min: number, max: number) {
@@ -50,7 +50,7 @@ function initNodes(members: string[], w: number, h: number, bounds: LayoutBounds
     const usableH = Math.max(120, h - bounds.top - bounds.bottom);
     const cx = bounds.left + usableW / 2;
     const cy = bounds.top + usableH / 2;
-    const r = Math.min(usableW, usableH) * (members.length <= 3 ? 0.28 : 0.36);
+    const r = Math.min(usableW, usableH) * (members.length <= 3 ? 0.24 : 0.3);
 
     return members.map((name, i) => {
         const angle = (2 * Math.PI * i) / Math.max(members.length, 1) - Math.PI / 2;
@@ -327,19 +327,18 @@ export default function SettlementGraph({
     const markerId = `arrow-${instanceId}`;
     const lineGlowId = `line-glow-${instanceId}`;
     const pillGlowId = `pill-glow-${instanceId}`;
+    const summaryHeight = compact ? 58 : 66;
 
     return (
         <div
-            ref={containerRef}
-            onPointerDown={(e) => e.stopPropagation()}
             style={{
                 width: '100%',
-                height: size.h,
+                height: size.h + summaryHeight,
                 position: 'relative',
                 overflow: 'hidden',
                 borderRadius: 'calc(var(--radius-2xl) + 6px)',
-                touchAction: 'none',
                 border: '1px solid rgba(var(--accent-500-rgb), 0.1)',
+                touchAction: 'pan-y',
                 background: `
                     radial-gradient(circle at 20% 16%, rgba(var(--accent-500-rgb), 0.1), transparent 26%),
                     radial-gradient(circle at 78% 18%, rgba(244, 114, 182, 0.05), transparent 20%),
@@ -534,11 +533,11 @@ export default function SettlementGraph({
             <div
                 style={{
                     position: 'absolute',
-                    top: 0,
-                    left: '16%',
-                    right: '16%',
+                    top: summaryHeight - 1,
+                    left: '12%',
+                    right: '12%',
                     height: 1,
-                    background: 'linear-gradient(90deg, transparent, rgba(var(--accent-500-rgb), 0.32), transparent)',
+                    background: 'linear-gradient(90deg, transparent, rgba(var(--accent-500-rgb), 0.2), transparent)',
                     pointerEvents: 'none',
                 }}
             />
@@ -546,7 +545,9 @@ export default function SettlementGraph({
             <div
                 style={{
                     position: 'absolute',
-                    inset: 16,
+                    top: 14,
+                    left: 16,
+                    right: 16,
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
@@ -570,21 +571,33 @@ export default function SettlementGraph({
                 </div>
             </div>
 
-            <svg
-                width={size.w}
-                height={size.h}
-                style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none' }}
+            <div
+                ref={containerRef}
+                style={{
+                    position: 'absolute',
+                    top: summaryHeight,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    touchAction: 'pan-y',
+                }}
             >
+
+                <svg
+                    width={size.w}
+                    height={size.h}
+                    style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none' }}
+                >
                 <defs>
                     <marker
                         id={markerId}
-                        markerWidth="14"
-                        markerHeight="12"
-                        refX="10"
-                        refY="6"
+                        markerWidth="11"
+                        markerHeight="9"
+                        refX="8"
+                        refY="4.5"
                         orient="auto"
                     >
-                        <path d="M0,0 L12,6 L0,12 Z" fill="rgba(var(--accent-500-rgb), 0.8)" />
+                        <path d="M0,0 L9,4.5 L0,9 Z" fill="rgba(var(--accent-500-rgb), 0.76)" />
                     </marker>
                     <filter id={lineGlowId}>
                         <feGaussianBlur stdDeviation="4" result="blur" />
@@ -725,149 +738,151 @@ export default function SettlementGraph({
                         </g>
                     );
                 })}
-            </svg>
+                </svg>
 
-            {nodes.map((node, index) => {
-                const color = getAvatarColor(node.name);
-                const initials = node.name
-                    .split(' ')
-                    .map((word) => word[0])
-                    .join('')
-                    .toUpperCase()
-                    .slice(0, 2);
-                const image = memberImages[node.name] || null;
-                const firstName = node.name.split(' ')[0];
-                const isDragging = dragIdx === index;
+                {nodes.map((node, index) => {
+                    const color = getAvatarColor(node.name);
+                    const initials = node.name
+                        .split(' ')
+                        .map((word) => word[0])
+                        .join('')
+                        .toUpperCase()
+                        .slice(0, 2);
+                    const image = memberImages[node.name] || null;
+                    const firstName = node.name.split(' ')[0];
+                    const isDragging = dragIdx === index;
 
-                return (
-                    <div
-                        key={`node-${node.name}`}
-                        onPointerDown={(e) => handlePointerDown(index, e)}
-                        onPointerMove={(e) => handlePointerMove(index, e)}
-                        onPointerUp={(e) => handlePointerUp(index, e)}
-                        style={{
-                            position: 'absolute',
-                            top: 0,
-                            left: 0,
-                            width: 68,
-                            height: 68,
-                            transform: `translate(${node.x - 34}px, ${node.y - 34}px) scale(${isDragging ? 1.1 : 1})`,
-                            transition: isDragging ? 'transform 0s' : 'transform 120ms var(--ease-out)',
-                            cursor: isDragging ? 'grabbing' : 'grab',
-                            zIndex: isDragging ? 40 : 12,
-                            touchAction: 'none',
-                            userSelect: 'none',
-                        }}
-                    >
+                    return (
                         <div
-                            className="settlement-node-aura"
+                            key={`node-${node.name}`}
+                            onPointerDown={(e) => handlePointerDown(index, e)}
+                            onPointerMove={(e) => handlePointerMove(index, e)}
+                            onPointerUp={(e) => handlePointerUp(index, e)}
                             style={{
                                 position: 'absolute',
-                                inset: -12,
-                                borderRadius: '50%',
-                                background: `radial-gradient(circle, ${color}30 0%, ${color}0 74%)`,
-                                opacity: isDragging ? 0.95 : 0.8,
-                                pointerEvents: 'none',
-                            }}
-                        />
-
-                        <div
-                            className="settlement-node-shell"
-                            style={{
-                                position: 'absolute',
-                                inset: -4,
-                                borderRadius: '50%',
-                                border: '1px solid rgba(var(--accent-500-rgb), 0.12)',
-                                background: 'linear-gradient(180deg, rgba(255,255,255,0.28), transparent)',
-                                pointerEvents: 'none',
-                            }}
-                        />
-
-                        <div
-                            style={{
-                                position: 'relative',
                                 width: 68,
                                 height: 68,
-                                borderRadius: '50%',
-                                overflow: 'hidden',
-                                border: '3px solid rgba(255,255,255,0.9)',
-                                boxShadow: isDragging
-                                    ? '0 20px 40px rgba(15, 23, 42, 0.22), 0 0 0 5px rgba(var(--accent-500-rgb), 0.16)'
-                                    : '0 14px 30px rgba(15, 23, 42, 0.18), 0 0 0 1px rgba(var(--accent-500-rgb), 0.08)',
-                                background: image ? 'var(--bg-secondary)' : color,
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
+                                top: 0,
+                                left: 0,
+                                transform: `translate(${node.x - 34}px, ${node.y - 34}px) scale(${isDragging ? 1.1 : 1})`,
+                                transition: isDragging ? 'transform 0s' : 'transform 120ms var(--ease-out)',
+                                cursor: isDragging ? 'grabbing' : 'grab',
+                                zIndex: isDragging ? 40 : 12,
+                                touchAction: 'none',
+                                userSelect: 'none',
                             }}
                         >
-                            {image ? (
-                                <Image
-                                    src={image}
-                                    alt={node.name}
-                                    width={68}
-                                    height={68}
-                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                    draggable={false}
-                                />
-                            ) : (
-                                <span
-                                    style={{
-                                        fontSize: 18,
-                                        fontWeight: 800,
-                                        color: 'white',
-                                        letterSpacing: '0.04em',
-                                        userSelect: 'none',
-                                    }}
-                                >
-                                    {initials}
-                                </span>
-                            )}
-                        </div>
-
-                        <div
-                            style={{
-                                position: 'absolute',
-                                left: '50%',
-                                bottom: -28,
-                                transform: 'translateX(-50%)',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: 6,
-                                maxWidth: 112,
-                                padding: '5px 11px',
-                                whiteSpace: 'nowrap',
-                                borderRadius: 999,
-                                background: 'linear-gradient(180deg, var(--bg-glass-strong), var(--bg-glass))',
-                                border: '1px solid rgba(var(--accent-500-rgb), 0.1)',
-                                boxShadow: '0 10px 18px rgba(15, 23, 42, 0.08)',
-                                pointerEvents: 'none',
-                            }}
-                        >
-                            <span
+                            <div
+                                className="settlement-node-aura"
                                 style={{
-                                    width: 8,
-                                    height: 8,
+                                    position: 'absolute',
+                                    inset: -12,
                                     borderRadius: '50%',
-                                    background: color,
-                                    boxShadow: `0 0 10px ${color}66`,
-                                    flexShrink: 0,
+                                    background: `radial-gradient(circle, ${color}30 0%, ${color}0 74%)`,
+                                    opacity: isDragging ? 0.95 : 0.8,
+                                    pointerEvents: 'none',
                                 }}
                             />
-                            <span
+
+                            <div
+                                className="settlement-node-shell"
                                 style={{
+                                    position: 'absolute',
+                                    inset: -4,
+                                    borderRadius: '50%',
+                                    border: '1px solid rgba(var(--accent-500-rgb), 0.12)',
+                                    background: 'linear-gradient(180deg, rgba(255,255,255,0.28), transparent)',
+                                    pointerEvents: 'none',
+                                }}
+                            />
+
+                            <div
+                                style={{
+                                    position: 'relative',
+                                    width: 68,
+                                    height: 68,
+                                    borderRadius: '50%',
                                     overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                    fontSize: 10.5,
-                                    fontWeight: 700,
-                                    color: 'var(--fg-primary)',
+                                    border: '3px solid rgba(255,255,255,0.9)',
+                                    boxShadow: isDragging
+                                        ? '0 20px 40px rgba(15, 23, 42, 0.22), 0 0 0 5px rgba(var(--accent-500-rgb), 0.16)'
+                                        : '0 14px 30px rgba(15, 23, 42, 0.18), 0 0 0 1px rgba(var(--accent-500-rgb), 0.08)',
+                                    background: image ? 'var(--bg-secondary)' : color,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
                                 }}
                             >
-                                {firstName}
-                            </span>
+                                {image ? (
+                                    <Image
+                                        src={image}
+                                        alt={node.name}
+                                        width={68}
+                                        height={68}
+                                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                        draggable={false}
+                                    />
+                                ) : (
+                                    <span
+                                        style={{
+                                            fontSize: 18,
+                                            fontWeight: 800,
+                                            color: 'white',
+                                            letterSpacing: '0.04em',
+                                            userSelect: 'none',
+                                        }}
+                                    >
+                                        {initials}
+                                    </span>
+                                )}
+                            </div>
+
+                            <div
+                                style={{
+                                    position: 'absolute',
+                                    left: '50%',
+                                    bottom: -28,
+                                    transform: 'translateX(-50%)',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 6,
+                                    maxWidth: 112,
+                                    padding: '5px 11px',
+                                    whiteSpace: 'nowrap',
+                                    borderRadius: 999,
+                                    background: 'linear-gradient(180deg, var(--bg-glass-strong), var(--bg-glass))',
+                                    border: '1px solid rgba(var(--accent-500-rgb), 0.1)',
+                                    boxShadow: '0 10px 18px rgba(15, 23, 42, 0.08)',
+                                    pointerEvents: 'none',
+                                }}
+                            >
+                                <span
+                                    style={{
+                                        width: 8,
+                                        height: 8,
+                                        borderRadius: '50%',
+                                        background: color,
+                                        boxShadow: `0 0 10px ${color}66`,
+                                        flexShrink: 0,
+                                    }}
+                                >
+                                </span>
+                                <span
+                                    style={{
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        fontSize: 10.5,
+                                        fontWeight: 700,
+                                        color: 'var(--fg-primary)',
+                                    }}
+                                >
+                                    {firstName}
+                                </span>
+                            </div>
                         </div>
-                    </div>
-                );
-            })}
+                    );
+                })}
+            </div>
         </div>
     );
 }
