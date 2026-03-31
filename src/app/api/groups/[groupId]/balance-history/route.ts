@@ -4,6 +4,8 @@ import { auth } from '@/lib/auth';
 import { isFeatureEnabled } from '@/lib/featureFlags';
 import {
     buildBalanceHistory,
+    BalanceHistoryDateRange,
+    BalanceHistoryFilterKey,
     FinanceMember,
     FinanceSettlementSnapshot,
     FinanceTransactionSnapshot,
@@ -29,6 +31,10 @@ export async function GET(
         const { searchParams } = new URL(req.url);
         const requestedUserId = searchParams.get('userId');
         const limit = Math.min(Math.max(parseInt(searchParams.get('limit') || '120', 10) || 120, 1), 250);
+        const beforeCreatedAt = searchParams.get('beforeCreatedAt');
+        const beforeId = searchParams.get('beforeId');
+        const filterKey = parseFilterKey(searchParams.get('filterKey'));
+        const dateRange = parseDateRange(searchParams.get('dateRange'));
 
         const user = await prisma.user.findUnique({ where: { email: session.user.email } });
         if (!user) {
@@ -156,6 +162,10 @@ export async function GET(
             settlements: settlementSnapshots,
             auditLogs: scopedAuditLogs,
             limit,
+            beforeCreatedAt,
+            beforeId,
+            filterKey,
+            dateRange,
         });
 
         const currentBalances = computeGroupBalances({
@@ -182,9 +192,32 @@ export async function GET(
                 (settlement) => settlement.from === effectiveUserId || settlement.to === effectiveUserId
             ),
             entries: history.entries,
+            hasMore: history.hasMore,
+            nextCursor: history.nextCursor,
         });
     } catch (error) {
         console.error('Balance history error:', error);
         return NextResponse.json({ error: 'Failed to fetch balance history' }, { status: 500 });
+    }
+}
+
+function parseFilterKey(value: string | null): BalanceHistoryFilterKey {
+    switch (value) {
+        case 'expenses':
+        case 'settlements':
+        case 'edits':
+            return value;
+        default:
+            return 'all';
+    }
+}
+
+function parseDateRange(value: string | null): BalanceHistoryDateRange {
+    switch (value) {
+        case '7d':
+        case '30d':
+            return value;
+        default:
+            return 'all';
     }
 }

@@ -35,10 +35,18 @@ interface LayoutBounds {
     left: number;
 }
 
-function getLayoutBounds(compact: boolean): LayoutBounds {
-    return compact
-        ? { top: 48, right: 64, bottom: 84, left: 54 }
-        : { top: 56, right: 72, bottom: 92, left: 60 };
+function getLayoutBounds(compact: boolean, width: number): LayoutBounds {
+    const narrow = width <= 390;
+
+    if (compact) {
+        return narrow
+            ? { top: 56, right: 102, bottom: 142, left: 66 }
+            : { top: 52, right: 92, bottom: 126, left: 60 };
+    }
+
+    return narrow
+        ? { top: 64, right: 98, bottom: 122, left: 68 }
+        : { top: 60, right: 86, bottom: 110, left: 64 };
 }
 
 function clamp(value: number, min: number, max: number) {
@@ -181,7 +189,7 @@ export default function SettlementGraph({
     const dragIdxRef = useRef<number | null>(null);
     const iterRef = useRef(0);
 
-    const bounds = useMemo(() => getLayoutBounds(compact), [compact]);
+    const bounds = useMemo(() => getLayoutBounds(compact, size.w), [compact, size.w]);
 
     const edges = useMemo(
         () =>
@@ -203,8 +211,8 @@ export default function SettlementGraph({
         function onResize() {
             if (!containerRef.current) return;
             const width = containerRef.current.offsetWidth;
-            const compactHeight = clamp(width * 0.92, 360, 420);
-            const fullHeight = clamp(width * 0.98, 460, 560);
+            const compactHeight = clamp(width * 0.98, 392, 452);
+            const fullHeight = clamp(width * 1.02, 476, 580);
             setSize({ w: width, h: compact ? compactHeight : fullHeight });
         }
 
@@ -626,6 +634,8 @@ export default function SettlementGraph({
 
                     const tx = 0.25 * sx + 0.5 * cpx + 0.25 * ex;
                     const ty = 0.25 * sy + 0.5 * cpy + 0.25 * ey;
+                    const clampedTx = clamp(tx, bounds.left + 40, size.w - bounds.right - 40);
+                    const clampedTy = clamp(ty, bounds.top + 18, size.h - bounds.bottom - 18);
                     const gradientId = `edge-gradient-${instanceId}-${index}`;
                     const routePathId = `edge-route-${instanceId}-${index}`;
 
@@ -699,8 +709,8 @@ export default function SettlementGraph({
                                 style={{ animationDelay: `${0.24 + index * 0.14}s, ${1.2 + index * 0.14}s` }}
                             >
                                 <rect
-                                    x={tx - 34}
-                                    y={ty - 14}
+                                    x={clampedTx - 34}
+                                    y={clampedTy - 14}
                                     width={68}
                                     height={28}
                                     rx={14}
@@ -709,8 +719,8 @@ export default function SettlementGraph({
                                     strokeWidth={1}
                                 />
                                 <text
-                                    x={tx}
-                                    y={ty + 4}
+                                    x={clampedTx}
+                                    y={clampedTy + 4}
                                     textAnchor="middle"
                                     fontSize="12.5"
                                     fontWeight="800"

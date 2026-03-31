@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import useSWR from 'swr';
+import useSWRInfinite from 'swr/infinite';
 import {
     ArrowLeft,
     ChevronDown,
@@ -28,6 +28,28 @@ const fetcher = async (url: string) => {
 };
 
 type FilterKey = 'all' | 'expenses' | 'settlements' | 'edits';
+type DateRangeKey = 'all' | '7d' | '30d';
+
+interface BalanceHistoryCursor {
+    beforeCreatedAt: string;
+    beforeId: string;
+}
+
+interface BalanceHistoryEntry {
+    id: string;
+    eventType: 'expense' | 'settlement' | 'edit';
+    sourceId: string;
+    sourceLabel: string;
+    createdAt: string;
+    beforeBalance: number;
+    delta: number;
+    afterBalance: number;
+    counterparties: string[];
+    explanation: string;
+    filterKey: FilterKey;
+    beforeRouteSummary: string;
+    afterRouteSummary: string;
+}
 
 interface BalanceHistoryResponse {
     group: { id: string; name: string; emoji: string };
@@ -35,21 +57,9 @@ interface BalanceHistoryResponse {
     currentBalance: number;
     currentRouteSummary: string;
     changeCountThisWeek: number;
-    entries: {
-        id: string;
-        eventType: 'expense' | 'settlement' | 'edit';
-        sourceId: string;
-        sourceLabel: string;
-        createdAt: string;
-        beforeBalance: number;
-        delta: number;
-        afterBalance: number;
-        counterparties: string[];
-        explanation: string;
-        filterKey: FilterKey;
-        beforeRouteSummary: string;
-        afterRouteSummary: string;
-    }[];
+    hasMore: boolean;
+    nextCursor: BalanceHistoryCursor | null;
+    entries: BalanceHistoryEntry[];
 }
 
 const filterOptions: { key: FilterKey; label: string }[] = [
@@ -59,39 +69,83 @@ const filterOptions: { key: FilterKey; label: string }[] = [
     { key: 'edits', label: 'Edits' },
 ];
 
+const dateRanges: { key: DateRangeKey; label: string }[] = [
+    { key: 'all', label: 'All time' },
+    { key: '7d', label: 'Last 7 days' },
+    { key: '30d', label: 'Last 30 days' },
+];
+
+const INITIAL_HISTORY_LIMIT = 12;
+const OLDER_HISTORY_LIMIT = 25;
+
 export default function GroupJourneyPage() {
     const params = useParams();
     const router = useRouter();
     const groupId = params.groupId as string;
     const [activeFilter, setActiveFilter] = useState<FilterKey>('all');
-    const [dateRange, setDateRange] = useState<'all' | '7d' | '30d'>('all');
+    const [dateRange, setDateRange] = useState<DateRangeKey>('all');
     const [expandedEntryId, setExpandedEntryId] = useState<string | null>(null);
-    const [referenceTime] = useState(() => Date.now());
 
-    const { data, error, isLoading } = useSWR<BalanceHistoryResponse>(
-        isFeatureEnabled('balanceJourney') ? `/api/groups/${groupId}/balance-history?limit=120` : null,
-        fetcher
-    );
+    const getKey = (pageIndex: number, previousPageData: BalanceHistoryResponse | null) => {
+        if (!isFeatureEnabled('balanceJourney')) return null;
+        if (previousPageData && !previousPageData.hasMore) return null;
 
-    const filteredEntries = useMemo(() => {
-        if (!data) return [];
-        return data.entries.filter((entry) => {
-            const filterMatches = activeFilter === 'all' || entry.filterKey === activeFilter;
-            const age = referenceTime - new Date(entry.createdAt).getTime();
-            const dateMatches = dateRange === 'all'
-                || (dateRange === '7d' && age <= 7 * 24 * 60 * 60 * 1000)
-                || (dateRange === '30d' && age <= 30 * 24 * 60 * 60 * 1000);
-            return filterMatches && dateMatches;
+        const params = new URLSearchParams({
+            limit: String(pageIndex === 0 ? INITIAL_HISTORY_LIMIT : OLDER_HISTORY_LIMIT),
+            filterKey: activeFilter,
+            dateRange,
         });
-    }, [activeFilter, data, dateRange, referenceTime]);
+
+        if (pageIndex > 0 && previousPageData?.nextCursor) {
+            params.set('beforeCreatedAt', previousPageData.nextCursor.beforeCreatedAt);
+            params.set('beforeId', previousPageData.nextCursor.beforeId);
+        }
+
+        return `/api/groups/${groupId}/balance-history?${params.toString()}`;
+    };
+
+    const {
+        data,
+        error,
+        isLoading,
+        isValidating,
+        size,
+        setSize,
+    } = useSWRInfinite<BalanceHistoryResponse>(getKey, fetcher, {
+        revalidateFirstPage: false,
+        persistSize: false,
+    });
+
+    const pages = useMemo(() => data ?? [], [data]);
+    const firstPage = pages[0];
 
     const timelineEntries = useMemo(() => {
-        return [...filteredEntries].sort(
-            (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-        );
-    }, [filteredEntries]);
+        const seen = new Set<string>();
+        return pages.flatMap((page) => page.entries).filter((entry) => {
+            if (seen.has(entry.id)) return false;
+            seen.add(entry.id);
+            return true;
+        });
+    }, [pages]);
 
-    const activeExpandedEntryId = expandedEntryId || timelineEntries.at(-1)?.id || null;
+    const latestEntry = timelineEntries[0] || null;
+    const activeExpandedEntryId = expandedEntryId || latestEntry?.id || null;
+    const hasMore = pages.length > 0 ? pages[pages.length - 1].hasMore : false;
+    const isLoadingMore = isValidating && pages.length > 0 && pages.length === size - 1;
+
+    const handleFilterChange = (nextFilter: FilterKey) => {
+        if (nextFilter === activeFilter) return;
+        setExpandedEntryId(null);
+        setActiveFilter(nextFilter);
+        void setSize(1);
+    };
+
+    const handleDateRangeChange = (nextRange: DateRangeKey) => {
+        if (nextRange === dateRange) return;
+        setExpandedEntryId(null);
+        setDateRange(nextRange);
+        void setSize(1);
+    };
 
     if (!isFeatureEnabled('balanceJourney')) {
         return (
@@ -103,7 +157,7 @@ export default function GroupJourneyPage() {
         );
     }
 
-    if (isLoading) {
+    if (isLoading && !firstPage) {
         return (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
                 {[0, 1, 2].map((index) => (
@@ -115,7 +169,7 @@ export default function GroupJourneyPage() {
         );
     }
 
-    if (error || !data) {
+    if (error || !firstPage) {
         return (
             <Card padding="normal">
                 <div style={{ textAlign: 'center', padding: 'var(--space-8) var(--space-4)' }}>
@@ -151,14 +205,14 @@ export default function GroupJourneyPage() {
                 </button>
                 <div className="page-hero" style={{ flex: 1, paddingTop: 0 }}>
                     <div className="page-kicker" style={{ margin: '0 auto', width: 'fit-content' }}>
-                        <span style={{ fontSize: '18px', lineHeight: 1 }}>{data.group.emoji}</span>
-                        {data.group.name}
+                        <span style={{ fontSize: '18px', lineHeight: 1 }}>{firstPage.group.emoji}</span>
+                        {firstPage.group.name}
                     </div>
                     <h1 className="page-hero-title" style={{ fontSize: 'clamp(1.95rem, 6vw, 2.9rem)' }}>
                         Your Balance Journey
                     </h1>
                     <p className="page-hero-subtitle">
-                        A step-by-step view of how your own number changed in this group, with your before, change, and now values.
+                        Open on the newest change first, then load older steps only when you want the full story.
                     </p>
                 </div>
                 <div style={{ width: 40, flexShrink: 0 }} />
@@ -170,10 +224,10 @@ export default function GroupJourneyPage() {
                     <div className="font-display" style={{
                         fontSize: 'clamp(2rem, 8vw, 3rem)',
                         fontWeight: 800,
-                        color: data.currentBalance >= 0 ? 'var(--color-success)' : 'var(--color-error)',
+                        color: firstPage.currentBalance >= 0 ? 'var(--color-success)' : 'var(--color-error)',
                         lineHeight: 1,
                     }}>
-                        {data.currentBalance >= 0 ? '+' : '-'}{formatCurrency(Math.abs(data.currentBalance))}
+                        {firstPage.currentBalance >= 0 ? '+' : '-'}{formatCurrency(Math.abs(firstPage.currentBalance))}
                     </div>
                     <p style={{
                         fontSize: 'var(--text-sm)',
@@ -182,7 +236,7 @@ export default function GroupJourneyPage() {
                         maxWidth: 440,
                         margin: 0,
                     }}>
-                        {data.currentRouteSummary}
+                        {firstPage.currentRouteSummary}
                     </p>
                     <div style={{
                         display: 'inline-flex',
@@ -195,7 +249,7 @@ export default function GroupJourneyPage() {
                         border: '1px solid rgba(var(--accent-500-rgb), 0.12)',
                     }}>
                         <span className="font-display" style={{ fontSize: 'var(--text-xl)', fontWeight: 800, color: 'var(--accent-500)' }}>
-                            {data.changeCountThisWeek}
+                            {firstPage.changeCountThisWeek}
                         </span>
                         <span style={{ fontSize: 'var(--text-xs)', color: 'var(--fg-tertiary)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                             changes this week
@@ -208,13 +262,13 @@ export default function GroupJourneyPage() {
                                 variant="outline"
                                 leftIcon={<Download size={14} />}
                                 onClick={() => exportBalanceHistoryAsCSV({
-                                    groupName: data.group.name,
-                                    groupEmoji: data.group.emoji,
-                                    userName: data.user.name,
-                                    currentBalance: data.currentBalance,
-                                    routeSummary: data.currentRouteSummary,
+                                    groupName: firstPage.group.name,
+                                    groupEmoji: firstPage.group.emoji,
+                                    userName: firstPage.user.name,
+                                    currentBalance: firstPage.currentBalance,
+                                    routeSummary: firstPage.currentRouteSummary,
                                     exportDate: new Date(),
-                                    entries: data.entries.map((entry) => ({
+                                    entries: timelineEntries.map((entry) => ({
                                         date: entry.createdAt,
                                         eventType: entry.eventType,
                                         sourceLabel: entry.sourceLabel,
@@ -243,6 +297,42 @@ export default function GroupJourneyPage() {
                 </div>
             </Card>
 
+            {latestEntry && (
+                <Card padding="normal" glow>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-3)', textAlign: 'center' }}>
+                        <div className="page-kicker">Latest Change</div>
+                        <div className="font-display" style={{ fontSize: 'clamp(1.45rem, 5vw, 2rem)', fontWeight: 800, color: 'var(--fg-primary)' }}>
+                            {latestEntry.sourceLabel}
+                        </div>
+                        <p style={{
+                            margin: 0,
+                            maxWidth: 560,
+                            fontSize: 'var(--text-sm)',
+                            color: 'var(--fg-secondary)',
+                            lineHeight: 1.7,
+                        }}>
+                            {latestEntry.explanation}
+                        </p>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 'var(--space-2)', width: '100%' }}>
+                            <StepMetric label="Was at" value={latestEntry.beforeBalance} />
+                            <StepMetric label="Changed by" value={latestEntry.delta} accent={latestEntry.delta >= 0 ? 'var(--color-success)' : 'var(--color-error)'} />
+                            <StepMetric label="Now at" value={latestEntry.afterBalance} />
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+                            <Badge variant={latestEntry.eventType === 'settlement' ? 'accent' : latestEntry.eventType === 'edit' ? 'warning' : 'default'} size="sm">
+                                {latestEntry.eventType}
+                            </Badge>
+                            {latestEntry.beforeRouteSummary !== latestEntry.afterRouteSummary && (
+                                <Badge variant="info" size="sm">route changed</Badge>
+                            )}
+                            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--fg-tertiary)' }}>
+                                {formatDate(latestEntry.createdAt)}
+                            </span>
+                        </div>
+                    </div>
+                </Card>
+            )}
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', alignItems: 'center' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', overflowX: 'auto', paddingBottom: 2, justifyContent: 'center', width: '100%' }}>
                     <div style={{
@@ -264,7 +354,7 @@ export default function GroupJourneyPage() {
                     {filterOptions.map((option) => (
                         <button
                             key={option.key}
-                            onClick={() => setActiveFilter(option.key)}
+                            onClick={() => handleFilterChange(option.key)}
                             style={{
                                 border: 'none',
                                 cursor: 'pointer',
@@ -288,14 +378,10 @@ export default function GroupJourneyPage() {
                 </div>
 
                 <div style={{ display: 'flex', gap: 'var(--space-2)', overflowX: 'auto', paddingBottom: 2, justifyContent: 'center', width: '100%' }}>
-                    {[
-                        { key: 'all', label: 'All time' },
-                        { key: '7d', label: 'Last 7 days' },
-                        { key: '30d', label: 'Last 30 days' },
-                    ].map((range) => (
+                    {dateRanges.map((range) => (
                         <button
                             key={range.key}
-                            onClick={() => setDateRange(range.key as 'all' | '7d' | '30d')}
+                            onClick={() => handleDateRangeChange(range.key)}
                             style={{
                                 border: '1px solid var(--border-glass)',
                                 cursor: 'pointer',
@@ -327,23 +413,37 @@ export default function GroupJourneyPage() {
                         const routeChanged = entry.beforeRouteSummary !== entry.afterRouteSummary;
 
                         return (
-                            <div key={entry.id} style={{ display: 'grid', gridTemplateColumns: '40px 1fr', gap: 'var(--space-3)', alignItems: 'stretch' }}>
+                            <div key={entry.id} style={{ display: 'grid', gridTemplateColumns: '52px 1fr', gap: 'var(--space-3)', alignItems: 'stretch' }}>
                                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                                    <div style={{
-                                        width: 34,
-                                        height: 34,
-                                        borderRadius: 'var(--radius-full)',
-                                        background: 'linear-gradient(135deg, var(--accent-500), var(--accent-600))',
-                                        color: '#fff',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        fontSize: 'var(--text-xs)',
-                                        fontWeight: 800,
-                                        boxShadow: '0 8px 24px rgba(var(--accent-500-rgb), 0.18)',
-                                    }}>
-                                        {index + 1}
-                                    </div>
+                                    {index === 0 ? (
+                                        <div style={{
+                                            minWidth: 44,
+                                            height: 26,
+                                            borderRadius: 'var(--radius-full)',
+                                            background: 'linear-gradient(135deg, var(--accent-500), var(--accent-600))',
+                                            color: '#fff',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            padding: '0 10px',
+                                            fontSize: '10px',
+                                            fontWeight: 800,
+                                            textTransform: 'uppercase',
+                                            letterSpacing: '0.08em',
+                                            boxShadow: '0 8px 24px rgba(var(--accent-500-rgb), 0.22)',
+                                        }}>
+                                            Latest
+                                        </div>
+                                    ) : (
+                                        <div style={{
+                                            width: 18,
+                                            height: 18,
+                                            borderRadius: '50%',
+                                            background: 'rgba(var(--accent-500-rgb), 0.14)',
+                                            border: '4px solid rgba(var(--accent-500-rgb), 0.82)',
+                                            boxSizing: 'border-box',
+                                        }} />
+                                    )}
                                     {index < timelineEntries.length - 1 && (
                                         <div style={{
                                             flex: 1,
@@ -494,6 +594,18 @@ export default function GroupJourneyPage() {
                     })
                 )}
             </div>
+
+            {hasMore && (
+                <div style={{ display: 'flex', justifyContent: 'center' }}>
+                    <Button
+                        variant="outline"
+                        onClick={() => void setSize(size + 1)}
+                        disabled={isLoadingMore}
+                    >
+                        {isLoadingMore ? 'Loading older changes...' : 'Load older changes'}
+                    </Button>
+                </div>
+            )}
         </div>
     );
 }

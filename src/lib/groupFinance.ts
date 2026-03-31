@@ -73,6 +73,14 @@ export interface BalanceHistoryEntry {
     afterRouteSummary: string;
 }
 
+export interface BalanceHistoryCursor {
+    beforeCreatedAt: string;
+    beforeId: string;
+}
+
+export type BalanceHistoryFilterKey = BalanceHistoryEntry['filterKey'];
+export type BalanceHistoryDateRange = 'all' | '7d' | '30d';
+
 type BalanceDeltaMap = Record<string, number>;
 
 type TimelineEvent = {
@@ -262,6 +270,10 @@ export function buildBalanceHistory(params: {
         createdAt: Date;
     }[];
     limit: number;
+    beforeCreatedAt?: string | null;
+    beforeId?: string | null;
+    filterKey?: BalanceHistoryFilterKey;
+    dateRange?: BalanceHistoryDateRange;
 }) {
     const currentBalances = computeGroupBalances({
         memberIds: params.members.map((member) => member.id),
@@ -316,9 +328,19 @@ export function buildBalanceHistory(params: {
         });
     }
 
-    const limitedEntries = entries
-        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-        .slice(0, params.limit);
+    const filteredEntries = entries
+        .sort(compareBalanceHistoryEntriesDesc)
+        .filter((entry) => matchesHistoryFilters(entry, params.filterKey || 'all', params.dateRange || 'all'))
+        .filter((entry) => isBeforeHistoryCursor(entry, params.beforeCreatedAt || null, params.beforeId || null));
+
+    const limitedEntries = filteredEntries.slice(0, params.limit);
+    const hasMore = filteredEntries.length > params.limit;
+    const nextCursor = hasMore && limitedEntries.length > 0
+        ? {
+            beforeCreatedAt: limitedEntries[limitedEntries.length - 1].createdAt,
+            beforeId: limitedEntries[limitedEntries.length - 1].id,
+        } satisfies BalanceHistoryCursor
+        : null;
 
     return {
         currentBalance: currentBalances[params.userId] || 0,
@@ -328,7 +350,54 @@ export function buildBalanceHistory(params: {
             params.userId
         ),
         entries: limitedEntries,
+        hasMore,
+        nextCursor,
     };
+}
+
+function compareBalanceHistoryEntriesDesc(a: BalanceHistoryEntry, b: BalanceHistoryEntry) {
+    const timeDiff = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    if (timeDiff !== 0) return timeDiff;
+    return b.id.localeCompare(a.id);
+}
+
+function matchesHistoryFilters(
+    entry: BalanceHistoryEntry,
+    filterKey: BalanceHistoryFilterKey,
+    dateRange: BalanceHistoryDateRange
+) {
+    const filterMatches = filterKey === 'all' || entry.filterKey === filterKey;
+    if (!filterMatches) return false;
+
+    if (dateRange === 'all') return true;
+
+    const age = Date.now() - new Date(entry.createdAt).getTime();
+    if (dateRange === '7d') {
+        return age <= 7 * 24 * 60 * 60 * 1000;
+    }
+
+    return age <= 30 * 24 * 60 * 60 * 1000;
+}
+
+function isBeforeHistoryCursor(
+    entry: BalanceHistoryEntry,
+    beforeCreatedAt: string | null,
+    beforeId: string | null
+) {
+    if (!beforeCreatedAt) return true;
+
+    const entryTime = new Date(entry.createdAt).getTime();
+    const cursorTime = new Date(beforeCreatedAt).getTime();
+
+    if (Number.isNaN(cursorTime)) {
+        return true;
+    }
+
+    if (entryTime < cursorTime) return true;
+    if (entryTime > cursorTime) return false;
+    if (!beforeId) return false;
+
+    return entry.id.localeCompare(beforeId) < 0;
 }
 
 function buildTimelineEvents(params: {
