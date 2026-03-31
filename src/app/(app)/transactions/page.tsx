@@ -194,6 +194,13 @@ export default function TransactionsPage() {
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+            <div className="page-hero" style={{ paddingTop: 'var(--space-2)' }}>
+                <div className="page-kicker">Activity Ledger</div>
+                <h2 className="page-hero-title">Every expense in one place</h2>
+                <p className="page-hero-subtitle">
+                    Search, inspect, and review split details with a cleaner timeline for your group activity.
+                </p>
+            </div>
 
             {/* ═══ SUMMARY HERO — Glassmorphic Stats Card ═══ */}
             <motion.div
@@ -216,7 +223,7 @@ export default function TransactionsPage() {
                         <div style={{ fontSize: 'var(--text-xs)', color: 'var(--fg-tertiary)', fontWeight: 600, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                             Total Spent
                         </div>
-                        <div style={{
+                        <div className="font-display" style={{
                             fontSize: 'var(--text-2xl)', fontWeight: 800,
                             background: 'linear-gradient(135deg, var(--accent-400), var(--accent-600))',
                             WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',

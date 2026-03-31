@@ -281,6 +281,7 @@ export default function AIChatPanel() {
                             <div style={{ flex: 1, minWidth: 0 }}>
                                 <h3 style={{
                                     fontSize: 15,
+                                    fontFamily: 'var(--font-display)',
                                     fontWeight: 800,
                                     color: 'var(--fg-primary)',
                                     letterSpacing: '-0.02em',
@@ -356,6 +357,7 @@ export default function AIChatPanel() {
                                         }}>✨</div>
                                         <h2 style={{
                                             fontSize: 15,
+                                            fontFamily: 'var(--font-display)',
                                             fontWeight: 800,
                                             color: 'var(--fg-primary)',
                                             marginBottom: 3,

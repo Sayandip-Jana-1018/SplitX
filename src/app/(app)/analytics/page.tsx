@@ -206,7 +206,9 @@ export default function AnalyticsPage() {
                                                     ? '1px solid rgba(34, 197, 94, 0.16)'
                                                     : '1px solid rgba(var(--accent-500-rgb), 0.12)',
                                             display: 'flex',
-                                            alignItems: 'flex-start',
+                                            flexDirection: 'column',
+                                            alignItems: 'center',
+                                            textAlign: 'center',
                                             gap: 10,
                                         }}
                                     >

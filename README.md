@@ -1,6 +1,6 @@
 # ⚡ SplitX — Smart Expense Splitting & Settlement
 
-> A production-grade, full-stack expense-splitting web app built with **Next.js 16**, **Prisma**, **PostgreSQL (Neon)**, and **NextAuth v5**. Features glassmorphic UI, AI-powered receipt scanning (Tesseract OCR + OpenAI Vision), Gemini AI chat assistant, real-time group chat with avatars, debt simplification with transparent calculation breakdowns, real-time analytics, smart notifications, colorful themed navigation, backend security hardening, and 12 color themes.
+> A production-grade, full-stack expense-splitting web app built with **Next.js 16**, **Prisma**, **PostgreSQL (Neon)**, and **NextAuth v5**. Features glassmorphic UI, AI-powered receipt scanning (Tesseract OCR + OpenAI Vision), Gemini AI chat assistant, real-time group chat with avatars, debt simplification with transparent calculation breakdowns, Balance Journey history timelines, CSV/print exports, real-time analytics, smart notifications, colorful themed navigation, backend security hardening, and 12 color themes.
 
 ---
 
@@ -38,7 +38,7 @@ graph TB
     subgraph API["🔌 API Routes — Next.js Route Handlers"]
         AuthAPI["POST /api/auth/*<br/>POST /api/register"]
         MeAPI["GET /api/me<br/>GET /api/me/avatar"]
-        GroupsAPI["GET/POST /api/groups<br/>GET/PUT /api/groups/:id<br/>GET /api/groups/:id/balances<br/>POST /api/groups/join"]
+        GroupsAPI["GET/POST /api/groups<br/>GET/PUT /api/groups/:id<br/>GET /api/groups/:id/balances<br/>GET /api/groups/:id/balance-history<br/>POST /api/groups/join"]
         TxnAPI["GET/POST /api/transactions<br/>PUT/DELETE /api/transactions/:id"]
         SettleAPI["GET/POST /api/settlements"]
         TripsAPI["GET/POST /api/trips"]
@@ -59,7 +59,7 @@ graph TB
         NotifLib["Notification Engine"]
         AuditLib["Audit Logger"]
         RateLimit["Rate Limiter"]
-        Export["CSV/JSON Export"]
+        Export["CSV/JSON Export + Print Views"]
         UPI["UPI Deep-link Generator"]
         Validators["Zod Validators"]
         FeatureFlags["Feature Flags"]
@@ -225,14 +225,16 @@ erDiagram
 | **Split Types** | Equal, percentage, custom, and item-based splitting — backend validates split sums equal total and all user IDs are group members |
 | **Settlements** | Track who owes whom, centered card layout with "Pay via UPI" and subtle "Mark Settled" text link for cash/offline payments |
 | **Settlement Transparency** | Per-group info tooltips explain simplified transfers; global view has expandable per-group breakdown showing how each group contributes to pairwise debts |
+| **Balance Journey** | Group-level running balance timeline for the current user with before/delta/after values, route-change explanations, filters, CSV export, and print-to-PDF support |
 | **Settlement Security** | Self-settlement block, 60s duplicate check (pending + initiated + completed), sender + recipient membership verification, **over-settlement guard** (rejects amounts exceeding actual debt with clear error), soft-delete filters |
 | **UPI Payment Notifications** | All group members notified on UPI payment — receiver gets ✅, others get 💸 |
 | **Transaction Edit Notifications** | All group members notified when any expense is edited (✏️) |
 | **Debt Simplification** | Dual algorithm: greedy netting + optimized exact-match pruning (auto-picks fewer transfers) |
 | **Per-Group Settlement Graphs** | Swipeable carousel with per-group settlement visualization + global pairwise overview with expandable group breakdowns |
-| **Analytics Dashboard** | 6-month spending trends, category breakdown, budget vs actual comparison, smart AI insights |
+| **Analytics Dashboard** | API-backed monthly trends, category breakdown, budget vs actual comparison, and smart insights |
 | **Budget Tracking** | Set monthly budgets per category, compare against actual spending |
-| **CSV/JSON Export** | Export transaction data for external use |
+| **CSV/JSON Export** | Export transaction data, account data, and balance-history reports for external use |
+| **Read-Only Split Details** | All group members can open the transaction pencil panel to inspect equal and custom split breakdowns without expanding edit permissions |
 
 ### AI & Smart Features
 | Feature | Description |
@@ -252,6 +254,7 @@ erDiagram
 | **Smart Notifications** | Real-time notification panel with type-based icons, unread badges, mark-all-read, 30s auto-polling — sender/recipient must share a group (anti-spam) |
 | **Smart Insights** | AI-generated spending insights: overspend alerts, savings detection, trend change analysis |
 | **Global Search** | Search across transactions, groups, and members |
+| **Expense Drafts & Impact Preview** | New-expense form autosaves drafts locally, warns about likely duplicates, and previews who will owe or be owed more before submit |
 
 ### Premium UI/UX
 | Feature | Description |
@@ -261,6 +264,7 @@ erDiagram
 | **Enhanced Nav Blur** | 60px backdrop-filter blur with 96% opacity + gradient fade mask for seamless content transition |
 | **12 Color Themes** | Rose, Ocean, Emerald, Violet, Amber, Slate, Coral, Teal, Indigo, Lime, Fuchsia, Cyan |
 | **Dark / Light Mode** | System-aware with manual toggle; theme saved to localStorage |
+| **Editorial Typography** | Playfair Display headings paired with Plus Jakarta Sans body text for a more polished light/dark experience |
 | **Animated Numbers** | Counting animations on dashboard stats |
 | **Pull to Refresh** | Touch gesture with animated gradient spinner |
 | **Haptic Feedback** | Vibration API integration on buttons, navigation, and actions |
@@ -280,13 +284,13 @@ erDiagram
 | Feature | Description |
 |---|---|
 | **System Health Dashboard** | Real-time service status, DB latency, data counts, server uptime |
-| **Audit Logging** | Track all data mutations (create/update/delete) with entity details |
+| **Audit Logging** | Track transaction, settlement, group, and member mutations with entity details for explainability and safer debugging |
 | **Feature Flags** | Toggle features on/off without code changes |
 | **Rate Limiting Middleware** | Tiered in-memory rate limiter: 5/hr register, 10/15min auth, 30/min settlements, 120/min default |
 | **Security Headers** | HSTS, X-Frame-Options DENY, X-Content-Type-Options, Permissions-Policy (no camera/mic/geo), Referrer-Policy |
 | **Soft Deletes** | All destructive operations (group delete, transaction delete, settlement cancel) use soft deletes with `deletedAt` guards on all queries including DELETE endpoints |
 | **Over-Settlement Guard** | Server-side pairwise debt calculation prevents settling more than what's owed; graceful degradation on calculation failure |
-| **Permission Model** | Delete group = owner only, remove member = owner/admin only, delete/edit transaction = payer or group owner only |
+| **Permission Model** | Delete group = owner only, remove member = owner/admin only, delete/edit transaction = payer or group owner only, view split details = any visible group member |
 | **Input Validation** | Zod schemas on all mutations including notification POST; custom splits validated (sum = total, user IDs ∈ group members); settlement recipient must be group member |
 | **Anti-Spam** | Notification POST requires sender & recipient share ≥1 group; duplicate settlement check covers pending/initiated/completed within 60s |
 | **Performance Indexes** | Composite DB indexes on `Settlement(tripId, status)` and `Notification(userId, read)` for optimized queries |
@@ -324,7 +328,7 @@ src/
 │   ├── (app)/                    # Authenticated app shell
 │   │   ├── layout.tsx            # Sidebar, header, bottom nav, FAB, AI chat
 │   │   ├── dashboard/            # Home — stats, balance hero, quick actions
-│   │   ├── groups/               # Group list & group detail (balances, members, activity)
+│   │   ├── groups/               # Group list & group detail (balances, members, activity, journey)
 │   │   ├── transactions/         # List/timeline view, new, scan, receipts
 │   │   ├── settlements/          # Settlement tracker with status management
 │   │   ├── analytics/            # Spending charts & breakdowns
@@ -334,8 +338,8 @@ src/
 │   ├── api/                      # Next.js API route handlers
 │   │   ├── auth/                 # NextAuth endpoints
 │   │   ├── register/             # User registration
-│   │   ├── me/                   # Current user profile & avatar
-│   │   ├── groups/               # CRUD + join + balances
+│   │   ├── me/                   # Current user profile, avatar, and account export
+│   │   ├── groups/               # CRUD + join + balances + balance history
 │   │   ├── transactions/         # CRUD with split management
 │   │   ├── settlements/          # Create & list settlements
 │   │   ├── trips/                # Trip management
@@ -362,7 +366,9 @@ src/
 │   ├── settlement.ts             # Dual settlement algorithm (greedy + optimized)
 │   ├── transactionParser.ts      # UPI/SMS regex parser
 │   ├── voiceParser.ts            # Local fallback parser for voice input
-│   ├── export.ts                 # CSV/JSON export
+│   ├── export.ts                 # CSV/JSON export + balance journey export
+│   ├── groupFinance.ts           # Shared balance and balance-history derivation engine
+│   ├── auditPayloads.ts          # Audit snapshot helpers for mutations
 │   ├── upi.ts                    # UPI deep-link generator
 │   ├── validators.ts             # Zod schemas
 │   ├── utils.ts                  # General utilities
@@ -452,12 +458,14 @@ npm start
 | `POST` | `/api/register` | Create a new user account |
 | `GET` | `/api/me` | Get current user profile |
 | `GET` | `/api/me/avatar` | Get user avatar |
+| `GET` | `/api/me/export` | Export the current user's account data bundle |
 | `GET` | `/api/groups` | List user's groups (filters soft-deleted) |
 | `POST` | `/api/groups` | Create a new group |
 | `GET` | `/api/groups/:id` | Get group details with members & balances |
 | `DELETE` | `/api/groups/:id` | **Soft-delete group** (owner only) — cascades to transactions & settlements, notifies all members |
-| `DELETE` | `/api/groups/:id/members` | **Remove member** (owner/admin) — recalculates equal splits, cleans orphaned data |
-| `GET` | `/api/groups/:id/balances` | Compute balances & suggested settlements |
+| `DELETE` | `/api/groups/:id/members` | **Remove member** (owner/admin) - recalculates equal splits, cleans orphaned data |
+| `GET` | `/api/groups/:id/balances` | Compute balances & suggested settlements (group members only) |
+| `GET` | `/api/groups/:id/balance-history` | Derive the current user's balance timeline with explanations, deltas, and route summaries |
 | `POST` | `/api/groups/join` | Join a group via invite code |
 | `GET` | `/api/settlements/by-group` | **Batch endpoint** — all per-group settlements + global overview in one call |
 | `GET` | `/api/transactions` | List transactions (supports `?limit=`) |
@@ -514,6 +522,7 @@ SplitX uses a **CSS custom properties** design system with HSL-based color token
 
 - **12 accent palettes**: `rose`, `ocean`, `emerald`, `violet`, `amber`, `slate`, `coral`, `teal`, `indigo`, `lime`, `fuchsia`, `cyan`
 - **Dark / Light modes** with automatic system detection
+- **Display typography**: `Playfair Display` for major headings and `Plus Jakarta Sans` for body/UI copy
 - **Glassmorphism tokens**: `--bg-glass`, `--border-glass`, `--shadow-card`
 - **Spacing scale**: 4px base with `--space-1` through `--space-12`
 - **Typography scale**: `--text-2xs` through `--text-3xl`
@@ -533,6 +542,15 @@ Theme preference is persisted in `localStorage` and applied via CSS class on `<h
 - **Haptic feedback** via Vibration API
 - **Offline detection** with user-friendly banner
 - **Camera integration** via getUserMedia for receipt scanning
+
+---
+
+## Notes on Balance History
+
+- You do **not** need to wipe existing production data to use Balance Journey.
+- Existing transactions and confirmed settlements can still be used to derive balance changes from your current database state.
+- Historical edits or deletes that happened **before** audit logging was added cannot be reconstructed perfectly if no audit record existed at the time.
+- From this release onward, new transaction edits, deletes, settlement confirmations, group mutations, and member removals are logged more clearly for future explainability.
 
 ---
 

@@ -189,6 +189,7 @@
     margin-bottom: 8px;
     font-size: 10px;
     color: var(--fg-tertiary);
+    font-family: var(--font-display);
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.1em;
@@ -253,6 +254,8 @@
 
 .navItemLabel {
     flex: 1;
+    font-family: var(--font-display);
+    letter-spacing: -0.01em;
 }
 
 /* ── Sidebar Footer — User Card ── */
@@ -539,6 +542,8 @@
 
 .bottomNavLabel {
     font-size: 10px;
+    font-family: var(--font-display);
+    font-weight: 700;
     letter-spacing: 0.01em;
     line-height: 1;
 }

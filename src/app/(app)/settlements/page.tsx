@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence, PanInfo } from 'framer-motion';
 import useSWR from 'swr';
 import { ArrowRightLeft, Check, Download, Share2, GitBranch, Inbox, CreditCard, Bell, ChevronLeft, ChevronRight, ChevronDown, Info } from 'lucide-react';
@@ -59,6 +60,7 @@ interface ByGroupResponse {
 
 /* ── Main component ── */
 export default function SettlementsPage() {
+    const router = useRouter();
     const { user: currentUser } = useCurrentUser();
     const { toast } = useToast();
     const [activeSlide, setActiveSlide] = useState(0); // 0 = "All", 1..N = per-group
@@ -241,9 +243,13 @@ export default function SettlementsPage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
             {/* ═══ HEADER ═══ */}
             <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
-                <p style={{ color: 'var(--fg-tertiary)', fontSize: 'var(--text-xs)' }}>
-                    Minimum transfers to settle all debts
-                </p>
+                <div className="page-hero" style={{ paddingTop: 'var(--space-2)' }}>
+                    <div className="page-kicker">Settle Smarter</div>
+                    <h2 className="page-hero-title">Minimum transfers, maximum clarity</h2>
+                    <p className="page-hero-subtitle">
+                        Review who owes whom, understand why each transfer exists, and jump into Balance Journey when the route changes.
+                    </p>
+                </div>
             </motion.div>
 
             {/* ═══ BALANCE OVERVIEW — Glassmorphic Hero ═══ */}
@@ -270,7 +276,7 @@ export default function SettlementsPage() {
                             <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-error)', fontWeight: 600, marginBottom: 4 }}>
                                 You Owe
                             </div>
-                            <div style={{ fontSize: 'var(--text-lg)', fontWeight: 800, color: 'var(--fg-primary)' }}>
+                            <div className="font-display" style={{ fontSize: 'var(--text-lg)', fontWeight: 800, color: 'var(--fg-primary)' }}>
                                 {formatCurrency(totalYouOwe)}
                             </div>
                         </div>
@@ -284,7 +290,7 @@ export default function SettlementsPage() {
                             <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-success)', fontWeight: 600, marginBottom: 4 }}>
                                 Owed to You
                             </div>
-                            <div style={{ fontSize: 'var(--text-lg)', fontWeight: 800, color: 'var(--fg-primary)' }}>
+                            <div className="font-display" style={{ fontSize: 'var(--text-lg)', fontWeight: 800, color: 'var(--fg-primary)' }}>
                                 {formatCurrency(totalOwedToYou)}
                             </div>
                         </div>
@@ -316,7 +322,7 @@ export default function SettlementsPage() {
 
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                             <span style={{ fontSize: '18px' }}>{activeSlideData?.emoji}</span>
-                            <span style={{
+                            <span className="font-display" style={{
                                 fontSize: 'var(--text-sm)', fontWeight: 700,
                                 color: 'var(--fg-primary)',
                             }}>
@@ -901,7 +907,7 @@ export default function SettlementsPage() {
                         </button>
                         {!isGlobalSlide && isFeatureEnabled('balanceJourney') && activeSlideData?.groupId && (
                             <button
-                                onClick={() => window.location.href = `/groups/${activeSlideData.groupId}/journey`}
+                                onClick={() => router.push(`/groups/${activeSlideData.groupId}/journey`)}
                                 style={{
                                     flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                                     padding: '10px', borderRadius: 'var(--radius-xl)',

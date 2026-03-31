@@ -35,13 +35,6 @@ interface BalanceHistoryResponse {
     currentBalance: number;
     currentRouteSummary: string;
     changeCountThisWeek: number;
-    currentSettlements: {
-        from: string;
-        to: string;
-        amount: number;
-        fromName: string;
-        toName: string;
-    }[];
     entries: {
         id: string;
         eventType: 'expense' | 'settlement' | 'edit';
@@ -92,7 +85,13 @@ export default function GroupJourneyPage() {
         });
     }, [activeFilter, data, dateRange, referenceTime]);
 
-    const activeExpandedEntryId = expandedEntryId || filteredEntries[0]?.id || null;
+    const timelineEntries = useMemo(() => {
+        return [...filteredEntries].sort(
+            (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+        );
+    }, [filteredEntries]);
+
+    const activeExpandedEntryId = expandedEntryId || timelineEntries.at(-1)?.id || null;
 
     if (!isFeatureEnabled('balanceJourney')) {
         return (
@@ -109,7 +108,7 @@ export default function GroupJourneyPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
                 {[0, 1, 2].map((index) => (
                     <Card key={index} padding="normal">
-                        <div style={{ height: 96, borderRadius: 'var(--radius-lg)', background: 'rgba(var(--accent-500-rgb), 0.06)' }} />
+                        <div style={{ height: 112, borderRadius: 'var(--radius-lg)', background: 'rgba(var(--accent-500-rgb), 0.06)' }} />
                     </Card>
                 ))}
             </div>
@@ -135,8 +134,8 @@ export default function GroupJourneyPage() {
                 <button
                     onClick={() => router.push(`/groups/${groupId}`)}
                     style={{
-                        width: 36,
-                        height: 36,
+                        width: 40,
+                        height: 40,
                         borderRadius: 'var(--radius-lg)',
                         border: '1px solid var(--border-glass)',
                         background: 'var(--bg-glass)',
@@ -145,80 +144,64 @@ export default function GroupJourneyPage() {
                         alignItems: 'center',
                         justifyContent: 'center',
                         cursor: 'pointer',
+                        flexShrink: 0,
                     }}
                 >
                     <ArrowLeft size={18} />
                 </button>
-                <div style={{ flex: 1, textAlign: 'center' }}>
-                    <div className="page-kicker" style={{ margin: '0 auto var(--space-2)', width: 'fit-content' }}>
+                <div className="page-hero" style={{ flex: 1, paddingTop: 0 }}>
+                    <div className="page-kicker" style={{ margin: '0 auto', width: 'fit-content' }}>
                         <span style={{ fontSize: '18px', lineHeight: 1 }}>{data.group.emoji}</span>
                         {data.group.name}
                     </div>
-                    <h1 className="page-hero-title" style={{ fontSize: 'clamp(1.9rem, 6vw, 2.8rem)' }}>Balance Journey</h1>
+                    <h1 className="page-hero-title" style={{ fontSize: 'clamp(1.95rem, 6vw, 2.9rem)' }}>
+                        Your Balance Journey
+                    </h1>
                     <p className="page-hero-subtitle">
-                        See exactly how expenses, edits, and settlements moved your balance over time.
+                        A step-by-step view of how your own number changed in this group, with your before, change, and now values.
                     </p>
                 </div>
-                <div style={{ width: 36 }} />
+                <div style={{ width: 40, flexShrink: 0 }} />
             </div>
 
             <Card padding="normal" glow>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-                        <div>
-                            <div style={{
-                                fontSize: 'var(--text-xs)',
-                                textTransform: 'uppercase',
-                                letterSpacing: '0.08em',
-                                color: 'var(--fg-tertiary)',
-                                fontWeight: 700,
-                                marginBottom: 6,
-                            }}>
-                                Current Balance
-                            </div>
-                            <div className="font-display" style={{
-                                fontSize: 'var(--text-2xl)',
-                                fontWeight: 800,
-                                color: data.currentBalance >= 0 ? 'var(--color-success)' : 'var(--color-error)',
-                            }}>
-                                {data.currentBalance >= 0 ? '+' : '-'}{formatCurrency(Math.abs(data.currentBalance))}
-                            </div>
-                        </div>
-                        <div style={{
-                            minWidth: 108,
-                            textAlign: 'center',
-                            padding: '12px',
-                            borderRadius: 'var(--radius-xl)',
-                            background: 'rgba(var(--accent-500-rgb), 0.08)',
-                            border: '1px solid rgba(var(--accent-500-rgb), 0.1)',
-                        }}>
-                            <div style={{ fontSize: 'var(--text-xl)', fontWeight: 800, color: 'var(--accent-500)' }}>
-                                {data.changeCountThisWeek}
-                            </div>
-                            <div style={{ fontSize: '11px', color: 'var(--fg-tertiary)', fontWeight: 700 }}>
-                                changes this week
-                            </div>
-                        </div>
-                    </div>
-
-                    <div style={{
-                        padding: '12px 14px',
-                        borderRadius: 'var(--radius-xl)',
-                        background: 'rgba(var(--accent-500-rgb), 0.05)',
-                        border: '1px solid rgba(var(--accent-500-rgb), 0.08)',
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 'var(--space-3)' }}>
+                    <div className="page-kicker">Current Snapshot</div>
+                    <div className="font-display" style={{
+                        fontSize: 'clamp(2rem, 8vw, 3rem)',
+                        fontWeight: 800,
+                        color: data.currentBalance >= 0 ? 'var(--color-success)' : 'var(--color-error)',
+                        lineHeight: 1,
                     }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                            <GitBranch size={14} style={{ color: 'var(--accent-500)' }} />
-                            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--fg-tertiary)', fontWeight: 700 }}>
-                                Current route
-                            </span>
-                        </div>
-                        <div style={{ fontSize: 'var(--text-sm)', color: 'var(--fg-primary)', fontWeight: 600 }}>
-                            {data.currentRouteSummary}
-                        </div>
+                        {data.currentBalance >= 0 ? '+' : '-'}{formatCurrency(Math.abs(data.currentBalance))}
                     </div>
-
-                    <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+                    <p style={{
+                        fontSize: 'var(--text-sm)',
+                        color: 'var(--fg-secondary)',
+                        lineHeight: 1.6,
+                        maxWidth: 440,
+                        margin: 0,
+                    }}>
+                        {data.currentRouteSummary}
+                    </p>
+                    <div style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 10,
+                        padding: '12px 16px',
+                        borderRadius: 'var(--radius-2xl)',
+                        background: 'rgba(var(--accent-500-rgb), 0.08)',
+                        border: '1px solid rgba(var(--accent-500-rgb), 0.12)',
+                    }}>
+                        <span className="font-display" style={{ fontSize: 'var(--text-xl)', fontWeight: 800, color: 'var(--accent-500)' }}>
+                            {data.changeCountThisWeek}
+                        </span>
+                        <span style={{ fontSize: 'var(--text-xs)', color: 'var(--fg-tertiary)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                            changes this week
+                        </span>
+                    </div>
+                    <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap', justifyContent: 'center' }}>
                         {isFeatureEnabled('balanceJourneyExport') && (
                             <Button
                                 size="sm"
@@ -251,192 +234,262 @@ export default function GroupJourneyPage() {
                                 size="sm"
                                 variant="secondary"
                                 leftIcon={<Printer size={14} />}
-                                onClick={() => window.open(`/groups/${groupId}/journey/print`, '_blank')}
+                                onClick={() => router.push(`/groups/${groupId}/journey/print`)}
                             >
-                                Print / PDF
+                                Print View
                             </Button>
                         )}
                     </div>
                 </div>
             </Card>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', overflowX: 'auto', paddingBottom: 2 }}>
-                <div style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    padding: '8px 10px',
-                    borderRadius: 'var(--radius-full)',
-                    border: '1px solid var(--border-glass)',
-                    background: 'var(--bg-glass)',
-                    color: 'var(--fg-tertiary)',
-                    fontSize: 'var(--text-xs)',
-                    fontWeight: 700,
-                    whiteSpace: 'nowrap',
-                }}>
-                    <Filter size={12} />
-                    Filter
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', overflowX: 'auto', paddingBottom: 2, justifyContent: 'center', width: '100%' }}>
+                    <div style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        padding: '8px 10px',
+                        borderRadius: 'var(--radius-full)',
+                        border: '1px solid var(--border-glass)',
+                        background: 'var(--bg-glass)',
+                        color: 'var(--fg-tertiary)',
+                        fontSize: 'var(--text-xs)',
+                        fontWeight: 700,
+                        whiteSpace: 'nowrap',
+                    }}>
+                        <Filter size={12} />
+                        Filter
+                    </div>
+                    {filterOptions.map((option) => (
+                        <button
+                            key={option.key}
+                            onClick={() => setActiveFilter(option.key)}
+                            style={{
+                                border: 'none',
+                                cursor: 'pointer',
+                                whiteSpace: 'nowrap',
+                                padding: '8px 12px',
+                                borderRadius: 'var(--radius-full)',
+                                background: activeFilter === option.key
+                                    ? 'linear-gradient(135deg, var(--accent-500), var(--accent-600))'
+                                    : 'var(--bg-glass)',
+                                color: activeFilter === option.key ? '#fff' : 'var(--fg-secondary)',
+                                fontSize: 'var(--text-xs)',
+                                fontWeight: 700,
+                                borderWidth: 1,
+                                borderStyle: 'solid',
+                                borderColor: activeFilter === option.key ? 'transparent' : 'var(--border-glass)',
+                            }}
+                        >
+                            {option.label}
+                        </button>
+                    ))}
                 </div>
-                {filterOptions.map((option) => (
-                    <button
-                        key={option.key}
-                        onClick={() => setActiveFilter(option.key)}
-                        style={{
-                            border: 'none',
-                            cursor: 'pointer',
-                            whiteSpace: 'nowrap',
-                            padding: '8px 12px',
-                            borderRadius: 'var(--radius-full)',
-                            background: activeFilter === option.key
-                                ? 'linear-gradient(135deg, var(--accent-500), var(--accent-600))'
-                                : 'var(--bg-glass)',
-                            color: activeFilter === option.key ? '#fff' : 'var(--fg-secondary)',
-                            fontSize: 'var(--text-xs)',
-                            fontWeight: 700,
-                            borderWidth: 1,
-                            borderStyle: 'solid',
-                            borderColor: activeFilter === option.key ? 'transparent' : 'var(--border-glass)',
-                        }}
-                    >
-                        {option.label}
-                    </button>
-                ))}
-            </div>
 
-            <div style={{ display: 'flex', gap: 'var(--space-2)', overflowX: 'auto', paddingBottom: 2 }}>
-                {[
-                    { key: 'all', label: 'All time' },
-                    { key: '7d', label: 'Last 7 days' },
-                    { key: '30d', label: 'Last 30 days' },
-                ].map((range) => (
-                    <button
-                        key={range.key}
-                        onClick={() => setDateRange(range.key as 'all' | '7d' | '30d')}
-                        style={{
-                            border: '1px solid var(--border-glass)',
-                            cursor: 'pointer',
-                            whiteSpace: 'nowrap',
-                            padding: '8px 12px',
-                            borderRadius: 'var(--radius-full)',
-                            background: dateRange === range.key ? 'rgba(var(--accent-500-rgb), 0.12)' : 'var(--bg-glass)',
-                            color: dateRange === range.key ? 'var(--accent-500)' : 'var(--fg-secondary)',
-                            fontSize: 'var(--text-xs)',
-                            fontWeight: 700,
-                        }}
-                    >
-                        {range.label}
-                    </button>
-                ))}
+                <div style={{ display: 'flex', gap: 'var(--space-2)', overflowX: 'auto', paddingBottom: 2, justifyContent: 'center', width: '100%' }}>
+                    {[
+                        { key: 'all', label: 'All time' },
+                        { key: '7d', label: 'Last 7 days' },
+                        { key: '30d', label: 'Last 30 days' },
+                    ].map((range) => (
+                        <button
+                            key={range.key}
+                            onClick={() => setDateRange(range.key as 'all' | '7d' | '30d')}
+                            style={{
+                                border: '1px solid var(--border-glass)',
+                                cursor: 'pointer',
+                                whiteSpace: 'nowrap',
+                                padding: '8px 12px',
+                                borderRadius: 'var(--radius-full)',
+                                background: dateRange === range.key ? 'rgba(var(--accent-500-rgb), 0.12)' : 'var(--bg-glass)',
+                                color: dateRange === range.key ? 'var(--accent-500)' : 'var(--fg-secondary)',
+                                fontSize: 'var(--text-xs)',
+                                fontWeight: 700,
+                            }}
+                        >
+                            {range.label}
+                        </button>
+                    ))}
+                </div>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-                {filteredEntries.length === 0 ? (
+                {timelineEntries.length === 0 ? (
                     <Card padding="normal">
                         <div style={{ textAlign: 'center', color: 'var(--fg-tertiary)' }}>
                             No history matches this filter yet.
                         </div>
                     </Card>
                 ) : (
-                    filteredEntries.map((entry) => {
+                    timelineEntries.map((entry, index) => {
                         const isExpanded = activeExpandedEntryId === entry.id;
+                        const routeChanged = entry.beforeRouteSummary !== entry.afterRouteSummary;
+
                         return (
-                            <Card key={entry.id} padding="normal" interactive>
-                                <button
-                                    onClick={() => setExpandedEntryId(isExpanded ? null : entry.id)}
-                                    style={{
-                                        width: '100%',
-                                        border: 'none',
-                                        background: 'transparent',
-                                        padding: 0,
-                                        textAlign: 'left',
-                                        cursor: 'pointer',
-                                        color: 'inherit',
-                                    }}
-                                >
-                                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-                                        <div style={{ flex: 1 }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap', marginBottom: 8 }}>
+                            <div key={entry.id} style={{ display: 'grid', gridTemplateColumns: '40px 1fr', gap: 'var(--space-3)', alignItems: 'stretch' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                    <div style={{
+                                        width: 34,
+                                        height: 34,
+                                        borderRadius: 'var(--radius-full)',
+                                        background: 'linear-gradient(135deg, var(--accent-500), var(--accent-600))',
+                                        color: '#fff',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        fontSize: 'var(--text-xs)',
+                                        fontWeight: 800,
+                                        boxShadow: '0 8px 24px rgba(var(--accent-500-rgb), 0.18)',
+                                    }}>
+                                        {index + 1}
+                                    </div>
+                                    {index < timelineEntries.length - 1 && (
+                                        <div style={{
+                                            flex: 1,
+                                            width: 2,
+                                            marginTop: 8,
+                                            borderRadius: 'var(--radius-full)',
+                                            background: 'linear-gradient(180deg, rgba(var(--accent-500-rgb), 0.28), rgba(var(--accent-500-rgb), 0.04))',
+                                            minHeight: 48,
+                                        }} />
+                                    )}
+                                </div>
+
+                                <Card padding="normal" interactive>
+                                    <button
+                                        onClick={() => setExpandedEntryId(isExpanded ? null : entry.id)}
+                                        style={{
+                                            width: '100%',
+                                            border: 'none',
+                                            background: 'transparent',
+                                            padding: 0,
+                                            textAlign: 'center',
+                                            cursor: 'pointer',
+                                            color: 'inherit',
+                                        }}
+                                    >
+                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-2)' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
                                                 <Badge variant={entry.eventType === 'settlement' ? 'accent' : entry.eventType === 'edit' ? 'warning' : 'default'} size="sm">
                                                     {entry.eventType}
                                                 </Badge>
-                                                {entry.beforeRouteSummary !== entry.afterRouteSummary && (
-                                                    <Badge variant="info" size="sm">route changed</Badge>
-                                                )}
+                                                {routeChanged && <Badge variant="info" size="sm">route changed</Badge>}
                                                 <span style={{ fontSize: 'var(--text-xs)', color: 'var(--fg-tertiary)' }}>
                                                     {formatDate(entry.createdAt)}
                                                 </span>
                                             </div>
-                                            <div style={{ fontSize: 'var(--text-base)', fontWeight: 700, marginBottom: 6 }}>
+
+                                            <div className="font-display" style={{ fontSize: 'var(--text-xl)', fontWeight: 700 }}>
                                                 {entry.sourceLabel}
                                             </div>
-                                            <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-                                                <MetricPill label="Before" value={entry.beforeBalance} />
-                                                <MetricPill
-                                                    label="Delta"
+
+                                            <p style={{
+                                                margin: 0,
+                                                fontSize: 'var(--text-sm)',
+                                                color: 'var(--fg-secondary)',
+                                                lineHeight: 1.6,
+                                                maxWidth: 520,
+                                            }}>
+                                                {entry.explanation}
+                                            </p>
+
+                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 'var(--space-2)', width: '100%' }}>
+                                                <StepMetric label="Started at" value={entry.beforeBalance} />
+                                                <StepMetric label="Changed by" value={entry.delta} accent={entry.delta >= 0 ? 'var(--color-success)' : 'var(--color-error)'} />
+                                                <StepMetric label="Now at" value={entry.afterBalance} />
+                                            </div>
+
+                                            <div style={{ color: 'var(--fg-tertiary)' }}>
+                                                {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                                            </div>
+                                        </div>
+                                    </button>
+
+                                    {isExpanded && (
+                                        <div style={{
+                                            marginTop: 'var(--space-3)',
+                                            paddingTop: 'var(--space-3)',
+                                            borderTop: '1px solid var(--border-subtle)',
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            gap: 'var(--space-3)',
+                                            textAlign: 'center',
+                                        }}>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                                                <StepStory
+                                                    title="Step 1"
+                                                    subtitle="You started here"
+                                                    value={entry.beforeBalance}
+                                                />
+                                                <StepStory
+                                                    title="Step 2"
+                                                    subtitle="This event changed your amount"
                                                     value={entry.delta}
                                                     accent={entry.delta >= 0 ? 'var(--color-success)' : 'var(--color-error)'}
                                                 />
-                                                <MetricPill label="After" value={entry.afterBalance} />
+                                                <StepStory
+                                                    title="Step 3"
+                                                    subtitle="You ended here"
+                                                    value={entry.afterBalance}
+                                                />
                                             </div>
-                                        </div>
-                                        <div style={{ color: 'var(--fg-tertiary)' }}>
-                                            {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                                        </div>
-                                    </div>
-                                </button>
 
-                                {isExpanded && (
-                                    <div style={{
-                                        marginTop: 'var(--space-3)',
-                                        paddingTop: 'var(--space-3)',
-                                        borderTop: '1px solid var(--border-subtle)',
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        gap: 'var(--space-3)',
-                                    }}>
-                                        <div>
-                                            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--fg-tertiary)', fontWeight: 700, marginBottom: 6 }}>
-                                                Why did this change?
-                                            </div>
-                                            <div style={{ fontSize: 'var(--text-sm)', color: 'var(--fg-secondary)', lineHeight: 1.6 }}>
-                                                {entry.explanation}
+                                            {routeChanged && (
+                                                <div style={{
+                                                    padding: '14px 16px',
+                                                    borderRadius: 'var(--radius-2xl)',
+                                                    background: 'rgba(var(--accent-500-rgb), 0.07)',
+                                                    border: '1px solid rgba(var(--accent-500-rgb), 0.1)',
+                                                }}>
+                                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                                                        <GitBranch size={14} style={{ color: 'var(--accent-500)' }} />
+                                                        <span style={{ fontSize: 'var(--text-xs)', color: 'var(--fg-tertiary)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                                                            Your route changed
+                                                        </span>
+                                                    </div>
+                                                    <div style={{ fontSize: 'var(--text-sm)', color: 'var(--fg-secondary)', lineHeight: 1.6 }}>
+                                                        Before: {entry.beforeRouteSummary}
+                                                    </div>
+                                                    <div style={{ fontSize: 'var(--text-sm)', color: 'var(--fg-secondary)', lineHeight: 1.6, marginTop: 4 }}>
+                                                        Now: {entry.afterRouteSummary}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {entry.counterparties.length > 0 && (
+                                                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+                                                    {entry.counterparties.map((name) => (
+                                                        <span
+                                                            key={`${entry.id}-${name}`}
+                                                            style={{
+                                                                padding: '6px 10px',
+                                                                borderRadius: 'var(--radius-full)',
+                                                                background: 'rgba(var(--accent-500-rgb), 0.08)',
+                                                                color: 'var(--fg-secondary)',
+                                                                fontSize: 'var(--text-xs)',
+                                                                fontWeight: 600,
+                                                            }}
+                                                        >
+                                                            {name}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            )}
+
+                                            <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap', justifyContent: 'center' }}>
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={() => router.push(entry.eventType === 'settlement' ? '/settlements' : `/transactions?focus=${entry.sourceId}`)}
+                                                >
+                                                    {entry.eventType === 'settlement' ? 'Open Settlements' : 'Open Transaction'}
+                                                </Button>
                                             </div>
                                         </div>
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)' }}>
-                                            <RouteBox label="Before route" value={entry.beforeRouteSummary} />
-                                            <RouteBox label="After route" value={entry.afterRouteSummary} />
-                                        </div>
-                                        {entry.counterparties.length > 0 && (
-                                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                                                {entry.counterparties.map((name) => (
-                                                    <span
-                                                        key={`${entry.id}-${name}`}
-                                                        style={{
-                                                            padding: '6px 10px',
-                                                            borderRadius: 'var(--radius-full)',
-                                                            background: 'rgba(var(--accent-500-rgb), 0.08)',
-                                                            color: 'var(--fg-secondary)',
-                                                            fontSize: 'var(--text-xs)',
-                                                            fontWeight: 600,
-                                                        }}
-                                                    >
-                                                        {name}
-                                                    </span>
-                                                ))}
-                                            </div>
-                                        )}
-                                        <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-                                            <Button
-                                                size="sm"
-                                                variant="outline"
-                                                onClick={() => router.push(entry.eventType === 'settlement' ? '/settlements' : `/transactions?focus=${entry.sourceId}`)}
-                                            >
-                                                {entry.eventType === 'settlement' ? 'Open Settlements' : 'Open Transaction'}
-                                            </Button>
-                                        </div>
-                                    </div>
-                                )}
-                            </Card>
+                                    )}
+                                </Card>
+                            </div>
                         );
                     })
                 )}
@@ -445,7 +498,7 @@ export default function GroupJourneyPage() {
     );
 }
 
-function MetricPill({
+function StepMetric({
     label,
     value,
     accent,
@@ -456,35 +509,66 @@ function MetricPill({
 }) {
     return (
         <div style={{
-            padding: '8px 10px',
-            borderRadius: 'var(--radius-xl)',
+            padding: '10px 8px',
+            borderRadius: 'var(--radius-2xl)',
             background: 'rgba(var(--accent-500-rgb), 0.06)',
             border: '1px solid rgba(var(--accent-500-rgb), 0.08)',
-            minWidth: 96,
+            textAlign: 'center',
         }}>
-            <div style={{ fontSize: '11px', color: 'var(--fg-tertiary)', fontWeight: 700, marginBottom: 2 }}>
+            <div style={{ fontSize: '11px', color: 'var(--fg-tertiary)', fontWeight: 700, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                 {label}
             </div>
-            <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: accent || 'var(--fg-primary)' }}>
+            <div className="font-display" style={{ fontSize: 'var(--text-base)', fontWeight: 700, color: accent || 'var(--fg-primary)' }}>
                 {value >= 0 ? '+' : '-'}{formatCurrency(Math.abs(value))}
             </div>
         </div>
     );
 }
 
-function RouteBox({ label, value }: { label: string; value: string }) {
+function StepStory({
+    title,
+    subtitle,
+    value,
+    accent,
+}: {
+    title: string;
+    subtitle: string;
+    value: number;
+    accent?: string;
+}) {
     return (
         <div style={{
-            padding: '10px 12px',
-            borderRadius: 'var(--radius-xl)',
+            display: 'grid',
+            gridTemplateColumns: '72px 1fr',
+            gap: 'var(--space-3)',
+            alignItems: 'center',
+            padding: '12px 14px',
+            borderRadius: 'var(--radius-2xl)',
             background: 'var(--bg-glass)',
             border: '1px solid var(--border-glass)',
+            textAlign: 'left',
         }}>
-            <div style={{ fontSize: '11px', color: 'var(--fg-tertiary)', fontWeight: 700, marginBottom: 4 }}>
-                {label}
+            <div style={{
+                display: 'inline-flex',
+                justifyContent: 'center',
+                padding: '8px 10px',
+                borderRadius: 'var(--radius-full)',
+                background: 'rgba(var(--accent-500-rgb), 0.08)',
+                color: 'var(--accent-500)',
+                fontSize: 'var(--text-xs)',
+                fontWeight: 800,
+                textTransform: 'uppercase',
+                letterSpacing: '0.06em',
+            }}>
+                {title}
             </div>
-            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--fg-secondary)', lineHeight: 1.5 }}>
-                {value}
+            <div>
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--fg-tertiary)', fontWeight: 700, marginBottom: 4 }}>
+                    {subtitle}
+                </div>
+                <div className="font-display" style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: accent || 'var(--fg-primary)' }}>
+                    {value >= 0 ? '+' : '-'}{formatCurrency(Math.abs(value))}
+                </div>
             </div>
         </div>
     );

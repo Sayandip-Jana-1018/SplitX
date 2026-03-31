@@ -259,6 +259,11 @@ export default function GroupDetailPage() {
     const activeTrip = group.activeTrip;
     const allTransactions = group.trips.flatMap(t => t.transactions);
     const recentTransactions = allTransactions.slice(0, 5);
+    const orderedMembers = [...members].sort((a, b) => {
+        if (a.userId === group.currentUserId) return -1;
+        if (b.userId === group.currentUserId) return 1;
+        return (a.user.name || '').localeCompare(b.user.name || '');
+    });
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', paddingTop: 'var(--space-2)' }}>
@@ -459,7 +464,7 @@ export default function GroupDetailPage() {
                                 background: 'rgba(var(--accent-500-rgb), 0.03)',
                             }}>
                                 <p style={{ fontSize: 10, color: 'var(--fg-muted)', marginBottom: 6, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Spent</p>
-                                <p style={{ fontSize: 'var(--text-xl)', fontWeight: 800, letterSpacing: '-0.02em' }}>{formatCurrency(group.totalSpent)}</p>
+                                <p className="font-display" style={{ fontSize: 'var(--text-xl)', fontWeight: 800, letterSpacing: '-0.02em' }}>{formatCurrency(group.totalSpent)}</p>
                             </div>
                             <div style={{
                                 textAlign: 'center',
@@ -468,7 +473,7 @@ export default function GroupDetailPage() {
                                 background: 'rgba(var(--accent-500-rgb), 0.03)',
                             }}>
                                 <p style={{ fontSize: 10, color: 'var(--fg-muted)', marginBottom: 6, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Per Person</p>
-                                <p style={{ fontSize: 'var(--text-xl)', fontWeight: 800, letterSpacing: '-0.02em' }}>{formatCurrency(members.length > 0 ? Math.round(group.totalSpent / members.length) : 0)}</p>
+                                <p className="font-display" style={{ fontSize: 'var(--text-xl)', fontWeight: 800, letterSpacing: '-0.02em' }}>{formatCurrency(members.length > 0 ? Math.round(group.totalSpent / members.length) : 0)}</p>
                             </div>
                         </div>
                     </Card>
@@ -529,12 +534,14 @@ export default function GroupDetailPage() {
                         <div>
                             <div style={{
                                 display: 'flex',
+                                flexDirection: 'column',
                                 alignItems: 'center',
-                                justifyContent: 'space-between',
+                                justifyContent: 'center',
                                 gap: 'var(--space-3)',
                                 marginBottom: 'var(--space-3)',
+                                textAlign: 'center',
                             }}>
-                                <h3 style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--fg-secondary)', letterSpacing: '-0.01em' }}>
+                                <h3 className="section-heading" style={{ fontSize: 'var(--text-xl)', fontWeight: 700, color: 'var(--fg-primary)', letterSpacing: '-0.01em', margin: 0 }}>
                                     Balances
                                 </h3>
                                 {isFeatureEnabled('balanceJourney') && (
@@ -555,7 +562,7 @@ export default function GroupDetailPage() {
                                         }}
                                     >
                                         <GitBranch size={12} />
-                                        Balance Journey
+                                        Open Your Balance Journey
                                     </button>
                                 )}
                             </div>
@@ -563,9 +570,11 @@ export default function GroupDetailPage() {
                                 <Card padding="normal" glow style={{ marginBottom: 'var(--space-3)' }}>
                                     <div style={{
                                         display: 'flex',
-                                        alignItems: 'flex-start',
-                                        justifyContent: 'space-between',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
                                         gap: 'var(--space-3)',
+                                        textAlign: 'center',
                                     }}>
                                         <div style={{ flex: 1 }}>
                                             <div style={{
@@ -578,7 +587,7 @@ export default function GroupDetailPage() {
                                             }}>
                                                 Why your number changed
                                             </div>
-                                            <div style={{
+                                            <div className="font-display" style={{
                                                 fontSize: 'var(--text-lg)',
                                                 fontWeight: 800,
                                                 color: journeyMeta.currentBalance >= 0 ? 'var(--color-success)' : 'var(--color-error)',
@@ -591,6 +600,7 @@ export default function GroupDetailPage() {
                                                 lineHeight: 1.5,
                                                 marginTop: 'var(--space-2)',
                                                 marginBottom: 0,
+                                                maxWidth: 420,
                                             }}>
                                                 {journeyMeta.currentRouteSummary}
                                             </p>
@@ -603,7 +613,7 @@ export default function GroupDetailPage() {
                                             background: 'rgba(var(--accent-500-rgb), 0.08)',
                                             border: '1px solid rgba(var(--accent-500-rgb), 0.1)',
                                         }}>
-                                            <div style={{ fontSize: 'var(--text-lg)', fontWeight: 800, color: 'var(--accent-500)' }}>
+                                            <div className="font-display" style={{ fontSize: 'var(--text-lg)', fontWeight: 800, color: 'var(--accent-500)' }}>
                                                 {journeyMeta.changeCountThisWeek}
                                             </div>
                                             <div style={{ fontSize: '11px', color: 'var(--fg-tertiary)', fontWeight: 600 }}>
@@ -613,15 +623,15 @@ export default function GroupDetailPage() {
                                     </div>
                                 </Card>
                             )}
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-                                {members.map((member) => {
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 'var(--space-3)' }}>
+                                {orderedMembers.map((member) => {
                                     const balance = group.balances[member.userId] || 0;
                                     const isCurrentUser = member.userId === group.currentUserId;
                                     return (
                                         <Card key={member.userId} padding="compact">
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-2)', textAlign: 'center' }}>
                                                 <Avatar name={member.user.name || 'User'} image={member.user.image} size="sm" />
-                                                <span style={{ flex: 1, fontSize: 'var(--text-sm)', fontWeight: 500 }}>
+                                                <span className={isCurrentUser ? 'font-display' : undefined} style={{ fontSize: 'var(--text-sm)', fontWeight: 600 }}>
                                                     {member.user.name || 'User'}
                                                     {isCurrentUser && <span style={{ color: 'var(--fg-tertiary)' }}> (You)</span>}
                                                 </span>
@@ -631,9 +641,9 @@ export default function GroupDetailPage() {
                                                     ) : balance < 0 ? (
                                                         <TrendingDown size={14} style={{ color: 'var(--color-error)' }} />
                                                     ) : null}
-                                                    <span style={{
+                                                    <span className="font-display" style={{
                                                         fontSize: 'var(--text-sm)',
-                                                        fontWeight: 600,
+                                                        fontWeight: 700,
                                                         color: balance > 0 ? 'var(--color-success)' : balance < 0 ? 'var(--color-error)' : 'var(--fg-tertiary)',
                                                     }}>
                                                         {balance > 0 ? '+' : ''}{formatCurrency(Math.abs(balance))}

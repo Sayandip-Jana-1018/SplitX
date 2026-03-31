@@ -142,6 +142,13 @@ export default function GroupsPage() {
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+            <div className="page-hero" style={{ paddingTop: 'var(--space-2)' }}>
+                <div className="page-kicker">Shared Spaces</div>
+                <h2 className="page-hero-title">Your groups, beautifully organized</h2>
+                <p className="page-hero-subtitle">
+                    {groups.length} group{groups.length !== 1 ? 's' : ''} ready for expenses, journeys, settlements, and group-level clarity.
+                </p>
+            </div>
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                 <p style={{ color: 'var(--fg-tertiary)', fontSize: 'var(--text-xs)' }}>
                     {groups.length} group{groups.length !== 1 ? 's' : ''} · Split expenses together
@@ -188,10 +195,16 @@ export default function GroupsPage() {
             ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
                     {groups.map((group, i) => (
-                        <motion.a
+                        <motion.button
                             key={group.id}
-                            href={`/groups/${group.id}`}
-                            style={{ textDecoration: 'none' }}
+                            onClick={() => router.push(`/groups/${group.id}`)}
+                            style={{
+                                textDecoration: 'none',
+                                background: 'transparent',
+                                border: 'none',
+                                padding: 0,
+                                width: '100%',
+                            }}
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: i * 0.06, duration: 0.4 }}
@@ -232,7 +245,7 @@ export default function GroupsPage() {
                                         {group.emoji}
                                     </div>
                                     <div style={{ flex: 1, minWidth: 0 }}>
-                                        <div style={{
+                                        <div className="font-display" style={{
                                             fontSize: 'var(--text-sm)', fontWeight: 700,
                                             color: 'var(--fg-primary)', marginBottom: 2,
                                             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
@@ -266,7 +279,7 @@ export default function GroupsPage() {
                                         </div>
                                     </div>
                                     <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                                        <div style={{
+                                        <div className="font-display" style={{
                                             fontSize: 'var(--text-sm)', fontWeight: 700,
                                             background: 'linear-gradient(135deg, var(--accent-400), var(--accent-500))',
                                             WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
@@ -302,7 +315,7 @@ export default function GroupsPage() {
                                     )}
                                 </div>
                             </div>
-                        </motion.a>
+                        </motion.button>
                     ))}
                 </div>
             )}
