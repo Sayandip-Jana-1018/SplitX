@@ -108,6 +108,13 @@ export async function PUT(
             return NextResponse.json({ error: 'Transaction not found or access denied' }, { status: 404 });
         }
 
+        if (existing.splitType === 'custom') {
+            return NextResponse.json(
+                { error: 'Custom split transactions cannot be edited. Delete and recreate the expense instead.' },
+                { status: 400 }
+            );
+        }
+
         // If amount changed, recalculate equal splits
         const updateData: Record<string, unknown> = {};
         if (parsed.data.title) updateData.title = parsed.data.title;
