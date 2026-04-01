@@ -2,6 +2,15 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseAdmin = process.env.SUPABASE_SERVICE_ROLE_KEY && process.env.NEXT_PUBLIC_SUPABASE_URL
+    ? createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
+        auth: { autoRefreshToken: false, persistSession: false },
+    })
+    : null;
+
+const AVATAR_BUCKETS = ['avatars', 'receipts'] as const;
 
 // POST /api/me/avatar — upload profile image to Supabase Storage
 export async function POST(req: Request) {
@@ -36,21 +45,29 @@ export async function POST(req: Request) {
 
         // Upload to Supabase Storage (receipts bucket — we reuse it for avatars too)
         const buffer = Buffer.from(await file.arrayBuffer());
-        const { error: uploadError } = await supabase.storage
-            .from('receipts')
-            .upload(filename, buffer, {
-                contentType: file.type,
-                upsert: true,
-            });
+        const storageClient = supabaseAdmin || supabase;
+        let imageUrl: string | null = null;
 
-        if (uploadError) {
-            console.error('Supabase upload error:', uploadError);
-            return NextResponse.json({ error: 'Failed to upload avatar' }, { status: 500 });
+        for (const bucket of AVATAR_BUCKETS) {
+            const { error: uploadError } = await storageClient.storage
+                .from(bucket)
+                .upload(filename, buffer, {
+                    contentType: file.type,
+                    upsert: true,
+                });
+
+            if (!uploadError) {
+                const { data: urlData } = storageClient.storage.from(bucket).getPublicUrl(filename);
+                imageUrl = urlData.publicUrl;
+                break;
+            }
+
+            console.warn(`Supabase avatar upload failed for bucket "${bucket}":`, uploadError);
         }
 
-        // Get public URL
-        const { data: urlData } = supabase.storage.from('receipts').getPublicUrl(filename);
-        const imageUrl = urlData.publicUrl;
+        if (!imageUrl) {
+            imageUrl = `data:${file.type};base64,${buffer.toString('base64')}`;
+        }
 
         // Update user record
         await prisma.user.update({

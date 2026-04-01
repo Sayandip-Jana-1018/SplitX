@@ -114,7 +114,7 @@ function buildEdgeLayouts(params: {
 
         const tx = 0.25 * sx + 0.5 * cpx + 0.25 * ex;
         const ty = 0.25 * sy + 0.5 * cpy + 0.25 * ey;
-        let pillX = tx + nx * (params.compact ? 8 : 10) * dir;
+        const pillX = tx + nx * (params.compact ? 8 : 10) * dir;
         let pillY = ty - (params.compact ? 20 : 24);
 
         const distanceFromSource = Math.hypot(pillX - fromNode.x, pillY - fromNode.y);

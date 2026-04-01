@@ -12,6 +12,97 @@ const CreateNotificationSchema = z.object({
     link: z.string().optional(),
 });
 
+function extractGroupIdFromLink(link?: string | null) {
+    if (!link) return null;
+    const match = link.match(/^\/groups\/([^/?#]+)/);
+    return match?.[1] || null;
+}
+
+async function cleanupStaleGroupNotifications(userId: string) {
+    const [recentNotifications, unreadGroupNotifications] = await Promise.all([
+        prisma.notification.findMany({
+            where: { userId },
+            include: {
+                actor: { select: { name: true, image: true } },
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 50,
+        }),
+        prisma.notification.findMany({
+            where: {
+                userId,
+                read: false,
+                link: { startsWith: '/groups/' },
+            },
+            select: { id: true, link: true },
+        }),
+    ]);
+
+    const linkedGroupIds = new Set<string>();
+    for (const notification of recentNotifications) {
+        const groupId = extractGroupIdFromLink(notification.link);
+        if (groupId) linkedGroupIds.add(groupId);
+    }
+    for (const notification of unreadGroupNotifications) {
+        const groupId = extractGroupIdFromLink(notification.link);
+        if (groupId) linkedGroupIds.add(groupId);
+    }
+
+    if (linkedGroupIds.size === 0) {
+        return {
+            notifications: recentNotifications,
+            unreadCount: recentNotifications.filter((notification) => !notification.read).length,
+        };
+    }
+
+    const accessibleGroups = await prisma.group.findMany({
+        where: {
+            id: { in: Array.from(linkedGroupIds) },
+            deletedAt: null,
+            OR: [
+                { ownerId: userId },
+                { members: { some: { userId } } },
+            ],
+        },
+        select: { id: true },
+    });
+
+    const accessibleGroupIds = new Set(accessibleGroups.map((group) => group.id));
+    const staleNotificationIds = new Set<string>();
+
+    for (const notification of recentNotifications) {
+        const groupId = extractGroupIdFromLink(notification.link);
+        if (groupId && !accessibleGroupIds.has(groupId)) {
+            staleNotificationIds.add(notification.id);
+        }
+    }
+
+    for (const notification of unreadGroupNotifications) {
+        const groupId = extractGroupIdFromLink(notification.link);
+        if (groupId && !accessibleGroupIds.has(groupId)) {
+            staleNotificationIds.add(notification.id);
+        }
+    }
+
+    if (staleNotificationIds.size > 0) {
+        await prisma.notification.deleteMany({
+            where: {
+                userId,
+                id: { in: Array.from(staleNotificationIds) },
+            },
+        });
+    }
+
+    const notifications = recentNotifications.filter(
+        (notification) => !staleNotificationIds.has(notification.id)
+    );
+
+    return {
+        notifications,
+        unreadCount: notifications.filter((notification) => !notification.read).length,
+    };
+}
+
 /**
  * GET /api/notifications — list user's notifications (newest first, max 50)
  * PATCH /api/notifications — mark notifications as read
@@ -31,18 +122,7 @@ export async function GET() {
         const user = await prisma.user.findUnique({ where: { email: session.user.email } });
         if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
-        const notifications = await prisma.notification.findMany({
-            where: { userId: user.id },
-            include: {
-                actor: { select: { name: true, image: true } },
-            },
-            orderBy: { createdAt: 'desc' },
-            take: 50,
-        });
-
-        const unreadCount = await prisma.notification.count({
-            where: { userId: user.id, read: false },
-        });
+        const { notifications, unreadCount } = await cleanupStaleGroupNotifications(user.id);
 
         return NextResponse.json({ data: notifications, unreadCount });
     } catch (error) {

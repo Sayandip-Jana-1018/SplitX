@@ -149,6 +149,16 @@ export async function DELETE(
 
         // ── Notify the removed user ──
         try {
+            await prisma.notification.deleteMany({
+                where: {
+                    userId,
+                    OR: [
+                        { link: `/groups/${groupId}` },
+                        { link: { startsWith: `/groups/${groupId}/` } },
+                    ],
+                },
+            });
+
             await prisma.notification.create({
                 data: {
                     user: { connect: { id: userId } },

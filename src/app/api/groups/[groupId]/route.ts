@@ -170,6 +170,15 @@ export async function DELETE(
                     data: { status: 'cancelled', deletedAt: new Date() },
                 });
             }
+
+            await tx.notification.deleteMany({
+                where: {
+                    OR: [
+                        { link: `/groups/${groupId}` },
+                        { link: { startsWith: `/groups/${groupId}/` } },
+                    ],
+                },
+            });
         });
 
         await createAuditLog({

@@ -40,6 +40,10 @@ interface ComputedTransfer {
     fromName?: string; toName?: string;
     fromImage?: string | null; toImage?: string | null;
     toUpiId?: string | null;
+    tripId?: string;
+    groupId?: string;
+    groupName?: string;
+    groupEmoji?: string;
     groupBreakdown?: { groupName: string; groupEmoji: string; amount: number }[];
 }
 interface RecordedSettlement {
@@ -123,7 +127,8 @@ export default function SettlementsPage() {
                 amount: t.amount,
                 status: 'pending' as const,
                 toUpiId: t.toUpiId || null,
-                tripId,
+                tripId: t.tripId || tripId,
+                groupBreakdown: t.groupBreakdown || [],
             }));
 
         const buildSettled = (recorded: RecordedSettlement[]) =>
@@ -141,15 +146,6 @@ export default function SettlementsPage() {
 
         const allP = buildPending(globalComputed, '');
         // Resolve tripId for global settlements — find any group where BOTH users are members
-        for (const s of allP) {
-            if (!s.tripId) {
-                const matchGroup = slideData.find(sl => sl.tripId &&
-                    sl.members.some(m => m.id === s.from.id) &&
-                    sl.members.some(m => m.id === s.to.id)
-                );
-                if (matchGroup) s.tripId = matchGroup.tripId;
-            }
-        }
         const allS = buildSettled(globalRecorded);
 
         const active = slideData[activeSlide] || slideData[0];
@@ -408,7 +404,7 @@ export default function SettlementsPage() {
                                                 textTransform: 'uppercase', letterSpacing: '0.05em',
                                             }}>
                                                 <GitBranch size={12} />
-                                                Global Pairwise Summary
+                                                Global Group Summary
                                             </div>
                                         </div>
                                         {/* Explanation */}
@@ -421,19 +417,14 @@ export default function SettlementsPage() {
                                             fontSize: 11, color: 'var(--fg-tertiary)', lineHeight: 1.5,
                                         }}>
                                             <Info size={13} style={{ flexShrink: 0, marginTop: 1, color: 'var(--accent-400)' }} />
-                                            <span>Net amounts owed between each pair of people across all groups. Tap any row to see which groups contribute.</span>
+                                            <span>Each row stays scoped to the group that created it, so shared members across different groups never get merged together.</span>
                                         </div>
                                         {activePending.length > 0 ? (
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                                                 {activePending.map((s, i) => {
                                                     const isSender = s.from.id === currentUserId;
                                                     const isReceiver = s.to.id === currentUserId;
-                                                    // Find the matching global computed transfer for breakdown
-                                                    const globalComputed = (data?.global?.computed || []) as ComputedTransfer[];
-                                                    const matchingTransfer = globalComputed.find(
-                                                        (t) => t.from === s.from.id && t.to === s.to.id
-                                                    );
-                                                    const breakdown = matchingTransfer?.groupBreakdown || [];
+                                                    const breakdown = s.groupBreakdown || [];
                                                     const isExpanded = expandedGlobalIdx === i;
                                                     return (
                                                         <div key={i}>

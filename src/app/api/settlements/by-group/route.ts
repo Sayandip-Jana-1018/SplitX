@@ -9,7 +9,34 @@ import {
     simplifyGroupBalances,
 } from '@/lib/groupFinance';
 
-// GET /api/settlements/by-group — returns per-group settlement data in one call
+function buildFinanceMembers(group: {
+    owner: { id: string; name: string | null; image: string | null; upiId: string | null };
+    members: {
+        user: { id: string; name: string | null; image: string | null; upiId: string | null };
+    }[];
+}) {
+    const memberMap = new Map<string, FinanceMember>();
+
+    memberMap.set(group.owner.id, {
+        id: group.owner.id,
+        name: group.owner.name || 'Unknown',
+        image: group.owner.image || null,
+        upiId: group.owner.upiId || null,
+    });
+
+    for (const member of group.members) {
+        memberMap.set(member.user.id, {
+            id: member.user.id,
+            name: member.user.name || 'Unknown',
+            image: member.user.image || null,
+            upiId: member.user.upiId || null,
+        });
+    }
+
+    return Array.from(memberMap.values());
+}
+
+// GET /api/settlements/by-group â€” returns per-group settlement data in one call
 export async function GET() {
     try {
         const session = await auth();
@@ -22,7 +49,6 @@ export async function GET() {
             return NextResponse.json({ groups: [], global: { computed: [], recorded: [] } });
         }
 
-        // 1) Get all groups the user belongs to, with members + active trip
         const groups = await prisma.group.findMany({
             where: {
                 deletedAt: null,
@@ -32,6 +58,9 @@ export async function GET() {
                 ],
             },
             include: {
+                owner: {
+                    select: { id: true, name: true, image: true, upiId: true },
+                },
                 members: {
                     include: { user: { select: { id: true, name: true, image: true, upiId: true } } },
                 },
@@ -43,100 +72,83 @@ export async function GET() {
             },
         });
 
-        // Build global name/image/upi maps
-        const nameMap: Record<string, string> = {};
-        const imageMap: Record<string, string | null> = {};
-        const upiMap: Record<string, string | null> = {};
-
-        for (const g of groups) {
-            // Include owner
-            nameMap[g.ownerId] = nameMap[g.ownerId] || 'Unknown';
-            for (const m of g.members) {
-                nameMap[m.user.id] = m.user.name || 'Unknown';
-                imageMap[m.user.id] = m.user.image || null;
-                upiMap[m.user.id] = m.user.upiId || null;
-            }
-        }
-
-        // 2) Collect all active tripIds
-        const tripIdToGroup = new Map<string, typeof groups[0]>();
+        const tripIdToGroup = new Map<string, (typeof groups)[number]>();
         const allTripIds: string[] = [];
 
-        for (const g of groups) {
-            if (g.trips[0]) {
-                tripIdToGroup.set(g.trips[0].id, g);
-                allTripIds.push(g.trips[0].id);
-            }
+        for (const group of groups) {
+            const activeTrip = group.trips[0];
+            if (!activeTrip) continue;
+            tripIdToGroup.set(activeTrip.id, group);
+            allTripIds.push(activeTrip.id);
         }
 
         if (allTripIds.length === 0) {
             return NextResponse.json({ groups: [], global: { computed: [], recorded: [] } });
         }
 
-        // 3) Batch-fetch ALL transactions + splits across all trips
-        const allTransactions = await prisma.transaction.findMany({
-            where: { tripId: { in: allTripIds }, deletedAt: null },
-            include: { splits: true },
-        });
+        const nameMap: Record<string, string> = {};
+        const imageMap: Record<string, string | null> = {};
+        const upiMap: Record<string, string | null> = {};
 
-        // 4) Batch-fetch ALL completed settlements
-        const allCompletedSettlements = await prisma.settlement.findMany({
-            where: {
-                tripId: { in: allTripIds },
-                status: { in: ['completed', 'confirmed'] },
-                deletedAt: null,
-            },
-        });
-
-        // 5) Batch-fetch ALL recorded settlements (for the list)
-        const allRecordedSettlements = await prisma.settlement.findMany({
-            where: { tripId: { in: allTripIds }, deletedAt: null },
-            include: {
-                from: { select: { id: true, name: true, image: true } },
-                to: { select: { id: true, name: true, image: true } },
-            },
-            orderBy: { createdAt: 'desc' },
-        });
-
-        // 6) Group transactions and settlements by tripId
-        const txnsByTrip = new Map<string, typeof allTransactions>();
-        for (const txn of allTransactions) {
-            const arr = txnsByTrip.get(txn.tripId) || [];
-            arr.push(txn);
-            txnsByTrip.set(txn.tripId, arr);
+        for (const group of groups) {
+            for (const member of buildFinanceMembers(group)) {
+                nameMap[member.id] = member.name;
+                imageMap[member.id] = member.image || null;
+                upiMap[member.id] = member.upiId || null;
+            }
         }
 
-        const settByTrip = new Map<string, typeof allCompletedSettlements>();
-        for (const s of allCompletedSettlements) {
-            const arr = settByTrip.get(s.tripId) || [];
-            arr.push(s);
-            settByTrip.set(s.tripId, arr);
+        const [allTransactions, allCompletedSettlements, allRecordedSettlements] = await Promise.all([
+            prisma.transaction.findMany({
+                where: { tripId: { in: allTripIds }, deletedAt: null },
+                include: { splits: true },
+            }),
+            prisma.settlement.findMany({
+                where: {
+                    tripId: { in: allTripIds },
+                    status: { in: ['completed', 'confirmed'] },
+                    deletedAt: null,
+                },
+            }),
+            prisma.settlement.findMany({
+                where: { tripId: { in: allTripIds }, deletedAt: null },
+                include: {
+                    from: { select: { id: true, name: true, image: true } },
+                    to: { select: { id: true, name: true, image: true } },
+                },
+                orderBy: { createdAt: 'desc' },
+            }),
+        ]);
+
+        const txnsByTrip = new Map<string, typeof allTransactions>();
+        for (const transaction of allTransactions) {
+            const transactions = txnsByTrip.get(transaction.tripId) || [];
+            transactions.push(transaction);
+            txnsByTrip.set(transaction.tripId, transactions);
+        }
+
+        const settlementsByTrip = new Map<string, typeof allCompletedSettlements>();
+        for (const settlement of allCompletedSettlements) {
+            const settlements = settlementsByTrip.get(settlement.tripId) || [];
+            settlements.push(settlement);
+            settlementsByTrip.set(settlement.tripId, settlements);
         }
 
         const recordedByTrip = new Map<string, typeof allRecordedSettlements>();
-        for (const r of allRecordedSettlements) {
-            const arr = recordedByTrip.get(r.tripId) || [];
-            arr.push(r);
-            recordedByTrip.set(r.tripId, arr);
+        for (const settlement of allRecordedSettlements) {
+            const recorded = recordedByTrip.get(settlement.tripId) || [];
+            recorded.push(settlement);
+            recordedByTrip.set(settlement.tripId, recorded);
         }
 
-        // 7) For each group, compute per-group settlements using greedy netting
-        const perGroupResults = [];
-
-        for (const tripId of allTripIds) {
+        const perGroupResults = allTripIds.flatMap((tripId) => {
             const group = tripIdToGroup.get(tripId);
-            if (!group) continue;
+            if (!group) return [];
 
+            const members = buildFinanceMembers(group);
             const transactions = txnsByTrip.get(tripId) || [];
-            const completedSettlements = settByTrip.get(tripId) || [];
-            const recorded = recordedByTrip.get(tripId) || [];
-
-            const members: FinanceMember[] = group.members.map((member) => ({
-                id: member.user.id,
-                name: member.user.name || 'Unknown',
-                image: member.user.image || null,
-                upiId: member.user.upiId || null,
-            }));
+            const completedSettlements = settlementsByTrip.get(tripId) || [];
+            const recordedSettlements = recordedByTrip.get(tripId) || [];
 
             const transactionSnapshots: FinanceTransactionSnapshot[] = transactions.map((transaction) => ({
                 id: transaction.id,
@@ -180,133 +192,50 @@ export async function GET() {
                 settlements: settlementSnapshots,
             });
 
-            const computedWithNames = simplifyGroupBalances({
+            const computed = simplifyGroupBalances({
                 balances,
                 members,
-            });
+            }).map((transfer) => ({
+                ...transfer,
+                tripId,
+                groupId: group.id,
+                groupName: group.name,
+                groupEmoji: group.emoji,
+                groupBreakdown: [
+                    {
+                        groupName: group.name,
+                        groupEmoji: group.emoji,
+                        amount: transfer.amount,
+                    },
+                ],
+            }));
 
-            perGroupResults.push({
+            return [{
                 groupId: group.id,
                 groupName: group.name,
                 groupEmoji: group.emoji,
                 tripId,
                 members,
-                computed: computedWithNames,
-                recorded: recorded.map(r => ({
-                    id: r.id,
-                    fromId: r.fromId,
-                    toId: r.toId,
-                    amount: r.amount,
-                    status: r.status,
-                    method: r.method,
-                    note: r.note,
-                    from: r.from,
-                    to: r.to,
-                    createdAt: r.createdAt,
+                computed,
+                recorded: recordedSettlements.map((settlement) => ({
+                    id: settlement.id,
+                    fromId: settlement.fromId,
+                    toId: settlement.toId,
+                    amount: settlement.amount,
+                    status: settlement.status,
+                    method: settlement.method,
+                    note: settlement.note,
+                    from: settlement.from,
+                    to: settlement.to,
+                    createdAt: settlement.createdAt,
                 })),
-            });
-        }
-
-        // 8) Compute global pairwise debts WITH per-group breakdown
-        const pairwise = new Map<string, number>();
-        // Track pairwise debts per-group for breakdown transparency
-        const pairwiseByGroup = new Map<string, Map<string, { amount: number; groupName: string; groupEmoji: string }>>();
-        const addDebt = (fromId: string, toId: string, amount: number) => {
-            if (fromId === toId) return;
-            const key = fromId < toId ? `${fromId}:${toId}` : `${toId}:${fromId}`;
-            const sign = fromId < toId ? 1 : -1;
-            pairwise.set(key, (pairwise.get(key) || 0) + amount * sign);
-        };
-        const addDebtForGroup = (fromId: string, toId: string, amount: number, groupName: string, groupEmoji: string, tripId: string) => {
-            if (fromId === toId) return;
-            const key = fromId < toId ? `${fromId}:${toId}` : `${toId}:${fromId}`;
-            const sign = fromId < toId ? 1 : -1;
-            if (!pairwiseByGroup.has(key)) pairwiseByGroup.set(key, new Map());
-            const groupMap = pairwiseByGroup.get(key)!;
-            const existing = groupMap.get(tripId) || { amount: 0, groupName, groupEmoji };
-            existing.amount += amount * sign;
-            groupMap.set(tripId, existing);
-        };
-
-        for (const txn of allTransactions) {
-            const group = tripIdToGroup.get(txn.tripId);
-            for (const split of txn.splits) {
-                addDebt(split.userId, txn.payerId, split.amount);
-                if (group) {
-                    addDebtForGroup(split.userId, txn.payerId, split.amount, group.name, group.emoji, txn.tripId);
-                }
-            }
-        }
-        for (const s of allCompletedSettlements) {
-            const group = tripIdToGroup.get(s.tripId);
-            addDebt(s.fromId, s.toId, -s.amount);
-            if (group) {
-                addDebtForGroup(s.fromId, s.toId, -s.amount, group.name, group.emoji, s.tripId);
-            }
-        }
-
-        const globalTransfers: {
-            from: string; to: string; amount: number;
-            fromName: string; toName: string;
-            fromImage: string | null; toImage: string | null;
-            toUpiId: string | null;
-            groupBreakdown: { groupName: string; groupEmoji: string; amount: number }[];
-        }[] = [];
-
-        for (const [key, amount] of pairwise.entries()) {
-            if (Math.abs(amount) < 1) continue;
-            const [userA, userB] = key.split(':');
-
-            // Build per-group breakdown for this pair
-            const groupMap = pairwiseByGroup.get(key);
-            const breakdown: { groupName: string; groupEmoji: string; amount: number }[] = [];
-            if (groupMap) {
-                for (const [, entry] of groupMap.entries()) {
-                    if (Math.abs(entry.amount) < 1) continue;
-                    // Align the amount direction: positive = userA owes userB
-                    breakdown.push({
-                        groupName: entry.groupName,
-                        groupEmoji: entry.groupEmoji,
-                        amount: entry.amount,
-                    });
-                }
-                // Sort by absolute amount descending for readability
-                breakdown.sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount));
-            }
-
-            if (amount > 0) {
-                // userA owes userB
-                globalTransfers.push({
-                    from: userA, to: userB, amount,
-                    fromName: nameMap[userA] || 'Unknown', toName: nameMap[userB] || 'Unknown',
-                    fromImage: imageMap[userA] || null, toImage: imageMap[userB] || null,
-                    toUpiId: upiMap[userB] || null,
-                    groupBreakdown: breakdown.map(b => ({
-                        ...b,
-                        // If net positive, the debt flows userA→userB, so show positive
-                        amount: b.amount,
-                    })),
-                });
-            } else {
-                // userB owes userA
-                globalTransfers.push({
-                    from: userB, to: userA, amount: -amount,
-                    fromName: nameMap[userB] || 'Unknown', toName: nameMap[userA] || 'Unknown',
-                    fromImage: imageMap[userB] || null, toImage: imageMap[userA] || null,
-                    toUpiId: upiMap[userA] || null,
-                    groupBreakdown: breakdown.map(b => ({
-                        ...b,
-                        // Flip direction: debt flows userB→userA
-                        amount: -b.amount,
-                    })),
-                });
-            }
-        }
+            }];
+        });
 
         return NextResponse.json({
             groups: perGroupResults,
             global: {
-                computed: globalTransfers,
+                computed: perGroupResults.flatMap((group) => group.computed),
                 recorded: allRecordedSettlements,
             },
         });
@@ -315,4 +244,3 @@ export async function GET() {
         return NextResponse.json({ error: 'Failed to compute settlements' }, { status: 500 });
     }
 }
-
