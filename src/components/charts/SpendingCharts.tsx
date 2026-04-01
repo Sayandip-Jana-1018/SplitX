@@ -305,6 +305,12 @@ interface MemberSpend {
     spent: number;  // paise (fair share / consumption)
 }
 
+interface GroupMemberSpend {
+    name: string;
+    amount: number;
+    image?: string | null;
+}
+
 const MOCK_MEMBER_DATA: MemberSpend[] = [
     { name: 'Sayan', paid: 780000, spent: 520000 },
     { name: 'Aman', paid: 450000, spent: 520000 },
@@ -417,6 +423,122 @@ export function MemberSpendChart({ data = MOCK_MEMBER_DATA }: { data?: MemberSpe
                     }} />
                     <span style={{ fontWeight: 600, color: 'var(--fg-secondary)' }}>Spent</span>
                 </span>
+            </div>
+        </div>
+    );
+}
+
+export function GroupSpendBarChart({
+    data,
+    title = 'Spent by Member',
+    subtitle = 'How much each person paid in this group this month',
+}: {
+    data: GroupMemberSpend[];
+    title?: string;
+    subtitle?: string;
+}) {
+    const maxAmount = Math.max(...data.map((entry) => entry.amount), 0);
+
+    return (
+        <div style={glassCard}>
+            <div style={{
+                position: 'absolute', inset: 0,
+                background: 'radial-gradient(circle at top left, rgba(var(--accent-500-rgb), 0.08), transparent 45%)',
+                pointerEvents: 'none',
+            }} />
+            <div style={{ position: 'relative', zIndex: 1 }}>
+                <div style={{
+                    textAlign: 'center',
+                    marginBottom: 'var(--space-4)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 4,
+                }}>
+                    <h4 style={{
+                        fontSize: 'var(--text-sm)', fontWeight: 700,
+                        color: 'var(--fg-primary)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                    }}>
+                        <span style={{ fontSize: 16 }}>💸</span>
+                        {title}
+                    </h4>
+                    <p style={{
+                        margin: 0,
+                        fontSize: 'var(--text-xs)',
+                        color: 'var(--fg-tertiary)',
+                    }}>
+                        {subtitle}
+                    </p>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+                    {data.map((entry, index) => {
+                        const amount = entry.amount;
+                        const width = maxAmount > 0 ? `${Math.max((amount / maxAmount) * 100, 10)}%` : '10%';
+                        const [start, end] = GRADIENT_PAIRS[index % GRADIENT_PAIRS.length];
+                        return (
+                            <div key={entry.name} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                <div style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    gap: 12,
+                                }}>
+                                    <div style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 10,
+                                        minWidth: 0,
+                                        flex: 1,
+                                    }}>
+                                        <div style={{
+                                            width: 10,
+                                            height: 10,
+                                            borderRadius: '50%',
+                                            flexShrink: 0,
+                                            background: `linear-gradient(135deg, ${start}, ${end})`,
+                                            boxShadow: `0 0 10px ${start}55`,
+                                        }} />
+                                        <span style={{
+                                            fontSize: 'var(--text-sm)',
+                                            fontWeight: 700,
+                                            color: 'var(--fg-primary)',
+                                            overflow: 'hidden',
+                                            textOverflow: 'ellipsis',
+                                            whiteSpace: 'nowrap',
+                                        }}>
+                                            {entry.name}
+                                        </span>
+                                    </div>
+                                    <span style={{
+                                        fontSize: 'var(--text-sm)',
+                                        fontWeight: 700,
+                                        color: 'var(--fg-primary)',
+                                        flexShrink: 0,
+                                    }}>
+                                        {formatCurrency(amount)}
+                                    </span>
+                                </div>
+
+                                <div style={{
+                                    height: 14,
+                                    borderRadius: 999,
+                                    overflow: 'hidden',
+                                    background: 'rgba(var(--accent-500-rgb), 0.08)',
+                                    border: '1px solid rgba(var(--accent-500-rgb), 0.08)',
+                                }}>
+                                    <div style={{
+                                        height: '100%',
+                                        width,
+                                        borderRadius: 999,
+                                        background: `linear-gradient(90deg, ${start}, ${end})`,
+                                        boxShadow: `0 0 18px ${start}33 inset`,
+                                    }} />
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
             </div>
         </div>
     );
