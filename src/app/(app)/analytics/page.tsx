@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { AlertTriangle, CheckCircle2, Inbox, Loader2, TrendingUp, Users, ArrowRight } from 'lucide-react';
 import dynamic from 'next/dynamic';
@@ -66,9 +66,13 @@ export default function AnalyticsPage() {
     const [loading, setLoading] = useState(true);
     const [pickerLoading, setPickerLoading] = useState(false);
     const [error, setError] = useState(false);
+    const hasLoadedRef = useRef(false);
+    const requestIdRef = useRef(0);
 
     const fetchData = useCallback(async (groupId?: string | null) => {
-        const isInitial = !payload;
+        const requestId = requestIdRef.current + 1;
+        requestIdRef.current = requestId;
+        const isInitial = !hasLoadedRef.current;
         setError(false);
         if (isInitial) setLoading(true);
         else setPickerLoading(true);
@@ -77,19 +81,25 @@ export default function AnalyticsPage() {
             const search = groupId ? `?groupId=${encodeURIComponent(groupId)}` : '';
             const res = await fetch(`/api/analytics${search}`);
             if (!res.ok) {
+                if (requestId !== requestIdRef.current) return;
                 setError(true);
                 return;
             }
             const nextPayload: AnalyticsPayload = await res.json();
+            if (requestId !== requestIdRef.current) return;
             setPayload(nextPayload);
             setSelectedGroupId(nextPayload.selectedGroupId);
+            hasLoadedRef.current = true;
         } catch {
+            if (requestId !== requestIdRef.current) return;
             setError(true);
         } finally {
-            setLoading(false);
-            setPickerLoading(false);
+            if (requestId === requestIdRef.current) {
+                setLoading(false);
+                setPickerLoading(false);
+            }
         }
-    }, [payload]);
+    }, []);
 
     useEffect(() => {
         fetchData();
