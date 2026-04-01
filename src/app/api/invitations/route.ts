@@ -85,7 +85,7 @@ export async function POST(req: Request) {
             type: 'group_invite',
             title: 'Group Invitation',
             body: `${user.name || 'Someone'} invited you to join ${group.emoji} ${group.name}`,
-            link: `/groups`,
+            link: `/invitations/${invitation.id}`,
         });
 
         return NextResponse.json({

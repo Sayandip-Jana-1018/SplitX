@@ -71,6 +71,7 @@ interface Settlement {
     fromName: string;
     toName: string;
     amount: number;
+    groupName?: string;
 }
 
 interface GroupMember {
@@ -150,13 +151,15 @@ export default function DashboardPage() {
     // Fast data fetching with SWR
     const { data: groupsData, mutate: mutateGroups, isLoading: loadingGroups } = useSWR('/api/groups', fetcher);
     const { data: txnsData, mutate: mutateTxns, isLoading: loadingTxns } = useSWR('/api/transactions?limit=5', fetcher);
-    const { data: settData, mutate: mutateSettlements, isLoading: loadingSett } = useSWR('/api/settlements', fetcher);
+    const { data: settData, mutate: mutateSettlements, isLoading: loadingSett } = useSWR('/api/settlements/by-group', fetcher);
 
     // Derive all dashboard data from SWR responses (no useEffect + setState)
     const { stats, recentTxns, settlements, members } = useMemo(() => {
         const groups = groupsData?.groups || groupsData || [];
         const txns = Array.isArray(txnsData?.transactions) ? txnsData.transactions : Array.isArray(txnsData) ? txnsData : [];
-        const pending = Array.isArray(settData?.computed) ? settData.computed : [];
+        const groupedSettlements = Array.isArray(settData?.groups) ? settData.groups : [];
+        const globalPending = Array.isArray(settData?.global?.computed) ? settData.global.computed : [];
+        const defaultGroupPending = Array.isArray(groupedSettlements[0]?.computed) ? groupedSettlements[0].computed : [];
 
         const newActiveTrips = groups.length;
         const allMembers: GroupMember[] = [];
@@ -185,16 +188,21 @@ export default function DashboardPage() {
         // Total spent = sum of totalSpent from ALL groups (pre-computed by groups API)
         const newTotalSpent = groups.reduce((sum: number, g: Record<string, unknown>) => sum + ((g.totalSpent as number) || 0), 0);
 
-        const settList: Settlement[] = pending.map((s: Record<string, unknown>) => ({
+        const settList: Settlement[] = defaultGroupPending.map((s: Record<string, unknown>) => ({
             from: (s.from as string) || '',
             to: (s.to as string) || '',
             fromName: (s.fromName as string) || (s.from as string) || 'Unknown',
             toName: (s.toName as string) || (s.to as string) || 'Unknown',
             amount: (s.amount as number) || 0,
+            groupName: (s.groupName as string) || groupedSettlements[0]?.groupName || '',
         }));
 
-        const newYouOwe = settList.reduce((sum, s) => currentUserId && s.from === currentUserId ? sum + s.amount : sum, 0);
-        const newYouAreOwed = settList.reduce((sum, s) => currentUserId && s.to === currentUserId ? sum + s.amount : sum, 0);
+        const newYouOwe = globalPending.reduce((sum: number, s: Record<string, unknown>) => (
+            currentUserId && s.from === currentUserId ? sum + (((s.amount as number) || 0)) : sum
+        ), 0);
+        const newYouAreOwed = globalPending.reduce((sum: number, s: Record<string, unknown>) => (
+            currentUserId && s.to === currentUserId ? sum + (((s.amount as number) || 0)) : sum
+        ), 0);
 
         return {
             stats: {
@@ -539,7 +547,11 @@ export default function DashboardPage() {
 
                     {/* ═══ SETTLEMENTS ═══ */}
                     <motion.div variants={fadeUp} transition={{ duration: 0.5, delay: 0.25 }}>
-                        <SectionHeader title="Pending Settlements" action="Settle Up" href="/settlements" />
+                        <SectionHeader
+                            title={settlements[0]?.groupName ? `${settlements[0].groupName} Pending Settlements` : 'Pending Settlements'}
+                            action="Settle Up"
+                            href="/settlements"
+                        />
                         {settlements.length > 0 ? (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
                                 {settlements.map((s, i) => (

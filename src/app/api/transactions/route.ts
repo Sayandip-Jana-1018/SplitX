@@ -50,6 +50,27 @@ export async function GET(req: Request) {
 
         // If tripId is provided, use it directly
         if (tripId) {
+            const user = await prisma.user.findUnique({ where: { email: session.user.email } });
+            if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
+
+            const accessibleTrip = await prisma.trip.findFirst({
+                where: {
+                    id: tripId,
+                    group: {
+                        deletedAt: null,
+                        OR: [
+                            { ownerId: user.id },
+                            { members: { some: { userId: user.id } } },
+                        ],
+                    },
+                },
+                select: { id: true },
+            });
+
+            if (!accessibleTrip) {
+                return NextResponse.json({ error: 'Trip not found or access denied' }, { status: 404 });
+            }
+
             const transactions = await prisma.transaction.findMany({
                 where: { tripId, deletedAt: null },
                 include: {

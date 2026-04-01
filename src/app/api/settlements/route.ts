@@ -62,6 +62,24 @@ export async function GET(req: Request) {
         if (!user) return NextResponse.json({ computed: [], recorded: [], balances: {} });
 
         if (tripId) {
+            const accessibleTrip = await prisma.trip.findFirst({
+                where: {
+                    id: tripId,
+                    group: {
+                        deletedAt: null,
+                        OR: [
+                            { ownerId: user.id },
+                            { members: { some: { userId: user.id } } },
+                        ],
+                    },
+                },
+                select: { id: true },
+            });
+
+            if (!accessibleTrip) {
+                return NextResponse.json({ error: 'Trip not found or access denied' }, { status: 404 });
+            }
+
             const transactions = await prisma.transaction.findMany({
                 where: { tripId, deletedAt: null },
                 include: { splits: true },

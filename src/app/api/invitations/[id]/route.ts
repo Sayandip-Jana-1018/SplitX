@@ -51,7 +51,11 @@ export async function PATCH(
         }
 
         if (invitation.status !== 'pending') {
-            return NextResponse.json({ error: 'Invitation already responded to' }, { status: 409 });
+            return NextResponse.json({
+                success: true,
+                status: invitation.status,
+                groupId: invitation.status === 'accepted' ? invitation.groupId : undefined,
+            });
         }
 
         const newStatus = parsed.data.status;
@@ -64,12 +68,19 @@ export async function PATCH(
 
         if (newStatus === 'accepted') {
             // Add user to the group
-            await prisma.groupMember.create({
-                data: {
+            await prisma.groupMember.upsert({
+                where: {
+                    groupId_userId: {
+                        groupId: invitation.groupId,
+                        userId: user.id,
+                    },
+                },
+                create: {
                     groupId: invitation.groupId,
                     userId: user.id,
                     role: 'member',
                 },
+                update: {},
             });
 
             // Notify the inviter

@@ -69,7 +69,8 @@ export default function NotificationPanel() {
     // ── Invitation accept/decline ──
     const handleInvitationAction = async (notif: Notification, status: 'accepted' | 'declined') => {
         if (!notif.link) return;
-        const invitationId = notif.link.split('/').pop();
+        const match = notif.link.match(/\/invitations\/([^/?#]+)/);
+        const invitationId = match?.[1];
         if (!invitationId) return;
 
         setActionLoading(`${notif.id}-${status}`);
@@ -161,6 +162,10 @@ export default function NotificationPanel() {
                 );
                 setUnreadCount(prev => Math.max(0, prev - 1));
             } catch { /* silent */ }
+        }
+
+        if (notif.type === 'group_invite') {
+            return;
         }
 
         if (notif.link) {

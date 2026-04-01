@@ -111,16 +111,37 @@ export async function POST(
         const group = await prisma.group.findFirst({
             where: {
                 id: groupId,
+                deletedAt: null,
                 OR: [
                     { ownerId: user.id },
                     { members: { some: { userId: user.id } } },
                 ],
             },
-            select: { id: true, name: true },
+            select: {
+                id: true,
+                name: true,
+                ownerId: true,
+                members: { select: { userId: true } },
+            },
         });
 
         if (!group) {
             return NextResponse.json({ error: 'Not a member of this group' }, { status: 403 });
+        }
+
+        if (type === 'payment_reminder') {
+            if (!targetUserId) {
+                return NextResponse.json({ error: 'A target user is required for payment reminders' }, { status: 400 });
+            }
+
+            const allowedTargetIds = new Set<string>([
+                group.ownerId,
+                ...group.members.map((member) => member.userId),
+            ]);
+
+            if (!allowedTargetIds.has(targetUserId)) {
+                return NextResponse.json({ error: 'Target user is not a member of this group' }, { status: 400 });
+            }
         }
 
         // Rate limit: max 5 messages per 10 seconds per user per group
