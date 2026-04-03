@@ -8,7 +8,7 @@ interface ErrorStateProps {
     title?: string;
     message?: string;
     onRetry?: () => void;
-    variant?: 'default' | 'network' | 'empty';
+    variant?: 'default' | 'network' | 'restricted' | 'offline' | 'server' | 'empty';
 }
 
 export default function ErrorState({
@@ -17,8 +17,14 @@ export default function ErrorState({
     onRetry,
     variant = 'default',
 }: ErrorStateProps) {
-    const Icon = variant === 'network' ? WifiOff : AlertTriangle;
-    const iconColor = variant === 'network' ? 'var(--color-warning)' : 'var(--color-error)';
+    const Icon = variant === 'network' || variant === 'restricted' || variant === 'offline' ? WifiOff : AlertTriangle;
+    const iconColor = variant === 'network' || variant === 'restricted'
+        ? 'var(--color-warning)'
+        : variant === 'offline'
+            ? 'var(--color-error)'
+            : variant === 'server'
+                ? 'var(--accent-500)'
+                : 'var(--color-error)';
 
     return (
         <motion.div

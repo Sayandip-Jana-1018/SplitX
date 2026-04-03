@@ -6,10 +6,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Search, ArrowUpDown, ScanLine, Inbox, Trash2, Pencil, Check, X, Clock, List, Users } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Button from '@/components/ui/Button';
+import ErrorState from '@/components/ui/ErrorState';
 import { CategoryIcon, PaymentIcon, CATEGORY_ICONS, PAYMENT_ICONS } from '@/components/ui/Icons';
 import { formatCurrency, timeAgo } from '@/lib/utils';
 import { useToast } from '@/components/ui/Toast';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
+import { useViewportTier } from '@/hooks/useViewportTier';
+import { getNetworkErrorCopy, NetworkErrorVariant, toNetworkTaggedError } from '@/lib/networkErrors';
 
 /* ── Glassmorphic styles ── */
 const glass: React.CSSProperties = {
@@ -43,6 +46,7 @@ export default function TransactionsPage() {
     const { user: currentUser } = useCurrentUser();
     const [transactions, setTransactions] = useState<TransactionData[]>([]);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState<NetworkErrorVariant | null>(null);
     const [search, setSearch] = useState('');
     const [sortBy, setSortBy] = useState<SortKey>('time');
     const [filterCategory, setFilterCategory] = useState<string | null>(null);
@@ -56,6 +60,7 @@ export default function TransactionsPage() {
     const [viewMode, setViewMode] = useState<'list' | 'timeline'>('list');
     const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
     const [focusId, setFocusId] = useState<string | null>(null);
+    const { isDesktop } = useViewportTier();
 
     const startEdit = (txn: TransactionData) => {
         setEditingId(txn.id);
@@ -129,9 +134,13 @@ export default function TransactionsPage() {
             if (res.ok) {
                 const data = await res.json();
                 setTransactions(Array.isArray(data) ? data : []);
+                setLoadError(null);
+            } else {
+                throw toNetworkTaggedError({ response: res });
             }
         } catch (err) {
             console.error('Failed to fetch transactions:', err);
+            setLoadError(toNetworkTaggedError({ error: err }).variant);
         } finally {
             setLoading(false);
         }
@@ -189,6 +198,18 @@ export default function TransactionsPage() {
                     </div>
                 ))}
             </div>
+        );
+    }
+
+    if (loadError) {
+        const copy = getNetworkErrorCopy(loadError);
+        return (
+            <ErrorState
+                variant={loadError}
+                title={copy.title}
+                message={copy.message}
+                onRetry={fetchTransactions}
+            />
         );
     }
 
@@ -351,7 +372,12 @@ export default function TransactionsPage() {
 
             {/* ═══ TRANSACTION LIST — Premium Cards ═══ */}
             {viewMode === 'list' ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: isDesktop ? 'repeat(2, minmax(0, 1fr))' : '1fr',
+                    gap: 'var(--space-2)',
+                    alignItems: 'start',
+                }}>
                     <AnimatePresence mode="popLayout">
                         {filtered.map((txn, i) => {
                             const catConfig = CATEGORY_ICONS[txn.category] || CATEGORY_ICONS.general;

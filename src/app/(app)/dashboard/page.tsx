@@ -19,6 +19,7 @@ import {
 import Button from '@/components/ui/Button';
 import { AvatarGroup } from '@/components/ui/Avatar';
 import { CategoryIcon, PaymentIcon, PAYMENT_ICONS } from '@/components/ui/Icons';
+import ErrorState from '@/components/ui/ErrorState';
 import { DashboardSkeleton } from '@/components/ui/Skeleton';
 import { useAnimatedNumber } from '@/hooks/useAnimatedNumber';
 import { useHaptics } from '@/hooks/useHaptics';
@@ -28,18 +29,28 @@ import PullToRefreshIndicator from '@/components/ui/PullToRefreshIndicator';
 import TiltCard from '@/components/ui/TiltCard';
 import ParticleBackground from '@/components/ui/ParticleBackground';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
+import { usePerformanceMode } from '@/hooks/usePerformanceMode';
+import { useViewportTier } from '@/hooks/useViewportTier';
+import { getNetworkErrorCopy, NetworkTaggedError, toNetworkTaggedError } from '@/lib/networkErrors';
 import { isFeatureEnabled } from '@/lib/featureFlags';
 import { formatCurrency, timeAgo } from '@/lib/utils';
 import useSWR from 'swr';
 import Link from 'next/link';
 
-const fetcher = (url: string) => fetch(url).then((res) => {
-    if (res.status === 401) {
-        if (typeof window !== 'undefined') window.location.href = '/login';
-        return null;
+const fetcher = async (url: string) => {
+    try {
+        const res = await fetch(url);
+        if (res.status === 401) {
+            if (typeof window !== 'undefined') window.location.href = '/login';
+            return null;
+        }
+        if (!res.ok) throw toNetworkTaggedError({ response: res });
+        return res.json();
+    } catch (error) {
+        if (error instanceof NetworkTaggedError) throw error;
+        throw toNetworkTaggedError({ error });
     }
-    return res.json();
-});
+};
 
 /* ── Animation helpers ── */
 const fadeUp = {
@@ -124,14 +135,24 @@ const glassCardInner: React.CSSProperties = {
     zIndex: 1,
 };
 
+const dashboardSwrOptions = {
+    dedupingInterval: 20000,
+    revalidateOnFocus: false,
+    revalidateIfStale: false,
+    keepPreviousData: true,
+};
+
 export default function DashboardPage() {
     const router = useRouter();
 
     const [isRefreshing, setIsRefreshing] = useState(false);
+    const [secondaryReady, setSecondaryReady] = useState(false);
     const { toast } = useToast();
     const haptics = useHaptics();
     const greeting = useSmartGreeting();
     const { user: currentUser } = useCurrentUser();
+    const { mode } = usePerformanceMode();
+    const { isDesktop } = useViewportTier();
     const currentUserId = currentUser?.id || '';
 
     const { containerRef: ptrContainerRef, pullDistance: ptrPullDistance, refreshing: ptrRefreshing } = usePullToRefresh({
@@ -144,14 +165,14 @@ export default function DashboardPage() {
 
     // Scroll Parallax Logic
     const { scrollY } = useScroll({ container: ptrContainerRef });
-    const heroScale = useTransform(scrollY, [0, 200], [1, 0.95]);
-    const heroOpacity = useTransform(scrollY, [0, 200], [1, 0.8]);
-    const heroY = useTransform(scrollY, [0, 200], [0, 10]);
+    const heroScale = useTransform(scrollY, [0, 200], [1, mode === 'premium' ? 0.95 : mode === 'balanced' ? 0.97 : 0.985]);
+    const heroOpacity = useTransform(scrollY, [0, 200], [1, mode === 'premium' ? 0.8 : mode === 'balanced' ? 0.88 : 0.94]);
+    const heroY = useTransform(scrollY, [0, 200], [0, mode === 'premium' ? 10 : 6]);
 
     // Fast data fetching with SWR
-    const { data: groupsData, mutate: mutateGroups, isLoading: loadingGroups } = useSWR('/api/groups', fetcher);
-    const { data: txnsData, mutate: mutateTxns, isLoading: loadingTxns } = useSWR('/api/transactions?limit=5', fetcher);
-    const { data: settData, mutate: mutateSettlements, isLoading: loadingSett } = useSWR('/api/settlements/by-group', fetcher);
+    const { data: groupsData, error: groupsError, mutate: mutateGroups, isLoading: loadingGroups } = useSWR('/api/groups', fetcher, dashboardSwrOptions);
+    const { data: txnsData, error: txnsError, mutate: mutateTxns, isLoading: loadingTxns } = useSWR('/api/transactions?limit=5', fetcher, dashboardSwrOptions);
+    const { data: settData, error: settError, mutate: mutateSettlements, isLoading: loadingSett } = useSWR('/api/settlements/by-group', fetcher, dashboardSwrOptions);
 
     // Derive all dashboard data from SWR responses (no useEffect + setState)
     const { stats, recentTxns, settlements, members } = useMemo(() => {
@@ -232,16 +253,35 @@ export default function DashboardPage() {
     const heroName = currentUser?.name?.split(' ')[0] || 'there';
 
     const isLoadingPage = loadingGroups || loadingTxns || loadingSett;
+    const dashboardError = [groupsError, txnsError, settError].find(Boolean) as NetworkTaggedError | undefined;
+    const particleCount = mode === 'premium' ? 28 : mode === 'balanced' ? 16 : 8;
+
+    useEffect(() => {
+        if (isLoadingPage) return;
+
+        const timer = window.setTimeout(() => {
+            setSecondaryReady(true);
+        }, mode === 'premium' ? 120 : 220);
+
+        return () => window.clearTimeout(timer);
+    }, [isLoadingPage, mode]);
 
     return (
         <div ref={ptrContainerRef} style={{ overflow: 'auto', position: 'relative', height: '100%', scrollbarWidth: 'none' }}>
-            <ParticleBackground count={30} className="fixed inset-0 pointer-events-none" />
+            <ParticleBackground count={particleCount} mode={mode} className="fixed inset-0 pointer-events-none" />
             <PullToRefreshIndicator pullDistance={ptrPullDistance} refreshing={ptrRefreshing} />
 
             {isLoadingPage && (!groupsData || !txnsData || !settData) ? (
                 <div style={{ padding: 'var(--space-5)' }}>
                     <DashboardSkeleton />
                 </div>
+            ) : dashboardError ? (
+                <ErrorState
+                    variant={dashboardError.variant}
+                    title={getNetworkErrorCopy(dashboardError.variant).title}
+                    message={getNetworkErrorCopy(dashboardError.variant).message}
+                    onRetry={() => Promise.all([mutateGroups(), mutateTxns(), mutateSettlements()])}
+                />
             ) : (
                 <motion.div
                     style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}
@@ -264,7 +304,11 @@ export default function DashboardPage() {
                         style={{ scale: heroScale, opacity: heroOpacity, y: heroY }}
                         transition={{ type: 'spring', stiffness: 300, damping: 30 }}
                     >
-                        <TiltCard maxTilt={4} scale={1.01} glare={true}>
+                        <TiltCard
+                            maxTilt={mode === 'premium' ? 4 : mode === 'balanced' ? 2.5 : 1.5}
+                            scale={mode === 'premium' ? 1.01 : 1.005}
+                            glare={mode === 'premium'}
+                        >
                             <div
                                 style={{
                                     ...glassCard,
@@ -385,7 +429,7 @@ export default function DashboardPage() {
 
                     {/* ═══ QUICK ACTIONS — Glass Pill Buttons ═══ */}
                     <motion.div variants={fadeUp} transition={{ duration: 0.5, delay: 0.1 }} data-tour="quick-actions">
-                        <div style={{ display: 'flex', gap: 'var(--space-2)', justifyContent: 'space-between' }}>
+                        <div style={{ display: 'flex', gap: 'var(--space-2)', justifyContent: 'space-between', flexWrap: 'wrap' }}>
                             {[
                                 { label: 'Add Expense', icon: <Plus size={13} />, href: '/transactions/new' },
                                 { label: 'Settle Up', icon: <ArrowRightLeft size={13} />, href: '/settlements' },
@@ -421,7 +465,7 @@ export default function DashboardPage() {
                         </div>
                     </motion.div>
 
-                    {isFeatureEnabled('balanceJourney') && firstGroup && (
+                    {secondaryReady && isFeatureEnabled('balanceJourney') && firstGroup && (
                         <motion.div variants={fadeUp} transition={{ duration: 0.5, delay: 0.12 }}>
                             <Link href={`/groups/${firstGroup.id}/journey`} style={{ textDecoration: 'none' }}>
                                 <div style={{
@@ -458,8 +502,14 @@ export default function DashboardPage() {
                         </motion.div>
                     )}
 
+                    <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: isDesktop ? 'minmax(0, 1.1fr) minmax(340px, 0.9fr)' : '1fr',
+                        gap: 'var(--space-4)',
+                        alignItems: 'start',
+                    }}>
                     {/* ═══ RECENT TRANSACTIONS ═══ */}
-                    <motion.div variants={fadeUp} transition={{ duration: 0.5, delay: 0.15 }}>
+                    {secondaryReady && <motion.div variants={fadeUp} transition={{ duration: 0.5, delay: 0.15 }}>
                         <SectionHeader title="Recent Activity" action="View All" href="/transactions" />
                         {recentTxns.length > 0 ? (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
@@ -543,10 +593,10 @@ export default function DashboardPage() {
                                 subtitle="Add your first expense to start tracking."
                             />
                         )}
-                    </motion.div>
+                    </motion.div>}
 
                     {/* ═══ SETTLEMENTS ═══ */}
-                    <motion.div variants={fadeUp} transition={{ duration: 0.5, delay: 0.25 }}>
+                    {secondaryReady && <motion.div variants={fadeUp} transition={{ duration: 0.5, delay: 0.25 }}>
                         <SectionHeader
                             title={settlements[0]?.groupName ? `${settlements[0].groupName} Pending Settlements` : 'Pending Settlements'}
                             action="Settle Up"
@@ -607,7 +657,8 @@ export default function DashboardPage() {
                                 subtitle="No pending settlements."
                             />
                         )}
-                    </motion.div>
+                    </motion.div>}
+                    </div>
 
                     {/* ═══ QUICK ADD EXPENSE ═══ */}
                     <motion.div variants={fadeUp} transition={{ duration: 0.5, delay: 0.3 }} data-tour="add-expense">
@@ -634,6 +685,12 @@ export default function DashboardPage() {
                     </motion.div>
 
                     {/* ═══ ANALYTICS LINK + MEMBERS ═══ */}
+                    <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: isDesktop ? 'minmax(0, 1fr) minmax(320px, 0.75fr)' : '1fr',
+                        gap: 'var(--space-4)',
+                        alignItems: 'start',
+                    }}>
                     <motion.div variants={fadeUp} transition={{ duration: 0.5, delay: 0.35 }}>
                         <Link href="/analytics" style={{ textDecoration: 'none' }}>
                             <div style={{
@@ -690,6 +747,7 @@ export default function DashboardPage() {
                             </div>
                         </motion.div>
                     )}
+                    </div>
                 </motion.div>
             )}
         </div>

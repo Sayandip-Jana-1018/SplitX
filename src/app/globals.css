@@ -2,9 +2,6 @@
    SplitX — Global Styles
    ═══════════════════════════════════════════════════════════════ */
 
-/* ── Google Fonts ── */
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
-
 /* ── Design System Imports ── */
 @import '../styles/tokens.css';
 @import '../styles/themes/light.css';
@@ -57,12 +54,17 @@ body {
         color var(--duration-slow) var(--ease-out);
 }
 
-/* ── Smooth theme transitions on all color properties ── */
-*:not(input):not(textarea):not(select) {
+.theme-transition,
+.surface-transition,
+.interactive-transition,
+button,
+a {
     transition: background-color var(--duration-normal) var(--ease-out),
         border-color var(--duration-normal) var(--ease-out),
         box-shadow var(--duration-normal) var(--ease-out),
-        color var(--duration-fast) var(--ease-out);
+        color var(--duration-fast) var(--ease-out),
+        transform var(--duration-fast) var(--ease-out),
+        opacity var(--duration-fast) var(--ease-out);
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -338,6 +340,20 @@ p {
     .container {
         padding: 0 var(--space-8);
     }
+
+    .page-hero {
+        max-width: 62rem;
+        gap: var(--space-3);
+    }
+
+    .page-hero-title {
+        font-size: clamp(2.8rem, 4.4vw, 4.8rem);
+    }
+
+    .page-hero-subtitle {
+        max-width: 46rem;
+        font-size: var(--text-base);
+    }
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -357,4 +373,20 @@ p {
 
 .page-transition {
     animation: pageIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    html {
+        scroll-behavior: auto;
+    }
+
+    .page-transition {
+        animation: none;
+    }
+
+    .interactive-transition,
+    button,
+    a {
+        transition-duration: 120ms;
+    }
 }

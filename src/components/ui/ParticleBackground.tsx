@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import type { PerformanceMode } from '@/hooks/usePerformanceMode';
 
 interface Particle {
     x: number;
@@ -15,9 +16,11 @@ interface Particle {
 export default function ParticleBackground({
     count = 40,
     className,
+    mode = 'premium',
 }: {
     count?: number;
     className?: string;
+    mode?: PerformanceMode;
 }) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const animRef = useRef<number>(0);
@@ -35,9 +38,10 @@ export default function ParticleBackground({
             .trim() || '#8b5cf6';
 
         const resize = () => {
-            canvas.width = canvas.offsetWidth * window.devicePixelRatio;
-            canvas.height = canvas.offsetHeight * window.devicePixelRatio;
-            ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = canvas.offsetWidth * dpr;
+            canvas.height = canvas.offsetHeight * dpr;
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         };
 
         resize();
@@ -46,17 +50,28 @@ export default function ParticleBackground({
         // Initialize particles
         const w = canvas.offsetWidth;
         const h = canvas.offsetHeight;
-        particlesRef.current = Array.from({ length: count }, () => ({
+        const particleCount = mode === 'premium' ? count : mode === 'balanced' ? Math.max(10, Math.round(count * 0.65)) : Math.max(6, Math.round(count * 0.4));
+        const maxConnectionDistance = mode === 'premium' ? 100 : mode === 'balanced' ? 76 : 0;
+        const targetFrameTime = mode === 'premium' ? 1000 / 60 : mode === 'balanced' ? 1000 / 36 : 1000 / 24;
+        let lastFrame = 0;
+
+        particlesRef.current = Array.from({ length: particleCount }, () => ({
             x: Math.random() * w,
             y: Math.random() * h,
-            vx: (Math.random() - 0.5) * 0.3,
-            vy: (Math.random() - 0.5) * 0.3,
+            vx: (Math.random() - 0.5) * (mode === 'premium' ? 0.3 : 0.22),
+            vy: (Math.random() - 0.5) * (mode === 'premium' ? 0.3 : 0.22),
             radius: Math.random() * 2 + 0.5,
             opacity: Math.random() * 0.4 + 0.1,
             opacityDir: Math.random() > 0.5 ? 0.002 : -0.002,
         }));
 
-        const draw = () => {
+        const draw = (time: number) => {
+            if (time - lastFrame < targetFrameTime) {
+                animRef.current = requestAnimationFrame(draw);
+                return;
+            }
+
+            lastFrame = time;
             const cw = canvas.offsetWidth;
             const ch = canvas.offsetHeight;
             ctx.clearRect(0, 0, cw, ch);
@@ -83,21 +98,22 @@ export default function ParticleBackground({
                 ctx.fill();
             }
 
-            // Draw faint connections
-            for (let i = 0; i < particlesRef.current.length; i++) {
-                for (let j = i + 1; j < particlesRef.current.length; j++) {
-                    const a = particlesRef.current[i];
-                    const b = particlesRef.current[j];
-                    const dx = a.x - b.x;
-                    const dy = a.y - b.y;
-                    const dist = Math.sqrt(dx * dx + dy * dy);
-                    if (dist < 100) {
-                        ctx.beginPath();
-                        ctx.moveTo(a.x, a.y);
-                        ctx.lineTo(b.x, b.y);
-                        ctx.strokeStyle = `rgba(${hexToRgb(computedColor)}, ${0.06 * (1 - dist / 100)})`;
-                        ctx.lineWidth = 0.5;
-                        ctx.stroke();
+            if (maxConnectionDistance > 0) {
+                for (let i = 0; i < particlesRef.current.length; i++) {
+                    for (let j = i + 1; j < particlesRef.current.length; j++) {
+                        const a = particlesRef.current[i];
+                        const b = particlesRef.current[j];
+                        const dx = a.x - b.x;
+                        const dy = a.y - b.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        if (dist < maxConnectionDistance) {
+                            ctx.beginPath();
+                            ctx.moveTo(a.x, a.y);
+                            ctx.lineTo(b.x, b.y);
+                            ctx.strokeStyle = `rgba(${hexToRgb(computedColor)}, ${0.06 * (1 - dist / maxConnectionDistance)})`;
+                            ctx.lineWidth = 0.5;
+                            ctx.stroke();
+                        }
                     }
                 }
             }
@@ -105,13 +121,13 @@ export default function ParticleBackground({
             animRef.current = requestAnimationFrame(draw);
         };
 
-        draw();
+        animRef.current = requestAnimationFrame(draw);
 
         return () => {
             cancelAnimationFrame(animRef.current);
             window.removeEventListener('resize', resize);
         };
-    }, [count]);
+    }, [count, mode]);
 
     return (
         <canvas

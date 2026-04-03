@@ -2,6 +2,7 @@
 
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
+import type { PerformanceMode } from '@/hooks/usePerformanceMode';
 import { formatCurrency, getAvatarColor } from '@/lib/utils';
 
 interface Settlement {
@@ -16,6 +17,7 @@ interface SettlementGraphProps {
     memberImages?: Record<string, string | null>;
     compact?: boolean;
     instanceId?: string;
+    performanceMode?: PerformanceMode;
 }
 
 interface NodeState {
@@ -269,6 +271,7 @@ export default function SettlementGraph({
     memberImages = {},
     compact = false,
     instanceId = 'default',
+    performanceMode = 'premium',
 }: SettlementGraphProps) {
     const containerRef = useRef<HTMLDivElement>(null);
     const [size, setSize] = useState({ w: 360, h: compact ? 380 : 500 });
@@ -439,6 +442,23 @@ export default function SettlementGraph({
     const lineGlowId = `line-glow-${instanceId}`;
     const pillGlowId = `pill-glow-${instanceId}`;
     const summaryHeight = compact ? 58 : 66;
+    const showFlowSparks = performanceMode !== 'calm';
+    const haloAnimation = performanceMode === 'premium'
+        ? 'settlement-line-draw 1.05s cubic-bezier(0.22, 1, 0.36, 1) both, settlement-line-glow 5.8s ease-in-out infinite'
+        : 'settlement-line-draw 1.05s cubic-bezier(0.22, 1, 0.36, 1) both';
+    const mainPathAnimation = performanceMode !== 'calm'
+        ? 'settlement-line-draw 1.2s cubic-bezier(0.22, 1, 0.36, 1) both, settlement-line-flow 13.5s linear infinite, settlement-line-breathe 4.8s ease-in-out infinite'
+        : 'settlement-line-draw 1.2s cubic-bezier(0.22, 1, 0.36, 1) both';
+    const sparkAnimation = `settlement-flow-spark-enter 0.8s ease-out both, settlement-flow-spark-glow ${performanceMode === 'premium' ? '3.8s' : '5.4s'} ease-in-out infinite`;
+    const pillAnimation = `settlement-pill-enter 0.9s cubic-bezier(0.22, 1, 0.36, 1) both, settlement-pill-float ${performanceMode === 'premium' ? '5.8s' : '7.2s'} ease-in-out infinite`;
+    const auraAnimation = performanceMode === 'calm' ? 'none' : 'settlement-node-aura 7.2s ease-in-out infinite';
+    const shellAnimation = performanceMode === 'premium' ? 'settlement-node-shell 7.2s ease-in-out infinite' : 'none';
+    const badgeAnimation = performanceMode === 'calm' ? 'none' : 'settlement-badge-pop 5.8s ease-in-out infinite';
+    const panelShadow = performanceMode === 'premium'
+        ? 'inset 0 1px 0 rgba(255,255,255,0.28), 0 18px 42px rgba(0, 0, 0, 0.1), 0 0 34px rgba(var(--accent-500-rgb), 0.04)'
+        : performanceMode === 'balanced'
+            ? 'inset 0 1px 0 rgba(255,255,255,0.22), 0 12px 28px rgba(0, 0, 0, 0.08), 0 0 18px rgba(var(--accent-500-rgb), 0.03)'
+            : 'inset 0 1px 0 rgba(255,255,255,0.18), 0 10px 22px rgba(0, 0, 0, 0.07)';
 
     return (
         <div
@@ -457,47 +477,38 @@ export default function SettlementGraph({
                     linear-gradient(180deg, rgba(var(--accent-500-rgb), 0.025), transparent 18%),
                     var(--bg-glass)
                 `,
-                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.28), 0 18px 42px rgba(0, 0, 0, 0.1), 0 0 34px rgba(var(--accent-500-rgb), 0.04)',
+                boxShadow: panelShadow,
             }}
         >
             <style jsx>{`
                 .settlement-path-halo {
                     stroke-dasharray: 12 10;
-                    animation:
-                        settlement-line-draw 1.05s cubic-bezier(0.22, 1, 0.36, 1) both,
-                        settlement-line-glow 5.8s ease-in-out infinite;
+                    animation: ${haloAnimation};
                 }
 
                 .settlement-path-main {
-                    animation:
-                        settlement-line-draw 1.2s cubic-bezier(0.22, 1, 0.36, 1) both,
-                        settlement-line-flow 13.5s linear infinite,
-                        settlement-line-breathe 4.8s ease-in-out infinite;
+                    animation: ${mainPathAnimation};
                 }
 
                 .settlement-flow-spark {
-                    animation:
-                        settlement-flow-spark-enter 0.8s ease-out both,
-                        settlement-flow-spark-glow 3.8s ease-in-out infinite;
+                    animation: ${sparkAnimation};
                 }
 
                 .settlement-pill-group {
                     transform-origin: center;
-                    animation:
-                        settlement-pill-enter 0.9s cubic-bezier(0.22, 1, 0.36, 1) both,
-                        settlement-pill-float 5.8s ease-in-out infinite;
+                    animation: ${pillAnimation};
                 }
 
                 .settlement-node-aura {
-                    animation: settlement-node-aura 6.5s ease-in-out infinite;
+                    animation: ${auraAnimation};
                 }
 
                 .settlement-node-shell {
-                    animation: settlement-node-shell 7.2s ease-in-out infinite;
+                    animation: ${shellAnimation};
                 }
 
                 .settlement-node-badge {
-                    animation: settlement-badge-pop 4.6s ease-in-out infinite;
+                    animation: ${badgeAnimation};
                 }
 
                 @keyframes settlement-line-draw {
@@ -697,7 +708,7 @@ export default function SettlementGraph({
                         <path d="M0,0 L9,4.5 L0,9 Z" fill="rgba(var(--accent-500-rgb), 0.76)" />
                     </marker>
                     <filter id={lineGlowId}>
-                        <feGaussianBlur stdDeviation="4" result="blur" />
+                        <feGaussianBlur stdDeviation={performanceMode === 'premium' ? '4' : performanceMode === 'balanced' ? '2.8' : '2'} result="blur" />
                         <feMerge>
                             <feMergeNode in="blur" />
                             <feMergeNode in="SourceGraphic" />
@@ -742,36 +753,40 @@ export default function SettlementGraph({
                                 }}
                             />
 
-                            <circle
-                                r="3.6"
-                                fill="rgba(var(--accent-500-rgb), 0.95)"
-                                filter={`url(#${pillGlowId})`}
-                                className="settlement-flow-spark"
-                                style={{ animationDelay: `${0.45 + index * 0.18}s, ${index * 0.18}s` }}
-                            >
-                                <animateMotion
-                                    dur={`${3.8 + index * 0.35}s`}
-                                    begin={`${0.9 + index * 0.2}s`}
-                                    repeatCount="indefinite"
-                                    rotate="auto"
-                                    path={`M ${layout.sx} ${layout.sy} Q ${layout.cpx} ${layout.cpy} ${layout.ex} ${layout.ey}`}
-                                />
-                            </circle>
+                            {showFlowSparks && (
+                                <>
+                                    <circle
+                                        r="3.6"
+                                        fill="rgba(var(--accent-500-rgb), 0.95)"
+                                        filter={`url(#${pillGlowId})`}
+                                        className="settlement-flow-spark"
+                                        style={{ animationDelay: `${0.45 + index * 0.18}s, ${index * 0.18}s` }}
+                                    >
+                                        <animateMotion
+                                            dur={`${3.8 + index * 0.35}s`}
+                                            begin={`${0.9 + index * 0.2}s`}
+                                            repeatCount="indefinite"
+                                            rotate="auto"
+                                            path={`M ${layout.sx} ${layout.sy} Q ${layout.cpx} ${layout.cpy} ${layout.ex} ${layout.ey}`}
+                                        />
+                                    </circle>
 
-                            <circle
-                                r="2.2"
-                                fill="rgba(255,255,255,0.9)"
-                                className="settlement-flow-spark"
-                                style={{ animationDelay: `${0.7 + index * 0.22}s, ${0.1 + index * 0.16}s` }}
-                            >
-                                <animateMotion
-                                    dur={`${4.6 + index * 0.3}s`}
-                                    begin={`${1.4 + index * 0.22}s`}
-                                    repeatCount="indefinite"
-                                    rotate="auto"
-                                    path={`M ${layout.sx} ${layout.sy} Q ${layout.cpx} ${layout.cpy} ${layout.ex} ${layout.ey}`}
-                                />
-                            </circle>
+                                    <circle
+                                        r="2.2"
+                                        fill="rgba(255,255,255,0.9)"
+                                        className="settlement-flow-spark"
+                                        style={{ animationDelay: `${0.7 + index * 0.22}s, ${0.1 + index * 0.16}s` }}
+                                    >
+                                        <animateMotion
+                                            dur={`${4.6 + index * 0.3}s`}
+                                            begin={`${1.4 + index * 0.22}s`}
+                                            repeatCount="indefinite"
+                                            rotate="auto"
+                                            path={`M ${layout.sx} ${layout.sy} Q ${layout.cpx} ${layout.cpy} ${layout.ex} ${layout.ey}`}
+                                        />
+                                    </circle>
+                                </>
+                            )}
                         </g>
                     );
                 })}
@@ -935,9 +950,11 @@ export default function SettlementGraph({
                             borderRadius: 999,
                             background: 'linear-gradient(180deg, rgba(var(--accent-500-rgb), 0.14), rgba(var(--accent-500-rgb), 0.04) 28%, var(--surface-popover) 100%)',
                             border: '1px solid rgba(var(--accent-500-rgb), 0.18)',
-                            boxShadow: '0 14px 26px rgba(0, 0, 0, 0.18), inset 0 1px 0 rgba(255,255,255,0.16)',
-                            backdropFilter: 'blur(16px)',
-                            WebkitBackdropFilter: 'blur(16px)',
+                            boxShadow: performanceMode === 'premium'
+                                ? '0 14px 26px rgba(0, 0, 0, 0.18), inset 0 1px 0 rgba(255,255,255,0.16)'
+                                : '0 10px 18px rgba(0, 0, 0, 0.14), inset 0 1px 0 rgba(255,255,255,0.14)',
+                            backdropFilter: performanceMode === 'premium' ? 'blur(16px)' : 'blur(10px)',
+                            WebkitBackdropFilter: performanceMode === 'premium' ? 'blur(16px)' : 'blur(10px)',
                             display: 'inline-flex',
                             alignItems: 'center',
                             justifyContent: 'center',

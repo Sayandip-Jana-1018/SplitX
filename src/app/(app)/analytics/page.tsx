@@ -5,6 +5,9 @@ import { motion } from 'framer-motion';
 import { AlertTriangle, CheckCircle2, Inbox, Loader2, TrendingUp, Users, ArrowRight } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import ErrorState from '@/components/ui/ErrorState';
+import { usePerformanceMode } from '@/hooks/usePerformanceMode';
+import { useViewportTier } from '@/hooks/useViewportTier';
+import { getNetworkErrorCopy, NetworkErrorVariant, toNetworkTaggedError } from '@/lib/networkErrors';
 import { formatCurrency } from '@/lib/utils';
 
 const SpendingPieChart = dynamic(
@@ -65,15 +68,18 @@ export default function AnalyticsPage() {
     const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [pickerLoading, setPickerLoading] = useState(false);
-    const [error, setError] = useState(false);
+    const [errorVariant, setErrorVariant] = useState<NetworkErrorVariant | null>(null);
+    const [chartsReady, setChartsReady] = useState(false);
     const hasLoadedRef = useRef(false);
     const requestIdRef = useRef(0);
+    const { mode } = usePerformanceMode();
+    const { isDesktop, isWide } = useViewportTier();
 
     const fetchData = useCallback(async (groupId?: string | null) => {
         const requestId = requestIdRef.current + 1;
         requestIdRef.current = requestId;
         const isInitial = !hasLoadedRef.current;
-        setError(false);
+        setErrorVariant(null);
         if (isInitial) setLoading(true);
         else setPickerLoading(true);
 
@@ -82,7 +88,7 @@ export default function AnalyticsPage() {
             const res = await fetch(`/api/analytics${search}`);
             if (!res.ok) {
                 if (requestId !== requestIdRef.current) return;
-                setError(true);
+                setErrorVariant(toNetworkTaggedError({ response: res }).variant);
                 return;
             }
             const nextPayload: AnalyticsPayload = await res.json();
@@ -90,9 +96,9 @@ export default function AnalyticsPage() {
             setPayload(nextPayload);
             setSelectedGroupId(nextPayload.selectedGroupId);
             hasLoadedRef.current = true;
-        } catch {
+        } catch (error) {
             if (requestId !== requestIdRef.current) return;
-            setError(true);
+            setErrorVariant(toNetworkTaggedError({ error }).variant);
         } finally {
             if (requestId === requestIdRef.current) {
                 setLoading(false);
@@ -104,6 +110,19 @@ export default function AnalyticsPage() {
     useEffect(() => {
         fetchData();
     }, [fetchData]);
+
+    useEffect(() => {
+        if (!payload || loading || errorVariant) {
+            setChartsReady(false);
+            return;
+        }
+
+        const timer = window.setTimeout(() => {
+            setChartsReady(true);
+        }, mode === 'premium' ? 80 : mode === 'balanced' ? 160 : 260);
+
+        return () => window.clearTimeout(timer);
+    }, [payload, loading, errorVariant, mode]);
 
     const selectedGroup = useMemo(
         () => payload?.groups.find((group) => group.id === selectedGroupId) || null,
@@ -156,8 +175,13 @@ export default function AnalyticsPage() {
                 }}>
                     <Loader2 size={28} style={{ animation: 'spin 1s linear infinite', color: 'var(--accent-400)' }} />
                 </div>
-            ) : error ? (
-                <ErrorState onRetry={() => fetchData(selectedGroupId)} variant="network" />
+            ) : errorVariant ? (
+                <ErrorState
+                    onRetry={() => fetchData(selectedGroupId)}
+                    variant={errorVariant}
+                    title={getNetworkErrorCopy(errorVariant).title}
+                    message={getNetworkErrorCopy(errorVariant).message}
+                />
             ) : !payload || payload.groups.length === 0 ? (
                 <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}>
                     <div style={{
@@ -325,7 +349,12 @@ export default function AnalyticsPage() {
                             </div>
                         </motion.div>
                     ) : (
-                        <>
+                        <div style={{
+                            display: 'grid',
+                            gridTemplateColumns: isDesktop ? 'minmax(0, 0.85fr) minmax(0, 1.15fr)' : '1fr',
+                            gap: 'var(--space-4)',
+                            alignItems: 'start',
+                        }}>
                             <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.08 }}>
                                 <div style={{
                                     ...glass, borderRadius: 'var(--radius-2xl)', padding: 'var(--space-4)',
@@ -382,25 +411,54 @@ export default function AnalyticsPage() {
                                 </div>
                             </motion.div>
 
-                            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}>
-                                <DailySpendingChart
-                                    data={monthlyChartData}
-                                    title="Monthly Trend"
-                                    emoji={payload.data.groupEmoji || '📈'}
-                                />
-                            </motion.div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+                            {chartsReady ? (
+                                <div style={{
+                                    display: 'grid',
+                                    gap: 'var(--space-4)',
+                                    gridTemplateColumns: isWide ? 'repeat(2, minmax(0, 1fr))' : '1fr',
+                                }}>
+                                    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}>
+                                        <DailySpendingChart
+                                            data={monthlyChartData}
+                                            title="Monthly Trend"
+                                            emoji={payload.data.groupEmoji || '📈'}
+                                        />
+                                    </motion.div>
 
-                            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.16 }}>
-                                <GroupSpendBarChart
-                                    data={payload.data.memberSpending}
-                                    title="Who paid in this group"
-                                    subtitle={`Real totals for ${payload.data.groupName || 'this group'} this month`}
-                                />
-                            </motion.div>
+                                    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.16 }}>
+                                        <GroupSpendBarChart
+                                            data={payload.data.memberSpending}
+                                            title="Who paid in this group"
+                                            subtitle={`Real totals for ${payload.data.groupName || 'this group'} this month`}
+                                        />
+                                    </motion.div>
 
-                            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-                                <SpendingPieChart data={categoryChartData} />
-                            </motion.div>
+                                    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+                                        <div style={{ gridColumn: isWide ? '1 / -1' : undefined }}>
+                                            <SpendingPieChart data={categoryChartData} />
+                                        </div>
+                                    </motion.div>
+                                </div>
+                            ) : (
+                                <div style={{
+                                    display: 'grid',
+                                    gridTemplateColumns: isWide ? 'repeat(2, minmax(0, 1fr))' : '1fr',
+                                    gap: 'var(--space-4)',
+                                }}>
+                                    {[0, 1, 2].map((index) => (
+                                        <div
+                                            key={index}
+                                            style={{
+                                                ...glass,
+                                                minHeight: index === 1 ? 280 : 240,
+                                                padding: 'var(--space-4)',
+                                                background: 'linear-gradient(135deg, rgba(var(--accent-500-rgb), 0.05), var(--bg-glass))',
+                                            }}
+                                        />
+                                    ))}
+                                </div>
+                            )}
 
                             <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.24 }}>
                                 <div style={{ ...glass, padding: 'var(--space-4)' }}>
@@ -454,7 +512,8 @@ export default function AnalyticsPage() {
                                     </div>
                                 </div>
                             </motion.div>
-                        </>
+                            </div>
+                        </div>
                     )}
                 </>
             )}

@@ -29,8 +29,11 @@ import { Card } from '@/components/ui/Card';
 import Avatar from '@/components/ui/Avatar';
 import Badge from '@/components/ui/Badge';
 import Modal from '@/components/ui/Modal';
+import ErrorState from '@/components/ui/ErrorState';
 import { Input } from '@/components/ui/Input';
 import { useToast } from '@/components/ui/Toast';
+import { useViewportTier } from '@/hooks/useViewportTier';
+import { getNetworkErrorCopy, NetworkErrorVariant, toNetworkTaggedError } from '@/lib/networkErrors';
 import { formatCurrency, timeAgo } from '@/lib/utils';
 import { isFeatureEnabled } from '@/lib/featureFlags';
 import { QRCodeSVG } from 'qrcode.react';
@@ -134,10 +137,13 @@ export default function GroupDetailPage() {
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [deletingGroup, setDeletingGroup] = useState(false);
     const [journeyMeta, setJourneyMeta] = useState<BalanceJourneyMeta | null>(null);
+    const [errorVariant, setErrorVariant] = useState<NetworkErrorVariant | null>(null);
     const { toast } = useToast();
+    const { isDesktop } = useViewportTier();
 
     const fetchGroup = useCallback(async () => {
         try {
+            setErrorVariant(null);
             const [groupRes, balancesRes, journeyRes] = await Promise.all([
                 fetch(`/api/groups/${groupId}`),
                 fetch(`/api/groups/${groupId}/balances`),
@@ -145,6 +151,9 @@ export default function GroupDetailPage() {
                     ? fetch(`/api/groups/${groupId}/balance-history?limit=1`)
                     : Promise.resolve(null),
             ]);
+            if (!groupRes.ok) {
+                throw toNetworkTaggedError({ response: groupRes });
+            }
             if (groupRes.ok) {
                 const data = await groupRes.json();
                 // Use balances from the dedicated balances API if available
@@ -168,6 +177,7 @@ export default function GroupDetailPage() {
             }
         } catch (err) {
             console.error('Failed to fetch group:', err);
+            setErrorVariant(toNetworkTaggedError({ error: err }).variant);
         } finally {
             setLoading(false);
         }
@@ -240,6 +250,21 @@ export default function GroupDetailPage() {
         );
     }
 
+    if (errorVariant) {
+        const copy = getNetworkErrorCopy(errorVariant);
+        return (
+            <ErrorState
+                variant={errorVariant}
+                title={copy.title}
+                message={copy.message}
+                onRetry={() => {
+                    setLoading(true);
+                    fetchGroup();
+                }}
+            />
+        );
+    }
+
     if (!group) {
         return (
             <Card padding="normal">
@@ -266,13 +291,20 @@ export default function GroupDetailPage() {
     });
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', paddingTop: 'var(--space-2)' }}>
+        <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 'var(--space-5)',
+            paddingTop: 'var(--space-2)',
+            maxWidth: isDesktop ? 'min(100%, 1240px)' : '100%',
+            margin: '0 auto',
+        }}>
             {/* ── Hero Section: Header + Trip ── */}
             <div style={{
                 position: 'relative',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
+                display: 'grid',
+                gridTemplateColumns: isDesktop ? 'minmax(0, 1fr) minmax(320px, 0.72fr)' : '1fr',
+                alignItems: 'start',
                 gap: 'var(--space-4)',
             }}>
                 {/* Back & Share — floating on sides */}
@@ -394,13 +426,16 @@ export default function GroupDetailPage() {
                     style={{
                         display: 'flex',
                         flexDirection: 'column',
-                        alignItems: 'center',
-                        textAlign: 'center',
+                        alignItems: isDesktop ? 'flex-start' : 'center',
+                        textAlign: isDesktop ? 'left' : 'center',
+                        justifyContent: 'center',
+                        minHeight: isDesktop ? 220 : undefined,
                         paddingTop: 'var(--space-2)',
+                        paddingInline: isDesktop ? 'var(--space-2)' : undefined,
                     }}
                 >
                     <span style={{
-                        fontSize: 36,
+                        fontSize: isDesktop ? 48 : 36,
                         lineHeight: 1,
                         marginBottom: 'var(--space-2)',
                         filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.08))',
@@ -409,16 +444,18 @@ export default function GroupDetailPage() {
                         Shared balances that stay transparent
                     </div>
                     <h2 className="font-display" style={{
-                        fontSize: 'var(--text-xl)',
+                        fontSize: isDesktop ? 'clamp(2.25rem, 3vw, 3.6rem)' : 'var(--text-xl)',
                         fontWeight: 800,
-                        letterSpacing: '-0.02em',
+                        letterSpacing: '-0.03em',
                         margin: 0,
+                        maxWidth: isDesktop ? 520 : undefined,
                     }}>{group.name}</h2>
                     <p style={{
-                        fontSize: 'var(--text-xs)',
+                        fontSize: isDesktop ? 'var(--text-sm)' : 'var(--text-xs)',
                         color: 'var(--fg-tertiary)',
-                        marginTop: 4,
+                        marginTop: 8,
                         fontWeight: 500,
+                        maxWidth: isDesktop ? 520 : undefined,
                     }}>
                         {members.length} members · Created {new Date(group.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
                     </p>
@@ -426,7 +463,7 @@ export default function GroupDetailPage() {
 
                 {/* Trip Summary — unified card */}
                 {activeTrip ? (
-                    <Card padding="normal" glow>
+                    <Card padding="normal" glow style={{ height: '100%' }}>
                         <div style={{
                             display: 'flex',
                             alignItems: 'center',
@@ -495,6 +532,7 @@ export default function GroupDetailPage() {
                 borderRadius: 'var(--radius-lg)',
                 padding: 4,
                 marginTop: 'var(--space-1)',
+                maxWidth: isDesktop ? 'min(100%, 1240px)' : '100%',
             }}>
                 {(['overview', 'members', 'activity', 'chat'] as const).map((t) => (
                     <button
@@ -528,7 +566,7 @@ export default function GroupDetailPage() {
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -8 }}
                         transition={{ duration: 0.2 }}
-                        style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}
+                        style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', maxWidth: isDesktop ? 'min(100%, 1240px)' : '100%' }}
                     >
                         {/* Balances */}
                         <div>
@@ -623,7 +661,7 @@ export default function GroupDetailPage() {
                                     </div>
                                 </Card>
                             )}
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 'var(--space-3)' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: isDesktop ? 'repeat(3, minmax(0, 1fr))' : 'repeat(2, minmax(0, 1fr))', gap: 'var(--space-3)' }}>
                                 {orderedMembers.map((member) => {
                                     const balance = group.balances[member.userId] || 0;
                                     const isCurrentUser = member.userId === group.currentUserId;
@@ -662,7 +700,7 @@ export default function GroupDetailPage() {
                                 <h3 style={{ fontSize: 'var(--text-sm)', fontWeight: 600, marginBottom: 'var(--space-2)', color: 'var(--fg-secondary)' }}>
                                     ⚡ Simplify Debts
                                 </h3>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: isDesktop ? 'repeat(2, minmax(0, 1fr))' : '1fr', gap: 'var(--space-2)' }}>
                                     {suggestedSettlements.map((s, i) => (
                                         <motion.div
                                             key={`${s.from}-${s.to}`}
@@ -707,7 +745,9 @@ export default function GroupDetailPage() {
 
                         {/* Quick Actions */}
                         <div style={{
-                            display: 'flex', gap: 'var(--space-2)',
+                            display: 'grid',
+                            gridTemplateColumns: isDesktop ? 'repeat(3, minmax(0, 1fr))' : '1fr',
+                            gap: 'var(--space-2)',
                             marginBottom: 'var(--space-2)',
                         }}>
                             <button
@@ -772,7 +812,7 @@ export default function GroupDetailPage() {
                                 <Button variant="ghost" size="sm" onClick={() => setTab('activity')}>View All</Button>
                             </div>
                             {recentTransactions.length > 0 ? (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: isDesktop ? 'repeat(2, minmax(0, 1fr))' : '1fr', gap: 'var(--space-3)' }}>
                                     {recentTransactions.map((txn) => (
                                         <Card key={txn.id} interactive padding="compact">
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
@@ -818,7 +858,7 @@ export default function GroupDetailPage() {
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -8 }}
                         transition={{ duration: 0.2 }}
-                        style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}
+                        style={{ display: 'grid', gridTemplateColumns: isDesktop ? 'repeat(2, minmax(0, 1fr))' : '1fr', gap: 'var(--space-3)' }}
                     >
                         {members.map((member, i) => {
                             const balance = group.balances[member.userId] || 0;
@@ -905,7 +945,7 @@ export default function GroupDetailPage() {
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -8 }}
                         transition={{ duration: 0.2 }}
-                        style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}
+                        style={{ display: 'grid', gridTemplateColumns: isDesktop ? 'repeat(2, minmax(0, 1fr))' : '1fr', gap: 'var(--space-2)' }}
                     >
                         {allTransactions.length > 0 ? allTransactions.map((txn, i) => (
                             <motion.div
@@ -930,7 +970,7 @@ export default function GroupDetailPage() {
                                 </Card>
                             </motion.div>
                         )) : (
-                            <Card padding="compact">
+                            <Card padding="compact" style={{ gridColumn: isDesktop ? '1 / -1' : undefined }}>
                                 <p style={{ textAlign: 'center', fontSize: 'var(--text-sm)', color: 'var(--fg-tertiary)', padding: 'var(--space-4)' }}>
                                     No transactions recorded yet
                                 </p>

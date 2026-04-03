@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
+import dynamic from 'next/dynamic';
 import {
     LayoutDashboard,
     History as HistoryIcon,
@@ -20,19 +21,21 @@ import {
 } from 'lucide-react';
 import ClipboardBanner from '@/components/features/ClipboardBanner';
 import NotificationBanner from '@/components/features/NotificationBanner';
-import NotificationPanel from '@/components/features/NotificationPanel';
-import AIChatPanel from '@/components/features/AIChatPanel';
 import ThemeSelector from '@/components/features/ThemeSelector';
 import Avatar from '@/components/ui/Avatar';
 import OfflineIndicator from '@/components/ui/OfflineIndicator';
-import OnboardingTour from '@/components/features/OnboardingTour';
 import { useHaptics } from '@/hooks/useHaptics';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
-import GlobalSearch from '@/components/ui/GlobalSearch';
 import { signOut } from 'next-auth/react';
 import DbKeepAlive from '@/components/providers/DbKeepAlive';
 import styles from './app.module.css';
 import { cn } from '@/lib/utils';
+import { usePerformanceMode } from '@/hooks/usePerformanceMode';
+
+const NotificationPanel = dynamic(() => import('@/components/features/NotificationPanel'), { ssr: false });
+const AIChatPanel = dynamic(() => import('@/components/features/AIChatPanel'), { ssr: false });
+const OnboardingTour = dynamic(() => import('@/components/features/OnboardingTour'), { ssr: false });
+const GlobalSearch = dynamic(() => import('@/components/ui/GlobalSearch'), { ssr: false });
 
 const NAV_ITEMS = [
     { href: '/history', icon: HistoryIcon, label: 'History', emoji: 'History' },
@@ -56,8 +59,8 @@ const BOTTOM_NAV = [
 
 /* ── Animation variants ── */
 const sidebarVariants = {
-    closed: { x: '-100%', transition: { type: 'spring' as const, damping: 30, stiffness: 300 } },
-    open: { x: 0, transition: { type: 'spring' as const, damping: 26, stiffness: 200, when: 'beforeChildren' as const, staggerChildren: 0.04 } },
+    closed: { x: '-100%', transition: { type: 'spring' as const, damping: 34, stiffness: 360 } },
+    open: { x: 0, transition: { type: 'spring' as const, damping: 30, stiffness: 260, when: 'beforeChildren' as const, staggerChildren: 0.03 } },
 };
 
 const overlayVariants = {
@@ -67,18 +70,36 @@ const overlayVariants = {
 
 const navItemVariants = {
     closed: { x: -20, opacity: 0 },
-    open: { x: 0, opacity: 1, transition: { type: 'spring' as const, damping: 20, stiffness: 200 } },
+    open: { x: 0, opacity: 1, transition: { type: 'spring' as const, damping: 24, stiffness: 260 } },
 };
 
 const footerVariants = {
     closed: { y: 20, opacity: 0 },
-    open: { y: 0, opacity: 1, transition: { type: 'spring' as const, damping: 20, stiffness: 200, delay: 0.2 } },
+    open: { y: 0, opacity: 1, transition: { type: 'spring' as const, damping: 24, stiffness: 240, delay: 0.16 } },
 };
+
+function ActionPlaceholder() {
+    return (
+        <div
+            className="surface-transition"
+            style={{
+                width: 34,
+                height: 34,
+                borderRadius: 'var(--radius-lg)',
+                background: 'rgba(var(--accent-500-rgb), 0.05)',
+                border: '1px solid rgba(var(--accent-500-rgb), 0.08)',
+            }}
+        />
+    );
+}
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
     const router = useRouter();
     const [sidebarOpen, setSidebarOpen] = useState(false);
+    const [deferredReady, setDeferredReady] = useState(false);
+    const [chatReady, setChatReady] = useState(false);
+    const [tourReady, setTourReady] = useState(false);
     const [isDesktop, setIsDesktop] = useState(() => {
         if (typeof window !== 'undefined') {
             return window.matchMedia('(min-width: 1024px)').matches;
@@ -87,6 +108,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     });
     const haptics = useHaptics();
     const { user } = useCurrentUser();
+    const { mode } = usePerformanceMode();
 
     // Detect desktop breakpoint to conditionally render desktop sidebar
     useEffect(() => {
@@ -109,11 +131,46 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         setSidebarOpen(false);
     };
 
+    useEffect(() => {
+        document.documentElement.dataset.motion = mode;
+    }, [mode]);
+
+    useEffect(() => {
+        const routes = new Set([
+            ...NAV_ITEMS.map((item) => item.href),
+            ...BOTTOM_NAV.map((item) => item.href),
+            '/transactions/new',
+        ]);
+
+        routes.forEach((href) => {
+            router.prefetch(href);
+        });
+    }, [router]);
+
+    useEffect(() => {
+        if (!showAppChrome) return;
+
+        const idleCallback = window.requestIdleCallback?.(
+            () => setDeferredReady(true),
+            { timeout: mode === 'premium' ? 400 : 700 }
+        );
+        const idleFallback = window.setTimeout(() => setDeferredReady(true), mode === 'premium' ? 220 : 360);
+        const chatTimer = window.setTimeout(() => setChatReady(true), mode === 'premium' ? 900 : 1300);
+        const tourTimer = window.setTimeout(() => setTourReady(true), mode === 'premium' ? 1600 : 2200);
+
+        return () => {
+            if (idleCallback) window.cancelIdleCallback?.(idleCallback);
+            window.clearTimeout(idleFallback);
+            window.clearTimeout(chatTimer);
+            window.clearTimeout(tourTimer);
+        };
+    }, [mode, showAppChrome]);
+
     return (
         <div className={styles.appShell}>
             {showAppChrome && <OfflineIndicator />}
             <DbKeepAlive />
-            {showAppChrome && <OnboardingTour />}
+            {showAppChrome && tourReady && <OnboardingTour />}
 
             {/* ── Animated Sidebar Overlay ── */}
             <AnimatePresence>
@@ -301,8 +358,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                         <h1 className={styles.headerTitle}>{pageTitle}</h1>
                     </div>
                     <div className={styles.headerRight}>
-                        <><GlobalSearch /></>
-                        <NotificationPanel />
+                        {deferredReady ? <GlobalSearch /> : <ActionPlaceholder />}
+                        {deferredReady ? <NotificationPanel /> : <ActionPlaceholder />}
                         <ThemeSelector />
                         <div
                             onClick={() => router.push('/settings')}
@@ -334,7 +391,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
 
             {/* ── AI Chat Panel (hidden on add-transaction page) ── */}
-            {showAppChrome && !pathname.startsWith('/transactions/new') && <AIChatPanel />}
+            {showAppChrome && chatReady && !pathname.startsWith('/transactions/new') && <AIChatPanel />}
 
             {/* ── Floating Bottom Nav (mobile) ── */}
             {showAppChrome && <nav className={styles.bottomNav}>

@@ -22,11 +22,15 @@ export default function DbKeepAlive() {
             });
         };
 
-        // Initial ping on mount
-        ping();
+        const idleCallback = window.requestIdleCallback?.(() => ping(), { timeout: 2500 });
+        const initialTimer = window.setTimeout(() => ping(), 1200);
 
         const interval = setInterval(ping, PING_INTERVAL);
-        return () => clearInterval(interval);
+        return () => {
+            if (idleCallback) window.cancelIdleCallback?.(idleCallback);
+            clearTimeout(initialTimer);
+            clearInterval(interval);
+        };
     }, [status]);
 
     return null; // Renders nothing

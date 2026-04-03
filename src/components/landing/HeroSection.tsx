@@ -80,78 +80,82 @@ export default function HeroSection() {
                 animate="visible"
                 variants={stagger}
             >
-                <motion.div className={styles.heroBadge} variants={fadeInUp}>
-                    <span className={styles.heroBadgePulse} />
-                    <Sparkles size={14} className={styles.heroBadgeIcon} />
-                    <span>V-1.0 is here - Experience next-gen tracking</span>
-                </motion.div>
+                <div className={styles.heroDesktopGrid}>
+                    <div className={styles.heroCopyColumn}>
+                        <motion.div className={styles.heroBadge} variants={fadeInUp}>
+                            <span className={styles.heroBadgePulse} />
+                            <Sparkles size={14} className={styles.heroBadgeIcon} />
+                            <span>V-1.0 is here - Experience next-gen tracking</span>
+                        </motion.div>
 
-                <motion.h1 className={styles.heroTitle} variants={fadeInUp}>
-                    <span className={styles.heroTitleRow}>
-                        <span className={`${styles.heroTitleOrb} ${styles.heroTitleOrbLeft}`}>
-                            <Sparkles size={18} />
-                        </span>
-                        <span className={styles.heroTitleBrand}>SplitX</span>
-                        <span className={`${styles.heroTitleOrb} ${styles.heroTitleOrbRight}`}>
-                            <Wallet size={18} />
-                        </span>
-                    </span>
-                    <span className={styles.heroTitleTop}>Split expenses</span>
-                    <span className={styles.heroGradient}>Keep the Vibe.</span>
-                </motion.h1>
+                        <motion.h1 className={styles.heroTitle} variants={fadeInUp}>
+                            <span className={styles.heroTitleRow}>
+                                <span className={`${styles.heroTitleOrb} ${styles.heroTitleOrbLeft}`}>
+                                    <Sparkles size={18} />
+                                </span>
+                                <span className={styles.heroTitleBrand}>SplitX</span>
+                                <span className={`${styles.heroTitleOrb} ${styles.heroTitleOrbRight}`}>
+                                    <Wallet size={18} />
+                                </span>
+                            </span>
+                            <span className={styles.heroTitleTop}>Split expenses</span>
+                            <span className={styles.heroGradient}>Keep the Vibe.</span>
+                        </motion.h1>
 
-                <motion.p className={styles.heroLead} variants={fadeInUp}>
-                    One shared memory deserves one calm money story.
-                </motion.p>
+                        <motion.p className={styles.heroLead} variants={fadeInUp}>
+                            One shared memory deserves one calm money story.
+                        </motion.p>
 
-                <motion.div className={styles.heroCTAs} variants={fadeInUp}>
-                    <Link href="/register">
-                        <Button size="lg" className={styles.primaryCtaBtn}>
-                            <span className={styles.ctaBtnShine} />
-                            Start Splitting - Free
-                            <ArrowRight size={18} style={{ marginLeft: '8px' }} />
-                        </Button>
-                    </Link>
-                    <Link href="#features">
-                        <Button size="lg" variant="outline" className={styles.secondaryCtaBtn}>
-                            See Features
-                        </Button>
-                    </Link>
-                </motion.div>
+                        <motion.div className={styles.heroCTAs} variants={fadeInUp}>
+                            <Link href="/register">
+                                <Button size="lg" className={styles.primaryCtaBtn}>
+                                    <span className={styles.ctaBtnShine} />
+                                    Start Splitting - Free
+                                    <ArrowRight size={18} style={{ marginLeft: '8px' }} />
+                                </Button>
+                            </Link>
+                            <Link href="#features">
+                                <Button size="lg" variant="outline" className={styles.secondaryCtaBtn}>
+                                    See Features
+                                </Button>
+                            </Link>
+                        </motion.div>
 
-                <motion.div
-                    className={styles.heroVideoShell}
-                    variants={scaleIn}
-                    style={{
-                        rotateX: heroMediaRotateX,
-                        rotateY: heroMediaRotateY,
-                        scale: heroMediaScale,
-                    }}
-                >
-                    <div className={styles.heroVideoAura} />
-                    <div className={styles.heroVideoFrame}>
-                        <video
-                            className={styles.heroVideo}
-                            src="/video.mp4"
-                            autoPlay
-                            muted
-                            loop
-                            playsInline
-                            preload="metadata"
-                        />
-                        <div className={styles.heroVideoOverlay} />
+                        <motion.p className={styles.heroSubtitle} variants={fadeInUp}>
+                            The smartest way to track group expenses on trips. Auto-capture from UPI,
+                            scan receipts instantly with AI, and settle up with one tap.
+                        </motion.p>
                     </div>
-                    <div className={styles.heroVideoTags} aria-hidden="true">
-                        <span className={styles.heroVideoTag}>Friends argue less</span>
-                        <span className={styles.heroVideoTag}>Balances stay clear</span>
-                        <span className={styles.heroVideoTag}>Settlements feel instant</span>
-                    </div>
-                </motion.div>
 
-                <motion.p className={styles.heroSubtitle} variants={fadeInUp}>
-                    The smartest way to track group expenses on trips. Auto-capture from UPI,
-                    scan receipts instantly with AI, and settle up with one tap.
-                </motion.p>
+                    <motion.div
+                        className={styles.heroVideoShell}
+                        variants={scaleIn}
+                        style={{
+                            rotateX: heroMediaRotateX,
+                            rotateY: heroMediaRotateY,
+                            scale: heroMediaScale,
+                        }}
+                    >
+                        <div className={styles.heroVideoAura} />
+                        <div className={styles.heroVideoFrame}>
+                            <video
+                                className={styles.heroVideo}
+                                src="/video.mp4"
+                                autoPlay
+                                muted
+                                loop
+                                playsInline
+                                preload="metadata"
+                            />
+                            <div className={styles.heroVideoOverlay} />
+                        </div>
+                        <div className={styles.heroVideoTags} aria-hidden="true">
+                            <span className={styles.heroVideoTag}>Friends argue less</span>
+                            <span className={styles.heroVideoTag}>Balances stay clear</span>
+                            <span className={styles.heroVideoTag}>Settlements feel instant</span>
+                        </div>
+                    </motion.div>
+                </div>
             </motion.div>
         </section>
     );

@@ -9,17 +9,30 @@ import Button from '@/components/ui/Button';
 import Avatar from '@/components/ui/Avatar';
 import Badge from '@/components/ui/Badge';
 import Modal from '@/components/ui/Modal';
+import ErrorState from '@/components/ui/ErrorState';
 import SettlementGraph from '@/components/features/SettlementGraph';
 import UpiPaymentModal from '@/components/features/UpiPaymentModal';
 import { useToast } from '@/components/ui/Toast';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
+import { usePerformanceMode } from '@/hooks/usePerformanceMode';
+import { useViewportTier } from '@/hooks/useViewportTier';
 import { isFeatureEnabled } from '@/lib/featureFlags';
+import { getNetworkErrorCopy, NetworkTaggedError, toNetworkTaggedError } from '@/lib/networkErrors';
 import { formatCurrency } from '@/lib/utils';
 import { exportAsText, shareSettlement } from '@/lib/export';
 import { SettlementSkeleton } from '@/components/ui/Skeleton';
 
 /* ── SWR fetcher ── */
-const fetcher = (url: string) => fetch(url).then(r => r.ok ? r.json() : null);
+const fetcher = async (url: string) => {
+    try {
+        const res = await fetch(url);
+        if (!res.ok) throw toNetworkTaggedError({ response: res });
+        return res.json();
+    } catch (error) {
+        if (error instanceof NetworkTaggedError) throw error;
+        throw toNetworkTaggedError({ error });
+    }
+};
 
 /* ── Glassmorphic styles ── */
 const glass: React.CSSProperties = {
@@ -66,6 +79,8 @@ interface ByGroupResponse {
 export default function SettlementsPage() {
     const router = useRouter();
     const { user: currentUser } = useCurrentUser();
+    const { mode } = usePerformanceMode();
+    const { isDesktop, isTablet } = useViewportTier();
     const { toast } = useToast();
     const [activeSlide, setActiveSlide] = useState(0); // 0 = "All", 1..N = per-group
     const [tab, setTab] = useState<'pending' | 'settled'>('pending');
@@ -75,7 +90,11 @@ export default function SettlementsPage() {
     const [expandedGlobalIdx, setExpandedGlobalIdx] = useState<number | null>(null);
 
     // SWR data fetching — single call replaces N+2 waterfall
-    const { data, isLoading, mutate } = useSWR<ByGroupResponse>('/api/settlements/by-group', fetcher);
+    const { data, isLoading, error, mutate } = useSWR<ByGroupResponse>('/api/settlements/by-group', fetcher, {
+        dedupingInterval: 20000,
+        revalidateOnFocus: false,
+        keepPreviousData: true,
+    });
 
     const currentUserId = currentUser?.id || null;
 
@@ -234,6 +253,17 @@ export default function SettlementsPage() {
     };
 
     if (isLoading) return <SettlementSkeleton />;
+    if (error instanceof NetworkTaggedError) {
+        const copy = getNetworkErrorCopy(error.variant);
+        return (
+            <ErrorState
+                variant={error.variant}
+                title={copy.title}
+                message={copy.message}
+                onRetry={() => mutate()}
+            />
+        );
+    }
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
@@ -374,7 +404,12 @@ export default function SettlementsPage() {
                     </div>
 
                     {/* Swipeable Graph Card */}
-                    <div style={{ overflow: 'hidden', borderRadius: 'var(--radius-2xl)' }}>
+                    <div style={{
+                        overflow: 'hidden',
+                        borderRadius: 'var(--radius-2xl)',
+                        maxWidth: isDesktop ? 'min(100%, 1180px)' : '100%',
+                        margin: '0 auto',
+                    }}>
                         <AnimatePresence mode="wait" initial={false}>
                             <motion.div
                                 key={activeSlide}
@@ -581,6 +616,7 @@ export default function SettlementsPage() {
                                                     settlements={graphSettlements}
                                                     memberImages={graphMemberImages}
                                                     compact
+                                                    performanceMode={mode}
                                                     instanceId={activeSlideData?.groupId || 'group'}
                                                 />
                                             </>
@@ -613,6 +649,8 @@ export default function SettlementsPage() {
             {/* ═══ TABS — Glassmorphic Segmented Control ═══ */}
             <div style={{
                 display: 'flex', ...glass, borderRadius: 'var(--radius-xl)', padding: 3,
+                maxWidth: isDesktop ? 'min(100%, 1180px)' : '100%',
+                margin: '0 auto',
             }}>
                 {(['pending', 'settled'] as const).map((t) => (
                     <button
@@ -636,11 +674,18 @@ export default function SettlementsPage() {
             </div>
 
             {/* ═══ SETTLEMENT LIST — Glassmorphic Cards ═══ */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+            <div style={{
+                display: 'grid',
+                gridTemplateColumns: isDesktop || isTablet ? 'repeat(2, minmax(0, 1fr))' : '1fr',
+                gap: 'var(--space-3)',
+                maxWidth: isDesktop ? 'min(100%, 1180px)' : '100%',
+                margin: '0 auto',
+            }}>
                 {filteredSettlements.length === 0 ? (
                     <div style={{
                         ...glass, borderRadius: 'var(--radius-2xl)',
                         padding: 'var(--space-10) var(--space-4)', textAlign: 'center',
+                        gridColumn: isDesktop || isTablet ? '1 / -1' : undefined,
                     }}>
                         <div style={{ position: 'relative', zIndex: 1 }}>
                             <div style={{

@@ -4,6 +4,15 @@
 
 ---
 
+## Local + CI Workflow
+
+- Local development: `npm install` then `npm run dev`
+- Local production-style container run: `docker compose up --build`
+- CI pipeline: `.github/workflows/ci.yml` runs `npm test`, `npm run lint`, `npm run build`, and validates the Docker image build on PRs and `main`
+- Docker uses your existing `.env` file, so keep production secrets out of the repo and configure them through environment variables / GitHub Secrets
+
+---
+
 ## 🏗️ Architecture Overview
 
 ```mermaid

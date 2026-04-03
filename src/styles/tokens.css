@@ -57,9 +57,9 @@
   --shadow-glow-lg: 0 0 40px rgba(var(--accent-500-rgb), 0.4);
 
   /* ── Typography ── */
-  --font-sans: 'Playfair Display', Georgia, 'Times New Roman', serif;
-  --font-display: 'Playfair Display', Georgia, 'Times New Roman', serif;
-  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  --font-sans: var(--font-playfair), Georgia, 'Times New Roman', serif;
+  --font-display: var(--font-playfair), Georgia, 'Times New Roman', serif;
+  --font-mono: var(--font-jetbrains-mono), 'Fira Code', monospace;
 
   --text-xs: 0.75rem;
   /* 12px */

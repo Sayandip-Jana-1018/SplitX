@@ -8,11 +8,23 @@ import Button from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import Modal from '@/components/ui/Modal';
 import { AvatarGroup } from '@/components/ui/Avatar';
+import ErrorState from '@/components/ui/ErrorState';
 import { useToast } from '@/components/ui/Toast';
+import { useViewportTier } from '@/hooks/useViewportTier';
+import { getNetworkErrorCopy, NetworkTaggedError, toNetworkTaggedError } from '@/lib/networkErrors';
 import { formatCurrency, timeAgo } from '@/lib/utils';
 import useSWR from 'swr';
 
-const fetcher = (url: string) => fetch(url).then(res => res.json());
+const fetcher = async (url: string) => {
+    try {
+        const res = await fetch(url);
+        if (!res.ok) throw toNetworkTaggedError({ response: res });
+        return res.json();
+    } catch (error) {
+        if (error instanceof NetworkTaggedError) throw error;
+        throw toNetworkTaggedError({ error });
+    }
+};
 
 const GROUP_EMOJIS = ['✈️', '🏖️', '🏠', '🍕', '🎮', '🏕️', '🎉', '🚗', '💼', '🎓', '🏋️', '🎵'];
 
@@ -51,8 +63,12 @@ export default function GroupsPage() {
     const [copied, setCopied] = useState(false);
     const [showJoin, setShowJoin] = useState(false);
     const { toast } = useToast();
+    const { isWide, isDesktop } = useViewportTier();
 
-    const { data: rawGroups, mutate: fetchGroups, isLoading: loading } = useSWR<GroupData[]>('/api/groups', fetcher);
+    const { data: rawGroups, mutate: fetchGroups, isLoading: loading, error } = useSWR<GroupData[]>('/api/groups', fetcher, {
+        dedupingInterval: 20000,
+        revalidateOnFocus: false,
+    });
     const groups = Array.isArray(rawGroups) ? rawGroups : [];
 
     const handleCreate = async () => {
@@ -140,6 +156,18 @@ export default function GroupsPage() {
         );
     }
 
+    if (error instanceof NetworkTaggedError) {
+        const copy = getNetworkErrorCopy(error.variant);
+        return (
+            <ErrorState
+                variant={error.variant}
+                title={copy.title}
+                message={copy.message}
+                onRetry={() => fetchGroups()}
+            />
+        );
+    }
+
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
             <div className="page-hero" style={{ paddingTop: 'var(--space-2)' }}>
@@ -193,7 +221,11 @@ export default function GroupsPage() {
                     </div>
                 </motion.div>
             ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+                <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: isDesktop ? 'repeat(2, minmax(0, 1fr))' : isWide ? 'repeat(2, minmax(0, 1fr))' : '1fr',
+                    gap: 'var(--space-3)',
+                }}>
                     {groups.map((group, i) => (
                         <motion.button
                             key={group.id}
