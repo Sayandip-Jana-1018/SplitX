@@ -4,11 +4,38 @@
 
 ---
 
+## Preview
+
+<div align="center">
+  <img src="./public/icons/icon-512.png" alt="SplitX App Icon" width="120" height="120" />
+  <h3>SplitX</h3>
+  <p>Premium PWA for shared expenses, balance clarity, and cleaner group settlements.</p>
+</div>
+
+### Live Experience
+
+- **Live Project:** [splitsj.vercel.app](https://splitsj.vercel.app)
+- **GitHub Repository:** [Sayandip-Jana-1018/SplitX](https://github.com/Sayandip-Jana-1018/SplitX)
+- **Hero Video Asset:** [`public/video.mp4`](./public/video.mp4)
+
+### Showcase Highlights
+
+- **Dashboard:** centered balance overview, recent activity, pending settlements, quick actions, and guided Balance Journey entry
+- **Groups:** shared-space management with invite flows, member avatars, and group-level spending context
+- **Settlements:** premium transfer graph, pay-via-UPI actions, pairwise clarity, and simplified debt routing
+- **Analytics:** real per-group monthly trend, category breakdown, and "who paid in this group" horizontal bars
+- **Settings:** profile customization, avatar upload, theming, PWA install, and export controls
+
+> For the best visual preview, open the live site on desktop and mobile. The repo currently ships the brand/video assets directly, while runtime screenshots are best viewed on the deployed app.
+
+---
+
 ## Local + CI Workflow
 
 - Local development: `npm install` then `npm run dev`
 - Local production-style container run: `docker compose up --build`
-- CI pipeline: `.github/workflows/ci.yml` runs `npm test`, `npm run lint`, `npm run build`, and validates the Docker image build on PRs and `main`
+- CI pipeline: `.github/workflows/ci.yml` runs `npm test`, `npm run lint`, and `npm run build` on PRs and `main`
+- Optional Docker validation can be enabled in GitHub Actions by setting the repository variable `ENABLE_DOCKER_CI=true`
 - Docker uses your existing `.env` file, so keep production secrets out of the repo and configure them through environment variables / GitHub Secrets
 
 ---
