@@ -73,9 +73,9 @@ export default function AnalyticsPage() {
     const hasLoadedRef = useRef(false);
     const requestIdRef = useRef(0);
     const { mode } = usePerformanceMode();
-    const { isDesktop, isWide } = useViewportTier();
+    const { isDesktop } = useViewportTier();
     const desktopStageStyle: React.CSSProperties = isDesktop
-        ? { width: 'min(100%, 1220px)', margin: '0 auto' }
+        ? { width: 'min(100%, 1100px)', margin: '0 auto' }
         : { width: '100%' };
 
     const fetchData = useCallback(async (groupId?: string | null) => {
@@ -211,7 +211,12 @@ export default function AnalyticsPage() {
                 </motion.div>
             ) : (
                 <>
-                    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
+                    <motion.div
+                        initial={{ opacity: 0, y: 12 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.05 }}
+                        style={{ width: '100%', maxWidth: isDesktop ? 980 : undefined, margin: '0 auto' }}
+                    >
                         <div style={{
                             ...glass,
                             padding: 'var(--space-4)',
@@ -355,13 +360,13 @@ export default function AnalyticsPage() {
                             </div>
                         </motion.div>
                     ) : (
-                        <div style={{
-                            display: 'grid',
-                            gridTemplateColumns: isDesktop ? 'minmax(320px, 0.8fr) minmax(520px, 1fr)' : '1fr',
-                            gap: 'var(--space-4)',
-                            alignItems: 'start',
-                        }}>
-                            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.08 }}>
+                        <>
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.95 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                transition={{ delay: 0.08 }}
+                                style={{ width: '100%', maxWidth: isDesktop ? 980 : undefined, margin: '0 auto' }}
+                            >
                                 <div style={{
                                     ...glass, borderRadius: 'var(--radius-2xl)', padding: 'var(--space-4)',
                                     background: 'linear-gradient(135deg, rgba(var(--accent-500-rgb), 0.1), var(--bg-glass), rgba(var(--accent-500-rgb), 0.05))',
@@ -417,13 +422,14 @@ export default function AnalyticsPage() {
                                 </div>
                             </motion.div>
 
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
                             {chartsReady ? (
-                                <div style={{
-                                    display: 'grid',
-                                    gap: 'var(--space-4)',
-                                    gridTemplateColumns: isWide ? 'repeat(2, minmax(0, 1fr))' : '1fr',
-                                }}>
+                            <div style={{
+                                display: 'grid',
+                                gap: 'var(--space-4)',
+                                gridTemplateColumns: isDesktop ? 'repeat(2, minmax(0, 1fr))' : '1fr',
+                                alignItems: 'start',
+                            }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
                                     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}>
                                         <DailySpendingChart
                                             data={monthlyChartData}
@@ -431,7 +437,12 @@ export default function AnalyticsPage() {
                                             emoji={payload.data.groupEmoji || '📈'}
                                         />
                                     </motion.div>
+                                    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+                                        <SpendingPieChart data={categoryChartData} />
+                                    </motion.div>
+                                </div>
 
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
                                     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.16 }}>
                                         <GroupSpendBarChart
                                             data={payload.data.memberSpending}
@@ -440,24 +451,72 @@ export default function AnalyticsPage() {
                                         />
                                     </motion.div>
 
-                                    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-                                        <div style={{ gridColumn: isWide ? '1 / -1' : undefined }}>
-                                            <SpendingPieChart data={categoryChartData} />
+                                    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.24 }}>
+                                        <div style={{ ...glass, padding: 'var(--space-4)' }}>
+                                            <div className="section-heading" style={{
+                                                fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--fg-primary)',
+                                                marginBottom: 'var(--space-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                                            }}>
+                                                <TrendingUp size={16} />
+                                                Smart Insights
+                                            </div>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                                                {payload.data.insights.length > 0 ? payload.data.insights.map((insight, index) => (
+                                                    <div
+                                                        key={`${insight.type}-${index}`}
+                                                        style={{
+                                                            padding: '12px 14px',
+                                                            borderRadius: 'var(--radius-lg)',
+                                                            background: insight.severity === 'warning'
+                                                                ? 'rgba(245, 158, 11, 0.08)'
+                                                                : insight.severity === 'success'
+                                                                    ? 'rgba(34, 197, 94, 0.08)'
+                                                                    : 'rgba(var(--accent-500-rgb), 0.08)',
+                                                            border: insight.severity === 'warning'
+                                                                ? '1px solid rgba(245, 158, 11, 0.16)'
+                                                                : insight.severity === 'success'
+                                                                    ? '1px solid rgba(34, 197, 94, 0.16)'
+                                                                    : '1px solid rgba(var(--accent-500-rgb), 0.12)',
+                                                            display: 'flex',
+                                                            flexDirection: 'column',
+                                                            alignItems: 'center',
+                                                            textAlign: 'center',
+                                                            gap: 10,
+                                                        }}
+                                                    >
+                                                        {insight.severity === 'warning' ? (
+                                                            <AlertTriangle size={16} style={{ color: '#f59e0b', flexShrink: 0, marginTop: 1 }} />
+                                                        ) : insight.severity === 'success' ? (
+                                                            <CheckCircle2 size={16} style={{ color: '#22c55e', flexShrink: 0, marginTop: 1 }} />
+                                                        ) : (
+                                                            <TrendingUp size={16} style={{ color: 'var(--accent-500)', flexShrink: 0, marginTop: 1 }} />
+                                                        )}
+                                                        <span style={{ fontSize: 'var(--text-sm)', color: 'var(--fg-secondary)', lineHeight: 1.5 }}>
+                                                            {insight.message}
+                                                        </span>
+                                                    </div>
+                                                )) : (
+                                                    <div style={{ fontSize: 'var(--text-sm)', color: 'var(--fg-tertiary)', textAlign: 'center' }}>
+                                                        No notable insights yet. Add more group expenses to make the story clearer.
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
                                     </motion.div>
                                 </div>
+                            </div>
                             ) : (
                                 <div style={{
                                     display: 'grid',
-                                    gridTemplateColumns: isWide ? 'repeat(2, minmax(0, 1fr))' : '1fr',
+                                    gridTemplateColumns: isDesktop ? 'repeat(2, minmax(0, 1fr))' : '1fr',
                                     gap: 'var(--space-4)',
                                 }}>
-                                    {[0, 1, 2].map((index) => (
+                                    {[0, 1, 2, 3].map((index) => (
                                         <div
                                             key={index}
                                             style={{
                                                 ...glass,
-                                                minHeight: index === 1 ? 280 : 240,
+                                                minHeight: index >= 2 ? 240 : 280,
                                                 padding: 'var(--space-4)',
                                                 background: 'linear-gradient(135deg, rgba(var(--accent-500-rgb), 0.05), var(--bg-glass))',
                                             }}
@@ -465,61 +524,7 @@ export default function AnalyticsPage() {
                                     ))}
                                 </div>
                             )}
-
-                            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.24 }}>
-                                <div style={{ ...glass, padding: 'var(--space-4)' }}>
-                                    <div className="section-heading" style={{
-                                        fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--fg-primary)',
-                                        marginBottom: 'var(--space-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                                    }}>
-                                        <TrendingUp size={16} />
-                                        Smart Insights
-                                    </div>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-                                        {payload.data.insights.length > 0 ? payload.data.insights.map((insight, index) => (
-                                            <div
-                                                key={`${insight.type}-${index}`}
-                                                style={{
-                                                    padding: '12px 14px',
-                                                    borderRadius: 'var(--radius-lg)',
-                                                    background: insight.severity === 'warning'
-                                                        ? 'rgba(245, 158, 11, 0.08)'
-                                                        : insight.severity === 'success'
-                                                            ? 'rgba(34, 197, 94, 0.08)'
-                                                            : 'rgba(var(--accent-500-rgb), 0.08)',
-                                                    border: insight.severity === 'warning'
-                                                        ? '1px solid rgba(245, 158, 11, 0.16)'
-                                                        : insight.severity === 'success'
-                                                            ? '1px solid rgba(34, 197, 94, 0.16)'
-                                                            : '1px solid rgba(var(--accent-500-rgb), 0.12)',
-                                                    display: 'flex',
-                                                    flexDirection: 'column',
-                                                    alignItems: 'center',
-                                                    textAlign: 'center',
-                                                    gap: 10,
-                                                }}
-                                            >
-                                                {insight.severity === 'warning' ? (
-                                                    <AlertTriangle size={16} style={{ color: '#f59e0b', flexShrink: 0, marginTop: 1 }} />
-                                                ) : insight.severity === 'success' ? (
-                                                    <CheckCircle2 size={16} style={{ color: '#22c55e', flexShrink: 0, marginTop: 1 }} />
-                                                ) : (
-                                                    <TrendingUp size={16} style={{ color: 'var(--accent-500)', flexShrink: 0, marginTop: 1 }} />
-                                                )}
-                                                <span style={{ fontSize: 'var(--text-sm)', color: 'var(--fg-secondary)', lineHeight: 1.5 }}>
-                                                    {insight.message}
-                                                </span>
-                                            </div>
-                                        )) : (
-                                            <div style={{ fontSize: 'var(--text-sm)', color: 'var(--fg-tertiary)', textAlign: 'center' }}>
-                                                No notable insights yet. Add more group expenses to make the story clearer.
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            </motion.div>
-                            </div>
-                        </div>
+                        </>
                     )}
                 </>
             )}

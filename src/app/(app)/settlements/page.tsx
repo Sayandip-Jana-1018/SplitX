@@ -82,7 +82,7 @@ export default function SettlementsPage() {
     const { mode } = usePerformanceMode();
     const { isDesktop, isTablet } = useViewportTier();
     const desktopStageStyle: React.CSSProperties = isDesktop
-        ? { width: 'min(100%, 1120px)', margin: '0 auto' }
+        ? { width: 'min(100%, 1040px)', margin: '0 auto' }
         : { width: '100%' };
     const { toast } = useToast();
     const [activeSlide, setActiveSlide] = useState(0); // 0 = "All", 1..N = per-group
@@ -282,7 +282,12 @@ export default function SettlementsPage() {
             </motion.div>
 
             {/* ═══ BALANCE OVERVIEW — Glassmorphic Hero ═══ */}
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.5, delay: 0.05 }}>
+            <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.5, delay: 0.05 }}
+                style={{ width: '100%', maxWidth: isDesktop ? 860 : undefined, margin: '0 auto' }}
+            >
                 <div style={{
                     ...glass, borderRadius: 'var(--radius-2xl)', padding: 'var(--space-4)',
                     background: 'linear-gradient(135deg, rgba(var(--accent-500-rgb), 0.08), var(--bg-glass), rgba(var(--accent-500-rgb), 0.04))',
@@ -334,6 +339,9 @@ export default function SettlementsPage() {
                     <div style={{
                         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                         marginBottom: 'var(--space-3)',
+                        width: '100%',
+                        maxWidth: isDesktop ? 860 : undefined,
+                        marginInline: 'auto',
                     }}>
                         <button
                             onClick={() => goToSlide(activeSlide - 1)}
@@ -410,7 +418,7 @@ export default function SettlementsPage() {
                     <div style={{
                         overflow: 'hidden',
                         borderRadius: 'var(--radius-2xl)',
-                        maxWidth: isDesktop ? 'min(100%, 920px)' : '100%',
+                        maxWidth: isDesktop ? 'min(100%, 860px)' : '100%',
                         margin: '0 auto',
                     }}>
                         <AnimatePresence mode="wait" initial={false}>
@@ -652,7 +660,7 @@ export default function SettlementsPage() {
             {/* ═══ TABS — Glassmorphic Segmented Control ═══ */}
             <div style={{
                 display: 'flex', ...glass, borderRadius: 'var(--radius-xl)', padding: 3,
-                maxWidth: isDesktop ? 'min(100%, 960px)' : '100%',
+                maxWidth: isDesktop ? 'min(100%, 860px)' : '100%',
                 margin: '0 auto',
             }}>
                 {(['pending', 'settled'] as const).map((t) => (
@@ -679,9 +687,9 @@ export default function SettlementsPage() {
             {/* ═══ SETTLEMENT LIST — Glassmorphic Cards ═══ */}
             <div style={{
                 display: 'grid',
-                gridTemplateColumns: isDesktop || isTablet ? 'repeat(2, minmax(0, 1fr))' : '1fr',
+                gridTemplateColumns: isDesktop ? 'repeat(2, minmax(0, 1fr))' : isTablet ? 'repeat(2, minmax(0, 1fr))' : '1fr',
                 gap: 'var(--space-3)',
-                maxWidth: isDesktop ? 'min(100%, 960px)' : '100%',
+                maxWidth: isDesktop ? 'min(100%, 860px)' : '100%',
                 margin: '0 auto',
             }}>
                 {filteredSettlements.length === 0 ? (
@@ -901,7 +909,7 @@ export default function SettlementsPage() {
             {/* ═══ EXPORT ACTIONS ═══ */}
             {activePending.length > 0 && (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }}>
-                    <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                    <div style={{ display: 'flex', gap: 'var(--space-2)', maxWidth: isDesktop ? 860 : undefined, margin: '0 auto' }}>
                         <button
                             onClick={() => {
                                 const data = {

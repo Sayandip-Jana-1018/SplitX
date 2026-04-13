@@ -154,7 +154,7 @@ export default function DashboardPage() {
     const { mode } = usePerformanceMode();
     const { isDesktop } = useViewportTier();
     const desktopStageStyle: React.CSSProperties = isDesktop
-        ? { width: 'min(100%, 1240px)', margin: '0 auto' }
+        ? { width: 'min(100%, 1080px)', margin: '0 auto' }
         : { width: '100%' };
     const currentUserId = currentUser?.id || '';
 
@@ -432,7 +432,15 @@ export default function DashboardPage() {
 
                     {/* ═══ QUICK ACTIONS — Glass Pill Buttons ═══ */}
                     <motion.div variants={fadeUp} transition={{ duration: 0.5, delay: 0.1 }} data-tour="quick-actions">
-                        <div style={{ display: 'flex', gap: 'var(--space-2)', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+                        <div style={{
+                            display: 'flex',
+                            gap: 'var(--space-2)',
+                            justifyContent: 'center',
+                            flexWrap: 'wrap',
+                            width: '100%',
+                            maxWidth: isDesktop ? 920 : undefined,
+                            margin: '0 auto',
+                        }}>
                             {[
                                 { label: 'Add Expense', icon: <Plus size={13} />, href: '/transactions/new' },
                                 { label: 'Settle Up', icon: <ArrowRightLeft size={13} />, href: '/settlements' },
@@ -507,8 +515,8 @@ export default function DashboardPage() {
 
                     <div style={{
                         display: 'grid',
-                        gridTemplateColumns: isDesktop ? 'minmax(0, 1.1fr) minmax(340px, 0.9fr)' : '1fr',
-                        gap: 'var(--space-4)',
+                        gridTemplateColumns: isDesktop ? 'minmax(0, 1fr) minmax(320px, 0.82fr)' : '1fr',
+                        gap: isDesktop ? 'var(--space-5)' : 'var(--space-4)',
                         alignItems: 'start',
                     }}>
                     {/* ═══ RECENT TRANSACTIONS ═══ */}
@@ -690,8 +698,8 @@ export default function DashboardPage() {
                     {/* ═══ ANALYTICS LINK + MEMBERS ═══ */}
                     <div style={{
                         display: 'grid',
-                        gridTemplateColumns: isDesktop ? 'minmax(0, 1fr) minmax(320px, 0.75fr)' : '1fr',
-                        gap: 'var(--space-4)',
+                        gridTemplateColumns: isDesktop ? 'minmax(0, 1fr) minmax(300px, 0.72fr)' : '1fr',
+                        gap: isDesktop ? 'var(--space-5)' : 'var(--space-4)',
                         alignItems: 'start',
                     }}>
                     <motion.div variants={fadeUp} transition={{ duration: 0.5, delay: 0.35 }}>
