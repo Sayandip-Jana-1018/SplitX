@@ -714,7 +714,7 @@
     }
 
     .pageContent {
-        max-width: min(1480px, calc(100vw - 320px));
+        max-width: min(1360px, calc(100vw - 320px));
         padding: var(--space-6) var(--space-8);
         padding-bottom: var(--space-6);
         margin: 0 auto;
@@ -722,7 +722,7 @@
     }
 
     .header {
-        max-width: min(1480px, calc(100vw - 320px));
+        max-width: min(1360px, calc(100vw - 320px));
         padding: var(--space-4) var(--space-8);
     }
 }

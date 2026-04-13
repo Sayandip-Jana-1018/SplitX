@@ -64,6 +64,9 @@ export default function GroupsPage() {
     const [showJoin, setShowJoin] = useState(false);
     const { toast } = useToast();
     const { isWide, isDesktop } = useViewportTier();
+    const desktopStageStyle: React.CSSProperties = isDesktop
+        ? { width: 'min(100%, 980px)', margin: '0 auto' }
+        : { width: '100%' };
 
     const { data: rawGroups, mutate: fetchGroups, isLoading: loading, error } = useSWR<GroupData[]>('/api/groups', fetcher, {
         dedupingInterval: 20000,
@@ -177,7 +180,7 @@ export default function GroupsPage() {
                     {groups.length} group{groups.length !== 1 ? 's' : ''} ready for expenses, journeys, settlements, and group-level clarity.
                 </p>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+            <div style={{ ...desktopStageStyle, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                 <p style={{ color: 'var(--fg-tertiary)', fontSize: 'var(--text-xs)' }}>
                     {groups.length} group{groups.length !== 1 ? 's' : ''} · Split expenses together
                 </p>
@@ -222,9 +225,17 @@ export default function GroupsPage() {
                 </motion.div>
             ) : (
                 <div style={{
+                    ...desktopStageStyle,
                     display: 'grid',
-                    gridTemplateColumns: isDesktop ? 'repeat(2, minmax(0, 1fr))' : isWide ? 'repeat(2, minmax(0, 1fr))' : '1fr',
+                    gridTemplateColumns: isDesktop
+                        ? groups.length === 1
+                            ? 'minmax(0, 720px)'
+                            : 'repeat(2, minmax(0, 1fr))'
+                        : isWide
+                            ? 'repeat(2, minmax(0, 1fr))'
+                            : '1fr',
                     gap: 'var(--space-3)',
+                    justifyContent: 'center',
                 }}>
                     {groups.map((group, i) => (
                         <motion.button
@@ -354,7 +365,7 @@ export default function GroupsPage() {
 
             {/* ═══ JOIN / CREATE BUTTONS — Only when groups exist ═══ */}
             {groups.length > 0 && (
-                <div style={{ display: 'flex', gap: 'var(--space-3)', justifyContent: 'center', padding: 'var(--space-2) 0' }}>
+                <div style={{ ...desktopStageStyle, display: 'flex', gap: 'var(--space-3)', justifyContent: 'center', padding: 'var(--space-2) 0' }}>
                     <Button size="sm" variant="outline" leftIcon={<LogIn size={14} />} onClick={() => setShowJoin(true)}>
                         Join Group
                     </Button>

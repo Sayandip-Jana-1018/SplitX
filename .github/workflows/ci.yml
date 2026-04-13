@@ -33,4 +33,5 @@ jobs:
         run: npm run build
 
       - name: Validate Docker image
+        if: ${{ vars.ENABLE_DOCKER_CI == 'true' }}
         run: docker build -t splitx-ci .

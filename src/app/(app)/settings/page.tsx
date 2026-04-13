@@ -8,6 +8,7 @@ import Button from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { useThemeContext, COLOR_PALETTES } from '@/components/providers/ThemeProvider';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
+import { useViewportTier } from '@/hooks/useViewportTier';
 import { useToast } from '@/components/ui/Toast';
 import { signOut } from 'next-auth/react';
 
@@ -31,6 +32,7 @@ interface BeforeInstallPromptEvent extends Event {
 export default function SettingsPage() {
     const { theme, palette, setTheme, setPalette } = useThemeContext();
     const { user, loading: userLoading, refresh: refreshUser } = useCurrentUser();
+    const { isDesktop } = useViewportTier();
     const { toast } = useToast();
 
     const [editingProfile, setEditingProfile] = useState(false);
@@ -217,7 +219,17 @@ export default function SettingsPage() {
         : '...';
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', maxWidth: 500, width: '100%', margin: '0 auto' }} suppressHydrationWarning>
+        <div
+            style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 'var(--space-5)',
+                maxWidth: isDesktop ? 980 : 500,
+                width: '100%',
+                margin: '0 auto',
+            }}
+            suppressHydrationWarning
+        >
             <div className="page-hero" style={{ paddingTop: 'var(--space-2)' }}>
                 <div className="page-kicker">Personalize SplitX</div>
                 <h2 className="page-hero-title">Make the app feel like yours</h2>

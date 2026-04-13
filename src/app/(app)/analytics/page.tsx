@@ -74,6 +74,9 @@ export default function AnalyticsPage() {
     const requestIdRef = useRef(0);
     const { mode } = usePerformanceMode();
     const { isDesktop, isWide } = useViewportTier();
+    const desktopStageStyle: React.CSSProperties = isDesktop
+        ? { width: 'min(100%, 1220px)', margin: '0 auto' }
+        : { width: '100%' };
 
     const fetchData = useCallback(async (groupId?: string | null) => {
         const requestId = requestIdRef.current + 1;
@@ -159,7 +162,10 @@ export default function AnalyticsPage() {
     const hasData = Boolean(payload && payload.data.monthlyTrend.length > 0);
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }} suppressHydrationWarning>
+        <div
+            style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', ...desktopStageStyle }}
+            suppressHydrationWarning
+        >
             <div className="page-hero" style={{ paddingTop: 'var(--space-2)' }}>
                 <div className="page-kicker">Group Analytics</div>
                 <h2 className="page-hero-title">See how one group is spending, clearly</h2>
@@ -351,7 +357,7 @@ export default function AnalyticsPage() {
                     ) : (
                         <div style={{
                             display: 'grid',
-                            gridTemplateColumns: isDesktop ? 'minmax(0, 0.85fr) minmax(0, 1.15fr)' : '1fr',
+                            gridTemplateColumns: isDesktop ? 'minmax(320px, 0.8fr) minmax(520px, 1fr)' : '1fr',
                             gap: 'var(--space-4)',
                             alignItems: 'start',
                         }}>

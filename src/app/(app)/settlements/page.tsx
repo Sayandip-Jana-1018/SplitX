@@ -81,6 +81,9 @@ export default function SettlementsPage() {
     const { user: currentUser } = useCurrentUser();
     const { mode } = usePerformanceMode();
     const { isDesktop, isTablet } = useViewportTier();
+    const desktopStageStyle: React.CSSProperties = isDesktop
+        ? { width: 'min(100%, 1120px)', margin: '0 auto' }
+        : { width: '100%' };
     const { toast } = useToast();
     const [activeSlide, setActiveSlide] = useState(0); // 0 = "All", 1..N = per-group
     const [tab, setTab] = useState<'pending' | 'settled'>('pending');
@@ -266,7 +269,7 @@ export default function SettlementsPage() {
     }
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', ...desktopStageStyle }}>
             {/* ═══ HEADER ═══ */}
             <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
                 <div className="page-hero" style={{ paddingTop: 'var(--space-2)' }}>
@@ -407,7 +410,7 @@ export default function SettlementsPage() {
                     <div style={{
                         overflow: 'hidden',
                         borderRadius: 'var(--radius-2xl)',
-                        maxWidth: isDesktop ? 'min(100%, 1180px)' : '100%',
+                        maxWidth: isDesktop ? 'min(100%, 920px)' : '100%',
                         margin: '0 auto',
                     }}>
                         <AnimatePresence mode="wait" initial={false}>
@@ -649,7 +652,7 @@ export default function SettlementsPage() {
             {/* ═══ TABS — Glassmorphic Segmented Control ═══ */}
             <div style={{
                 display: 'flex', ...glass, borderRadius: 'var(--radius-xl)', padding: 3,
-                maxWidth: isDesktop ? 'min(100%, 1180px)' : '100%',
+                maxWidth: isDesktop ? 'min(100%, 960px)' : '100%',
                 margin: '0 auto',
             }}>
                 {(['pending', 'settled'] as const).map((t) => (
@@ -678,7 +681,7 @@ export default function SettlementsPage() {
                 display: 'grid',
                 gridTemplateColumns: isDesktop || isTablet ? 'repeat(2, minmax(0, 1fr))' : '1fr',
                 gap: 'var(--space-3)',
-                maxWidth: isDesktop ? 'min(100%, 1180px)' : '100%',
+                maxWidth: isDesktop ? 'min(100%, 960px)' : '100%',
                 margin: '0 auto',
             }}>
                 {filteredSettlements.length === 0 ? (

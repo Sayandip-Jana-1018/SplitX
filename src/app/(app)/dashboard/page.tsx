@@ -153,6 +153,9 @@ export default function DashboardPage() {
     const { user: currentUser } = useCurrentUser();
     const { mode } = usePerformanceMode();
     const { isDesktop } = useViewportTier();
+    const desktopStageStyle: React.CSSProperties = isDesktop
+        ? { width: 'min(100%, 1240px)', margin: '0 auto' }
+        : { width: '100%' };
     const currentUserId = currentUser?.id || '';
 
     const { containerRef: ptrContainerRef, pullDistance: ptrPullDistance, refreshing: ptrRefreshing } = usePullToRefresh({
@@ -284,7 +287,7 @@ export default function DashboardPage() {
                 />
             ) : (
                 <motion.div
-                    style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}
+                    style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', ...desktopStageStyle }}
                     initial="initial"
                     animate="animate"
                     variants={staggerContainer}
