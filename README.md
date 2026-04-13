@@ -1,4 +1,4 @@
-# ⚡ SplitX — Smart Expense Splitting & Settlement
+# ⚡ SplitX ~ Smart Expense Splitting & Settlement (MOBILE FIRST)
 
 > A production-grade, full-stack expense-splitting web app built with **Next.js 16**, **Prisma**, **PostgreSQL (Neon)**, and **NextAuth v5**. Features glassmorphic UI, AI-powered receipt scanning (Tesseract OCR + OpenAI Vision), Gemini AI chat assistant, real-time group chat with avatars, debt simplification with transparent calculation breakdowns, Balance Journey history timelines, CSV/print exports, real-time analytics, smart notifications, colorful themed navigation, backend security hardening, and 12 color themes.
 
