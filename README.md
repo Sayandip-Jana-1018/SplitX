@@ -7,9 +7,17 @@
 ## Preview
 
 <div align="center">
-  <img src="./public/icons/icon-512.png" alt="SplitX App Icon" width="120" height="120" />
-  <h3>SplitX</h3>
-  <p>Premium PWA for shared expenses, balance clarity, and cleaner group settlements.</p>
+  <img src="./public/screenshots/1.png" width="120" height="120" />
+  <img src="./public/screenshots/2.png" width="120" height="120" />
+  <img src="./public/screenshots/3.png" width="120" height="120" />
+  <img src="./public/screenshots/4.png" width="120" height="120" />
+  <img src="./public/screenshots/5.png" width="120" height="120" />
+  <img src="./public/screenshots/6.png" width="120" height="120" />
+  <img src="./public/screenshots/7.png" width="120" height="120" />
+  <img src="./public/screenshots/8.png" width="120" height="120" />
+  <img src="./public/screenshots/9.png" width="120" height="120" />
+  <img src="./public/screenshots/10.png" width="120" height="120" />
+  <img src="./public/screenshots/11.png" width="120" height="120" />
 </div>
 
 ### Live Experience
