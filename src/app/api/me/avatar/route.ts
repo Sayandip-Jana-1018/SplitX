@@ -1,16 +1,23 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
-import { supabase } from '@/lib/supabase';
+import { getSupabaseClient } from '@/lib/supabase';
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseAdmin = process.env.SUPABASE_SERVICE_ROLE_KEY && process.env.NEXT_PUBLIC_SUPABASE_URL
-    ? createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
-        auth: { autoRefreshToken: false, persistSession: false },
-    })
-    : null;
-
 const AVATAR_BUCKETS = ['avatars', 'receipts'] as const;
+
+function getSupabaseAdminClient() {
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+
+    if (!serviceRoleKey || !supabaseUrl) {
+        return null;
+    }
+
+    return createClient(supabaseUrl, serviceRoleKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+    });
+}
 
 // POST /api/me/avatar — upload profile image to Supabase Storage
 export async function POST(req: Request) {
@@ -45,7 +52,7 @@ export async function POST(req: Request) {
 
         // Upload to Supabase Storage (receipts bucket — we reuse it for avatars too)
         const buffer = Buffer.from(await file.arrayBuffer());
-        const storageClient = supabaseAdmin || supabase;
+        const storageClient = getSupabaseAdminClient() || getSupabaseClient();
         let imageUrl: string | null = null;
 
         for (const bucket of AVATAR_BUCKETS) {

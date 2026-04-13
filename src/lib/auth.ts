@@ -5,20 +5,33 @@ import GitHub from 'next-auth/providers/github';
 import { prisma } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 
-export const { handlers, signIn, signOut, auth } = NextAuth({
-    providers: [
+const oauthProviders = [];
+
+if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+    oauthProviders.push(
         Google({
-            clientId: process.env.GOOGLE_CLIENT_ID!,
-            clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-        }),
+            clientId: process.env.GOOGLE_CLIENT_ID,
+            clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+        })
+    );
+}
+
+if (process.env.GITHUB_ID && process.env.GITHUB_SECRET) {
+    oauthProviders.push(
         GitHub({
-            clientId: process.env.GITHUB_ID!,
-            clientSecret: process.env.GITHUB_SECRET!,
+            clientId: process.env.GITHUB_ID,
+            clientSecret: process.env.GITHUB_SECRET,
             // Request email scope explicitly — GitHub doesn't always provide it
             authorization: {
                 params: { scope: 'read:user user:email' },
             },
-        }),
+        })
+    );
+}
+
+export const { handlers, signIn, signOut, auth } = NextAuth({
+    providers: [
+        ...oauthProviders,
         CredentialsProvider({
             name: 'credentials',
             credentials: {

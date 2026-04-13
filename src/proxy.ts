@@ -12,17 +12,25 @@ import { Redis } from '@upstash/redis';
  * 3. Security headers
  */
 
-// Initialize Redis and Ratelimit
-const redis = new Redis({
-    url: process.env.UPSTASH_REDIS_REST_URL!,
-    token: process.env.UPSTASH_REDIS_REST_TOKEN!,
-});
+function getRatelimit() {
+    const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
+    const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
 
-const ratelimit = new Ratelimit({
-    redis,
-    limiter: Ratelimit.slidingWindow(50, '1 m'),
-    analytics: true,
-});
+    if (!redisUrl || !redisToken) {
+        return null;
+    }
+
+    const redis = new Redis({
+        url: redisUrl,
+        token: redisToken,
+    });
+
+    return new Ratelimit({
+        redis,
+        limiter: Ratelimit.slidingWindow(50, '1 m'),
+        analytics: true,
+    });
+}
 
 // Paths to skip rate limiting
 const SKIP_PATHS = [
@@ -94,6 +102,18 @@ export async function proxy(request: NextRequest) {
     console.log(`[API] ${method} ${pathname} — IP: ${ip} — ${new Date().toISOString()}`);
 
     // ── Global Upstash Rate Limiting ──
+    const ratelimit = getRatelimit();
+    if (!ratelimit) {
+        const response = NextResponse.next();
+        response.headers.set('X-DNS-Prefetch-Control', 'on');
+        response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+        response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+        response.headers.set('X-Content-Type-Options', 'nosniff');
+        response.headers.set('X-Frame-Options', 'DENY');
+        response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+        return response;
+    }
+
     const id = ip;
     const { success, limit, reset, remaining } = await ratelimit.limit(id);
 
