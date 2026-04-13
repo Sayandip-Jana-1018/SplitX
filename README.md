@@ -4,22 +4,6 @@
 
 ---
 
-## Preview
-
-<div align="left">
-  <img src="./public/screenshots/1.png" />
-  <img src="./public/screenshots/2.png" />
-  <img src="./public/screenshots/3.png" />
-  <img src="./public/screenshots/4.png" />
-  <img src="./public/screenshots/5.png" />
-  <img src="./public/screenshots/6.png" />
-  <img src="./public/screenshots/7.png" />
-  <img src="./public/screenshots/8.png" />
-  <img src="./public/screenshots/9.png" />
-  <img src="./public/screenshots/10.png" />
-  <img src="./public/screenshots/11.png" />
-</div>
-
 ### Screenshots
 
 <div align="center">
