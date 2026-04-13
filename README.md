@@ -6,18 +6,18 @@
 
 ## Preview
 
-<div align="center">
-  <img src="./public/screenshots/1.png" width="120" height="120" />
-  <img src="./public/screenshots/2.png" width="120" height="120" />
-  <img src="./public/screenshots/3.png" width="120" height="120" />
-  <img src="./public/screenshots/4.png" width="120" height="120" />
-  <img src="./public/screenshots/5.png" width="120" height="120" />
-  <img src="./public/screenshots/6.png" width="120" height="120" />
-  <img src="./public/screenshots/7.png" width="120" height="120" />
-  <img src="./public/screenshots/8.png" width="120" height="120" />
-  <img src="./public/screenshots/9.png" width="120" height="120" />
-  <img src="./public/screenshots/10.png" width="120" height="120" />
-  <img src="./public/screenshots/11.png" width="120" height="120" />
+<div align="left">
+  <img src="./public/screenshots/1.png" />
+  <img src="./public/screenshots/2.png" />
+  <img src="./public/screenshots/3.png" />
+  <img src="./public/screenshots/4.png" />
+  <img src="./public/screenshots/5.png" />
+  <img src="./public/screenshots/6.png" />
+  <img src="./public/screenshots/7.png" />
+  <img src="./public/screenshots/8.png" />
+  <img src="./public/screenshots/9.png" />
+  <img src="./public/screenshots/10.png" />
+  <img src="./public/screenshots/11.png" />
 </div>
 
 ### Live Experience
