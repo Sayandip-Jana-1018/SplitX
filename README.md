@@ -20,6 +20,31 @@
   <img src="./public/screenshots/11.png" />
 </div>
 
+### Screenshots
+
+<div align="center">
+  <img src="public/screenshots/1.png" alt="SplitX landing page" width="180" />
+  <img src="public/screenshots/2.png" alt="SplitX dashboard" width="180" />
+  <img src="public/screenshots/3.png" alt="SplitX dark mode activity" width="180" />
+</div>
+
+<div align="center">
+  <img src="public/screenshots/4.png" alt="SplitX add expense flow" width="180" />
+  <img src="public/screenshots/5.png" alt="SplitX analytics page" width="180" />
+  <img src="public/screenshots/6.png" alt="SplitX dark analytics view" width="180" />
+</div>
+
+<div align="center">
+  <img src="public/screenshots/7.png" alt="SplitX settings page" width="180" />
+  <img src="public/screenshots/8.png" alt="SplitX settlements graph" width="180" />
+  <img src="public/screenshots/9.png" alt="SplitX UPI payment flow" width="180" />
+</div>
+
+<div align="center">
+  <img src="public/screenshots/10.png" alt="SplitX receipt scan result" width="180" />
+  <img src="public/screenshots/11.png" alt="SplitX notes and whiteboard" width="180" />
+</div>
+
 ### Live Experience
 
 - **Live Project:** [splitsj.vercel.app](https://splitsj.vercel.app)
