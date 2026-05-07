@@ -219,6 +219,7 @@ export async function GET() {
                 computed,
                 recorded: recordedSettlements.map((settlement) => ({
                     id: settlement.id,
+                    tripId: settlement.tripId,
                     fromId: settlement.fromId,
                     toId: settlement.toId,
                     amount: settlement.amount,

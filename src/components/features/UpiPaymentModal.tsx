@@ -185,7 +185,7 @@ export default function UpiPaymentModal({
                     {/* ── Header section ── */}
                     <div style={{ padding: '28px 24px 0', position: 'relative' }}>
                         <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.7)' }}>
-                            {step === 'done' ? 'Payment Completed' : 'Pay via UPI'}
+                            {step === 'done' ? 'Approval Requested' : 'Pay via UPI'}
                         </div>
                         <div style={{ fontSize: 36, fontWeight: 900, color: '#fff', marginTop: 6, letterSpacing: '-0.03em' }}>
                             {formatCurrency(amount)}
@@ -331,7 +331,7 @@ export default function UpiPaymentModal({
                                         <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginTop: 4, maxWidth: 260 }}>
                                             {utrNumber
                                                 ? `UTR: ${utrNumber} will be shared for verification`
-                                                : `${payeeName} will manually confirm receipt`}
+                                                : `${payeeName} will approve this after checking the payment`}
                                         </div>
                                     </div>
 
@@ -362,9 +362,9 @@ export default function UpiPaymentModal({
                                         }}>
                                         <CheckCircle2 size={32} color="#fff" />
                                     </motion.div>
-                                    <div style={{ fontSize: 20, fontWeight: 800, color: '#fff' }}>Payment Completed!</div>
+                                    <div style={{ fontSize: 20, fontWeight: 800, color: '#fff' }}>Approval Request Sent!</div>
                                     <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.65)' }}>
-                                        {payeeName} has been notified
+                                        {payeeName} has been notified and the settlement will finish once they approve receipt
                                     </div>
                                 </motion.div>
                             )}

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { generateUpiLink } from '@/lib/upi';
+import { canInitiateSettlementPayment, isAwaitingReceiverApproval, isCompletedSettlementStatus } from '@/lib/settlementStatus';
 
 // POST /api/settlements/:id/pay — Generate UPI deep link and mark settlement as initiated
 export async function POST(
@@ -40,10 +41,23 @@ export async function POST(
             );
         }
 
-        // Check if already completed
-        if (settlement.status === 'confirmed' || settlement.status === 'completed') {
+        if (isCompletedSettlementStatus(settlement.status)) {
             return NextResponse.json(
                 { error: 'This settlement has already been completed' },
+                { status: 400 }
+            );
+        }
+
+        if (isAwaitingReceiverApproval(settlement.status)) {
+            return NextResponse.json(
+                { error: 'This payment is already waiting for the receiver to approve it.' },
+                { status: 400 }
+            );
+        }
+
+        if (!canInitiateSettlementPayment(settlement.status)) {
+            return NextResponse.json(
+                { error: 'This settlement cannot be initiated right now.' },
                 { status: 400 }
             );
         }
@@ -67,10 +81,12 @@ export async function POST(
             note: 'SplitX settlement',
         });
 
-        // Update settlement status to "initiated"
         await prisma.settlement.update({
             where: { id },
-            data: { status: 'initiated' },
+            data: {
+                status: 'initiated',
+                method: settlement.method || 'upi',
+            },
         });
 
         return NextResponse.json({

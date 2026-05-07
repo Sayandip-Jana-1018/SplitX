@@ -160,11 +160,11 @@ export async function DELETE(
                     data: { deletedAt: new Date() },
                 });
 
-                // 3. Cancel all pending/initiated settlements
+                // 3. Cancel all non-completed settlements
                 await tx.settlement.updateMany({
                     where: {
                         tripId: { in: tripIds },
-                        status: { in: ['pending', 'initiated'] },
+                        status: { in: ['pending', 'initiated', 'paid_pending'] },
                         deletedAt: null,
                     },
                     data: { status: 'cancelled', deletedAt: new Date() },

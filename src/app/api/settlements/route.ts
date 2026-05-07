@@ -4,6 +4,7 @@ import { auth } from '@/lib/auth';
 import { z } from 'zod';
 import { createAuditLog } from '@/lib/auditLog';
 import { serializeSettlementAuditSnapshot } from '@/lib/auditPayloads';
+import { createNotification } from '@/lib/notifications';
 import {
     computeGroupBalances,
     FinanceMember,
@@ -339,7 +340,7 @@ export async function GET(req: Request) {
     }
 }
 
-// POST /api/settlements — record a settlement payment (immediately completed)
+// POST /api/settlements — create or resume a settlement request
 export async function POST(req: Request) {
     try {
         const session = await auth();
@@ -380,7 +381,29 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'Recipient is not a member of this group' }, { status: 403 });
         }
 
-        // ── Security: Duplicate check (same pair, same trip, within 60s) ──
+        // ── Reuse any in-flight request for the same pair + amount ──
+        const openRequest = await prisma.settlement.findFirst({
+            where: {
+                tripId: parsed.data.tripId,
+                fromId: user.id,
+                toId: parsed.data.toUserId,
+                amount: parsed.data.amount,
+                status: { in: ['pending', 'initiated', 'paid_pending'] },
+                deletedAt: null,
+            },
+            include: {
+                from: { select: { name: true } },
+                to: { select: { name: true } },
+                trip: { select: { id: true, title: true, groupId: true } },
+            },
+            orderBy: { createdAt: 'desc' },
+        });
+
+        if (openRequest) {
+            return NextResponse.json(openRequest, { status: 200 });
+        }
+
+        // ── Security: Duplicate check for recently completed settlements ──
         const sixtySecondsAgo = new Date(Date.now() - 60_000);
         const duplicate = await prisma.settlement.findFirst({
             where: {
@@ -388,7 +411,7 @@ export async function POST(req: Request) {
                 fromId: user.id,
                 toId: parsed.data.toUserId,
                 amount: parsed.data.amount,
-                status: { in: ['pending', 'initiated', 'completed'] },
+                status: { in: ['completed', 'confirmed'] },
                 createdAt: { gte: sixtySecondsAgo },
                 deletedAt: null,
             },
@@ -465,10 +488,7 @@ export async function POST(req: Request) {
             // (better to allow than block a legitimate payment)
         }
 
-        // ── Create settlement ──
-        // UPI payments start as 'pending' — the confirm route will mark them 'completed'
-        // Cash/other payments are immediately completed
-        const isUpi = parsed.data.method === 'upi';
+        // ── Create settlement request ──
         const settlement = await prisma.settlement.create({
             data: {
                 tripId: parsed.data.tripId,
@@ -477,7 +497,7 @@ export async function POST(req: Request) {
                 amount: parsed.data.amount,
                 method: parsed.data.method,
                 note: parsed.data.note,
-                status: isUpi ? 'pending' : 'completed',
+                status: 'pending',
             },
             include: {
                 from: { select: { name: true } },
@@ -514,29 +534,14 @@ export async function POST(req: Request) {
             },
         });
 
-        // ── Notify + chat only for immediately-completed (non-UPI) settlements ──
-        if (!isUpi) {
-            await prisma.notification.create({
-                data: {
-                    user: { connect: { id: parsed.data.toUserId } },
-                    actor: { connect: { id: user.id } },
-                    type: 'settlement_completed',
-                    title: '✅ Payment Received',
-                    body: `${user.name || 'Someone'} paid you ₹${(parsed.data.amount / 100).toLocaleString('en-IN')} via ${parsed.data.method}`,
-                    link: '/settlements',
-                },
-            });
-
-            await prisma.groupMessage.create({
-                data: {
-                    groupId: trip.group.id,
-                    senderId: user.id,
-                    type: 'system',
-                    content: `💸 ${settlement.from.name || 'Someone'} paid ₹${(parsed.data.amount / 100).toFixed(0)} to ${settlement.to.name || 'someone'} (${parsed.data.method})`,
-                    settlementId: settlement.id,
-                },
-            });
-        }
+        await createNotification({
+            userId: parsed.data.toUserId,
+            actorId: user.id,
+            type: 'group_activity',
+            title: 'Settlement request created',
+            body: `${user.name || 'Someone'} created a ${parsed.data.method} settlement request for ₹${(parsed.data.amount / 100).toLocaleString('en-IN')}.`,
+            link: '/settlements',
+        });
 
         return NextResponse.json(settlement, { status: 201 });
     } catch (error) {

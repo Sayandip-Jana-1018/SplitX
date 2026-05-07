@@ -4,7 +4,7 @@ import { useState, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence, PanInfo } from 'framer-motion';
 import useSWR from 'swr';
-import { ArrowRightLeft, Check, Download, Share2, GitBranch, Inbox, CreditCard, Bell, ChevronLeft, ChevronRight, ChevronDown, Info } from 'lucide-react';
+import { ArrowRightLeft, Check, Download, Share2, GitBranch, Inbox, CreditCard, Bell, ChevronLeft, ChevronRight, ChevronDown, Info, CheckCheck, ShieldAlert } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import Avatar from '@/components/ui/Avatar';
 import Badge from '@/components/ui/Badge';
@@ -21,6 +21,12 @@ import { getNetworkErrorCopy, NetworkTaggedError, toNetworkTaggedError } from '@
 import { formatCurrency } from '@/lib/utils';
 import { exportAsText, shareSettlement } from '@/lib/export';
 import { SettlementSkeleton } from '@/components/ui/Skeleton';
+import {
+    canInitiateSettlementPayment,
+    isAwaitingReceiverApproval,
+    isCompletedSettlementStatus,
+    isPendingSettlementStatus,
+} from '@/lib/settlementStatus';
 
 /* ── SWR fetcher ── */
 const fetcher = async (url: string) => {
@@ -63,6 +69,7 @@ interface RecordedSettlement {
     id: string; fromId: string; toId: string; amount: number;
     status: string; method: string | null; note: string | null;
     from: UserRef; to: UserRef; createdAt: string;
+    tripId?: string;
 }
 interface GroupData {
     groupId: string; groupName: string; groupEmoji: string; tripId: string;
@@ -73,6 +80,26 @@ interface GroupData {
 interface ByGroupResponse {
     groups: GroupData[];
     global: { computed: ComputedTransfer[]; recorded: RecordedSettlement[] };
+}
+
+interface SettlementListItem {
+    id: string;
+    source: 'computed' | 'recorded';
+    from: { name: string; id: string; image?: string | null };
+    to: { name: string; id: string; image?: string | null };
+    amount: number;
+    status: string;
+    toUpiId: string | null;
+    tripId: string;
+    settlementId?: string;
+    method?: string | null;
+    note?: string | null;
+    createdAt?: string;
+    groupBreakdown?: { groupName: string; groupEmoji: string; amount: number }[];
+}
+
+function buildSettlementKey(fromId: string, toId: string, amount: number, tripId: string) {
+    return `${tripId}:${fromId}:${toId}:${amount}`;
 }
 
 /* ── Main component ── */
@@ -140,39 +167,85 @@ export default function SettlementsPage() {
         ];
         const globalSlideIdx = slideData.length - 1;
 
-        // Build pending/settled lists
-        const buildPending = (computed: ComputedTransfer[], tripId: string) =>
-            computed.map((t, i) => ({
-                id: `computed-${tripId}-${i}`,
-                from: { name: nMap[t.from] || t.fromName || t.from, id: t.from, image: t.fromImage || iMap[t.from] || null },
-                to: { name: nMap[t.to] || t.toName || t.to, id: t.to, image: t.toImage || iMap[t.to] || null },
-                amount: t.amount,
-                status: 'pending' as const,
-                toUpiId: t.toUpiId || null,
-                tripId: t.tripId || tripId,
-                groupBreakdown: t.groupBreakdown || [],
+        const buildPending = (
+            computed: ComputedTransfer[],
+            recorded: RecordedSettlement[],
+            tripId: string
+        ): SettlementListItem[] => {
+            const inFlight = recorded
+                .filter((settlement) => isPendingSettlementStatus(settlement.status))
+                .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+            const inFlightKeys = new Set(
+                inFlight.map((settlement) =>
+                    buildSettlementKey(
+                        settlement.fromId,
+                        settlement.toId,
+                        settlement.amount,
+                        settlement.tripId || tripId
+                    )
+                )
+            );
+
+            const requestItems: SettlementListItem[] = inFlight.map((settlement) => ({
+                id: settlement.id,
+                source: 'recorded',
+                settlementId: settlement.id,
+                from: { name: settlement.from.name || 'Unknown', id: settlement.fromId, image: settlement.from.image || null },
+                to: { name: settlement.to.name || 'Unknown', id: settlement.toId, image: settlement.to.image || null },
+                amount: settlement.amount,
+                status: settlement.status,
+                toUpiId: null,
+                tripId: settlement.tripId || tripId,
+                method: settlement.method,
+                note: settlement.note,
+                createdAt: settlement.createdAt,
             }));
 
-        const buildSettled = (recorded: RecordedSettlement[]) =>
-            recorded
-                .filter(r => ['completed', 'confirmed', 'paid_pending'].includes(r.status))
-                .map(r => ({
-                    id: r.id,
-                    from: { name: r.from.name || 'Unknown', id: r.fromId, image: r.from.image || null },
-                    to: { name: r.to.name || 'Unknown', id: r.toId, image: r.to.image || null },
-                    amount: r.amount,
-                    status: 'settled' as const,
-                    toUpiId: null as string | null,
-                    tripId: '',
+            const suggestedItems: SettlementListItem[] = computed
+                .filter((transfer) => !inFlightKeys.has(
+                    buildSettlementKey(transfer.from, transfer.to, transfer.amount, transfer.tripId || tripId)
+                ))
+                .map((transfer, index) => ({
+                    id: `computed-${tripId}-${index}`,
+                    source: 'computed',
+                    from: { name: nMap[transfer.from] || transfer.fromName || transfer.from, id: transfer.from, image: transfer.fromImage || iMap[transfer.from] || null },
+                    to: { name: nMap[transfer.to] || transfer.toName || transfer.to, id: transfer.to, image: transfer.toImage || iMap[transfer.to] || null },
+                    amount: transfer.amount,
+                    status: 'pending',
+                    toUpiId: transfer.toUpiId || null,
+                    tripId: transfer.tripId || tripId,
+                    groupBreakdown: transfer.groupBreakdown || [],
                 }));
 
-        const allP = buildPending(globalComputed, '');
+            return [...requestItems, ...suggestedItems];
+        };
+
+        const buildSettled = (recorded: RecordedSettlement[]): SettlementListItem[] =>
+            recorded
+                .filter((settlement) => isCompletedSettlementStatus(settlement.status))
+                .map((settlement) => ({
+                    id: settlement.id,
+                    source: 'recorded',
+                    settlementId: settlement.id,
+                    from: { name: settlement.from.name || 'Unknown', id: settlement.fromId, image: settlement.from.image || null },
+                    to: { name: settlement.to.name || 'Unknown', id: settlement.toId, image: settlement.to.image || null },
+                    amount: settlement.amount,
+                    status: settlement.status,
+                    toUpiId: null,
+                    tripId: settlement.tripId || '',
+                    method: settlement.method,
+                    note: settlement.note,
+                    createdAt: settlement.createdAt,
+                }));
+
+        const allP = buildPending(globalComputed, globalRecorded, '');
         // Resolve tripId for global settlements — find any group where BOTH users are members
         const allS = buildSettled(globalRecorded);
 
         const active = slideData[activeSlide] || slideData[0];
         const isGlobal = activeSlide === globalSlideIdx;
-        const aP = isGlobal ? allP : buildPending(active.computed, active.tripId);
+        const aP = isGlobal ? allP : buildPending(active.computed, active.recorded, active.tripId);
         const aS = isGlobal ? allS : buildSettled(active.recorded);
 
         return {
@@ -241,7 +314,7 @@ export default function SettlementsPage() {
                 }),
             });
             if (res.ok) {
-                toast('Settlement recorded ✅', 'success');
+                toast('Settlement request sent. It will complete after receiver approval.', 'success');
                 setConfirmSettle(null);
                 mutate();
             } else {
@@ -718,7 +791,15 @@ export default function SettlementsPage() {
                 ) : filteredSettlements.map((settlement, i) => {
                     const isSender = settlement.from.id === currentUserId;
                     const isReceiver = settlement.to.id === currentUserId;
-                    const isSettled = settlement.status === 'settled';
+                    const isSettled = isCompletedSettlementStatus(settlement.status);
+                    const isRecordedRequest = settlement.source === 'recorded';
+                    const isAwaitingApproval = isAwaitingReceiverApproval(settlement.status);
+                    const isPendingRequest = isRecordedRequest && isPendingSettlementStatus(settlement.status);
+                    const canSenderInitiate = isSender && (
+                        settlement.source === 'computed' ||
+                        (isRecordedRequest && canInitiateSettlementPayment(settlement.status))
+                    );
+                    const canReceiverApprove = isReceiver && isAwaitingApproval;
                     const tripId = settlement.tripId || activeSlideData?.tripId || '';
 
                     return (
@@ -778,6 +859,22 @@ export default function SettlementsPage() {
                                     }}>
                                         {formatCurrency(settlement.amount)}
                                     </span>
+                                    {isPendingRequest && (
+                                        <Badge
+                                            variant={isAwaitingApproval ? 'accent' : 'warning'}
+                                            size="sm"
+                                        >
+                                            {isAwaitingApproval ? (
+                                                <>
+                                                    <CheckCheck size={11} /> Waiting for receiver approval
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <ShieldAlert size={11} /> Settlement request open
+                                                </>
+                                            )}
+                                        </Badge>
+                                    )}
                                 </div>
 
                                 {/* Actions */}
@@ -803,7 +900,7 @@ export default function SettlementsPage() {
                                         ) : (
                                             /* Per-group view — show all payment actions */
                                             <>
-                                                {isSender && (
+                                                {canSenderInitiate && (
                                                     <Button size="sm" leftIcon={<CreditCard size={13} />}
                                                         style={{
                                                             background: 'linear-gradient(135deg, var(--accent-500), var(--accent-600))',
@@ -813,38 +910,99 @@ export default function SettlementsPage() {
                                                             const resolvedTripId = settlement.tripId || tripId;
                                                             if (!resolvedTripId) { toast('No active trip — add an expense first', 'error'); return; }
                                                             try {
-                                                                const res = await fetch('/api/settlements', {
-                                                                    method: 'POST',
-                                                                    headers: { 'Content-Type': 'application/json' },
-                                                                    body: JSON.stringify({
-                                                                        tripId: resolvedTripId,
-                                                                        toUserId: settlement.to.id,
-                                                                        amount: settlement.amount,
-                                                                        method: 'upi',
-                                                                    }),
-                                                                });
-                                                                if (!res.ok) {
-                                                                    const err = await res.json().catch(() => ({}));
-                                                                    toast(err.error || 'Failed to create settlement', 'error');
-                                                                    return;
+                                                                let settlementId = settlement.settlementId;
+                                                                if (!settlementId) {
+                                                                    const res = await fetch('/api/settlements', {
+                                                                        method: 'POST',
+                                                                        headers: { 'Content-Type': 'application/json' },
+                                                                        body: JSON.stringify({
+                                                                            tripId: resolvedTripId,
+                                                                            toUserId: settlement.to.id,
+                                                                            amount: settlement.amount,
+                                                                            method: 'upi',
+                                                                        }),
+                                                                    });
+                                                                    if (!res.ok) {
+                                                                        const err = await res.json().catch(() => ({}));
+                                                                        toast(err.error || 'Failed to create settlement', 'error');
+                                                                        return;
+                                                                    }
+                                                                    const created = await res.json();
+                                                                    settlementId = created.id;
                                                                 }
-                                                                const created = await res.json();
                                                                 setUpiModal({
                                                                     open: true,
                                                                     amount: settlement.amount,
                                                                     payeeName: settlement.to.name,
                                                                     payeeUpiId: settlement.toUpiId || undefined,
-                                                                    settlementId: created.id,
+                                                                    settlementId,
                                                                 });
                                                             } catch {
                                                                 toast('Network error', 'error');
                                                             }
                                                         }}
                                                     >
-                                                        Pay via UPI
+                                                        {settlement.source === 'computed' ? 'Pay via UPI' : 'Continue payment'}
                                                     </Button>
                                                 )}
-                                                {isReceiver && (
+                                                {canReceiverApprove && (
+                                                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+                                                        <Button
+                                                            size="sm"
+                                                            leftIcon={<CheckCheck size={13} />}
+                                                            style={{
+                                                                background: 'linear-gradient(135deg, var(--color-success), #059669)',
+                                                                boxShadow: '0 4px 16px rgba(16, 185, 129, 0.22)',
+                                                            }}
+                                                            onClick={async () => {
+                                                                try {
+                                                                    const res = await fetch(`/api/settlements/${settlement.settlementId}/approve`, {
+                                                                        method: 'POST',
+                                                                        headers: { 'Content-Type': 'application/json' },
+                                                                        body: JSON.stringify({ action: 'approve' }),
+                                                                    });
+                                                                    const data = await res.json().catch(() => ({}));
+                                                                    if (!res.ok) {
+                                                                        toast(data.error || 'Failed to approve payment', 'error');
+                                                                        return;
+                                                                    }
+                                                                    toast(data.message || 'Payment approved', 'success');
+                                                                    mutate();
+                                                                } catch {
+                                                                    toast('Network error', 'error');
+                                                                }
+                                                            }}
+                                                        >
+                                                            Approve receipt
+                                                        </Button>
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            leftIcon={<ShieldAlert size={13} />}
+                                                            onClick={async () => {
+                                                                try {
+                                                                    const res = await fetch(`/api/settlements/${settlement.settlementId}/approve`, {
+                                                                        method: 'POST',
+                                                                        headers: { 'Content-Type': 'application/json' },
+                                                                        body: JSON.stringify({ action: 'reject' }),
+                                                                    });
+                                                                    const data = await res.json().catch(() => ({}));
+                                                                    if (!res.ok) {
+                                                                        toast(data.error || 'Failed to send back the request', 'error');
+                                                                        return;
+                                                                    }
+                                                                    toast(data.message || 'Sent back to payer', 'success');
+                                                                    mutate();
+                                                                } catch {
+                                                                    toast('Network error', 'error');
+                                                                }
+                                                            }}
+                                                        >
+                                                            Not received yet
+                                                        </Button>
+                                                    </div>
+                                                )}
+                                                {isReceiver && !canReceiverApprove && settlement.source === 'computed' && (
                                                     <Button size="sm" variant="outline"
                                                         leftIcon={<Bell size={13} />}
                                                         onClick={async () => {
@@ -873,7 +1031,20 @@ export default function SettlementsPage() {
                                                         Remind
                                                     </Button>
                                                 )}
-                                                {(isSender || isReceiver) && (
+                                                {isSender && isAwaitingApproval && (
+                                                    <span style={{
+                                                        fontSize: 'var(--text-xs)',
+                                                        color: 'var(--fg-muted)',
+                                                        textAlign: 'center',
+                                                        lineHeight: 1.4,
+                                                        padding: '4px 12px',
+                                                        background: 'rgba(var(--accent-500-rgb), 0.06)',
+                                                        borderRadius: 'var(--radius-lg)',
+                                                    }}>
+                                                        Waiting for {settlement.to.name} to approve receipt
+                                                    </span>
+                                                )}
+                                                {settlement.source === 'computed' && (isSender || isReceiver) && (
                                                     <button
                                                         onClick={() => setConfirmSettle({ from: settlement.from.id, to: settlement.to.id, amount: settlement.amount, tripId })}
                                                         style={{
@@ -882,8 +1053,21 @@ export default function SettlementsPage() {
                                                             textDecoration: 'underline', textUnderlineOffset: 2,
                                                         }}
                                                     >
-                                                        Mark Settled
+                                                        Request manual settlement
                                                     </button>
+                                                )}
+                                                {settlement.source === 'recorded' && isReceiver && !isAwaitingApproval && (
+                                                    <span style={{
+                                                        fontSize: 'var(--text-xs)',
+                                                        color: 'var(--fg-muted)',
+                                                        textAlign: 'center',
+                                                        lineHeight: 1.4,
+                                                        padding: '4px 12px',
+                                                        background: 'rgba(var(--accent-500-rgb), 0.06)',
+                                                        borderRadius: 'var(--radius-lg)',
+                                                    }}>
+                                                        Waiting for {settlement.from.name} to submit payment confirmation
+                                                    </span>
                                                 )}
                                                 {!isSender && !isReceiver && (
                                                     <Badge variant="accent">Between others</Badge>
@@ -896,7 +1080,7 @@ export default function SettlementsPage() {
                                 {isSettled && (
                                     <div style={{ display: 'flex', justifyContent: 'center' }}>
                                         <Badge variant="success" size="sm">
-                                            <Check size={11} /> Settled
+                                            <Check size={11} /> Approved & settled
                                         </Badge>
                                     </div>
                                 )}
@@ -974,7 +1158,7 @@ export default function SettlementsPage() {
             <Modal
                 isOpen={!!confirmSettle}
                 onClose={() => setConfirmSettle(null)}
-                title="Confirm Settlement"
+                title="Request Manual Settlement"
                 size="small"
             >
                 {confirmSettle && (
@@ -985,9 +1169,9 @@ export default function SettlementsPage() {
                             <Avatar name={nameMap[confirmSettle.to] || 'User'} image={imageMap[confirmSettle.to]} size="md" />
                         </div>
                         <p style={{ color: 'var(--fg-secondary)', fontSize: 'var(--text-sm)' }}>
-                            Mark <strong>{formatCurrency(confirmSettle.amount)}</strong> from{' '}
+                            Send a manual settlement request for <strong>{formatCurrency(confirmSettle.amount)}</strong> from{' '}
                             <strong>{nameMap[confirmSettle.from] || 'User'}</strong> to{' '}
-                            <strong>{nameMap[confirmSettle.to] || 'User'}</strong> as settled?
+                            <strong>{nameMap[confirmSettle.to] || 'User'}</strong>. The receiver will still need to approve that the payment was received.
                         </p>
                         <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
                             <Button variant="outline" fullWidth onClick={() => setConfirmSettle(null)}>Cancel</Button>
@@ -997,7 +1181,7 @@ export default function SettlementsPage() {
                                     boxShadow: '0 4px 20px rgba(var(--accent-500-rgb), 0.3)',
                                 }}
                             >
-                                Confirm
+                                Send Request
                             </Button>
                         </div>
                     </div>

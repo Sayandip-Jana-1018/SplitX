@@ -1,4 +1,4 @@
-export const BALANCE_SETTLEMENT_STATUSES = ['completed', 'confirmed'] as const;
+import { isCompletedSettlementStatus } from '@/lib/settlementStatus';
 
 export interface FinanceMember {
     id: string;
@@ -101,12 +101,6 @@ type TransactionAuditDetails = {
     before?: FinanceTransactionSnapshot | null;
     after?: FinanceTransactionSnapshot | null;
 };
-
-export function isCompletedSettlementStatus(status: string) {
-    return BALANCE_SETTLEMENT_STATUSES.includes(
-        status as (typeof BALANCE_SETTLEMENT_STATUSES)[number]
-    );
-}
 
 export function cloneBalances(balances: Record<string, number>) {
     return Object.fromEntries(Object.entries(balances).map(([userId, amount]) => [userId, amount]));

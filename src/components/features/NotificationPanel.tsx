@@ -20,7 +20,9 @@ interface Notification {
 const TYPE_ICONS: Record<string, React.ReactNode> = {
     new_expense: <Receipt size={15} />,
     payment_reminder: <Clock size={15} />,
+    settlement_approval_request: <CheckCheck size={15} />,
     settlement_completed: <ArrowRightLeft size={15} />,
+    settlement_rejected: <X size={15} />,
     group_activity: <Users size={15} />,
     group_invite: <Send size={15} />,
     group_invite_accepted: <CheckCheck size={15} />,
@@ -30,7 +32,9 @@ const TYPE_ICONS: Record<string, React.ReactNode> = {
 const TYPE_COLORS: Record<string, string> = {
     new_expense: 'var(--accent-400)',
     payment_reminder: '#f59e0b',
+    settlement_approval_request: '#06b6d4',
     settlement_completed: '#10b981',
+    settlement_rejected: '#ef4444',
     group_activity: '#3b82f6',
     group_invite: '#8b5cf6',
     group_invite_accepted: '#10b981',
@@ -40,7 +44,9 @@ const TYPE_COLORS: Record<string, string> = {
 const TYPE_GRADIENTS: Record<string, string> = {
     new_expense: 'linear-gradient(135deg, rgba(var(--accent-500-rgb), 0.15), rgba(var(--accent-500-rgb), 0.05))',
     payment_reminder: 'linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(245, 158, 11, 0.05))',
+    settlement_approval_request: 'linear-gradient(135deg, rgba(6, 182, 212, 0.15), rgba(6, 182, 212, 0.05))',
     settlement_completed: 'linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(16, 185, 129, 0.05))',
+    settlement_rejected: 'linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(239, 68, 68, 0.05))',
     group_activity: 'linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(59, 130, 246, 0.05))',
     group_invite: 'linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(139, 92, 246, 0.05))',
     group_invite_accepted: 'linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(16, 185, 129, 0.05))',

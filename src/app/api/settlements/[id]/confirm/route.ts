@@ -3,8 +3,14 @@ import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { createAuditLog } from '@/lib/auditLog';
 import { serializeSettlementAuditSnapshot } from '@/lib/auditPayloads';
+import { createNotification } from '@/lib/notifications';
+import {
+    canInitiateSettlementPayment,
+    isAwaitingReceiverApproval,
+    isCompletedSettlementStatus,
+} from '@/lib/settlementStatus';
 
-// POST /api/settlements/:id/confirm — Payer confirms "I've Paid" → immediately completes settlement
+// POST /api/settlements/:id/confirm — Payer confirms "I've Paid" → receiver must approve
 export async function POST(
     req: Request,
     { params }: { params: Promise<{ id: string }> }
@@ -43,19 +49,31 @@ export async function POST(
             );
         }
 
-        // Check if already completed
-        if (settlement.status === 'completed' || settlement.status === 'confirmed') {
+        if (isCompletedSettlementStatus(settlement.status)) {
             return NextResponse.json(
                 { error: 'This settlement has already been completed' },
                 { status: 400 }
             );
         }
 
-        // ── Directly mark as completed (trust-based for friends) ──
+        if (isAwaitingReceiverApproval(settlement.status)) {
+            return NextResponse.json(
+                { error: 'This payment is already waiting for receiver approval' },
+                { status: 400 }
+            );
+        }
+
+        if (!canInitiateSettlementPayment(settlement.status)) {
+            return NextResponse.json(
+                { error: 'This settlement can no longer be confirmed from the payer side.' },
+                { status: 400 }
+            );
+        }
+
         const updated = await prisma.settlement.update({
             where: { id },
             data: {
-                status: 'completed',
+                status: 'paid_pending',
                 ...(utrNumber ? { utrNumber } : {}),
                 method: 'upi',
             },
@@ -102,61 +120,19 @@ export async function POST(
             },
         });
 
-        // ── Notify the receiver ──
-        await prisma.notification.create({
-            data: {
-                user: { connect: { id: settlement.toId } },
-                actor: { connect: { id: user.id } },
-                type: 'settlement_completed',
-                title: '✅ Payment Received',
-                body: `${settlement.from.name || 'Someone'} paid you ₹${(settlement.amount / 100).toLocaleString('en-IN')} via UPI${utrNumber ? ` (UTR: ${utrNumber})` : ''}`,
-                link: `/settlements`,
-            },
+        await createNotification({
+            userId: settlement.toId,
+            actorId: user.id,
+            type: 'settlement_approval_request',
+            title: 'Payment approval needed',
+            body: `${settlement.from.name || 'Someone'} says they paid you ₹${(settlement.amount / 100).toLocaleString('en-IN')}. Approve it once you receive the money${utrNumber ? ` (UTR: ${utrNumber})` : ''}.`,
+            link: '/settlements',
         });
 
-        // ── Notify OTHER group members about the settlement ──
-        if (settlement.trip?.groupId) {
-            try {
-                const groupWithMembers = await prisma.group.findUnique({
-                    where: { id: settlement.trip.groupId },
-                    include: { members: { select: { userId: true } } },
-                });
-                if (groupWithMembers) {
-                    const otherMemberIds = groupWithMembers.members
-                        .map(m => m.userId)
-                        .filter(id => id !== settlement.fromId && id !== settlement.toId);
-
-                    if (otherMemberIds.length > 0) {
-                        const amountStr = `₹${(settlement.amount / 100).toLocaleString('en-IN')}`;
-                        await prisma.notification.createMany({
-                            data: otherMemberIds.map(memberId => ({
-                                userId: memberId,
-                                actorId: user.id,
-                                type: 'settlement_completed',
-                                title: '💸 Settlement completed',
-                                body: `${settlement.from.name || 'Someone'} settled ${amountStr} with ${settlement.to.name || 'someone'} via UPI`,
-                                link: `/settlements`,
-                            })),
-                        });
-                    }
-                }
-            } catch {
-                // non-fatal — don't block the response
-            }
-
-            // ── Auto-post settlement message in group chat ──
-            await prisma.groupMessage.create({
-                data: {
-                    groupId: settlement.trip.groupId,
-                    senderId: user.id,
-                    type: 'system',
-                    content: `💸 ${settlement.from.name || 'Someone'} paid ₹${(settlement.amount / 100).toFixed(0)} to ${settlement.to.name || 'someone'} via UPI`,
-                    settlementId: settlement.id,
-                },
-            });
-        }
-
-        return NextResponse.json({ settlement: updated, message: 'Payment completed!' });
+        return NextResponse.json({
+            settlement: updated,
+            message: 'Payment request sent for receiver approval.',
+        });
     } catch (error) {
         console.error('Settlement confirm error:', error);
         return NextResponse.json({ error: 'Failed to confirm payment' }, { status: 500 });

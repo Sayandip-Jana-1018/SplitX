@@ -9,7 +9,9 @@ import { isFeatureEnabled } from '@/lib/featureFlags';
 type NotificationType =
     | 'payment_reminder'
     | 'new_expense'
+    | 'settlement_approval_request'
     | 'settlement_completed'
+    | 'settlement_rejected'
     | 'group_activity'
     | 'group_invite'
     | 'group_invite_accepted';
