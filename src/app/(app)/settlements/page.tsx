@@ -707,6 +707,7 @@ export default function SettlementsPage() {
                                                     <span>Debts are simplified to minimize total transfers. The amounts shown settle all balances in fewest payments.</span>
                                                 </div>
                                                 <div style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
+                                                    <div style={{ width: '100%', maxWidth: 540, margin: '0 auto' }}>
                                                     <SettlementGraph
                                                         members={graphMembers}
                                                         settlements={graphSettlements}
@@ -715,6 +716,7 @@ export default function SettlementsPage() {
                                                         performanceMode={mode}
                                                         instanceId={activeSlideData?.groupId || 'group'}
                                                     />
+                                                    </div>
                                                 </div>
                                             </>
                                         ) : (
