@@ -1,0 +1,16 @@
+# Production environment overrides
+replicaCount: 3
+
+resources:
+  requests:
+    memory: "256Mi"
+    cpu: "200m"
+  limits:
+    memory: "1Gi"
+    cpu: "1000m"
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 8
+  targetCPUUtilization: 65

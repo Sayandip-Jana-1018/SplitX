@@ -1,0 +1,12 @@
+# Auto-provision dashboards from JSON files
+apiVersion: 1
+
+providers:
+  - name: "SplitX Dashboards"
+    orgId: 1
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

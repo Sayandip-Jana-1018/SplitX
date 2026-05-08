@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node tests/production-hardening.test.mjs"
+    "test": "node tests/production-hardening.test.mjs",
+    "prepare": "husky"
   },
   "dependencies": {
     "@ducanh2912/next-pwa": "^10.2.9",
@@ -20,6 +21,7 @@
     "lucide-react": "^0.564.0",
     "next": "16.1.6",
     "next-auth": "^5.0.0-beta.30",
+    "prom-client": "^15.1.3",
     "qrcode.react": "^4.2.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
@@ -31,6 +33,8 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@commitlint/cli": "^20.5.0",
+    "@commitlint/config-conventional": "^20.5.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20",
     "@types/react": "^19",
@@ -38,6 +42,7 @@
     "babel-plugin-react-compiler": "1.0.0",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
+    "husky": "^9.1.7",
     "prisma": "^6.19.2",
     "typescript": "^5"
   }

@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: splitx
+  labels:
+    app: splitx
+    managed-by: kubectl

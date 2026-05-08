@@ -1,9 +1,18 @@
+# ═══════════════════════════════════════════════════════════════
+#   SplitX — Full Development Stack
+#   Run: docker compose --profile monitoring --profile ci up -d
+#   App only: docker compose up -d
+# ═══════════════════════════════════════════════════════════════
+
 services:
+
+  # ── SplitX Application ──
   splitx:
     build:
       context: .
       dockerfile: Dockerfile
     image: splitx:local
+    container_name: splitx-app
     ports:
       - "3000:3000"
     env_file:
@@ -11,4 +20,164 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3000
+      HOSTNAME: "0.0.0.0"
+      METRICS_TOKEN: ${METRICS_TOKEN:-splitx-metrics-secret}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000/"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - splitx-network
+
+  # ── PostgreSQL (Local Development DB) ──
+  postgres:
+    image: postgres:16-alpine
+    container_name: splitx-postgres
+    environment:
+      POSTGRES_USER: splitx
+      POSTGRES_PASSWORD: splitx_dev_password
+      POSTGRES_DB: splitx
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U splitx"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - splitx-network
+
+  # ── Redis (Local Cache / Rate Limiting) ──
+  redis:
+    image: redis:7-alpine
+    container_name: splitx-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - splitx-network
+
+  # ── Prometheus (Metrics Collection) ──
+  prometheus:
+    image: prom/prometheus:v3.4.1
+    container_name: splitx-prometheus
+    profiles: ["monitoring"]
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/alert-rules.yml:/etc/prometheus/alert-rules.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.retention.time=7d'
+    depends_on:
+      splitx:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - splitx-network
+
+  # ── Grafana (Dashboards & Visualization) ──
+  grafana:
+    image: grafana/grafana:11.6.1
+    container_name: splitx-grafana
+    profiles: ["monitoring"]
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: splitx_grafana
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    networks:
+      - splitx-network
+
+  # ── Jenkins (CI/CD Pipeline) ──
+  jenkins:
+    build:
+      context: ./jenkins
+      dockerfile: Dockerfile.jenkins
+    container_name: splitx-jenkins
+    profiles: ["ci"]
+    ports:
+      - "8080:8080"
+      - "50000:50000"
+    volumes:
+      - jenkins_data:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      JAVA_OPTS: "-Djava.awt.headless=true -Xmx512m"
+    restart: unless-stopped
+    networks:
+      - splitx-network
+
+  # ── SonarQube (Code Quality Analysis) ──
+  sonarqube:
+    image: sonarqube:10-community
+    container_name: splitx-sonarqube
+    profiles: ["ci"]
+    ports:
+      - "9000:9000"
+    environment:
+      SONAR_ES_BOOTSTRAP_CHECKS_DISABLE: "true"
+    volumes:
+      - sonarqube_data:/opt/sonarqube/data
+      - sonarqube_logs:/opt/sonarqube/logs
+      - sonarqube_extensions:/opt/sonarqube/extensions
+    restart: unless-stopped
+    networks:
+      - splitx-network
+
+  # ── Nexus (Artifact Repository) ──
+  nexus:
+    image: sonatype/nexus3:latest
+    container_name: splitx-nexus
+    profiles: ["ci"]
+    ports:
+      - "8081:8081"
+      - "8082:8082"
+    volumes:
+      - nexus_data:/nexus-data
+    restart: unless-stopped
+    networks:
+      - splitx-network
+
+volumes:
+  postgres_data:
+  redis_data:
+  prometheus_data:
+  grafana_data:
+  jenkins_data:
+  sonarqube_data:
+  sonarqube_logs:
+  sonarqube_extensions:
+  nexus_data:
+
+networks:
+  splitx-network:
+    driver: bridge

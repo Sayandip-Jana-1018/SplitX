@@ -1,0 +1,13 @@
+# Dev environment overrides — lower resources for local minikube
+replicaCount: 1
+
+resources:
+  requests:
+    memory: "64Mi"
+    cpu: "50m"
+  limits:
+    memory: "256Mi"
+    cpu: "250m"
+
+autoscaling:
+  enabled: false

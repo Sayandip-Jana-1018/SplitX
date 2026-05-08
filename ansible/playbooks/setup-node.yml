@@ -1,0 +1,146 @@
+# ═══════════════════════════════════════════════════════════════
+#   SplitX — Server Setup Playbook
+#   Configures fresh EC2 Ubuntu instances with Docker, kubectl, Helm
+#   Usage: ansible-playbook playbooks/setup-node.yml
+# ═══════════════════════════════════════════════════════════════
+
+---
+- name: Setup SplitX Kubernetes Node
+  hosts: k8s_nodes
+  become: true
+  vars:
+    docker_version: "5:27.*"
+    kubectl_version: "1.31.0"
+    node_env: "production"
+
+  tasks:
+    # ── System Updates ──
+    - name: Update apt cache and upgrade packages
+      apt:
+        update_cache: yes
+        upgrade: safe
+        cache_valid_time: 3600
+
+    - name: Install required system packages
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - gnupg
+          - software-properties-common
+          - unzip
+          - wget
+          - htop
+          - jq
+        state: present
+
+    # ── Docker Installation ──
+    - name: Add Docker GPG key
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+
+    - name: Add Docker repository
+      apt_repository:
+        repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_lsb.codename }} stable"
+        state: present
+
+    - name: Install Docker Engine
+      apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+        state: present
+
+    - name: Start and enable Docker service
+      systemd:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Add ubuntu user to docker group
+      user:
+        name: ubuntu
+        groups: docker
+        append: yes
+
+    # ── kubectl Installation ──
+    - name: Download kubectl
+      get_url:
+        url: "https://dl.k8s.io/release/v{{ kubectl_version }}/bin/linux/amd64/kubectl"
+        dest: /usr/local/bin/kubectl
+        mode: '0755'
+
+    - name: Verify kubectl installation
+      command: kubectl version --client --short
+      register: kubectl_version_output
+      changed_when: false
+
+    - name: Display kubectl version
+      debug:
+        msg: "{{ kubectl_version_output.stdout }}"
+
+    # ── Helm Installation ──
+    - name: Install Helm
+      shell: curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+      args:
+        creates: /usr/local/bin/helm
+
+    # ── AWS CLI Installation ──
+    - name: Download AWS CLI v2
+      unarchive:
+        src: https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip
+        dest: /tmp
+        remote_src: yes
+        creates: /tmp/aws
+
+    - name: Install AWS CLI v2
+      command: /tmp/aws/install --update
+      args:
+        creates: /usr/local/bin/aws
+
+    # ── Firewall Configuration ──
+    - name: Configure UFW - allow SSH
+      ufw:
+        rule: allow
+        port: '22'
+        proto: tcp
+
+    - name: Configure UFW - allow HTTP
+      ufw:
+        rule: allow
+        port: '80'
+        proto: tcp
+
+    - name: Configure UFW - allow HTTPS
+      ufw:
+        rule: allow
+        port: '443'
+        proto: tcp
+
+    - name: Configure UFW - allow Kubernetes API
+      ufw:
+        rule: allow
+        port: '6443'
+        proto: tcp
+
+    - name: Enable UFW
+      ufw:
+        state: enabled
+        policy: deny
+
+    # ── Verification ──
+    - name: Verify all tools are installed
+      shell: |
+        echo "Docker: $(docker --version)"
+        echo "kubectl: $(kubectl version --client --short 2>/dev/null)"
+        echo "Helm: $(helm version --short)"
+        echo "AWS CLI: $(aws --version)"
+      register: tool_versions
+      changed_when: false
+
+    - name: Display installed tool versions
+      debug:
+        msg: "{{ tool_versions.stdout_lines }}"

@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SplitX - Project Synopsis</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap');
+:root{--primary:#6366f1;--primary-dark:#4f46e5;--accent:#8b5cf6;--bg:#fff;--fg:#1e1b4b;--fg2:#475569;--fgm:#94a3b8;--border:#e2e8f0;--surface:#f8fafc;--success:#10b981}
+*{margin:0;padding:0;box-sizing:border-box}
+@page{size:A4;margin:20mm 18mm 25mm 18mm}
+body{font-family:'Inter',sans-serif;font-size:11.5pt;line-height:1.7;color:var(--fg);background:var(--bg);-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.title-page{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;page-break-after:always}
+.title-main{font-size:42pt;font-weight:900;letter-spacing:-0.04em;background:linear-gradient(135deg,var(--primary),var(--accent));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:8px}
+.title-subtitle{font-size:14pt;color:var(--fg2);max-width:520px;margin-bottom:48px;line-height:1.6}
+.title-meta{display:flex;flex-direction:column;gap:6px;font-size:11pt;color:var(--fg2)}
+.title-meta strong{color:var(--fg);font-weight:600}
+.title-badge{margin-top:40px;padding:8px 20px;border-radius:100px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.15);color:var(--primary);font-size:9pt;font-weight:700;letter-spacing:0.1em;text-transform:uppercase}
+.page{page-break-after:always;padding-top:10px}
+.page:last-child{page-break-after:auto}
+h1{font-size:22pt;font-weight:800;color:var(--primary-dark);letter-spacing:-0.03em;margin-bottom:6px;padding-bottom:10px;border-bottom:3px solid var(--primary);display:inline-block}
+h2{font-size:15pt;font-weight:700;color:var(--fg);margin-top:24px;margin-bottom:10px}
+h3{font-size:12pt;font-weight:600;color:var(--primary-dark);margin-top:18px;margin-bottom:8px}
+p{margin-bottom:10px;text-align:justify}
+table{width:100%;border-collapse:collapse;margin:14px 0;font-size:10pt}
+thead th{background:linear-gradient(135deg,var(--primary),var(--primary-dark));color:#fff;padding:10px 12px;text-align:left;font-weight:600;font-size:9.5pt;text-transform:uppercase;letter-spacing:0.04em}
+thead th:first-child{border-radius:8px 0 0 0}
+thead th:last-child{border-radius:0 8px 0 0}
+tbody td{padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:top}
+tbody tr:nth-child(even){background:var(--surface)}
+code{font-family:'JetBrains Mono',monospace;font-size:9pt;background:var(--surface);border:1px solid var(--border);padding:1px 5px;border-radius:4px;color:var(--primary-dark)}
+pre{background:#1e1b4b;color:#e2e8f0;padding:16px 20px;border-radius:10px;font-family:'JetBrains Mono',monospace;font-size:8.5pt;line-height:1.6;overflow-x:auto;margin:12px 0}
+.info-box{padding:14px 18px;border-radius:10px;margin:14px 0;font-size:10.5pt;border-left:4px solid}
+.info-box.blue{background:rgba(99,102,241,0.06);border-color:var(--primary);color:#3730a3}
+.info-box.green{background:rgba(16,185,129,0.06);border-color:var(--success);color:#065f46}
+.tool-card{border:1px solid var(--border);border-radius:12px;padding:18px 20px;margin:14px 0;background:var(--bg);page-break-inside:avoid}
+.tool-card-header{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+.tool-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:800;color:#fff;flex-shrink:0}
+.tool-card-header h3{margin:0;font-size:13pt}
+.tool-card-header .tool-category{font-size:8.5pt;color:var(--fgm);font-weight:500}
+.tool-card p{font-size:10.5pt;margin-bottom:8px}
+.arch-box{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;margin:16px 0}
+.arch-box pre{background:transparent;color:var(--fg);text-align:left;font-size:8pt;padding:0;margin:0}
+.toc{list-style:none;padding:0}
+.toc li{padding:7px 0;border-bottom:1px dotted var(--border);display:flex;justify-content:space-between;font-size:11pt}
+.toc li span:first-child{font-weight:500}
+.toc li span:last-child{color:var(--fgm);font-weight:600}
+.toc .toc-section{font-weight:700;color:var(--primary-dark);padding-top:12px;border-bottom:none}
+@media print{body{font-size:10.5pt}.title-page{min-height:100vh}}
+</style>
+</head>
+<body>
+
+<div class="title-page">
+  <div class="title-main">SplitX</div>
+  <div class="title-subtitle">A Production-Grade Expense Splitting Platform with Enterprise DevOps, Cloud Infrastructure, and Observability Pipeline</div>
+  <div class="title-meta">
+    <div><strong>Author:</strong> Sayandip Jana</div>
+    <div><strong>University Project Synopsis</strong></div>
+    <div><strong>Date:</strong> April 2026</div>
+    <div><strong>Production URL:</strong> https://splitsj.vercel.app</div>
+  </div>
+  <div class="title-badge">13 DevOps Tools &middot; 7 Implementation Phases &middot; Full Cloud Integration</div>
+</div>
+
+<div class="page">
+  <h1>Table of Contents</h1>
+  <ul class="toc">
+    <li class="toc-section"><span>Part I &mdash; Project Overview</span><span></span></li>
+    <li><span>1. Abstract</span><span>3</span></li>
+    <li><span>2. Introduction &amp; Problem Statement</span><span>3</span></li>
+    <li><span>3. System Architecture</span><span>4</span></li>
+    <li><span>4. Core Technology Stack</span><span>5</span></li>
+    <li class="toc-section"><span>Part II &mdash; DevOps Tools &amp; Implementation</span><span></span></li>
+    <li><span>5. Git &mdash; Version Control</span><span>6</span></li>
+    <li><span>6. Docker &mdash; Containerization</span><span>7</span></li>
+    <li><span>7. Jenkins &mdash; CI/CD Pipeline</span><span>8</span></li>
+    <li><span>8. SonarQube &mdash; Code Quality</span><span>9</span></li>
+    <li><span>9. Nexus &mdash; Artifact Repository</span><span>9</span></li>
+    <li><span>10. Trivy &mdash; Security Scanning</span><span>10</span></li>
+    <li><span>11. Terraform &mdash; Infrastructure as Code</span><span>11</span></li>
+    <li><span>12. AWS &mdash; Cloud Platform</span><span>12</span></li>
+    <li><span>13. Kubernetes &mdash; Orchestration</span><span>13</span></li>
+    <li><span>14. Helm &mdash; K8s Package Manager</span><span>14</span></li>
+    <li><span>15. Prometheus &mdash; Monitoring</span><span>15</span></li>
+    <li><span>16. Grafana &mdash; Dashboards</span><span>16</span></li>
+    <li><span>17. Ansible &mdash; Configuration Management</span><span>17</span></li>
+    <li class="toc-section"><span>Part III &mdash; Deployment &amp; Conclusion</span><span></span></li>
+    <li><span>18. CI/CD Pipeline Flow</span><span>18</span></li>
+    <li><span>19. Cost Analysis</span><span>19</span></li>
+    <li><span>20. Conclusion &amp; Future Scope</span><span>20</span></li>
+  </ul>
+</div>
+
+<div class="page">
+  <h1>1. Abstract</h1>
+  <p><strong>SplitX</strong> is a production-deployed, mobile-first expense splitting web application built with Next.js 16, React 19, Prisma ORM, and PostgreSQL. The platform enables real-time group expense tracking, AI-powered receipt scanning, optimized debt settlement algorithms, and voice-based transaction input. Currently live at <code>splitsj.vercel.app</code>, it serves real users with features including a dual-algorithm settlement engine (Greedy Netting + Exact-Match Pruning), 18 glassmorphic color themes, PWA offline support, and comprehensive audit logging.</p>
+  <p>This synopsis documents the integration of <strong>13 industry-standard DevOps, cloud, and infrastructure tools</strong> into the SplitX ecosystem. The implementation follows a <strong>dual-deployment architecture</strong> &mdash; the existing Vercel production deployment remains untouched while a parallel enterprise-grade infrastructure is built using AWS EKS, Terraform, Jenkins, and a full observability stack.</p>
+  <div class="info-box blue"><strong>Key Metrics:</strong> 50+ new configuration files created across 7 implementation phases. Only 4 existing source files were modified, ensuring zero production risk.</div>
+
+  <h1>2. Introduction &amp; Problem Statement</h1>
+  <h2>2.1 Background</h2>
+  <p>Modern software development demands more than just writing application code. Production-grade applications require automated testing, continuous integration, containerized deployments, infrastructure automation, monitoring, and security scanning. SplitX, while feature-complete as an application, initially lacked these enterprise DevOps capabilities.</p>
+  <h2>2.2 Problem Statement</h2>
+  <p>The objective of this project is to implement a comprehensive DevOps pipeline for the SplitX application that:</p>
+  <ul style="margin:8px 0 12px 20px">
+    <li>Automates the entire build, test, scan, and deploy lifecycle</li>
+    <li>Provisions cloud infrastructure reproducibly using Infrastructure as Code</li>
+    <li>Orchestrates containerized deployments with auto-scaling and self-healing</li>
+    <li>Monitors application health with real-time metrics and alerting</li>
+    <li>Enforces code quality standards and container security policies</li>
+    <li>Manages configuration across multiple environments consistently</li>
+  </ul>
+  <h2>2.3 Scope</h2>
+  <p>The implementation integrates 13 tools organized into 7 phases: Version Control (Git), Containerization (Docker), CI/CD (Jenkins), Code Quality (SonarQube), Artifact Management (Nexus), Security (Trivy), Infrastructure as Code (Terraform), Cloud Platform (AWS), Orchestration (Kubernetes), Package Management (Helm), Monitoring (Prometheus), Visualization (Grafana), and Configuration Management (Ansible).</p>
+</div>
+
+<!-- ARCHITECTURE -->
+<div class="page">
+  <h1>3. System Architecture</h1>
+  <h2>3.1 Application Architecture</h2>
+  <p>SplitX follows a monolithic Next.js architecture using the App Router pattern. The application layer is divided into: a React 19 frontend with CSS Modules and Framer Motion animations, server-side API routes handling business logic, Prisma ORM for database operations against Neon PostgreSQL, and middleware for authentication, rate limiting, and metrics collection.</p>
+  <h2>3.2 DevOps Architecture (Dual-Deployment)</h2>
+  <div class="arch-box">
+<pre>
++-------------------------------------------------------------------+
+|                    DEVELOPER WORKSTATION                           |
+|                                                                   |
+|  Git Push --&gt; GitHub --&gt; Jenkins (Docker)                         |
+|                            |                                      |
+|            +---------------+---------------+                      |
+|            v               v               v                      |
+|       npm test         npm lint      SonarQube                    |
+|            |               |          Analysis                    |
+|            +-------+-------+               |                      |
+|                    v                       |                      |
+|             Docker Build &lt;-----------------+                      |
+|                    |                                              |
+|            +-------+-------+                                      |
+|            v               v                                      |
+|       Trivy Scan     Nexus Push                                   |
+|            |               |                                      |
+|            +-------+-------+                                      |
+|                    v                                              |
+|            Helm Deploy to K8s                                     |
+|                    |                                              |
+|    +---------------+---------------+                              |
+|    v               v               v                              |
+|  minikube       AWS EKS       Monitoring                          |
+|  (Local)       (Cloud)    Prometheus+Grafana                      |
++-------------------------------------------------------------------+
+
+  Existing Production: Vercel (splitsj.vercel.app) -- Untouched
+</pre>
+  </div>
+  <h2>3.3 Core Application Features</h2>
+  <table>
+    <thead><tr><th>Feature</th><th>Technology</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td>Debt Settlement</td><td>Custom Algorithm</td><td>Dual-engine: Greedy Netting + Exact-Match Pruning</td></tr>
+      <tr><td>AI Receipt Scanning</td><td>Tesseract.js + Gemini</td><td>OCR-based receipt parsing with AI field extraction</td></tr>
+      <tr><td>Voice Input</td><td>Web Speech API</td><td>Natural language voice commands for transactions</td></tr>
+      <tr><td>Real-time Chat</td><td>Gemini AI</td><td>AI-powered financial assistant per group</td></tr>
+      <tr><td>18 Color Themes</td><td>CSS Variables</td><td>Glassmorphic UI with dynamic accent palettes</td></tr>
+      <tr><td>PWA Support</td><td>Service Workers</td><td>Offline detection, installable app</td></tr>
+      <tr><td>Audit Logging</td><td>Prisma + PostgreSQL</td><td>Tracks all mutations on transactions</td></tr>
+      <tr><td>Rate Limiting</td><td>Upstash Redis</td><td>Sliding window limiter (50 req/min)</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- TECH STACK -->
+<div class="page">
+  <h1>4. Core Technology Stack</h1>
+  <h2>4.1 Application Stack</h2>
+  <table>
+    <thead><tr><th>Layer</th><th>Technology</th><th>Version</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td>Framework</td><td>Next.js (App Router)</td><td>16.1.6</td><td>Full-stack React framework with SSR</td></tr>
+      <tr><td>UI Library</td><td>React</td><td>19.2.3</td><td>Component-based UI with React Compiler</td></tr>
+      <tr><td>Language</td><td>TypeScript</td><td>5.x</td><td>Type-safe JavaScript</td></tr>
+      <tr><td>ORM</td><td>Prisma</td><td>6.19.2</td><td>Type-safe database access layer</td></tr>
+      <tr><td>Database</td><td>PostgreSQL (Neon)</td><td>16</td><td>Serverless PostgreSQL</td></tr>
+      <tr><td>Authentication</td><td>NextAuth v5</td><td>5.0.0-beta.30</td><td>OAuth + credential auth</td></tr>
+      <tr><td>Validation</td><td>Zod</td><td>4.3.6</td><td>Runtime schema validation</td></tr>
+      <tr><td>Animation</td><td>Framer Motion</td><td>12.34.0</td><td>Declarative animations</td></tr>
+      <tr><td>Charts</td><td>Recharts</td><td>3.7.0</td><td>Data visualization</td></tr>
+    </tbody>
+  </table>
+  <h2>4.2 DevOps &amp; Infrastructure Stack</h2>
+  <table>
+    <thead><tr><th>#</th><th>Tool</th><th>Category</th><th>Runs Where</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>Git + Husky</td><td>Version Control</td><td>Local CLI</td></tr>
+      <tr><td>2</td><td>Docker</td><td>Containerization</td><td>Docker Desktop</td></tr>
+      <tr><td>3</td><td>Jenkins</td><td>CI/CD Automation</td><td>Docker Container (8080)</td></tr>
+      <tr><td>4</td><td>SonarQube</td><td>Code Quality</td><td>Docker Container (9000)</td></tr>
+      <tr><td>5</td><td>Nexus</td><td>Artifact Repository</td><td>Docker Container (8081)</td></tr>
+      <tr><td>6</td><td>Trivy</td><td>Security Scanning</td><td>Inside Jenkins Pipeline</td></tr>
+      <tr><td>7</td><td>Terraform</td><td>Infrastructure as Code</td><td>Local CLI &rarr; AWS</td></tr>
+      <tr><td>8</td><td>AWS</td><td>Cloud Platform</td><td>EKS, ECR, VPC, S3</td></tr>
+      <tr><td>9</td><td>Kubernetes</td><td>Orchestration</td><td>minikube + EKS</td></tr>
+      <tr><td>10</td><td>Helm</td><td>K8s Packaging</td><td>Local CLI &rarr; K8s</td></tr>
+      <tr><td>11</td><td>Prometheus</td><td>Monitoring</td><td>Docker / K8s Pod</td></tr>
+      <tr><td>12</td><td>Grafana</td><td>Dashboards</td><td>Docker / K8s Pod</td></tr>
+      <tr><td>13</td><td>Ansible</td><td>Config Management</td><td>WSL2 (Ubuntu)</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- GIT -->
+<div class="page">
+  <h1>5. Git &mdash; Version Control &amp; Collaboration</h1>
+  <div class="tool-card">
+    <div class="tool-card-header">
+      <div class="tool-icon" style="background:linear-gradient(135deg,#f05032,#de4c36)">G</div>
+      <div><h3>Git</h3><div class="tool-category">Distributed Version Control System</div></div>
+    </div>
+    <p>Git is the foundation of the entire DevOps pipeline. Every code change, configuration file, and infrastructure definition is version-controlled, enabling traceability, collaboration, and rollback capabilities.</p>
+  </div>
+  <h2>5.1 What It Is</h2>
+  <p>Git is a distributed version control system that tracks changes in source code. Every developer has a complete copy of the repository history, enabling offline work and parallel development through branching.</p>
+  <h2>5.2 How It Is Used in SplitX</h2>
+  <h3>Conventional Commits</h3>
+  <p>All commits follow the Conventional Commits specification, enforced by <code>commitlint</code>. Valid types: <code>feat:</code>, <code>fix:</code>, <code>docs:</code>, <code>ci:</code>, <code>refactor:</code>, <code>chore:</code>, <code>test:</code>.</p>
+  <h3>Pre-Commit Hooks (Husky)</h3>
+  <p>Two Git hooks are configured via Husky:</p>
+  <ul style="margin:6px 0 12px 20px">
+    <li><strong>pre-commit:</strong> Runs ESLint on all staged files. Commits are blocked if linting fails.</li>
+    <li><strong>commit-msg:</strong> Validates the commit message format against conventional commit rules.</li>
+  </ul>
+  <h3>Key Configuration Files</h3>
+  <table>
+    <thead><tr><th>File</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><code>.husky/pre-commit</code></td><td>ESLint execution before every commit</td></tr>
+      <tr><td><code>.husky/commit-msg</code></td><td>Conventional commit message validation</td></tr>
+      <tr><td><code>commitlint.config.js</code></td><td>Commit message rules and allowed types</td></tr>
+      <tr><td><code>.github/PULL_REQUEST_TEMPLATE.md</code></td><td>Standardized PR review checklist</td></tr>
+    </tbody>
+  </table>
+
+  <h1 style="margin-top:30px">6. Docker &mdash; Containerization</h1>
+  <div class="tool-card">
+    <div class="tool-card-header">
+      <div class="tool-icon" style="background:linear-gradient(135deg,#2496ed,#1a7bc5)">D</div>
+      <div><h3>Docker</h3><div class="tool-category">Container Platform</div></div>
+    </div>
+    <p>Docker packages the SplitX application and all its dependencies into a portable, immutable container image. This ensures the application runs identically across development, testing, and production.</p>
+  </div>
+  <h2>6.1 Multi-Stage Dockerfile</h2>
+  <table>
+    <thead><tr><th>Stage</th><th>Base Image</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><strong>deps</strong></td><td>node:20-alpine3.19</td><td>Install npm dependencies with <code>npm ci</code></td></tr>
+      <tr><td><strong>builder</strong></td><td>node:20-alpine3.19</td><td>Generate Prisma client, build Next.js standalone output</td></tr>
+      <tr><td><strong>runner</strong></td><td>node:20-alpine3.19</td><td>Production runtime &mdash; copies only built artifacts</td></tr>
+    </tbody>
+  </table>
+  <h2>6.2 Security Hardening</h2>
+  <ul style="margin:6px 0 12px 20px">
+    <li><strong>Non-root user:</strong> Runs as <code>USER nextjs</code> (UID 1001)</li>
+    <li><strong>Pinned base image:</strong> Uses <code>node:20-alpine3.19</code></li>
+    <li><strong>OCI Labels:</strong> Metadata labels for identification</li>
+    <li><strong>HEALTHCHECK:</strong> Built-in probe hitting <code>/api/health</code> every 30s</li>
+  </ul>
+  <h2>6.3 Docker Compose &mdash; Full Development Stack</h2>
+  <table>
+    <thead><tr><th>Service</th><th>Image</th><th>Port</th><th>Profile</th></tr></thead>
+    <tbody>
+      <tr><td>SplitX App</td><td>splitx:local</td><td>3000</td><td>default</td></tr>
+      <tr><td>PostgreSQL</td><td>postgres:16-alpine</td><td>5432</td><td>default</td></tr>
+      <tr><td>Redis</td><td>redis:7-alpine</td><td>6379</td><td>default</td></tr>
+      <tr><td>Prometheus</td><td>prom/prometheus:v3.4.1</td><td>9090</td><td>monitoring</td></tr>
+      <tr><td>Grafana</td><td>grafana/grafana:11.6.1</td><td>3001</td><td>monitoring</td></tr>
+      <tr><td>Jenkins</td><td>Custom (Dockerfile.jenkins)</td><td>8080</td><td>ci</td></tr>
+      <tr><td>SonarQube</td><td>sonarqube:10-community</td><td>9000</td><td>ci</td></tr>
+      <tr><td>Nexus</td><td>sonatype/nexus3:latest</td><td>8081</td><td>ci</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- JENKINS -->
+<div class="page">
+  <h1>7. Jenkins &mdash; CI/CD Pipeline Automation</h1>
+  <div class="tool-card">
+    <div class="tool-card-header">
+      <div class="tool-icon" style="background:linear-gradient(135deg,#d33833,#b32f2a)">J</div>
+      <div><h3>Jenkins</h3><div class="tool-category">Continuous Integration &amp; Continuous Deployment</div></div>
+    </div>
+    <p>Jenkins is the central automation engine that orchestrates the entire build-to-deploy pipeline. Every code push triggers an 8-stage pipeline that tests, scans, builds, and deploys the application without manual intervention.</p>
+  </div>
+  <h2>7.1 Custom Jenkins Docker Image</h2>
+  <p>A custom Jenkins image (<code>jenkins/Dockerfile.jenkins</code>) is built on <code>jenkins/jenkins:lts-jdk17</code> with Docker CLI, kubectl, Helm, Trivy, AWS CLI v2, and Node.js 20 pre-installed.</p>
+  <h2>7.2 Eight-Stage Declarative Pipeline</h2>
+  <table>
+    <thead><tr><th>Stage</th><th>Action</th><th>Failure Behavior</th></tr></thead>
+    <tbody>
+      <tr><td>1. Checkout</td><td>Clone repository from GitHub</td><td>Pipeline aborts</td></tr>
+      <tr><td>2. Install</td><td><code>npm ci</code> &mdash; deterministic dependency install</td><td>Pipeline aborts</td></tr>
+      <tr><td>3a. Test (parallel)</td><td><code>npm test</code> &mdash; run test suite</td><td>Pipeline aborts</td></tr>
+      <tr><td>3b. Lint (parallel)</td><td><code>npm run lint</code> &mdash; ESLint analysis</td><td>Pipeline aborts</td></tr>
+      <tr><td>4. SonarQube</td><td>Static code analysis, quality gate</td><td>Warning (non-blocking)</td></tr>
+      <tr><td>5. Docker Build</td><td>Multi-stage build, tagged with Git SHA + latest</td><td>Pipeline aborts</td></tr>
+      <tr><td>6. Trivy Scan</td><td>CVE scan for CRITICAL vulnerabilities</td><td>Warning + HTML report</td></tr>
+      <tr><td>7. Nexus Push</td><td>Push image to Nexus Docker registry</td><td>Pipeline aborts</td></tr>
+      <tr><td>8. K8s Deploy</td><td><code>helm upgrade --install</code> (main branch only)</td><td>Pipeline aborts</td></tr>
+    </tbody>
+  </table>
+  <div class="info-box green"><strong>Key Design:</strong> Stages 3a and 3b run in parallel using Jenkins' <code>parallel</code> directive, reducing pipeline execution time by ~40%.</div>
+</div>
+
+<!-- SONARQUBE + NEXUS + TRIVY -->
+<div class="page">
+  <h1>8. SonarQube &mdash; Code Quality Analysis</h1>
+  <div class="tool-card">
+    <div class="tool-card-header">
+      <div class="tool-icon" style="background:linear-gradient(135deg,#4e9bcd,#3a7db5)">S</div>
+      <div><h3>SonarQube</h3><div class="tool-category">Static Code Analysis &amp; Quality Gate</div></div>
+    </div>
+    <p>SonarQube performs continuous inspection of code quality, detecting bugs, code smells, security vulnerabilities, and measuring test coverage. It acts as a quality gate in the Jenkins pipeline.</p>
+  </div>
+  <h2>8.1 Metrics Tracked</h2>
+  <p>Bugs, Code Smells, Security Vulnerabilities, Security Hotspots, Duplications, and Coverage. Configuration is in <code>sonar-project.properties</code> which specifies source paths and exclusions for generated files.</p>
+
+  <h1 style="margin-top:30px">9. Nexus &mdash; Artifact Repository</h1>
+  <div class="tool-card">
+    <div class="tool-card-header">
+      <div class="tool-icon" style="background:linear-gradient(135deg,#1b8553,#157a4a)">N</div>
+      <div><h3>Sonatype Nexus 3</h3><div class="tool-category">Universal Artifact Repository Manager</div></div>
+    </div>
+    <p>Nexus serves as a private Docker registry (port 8081 UI, port 8082 registry), storing built container images with versioned tags. Every deployed version is traceable back to its Git commit SHA.</p>
+  </div>
+
+  <h1 style="margin-top:30px">10. Trivy &mdash; Container Security Scanning</h1>
+  <div class="tool-card">
+    <div class="tool-card-header">
+      <div class="tool-icon" style="background:linear-gradient(135deg,#1a237e,#283593)">T</div>
+      <div><h3>Aqua Trivy</h3><div class="tool-category">Vulnerability Scanner for Containers</div></div>
+    </div>
+    <p>Trivy scans Docker images for known CVEs in OS packages and application dependencies. Integrated into Jenkins pipeline as Stage 6, producing both console output and an archived HTML report. A standalone script (<code>scripts/scan-image.sh</code>) allows local scans.</p>
+  </div>
+</div>
+
+<!-- TERRAFORM -->
+<div class="page">
+  <h1>11. Terraform &mdash; Infrastructure as Code</h1>
+  <div class="tool-card">
+    <div class="tool-card-header">
+      <div class="tool-icon" style="background:linear-gradient(135deg,#7b42bc,#5c3d9e)">T</div>
+      <div><h3>HashiCorp Terraform</h3><div class="tool-category">Infrastructure as Code (IaC)</div></div>
+    </div>
+    <p>Terraform enables the entire AWS infrastructure to be defined as code, versioned in Git, and provisioned or destroyed with a single command. This eliminates manual console clicks and ensures reproducible, auditable infrastructure.</p>
+  </div>
+  <h2>11.1 Modular Architecture</h2>
+  <table>
+    <thead><tr><th>Module</th><th>Resources Created</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><strong>VPC</strong></td><td>VPC, 2 Public Subnets, 2 Private Subnets, IGW, NAT, Route Tables</td><td>Isolated network across 2 AZs</td></tr>
+      <tr><td><strong>ECR</strong></td><td>ECR Repository, Lifecycle Policy</td><td>Docker registry with auto-cleanup (keep 10 images)</td></tr>
+      <tr><td><strong>EKS</strong></td><td>EKS Cluster, Node Group, IAM Roles (3), Policies (4)</td><td>Managed K8s with autoscaling nodes</td></tr>
+    </tbody>
+  </table>
+  <h2>11.2 Remote State</h2>
+  <p>State stored in S3 with DynamoDB locking, preventing concurrent conflicting changes and enabling state versioning for disaster recovery.</p>
+  <h2>11.3 Key Files</h2>
+  <table>
+    <thead><tr><th>File</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><code>terraform/main.tf</code></td><td>Root module composing VPC, ECR, EKS</td></tr>
+      <tr><td><code>terraform/variables.tf</code></td><td>Input variable definitions</td></tr>
+      <tr><td><code>terraform/backend.tf</code></td><td>S3 remote state + DynamoDB lock</td></tr>
+      <tr><td><code>terraform/modules/vpc/*</code></td><td>VPC, subnets, NAT, routing</td></tr>
+      <tr><td><code>terraform/modules/ecr/*</code></td><td>Container registry + lifecycle</td></tr>
+      <tr><td><code>terraform/modules/eks/*</code></td><td>EKS cluster, nodes, IAM</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- AWS + K8S -->
+<div class="page">
+  <h1>12. AWS &mdash; Cloud Platform</h1>
+  <div class="tool-card">
+    <div class="tool-card-header">
+      <div class="tool-icon" style="background:linear-gradient(135deg,#ff9900,#e68a00)">A</div>
+      <div><h3>Amazon Web Services</h3><div class="tool-category">Public Cloud Infrastructure</div></div>
+    </div>
+    <p>AWS provides production-grade cloud infrastructure. All resources are provisioned via Terraform, ensuring reproducibility and on-demand creation/destruction for cost optimization.</p>
+  </div>
+  <h2>12.1 Services Used</h2>
+  <table>
+    <thead><tr><th>Service</th><th>Purpose</th><th>Configuration</th></tr></thead>
+    <tbody>
+      <tr><td>VPC</td><td>Isolated network</td><td>CIDR 10.0.0.0/16, 2 AZs</td></tr>
+      <tr><td>EKS</td><td>Managed Kubernetes</td><td>v1.31, public + private endpoints</td></tr>
+      <tr><td>EC2</td><td>Worker nodes</td><td>t3.small, 1-3 node autoscaling</td></tr>
+      <tr><td>ECR</td><td>Docker registry</td><td>Scan-on-push, lifecycle policy</td></tr>
+      <tr><td>S3</td><td>Terraform state</td><td>Versioned, encrypted</td></tr>
+      <tr><td>DynamoDB</td><td>State locking</td><td>PAY_PER_REQUEST billing</td></tr>
+      <tr><td>IAM</td><td>Access control</td><td>Least-privilege roles</td></tr>
+    </tbody>
+  </table>
+
+  <h1 style="margin-top:30px">13. Kubernetes &mdash; Container Orchestration</h1>
+  <div class="tool-card">
+    <div class="tool-card-header">
+      <div class="tool-icon" style="background:linear-gradient(135deg,#326ce5,#2858b8)">K</div>
+      <div><h3>Kubernetes (K8s)</h3><div class="tool-category">Container Orchestration Platform</div></div>
+    </div>
+    <p>Kubernetes manages deployment, scaling, and operation of SplitX containers with auto-scaling, self-healing, rolling updates, and network policies for security isolation.</p>
+  </div>
+  <h2>13.1 Manifests</h2>
+  <table>
+    <thead><tr><th>Manifest</th><th>Kind</th><th>Key Config</th></tr></thead>
+    <tbody>
+      <tr><td>namespace.yaml</td><td>Namespace</td><td>Dedicated <code>splitx</code> namespace</td></tr>
+      <tr><td>deployment.yaml</td><td>Deployment</td><td>2 replicas, rolling update, probes</td></tr>
+      <tr><td>service.yaml</td><td>Service</td><td>ClusterIP 80 &rarr; 3000</td></tr>
+      <tr><td>ingress.yaml</td><td>Ingress</td><td>NGINX with SSL redirect</td></tr>
+      <tr><td>hpa.yaml</td><td>HPA</td><td>Scale 2-5 at 70% CPU</td></tr>
+      <tr><td>network-policy.yaml</td><td>NetworkPolicy</td><td>Restrict to ingress + Prometheus</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- HELM + PROMETHEUS -->
+<div class="page">
+  <h1>14. Helm &mdash; Kubernetes Package Management</h1>
+  <div class="tool-card">
+    <div class="tool-card-header">
+      <div class="tool-icon" style="background:linear-gradient(135deg,#0f1689,#1a237e)">H</div>
+      <div><h3>Helm</h3><div class="tool-category">Kubernetes Package Manager</div></div>
+    </div>
+    <p>Helm templates K8s manifests with environment-specific values, enabling the same chart to deploy to dev (minikube, 1 replica) and production (EKS, 3 replicas) with different value files.</p>
+  </div>
+  <h2>14.1 Environment Separation</h2>
+  <table>
+    <thead><tr><th>Parameter</th><th>Dev (minikube)</th><th>Prod (EKS)</th></tr></thead>
+    <tbody>
+      <tr><td>Replicas</td><td>1</td><td>3</td></tr>
+      <tr><td>CPU Request</td><td>50m</td><td>200m</td></tr>
+      <tr><td>Memory Limit</td><td>256Mi</td><td>1Gi</td></tr>
+      <tr><td>Autoscaling</td><td>Disabled</td><td>Enabled (3-8 pods)</td></tr>
+    </tbody>
+  </table>
+
+  <h1 style="margin-top:30px">15. Prometheus &mdash; Monitoring &amp; Alerting</h1>
+  <div class="tool-card">
+    <div class="tool-card-header">
+      <div class="tool-icon" style="background:linear-gradient(135deg,#e6522c,#c9461f)">P</div>
+      <div><h3>Prometheus</h3><div class="tool-category">Time-Series Metrics &amp; Alerting</div></div>
+    </div>
+    <p>Prometheus scrapes the SplitX <code>/api/metrics</code> endpoint every 15 seconds, collecting infrastructure and business metrics.</p>
+  </div>
+  <h2>15.1 Custom Metrics</h2>
+  <table>
+    <thead><tr><th>Metric</th><th>Type</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>splitx_http_requests_total</code></td><td>Counter</td><td>HTTP requests by method, route, status</td></tr>
+      <tr><td><code>splitx_http_request_duration_seconds</code></td><td>Histogram</td><td>Request latency distribution</td></tr>
+      <tr><td><code>splitx_transactions_created_total</code></td><td>Counter</td><td>Expense transactions created</td></tr>
+      <tr><td><code>splitx_settlements_completed_total</code></td><td>Counter</td><td>Debt settlements confirmed</td></tr>
+      <tr><td><code>splitx_ai_chat_requests_total</code></td><td>Counter</td><td>AI assistant interactions</td></tr>
+      <tr><td><code>splitx_receipt_scans_total</code></td><td>Counter</td><td>Receipt OCR scans</td></tr>
+    </tbody>
+  </table>
+  <h2>15.2 Alert Rules</h2>
+  <table>
+    <thead><tr><th>Alert</th><th>Condition</th><th>Severity</th></tr></thead>
+    <tbody>
+      <tr><td>HighErrorRate</td><td>&gt;5% 5xx responses for 2 min</td><td>Critical</td></tr>
+      <tr><td>HighLatency</td><td>p95 &gt; 2s for 3 min</td><td>Warning</td></tr>
+      <tr><td>ApplicationDown</td><td>Unreachable for 1 min</td><td>Critical</td></tr>
+      <tr><td>HighRequestRate</td><td>&gt;100 req/s for 2 min</td><td>Warning</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- GRAFANA + ANSIBLE -->
+<div class="page">
+  <h1>16. Grafana &mdash; Visualization &amp; Dashboards</h1>
+  <div class="tool-card">
+    <div class="tool-card-header">
+      <div class="tool-icon" style="background:linear-gradient(135deg,#f46800,#e05e00)">G</div>
+      <div><h3>Grafana</h3><div class="tool-category">Observability Dashboard Platform</div></div>
+    </div>
+    <p>Grafana transforms raw Prometheus metrics into rich, interactive dashboards. A pre-built 9-panel dashboard is auto-provisioned on startup at <code>http://localhost:3001</code> (admin / splitx_grafana).</p>
+  </div>
+  <h2>16.1 Dashboard Panels</h2>
+  <table>
+    <thead><tr><th>Row</th><th>Panels</th><th>Metrics Visualized</th></tr></thead>
+    <tbody>
+      <tr><td>Operations</td><td>Request Rate, Error Rate (gauge), Latency p50/p95</td><td>HTTP throughput, errors, response time</td></tr>
+      <tr><td>Business</td><td>Transactions, Settlements, AI Chat, Receipt Scans</td><td>Business activity counters</td></tr>
+      <tr><td>Infrastructure</td><td>Requests by Route (stacked), Node.js Memory</td><td>Per-route traffic, heap/RSS</td></tr>
+    </tbody>
+  </table>
+
+  <h1 style="margin-top:30px">17. Ansible &mdash; Configuration Management</h1>
+  <div class="tool-card">
+    <div class="tool-card-header">
+      <div class="tool-icon" style="background:linear-gradient(135deg,#1a1918,#3d3d3d)">A</div>
+      <div><h3>Ansible</h3><div class="tool-category">Agentless Configuration Management</div></div>
+    </div>
+    <p>Ansible automates server provisioning via SSH. The <code>setup-node.yml</code> playbook installs Docker, kubectl, Helm, AWS CLI, and configures UFW firewall on fresh EC2 Ubuntu instances &mdash; all idempotently.</p>
+  </div>
+  <h2>17.1 Playbook Tasks</h2>
+  <table>
+    <thead><tr><th>Task Group</th><th>Actions</th></tr></thead>
+    <tbody>
+      <tr><td>System Updates</td><td>apt update, install curl, wget, jq, htop, unzip</td></tr>
+      <tr><td>Docker</td><td>Add GPG key, add repo, install Docker CE, start service</td></tr>
+      <tr><td>kubectl</td><td>Download specific version binary</td></tr>
+      <tr><td>Helm</td><td>Run official installer script</td></tr>
+      <tr><td>AWS CLI</td><td>Install AWS CLI v2</td></tr>
+      <tr><td>Firewall</td><td>UFW: allow SSH(22), HTTP(80), HTTPS(443), K8s(6443)</td></tr>
+      <tr><td>Verification</td><td>Print all installed tool versions</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- PIPELINE FLOW -->
+<div class="page">
+  <h1>18. End-to-End CI/CD Pipeline Flow</h1>
+  <div class="arch-box">
+<pre>
+  Developer                  Jenkins Pipeline                   Deployment
+  ---------                  ----------------                   ----------
+
+  git commit
+      |
+      v
+  Husky Hooks --&gt; ESLint + Commit Validation
+      |
+      v
+  git push ---------------&gt; GitHub Webhook
+                                |
+                     +--- STAGE 1: Checkout ---+
+                     |   Clone repository       |
+                     +----------+---------------+
+                                v
+                     +--- STAGE 2: Install ----+
+                     |   npm ci (deterministic) |
+                     +----------+---------------+
+                                v
+                     +--- STAGE 3: Quality ----+
+                     |  +--------+---------+    |
+                     |  | 3a Test| 3b Lint |    |  &lt;-- Parallel
+                     |  +--------+---------+    |
+                     +----------+---------------+
+                                v
+                     +--- STAGE 4: SonarQube --+
+                     |  Static code analysis    |
+                     +----------+---------------+
+                                v
+                     +--- STAGE 5: Docker -----+
+                     |  Multi-stage build       |
+                     +----------+---------------+
+                                v
+                     +--- STAGE 6: Trivy ------+
+                     |  CVE scan (CRITICAL)     |
+                     +----------+---------------+
+                                v
+                     +--- STAGE 7: Nexus ------+
+                     |  Push to Docker registry |
+                     +----------+---------------+
+                                v
+                     +--- STAGE 8: Deploy -----+
+                     |  helm upgrade --install  |---&gt; Kubernetes
+                     +--------------------------+
+</pre>
+  </div>
+  <h2>18.1 Pipeline Safeguards</h2>
+  <table>
+    <thead><tr><th>Safeguard</th><th>Implementation</th></tr></thead>
+    <tbody>
+      <tr><td>Timeout</td><td>30-minute global timeout prevents hung builds</td></tr>
+      <tr><td>Concurrency Lock</td><td><code>disableConcurrentBuilds()</code> prevents race conditions</td></tr>
+      <tr><td>Build History</td><td>Keeps last 10 builds, auto-cleans older artifacts</td></tr>
+      <tr><td>Branch Gating</td><td>K8s deploy only triggers on <code>main</code> branch</td></tr>
+      <tr><td>Workspace Cleanup</td><td><code>cleanWs()</code> in post-always block</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- COST + CONCLUSION -->
+<div class="page">
+  <h1>19. Cost Analysis &amp; Optimization</h1>
+  <table>
+    <thead><tr><th>Resource</th><th>Rate</th><th>48-hr Demo Cost</th><th>Monthly</th></tr></thead>
+    <tbody>
+      <tr><td>EKS Control Plane</td><td>$0.10/hr</td><td>$4.80</td><td>$72.00</td></tr>
+      <tr><td>EC2 Nodes (2x t3.small)</td><td>$0.0208/hr each</td><td>$2.00</td><td>$30.00</td></tr>
+      <tr><td>NAT Gateway</td><td>$0.045/hr</td><td>$2.16</td><td>$32.40</td></tr>
+      <tr><td>ECR Storage</td><td>$0.10/GB</td><td>$0.05</td><td>$0.50</td></tr>
+      <tr><td>S3 + Data Transfer</td><td>Various</td><td>$0.50</td><td>$2.01</td></tr>
+      <tr><td colspan="2"><strong>Total</strong></td><td><strong>~$9.51</strong></td><td><strong>~$136.91</strong></td></tr>
+    </tbody>
+  </table>
+  <h2>19.1 Optimization Strategy</h2>
+  <ul style="margin:8px 0 12px 20px">
+    <li><strong>On-demand provisioning:</strong> <code>terraform apply</code> before demos, <code>terraform destroy</code> after</li>
+    <li><strong>Local-first:</strong> Jenkins, SonarQube, Nexus, Prometheus, Grafana run locally in Docker &mdash; zero cloud cost</li>
+    <li><strong>minikube for K8s testing:</strong> Full Kubernetes environment locally &mdash; EKS only for final demo</li>
+    <li><strong>ECR lifecycle policy:</strong> Auto-delete images beyond last 10</li>
+  </ul>
+  <div class="info-box blue"><strong>Budget Impact:</strong> With a 48-hour demo window, total AWS cost is ~$9.51 per session, allowing ~10 full demos within the $100 free tier credits.</div>
+
+  <h1 style="margin-top:30px">20. Conclusion &amp; Future Scope</h1>
+  <h2>20.1 Key Accomplishments</h2>
+  <table>
+    <thead><tr><th>Area</th><th>Achievement</th></tr></thead>
+    <tbody>
+      <tr><td>Version Control</td><td>Conventional commits with automated linting via Husky</td></tr>
+      <tr><td>Containerization</td><td>Security-hardened multi-stage Dockerfile, non-root user</td></tr>
+      <tr><td>CI/CD</td><td>8-stage Jenkins pipeline: test, lint, analyze, build, scan, push, deploy</td></tr>
+      <tr><td>Code Quality</td><td>Automated SonarQube static analysis with quality gates</td></tr>
+      <tr><td>Security</td><td>Trivy CVE scanning with HTML reporting</td></tr>
+      <tr><td>Artifacts</td><td>Nexus private Docker registry with SHA-tagged versioning</td></tr>
+      <tr><td>Infrastructure</td><td>Modular Terraform for VPC, EKS, ECR on AWS</td></tr>
+      <tr><td>Orchestration</td><td>Kubernetes with HPA, rolling updates, probes, network policies</td></tr>
+      <tr><td>Packaging</td><td>Helm chart with dev/prod value files</td></tr>
+      <tr><td>Monitoring</td><td>Custom Prometheus metrics (7 metrics) with 4 alert rules</td></tr>
+      <tr><td>Visualization</td><td>Auto-provisioned 9-panel Grafana dashboard</td></tr>
+      <tr><td>Configuration</td><td>Ansible playbook for automated EC2 server setup</td></tr>
+    </tbody>
+  </table>
+  <h2>20.2 Production Safety</h2>
+  <p>Only <strong>4 existing source files were modified</strong> (Dockerfile, docker-compose.yml, proxy.ts, package.json), all changes additive and backwards-compatible. The live deployment at <code>splitsj.vercel.app</code> continued operating without interruption.</p>
+  <h2>20.3 Future Scope</h2>
+  <ul style="margin:8px 0 12px 20px">
+    <li><strong>GitOps with ArgoCD:</strong> Continuous reconciliation between Git and cluster state</li>
+    <li><strong>Log Aggregation with Loki:</strong> Centralize logs alongside metrics in Grafana</li>
+    <li><strong>Service Mesh (Istio):</strong> mTLS, traffic management, distributed tracing</li>
+    <li><strong>Chaos Engineering:</strong> Chaos Monkey for resilience testing</li>
+    <li><strong>Multi-Region Deployment:</strong> Cross-region failover via Terraform</li>
+  </ul>
+  <div class="info-box green"><strong>Project Impact:</strong> SplitX demonstrates that a production application can be enhanced with enterprise-grade infrastructure tooling in a safe, incremental, and cost-effective manner &mdash; showcasing proficiency across the full DevOps spectrum.</div>
+</div>
+
+<div style="text-align:center;padding:40px 0;color:#94a3b8;font-size:10pt">
+  <p>&mdash; End of Synopsis &mdash;</p>
+  <p style="margin-top:8px;font-size:9pt">SplitX &copy; 2026 Sayandip Jana. All Rights Reserved.</p>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,53 @@
+# Default values for SplitX Helm chart
+replicaCount: 2
+
+image:
+  repository: splitx-app
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 3000
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+  hosts:
+    - paths:
+        - path: /
+          pathType: Prefix
+
+resources:
+  requests:
+    memory: "128Mi"
+    cpu: "100m"
+  limits:
+    memory: "512Mi"
+    cpu: "500m"
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilization: 70
+  targetMemoryUtilization: 80
+
+probes:
+  liveness:
+    path: /api/health
+    initialDelaySeconds: 15
+    periodSeconds: 30
+  readiness:
+    path: /api/health
+    initialDelaySeconds: 5
+    periodSeconds: 10
+
+env:
+  NODE_ENV: "production"
+  NEXT_TELEMETRY_DISABLED: "1"
+  PORT: "3000"
+  METRICS_TOKEN: "splitx-metrics-secret"

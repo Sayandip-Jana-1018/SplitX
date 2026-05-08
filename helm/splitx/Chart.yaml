@@ -1,0 +1,12 @@
+apiVersion: v2
+name: splitx
+description: Helm chart for the SplitX expense-splitting application
+type: application
+version: 1.0.0
+appVersion: "0.1.0"
+keywords:
+  - splitx
+  - expense-splitting
+  - nextjs
+maintainers:
+  - name: Sayandip Jana

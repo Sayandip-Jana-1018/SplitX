@@ -295,7 +295,7 @@ export default function SettlementsPage() {
         graphMemberImages[m.name] = m.image;
     }
 
-    // Handle mark as paid
+    // Handle mark as paid — creates settlement AND immediately transitions to paid_pending
     const handleMarkAsPaid = async () => {
         if (!confirmSettle) return;
         const tripId = confirmSettle.tripId || activeSlideData?.tripId;
@@ -313,18 +313,76 @@ export default function SettlementsPage() {
                     amount: confirmSettle.amount, method: 'cash',
                 }),
             });
-            if (res.ok) {
-                toast('Settlement request sent. It will complete after receiver approval.', 'success');
-                setConfirmSettle(null);
-                mutate();
-            } else {
+            if (!res.ok) {
                 const err = await res.json().catch(() => ({}));
                 toast(err.error || 'Failed to record settlement', 'error');
+                return;
             }
+            const created = await res.json();
+            // Immediately confirm so receiver gets the approve button
+            const confirmRes = await fetch(`/api/settlements/${created.id}/confirm`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ utrNumber: '' }),
+            });
+            if (confirmRes.ok) {
+                toast('Settlement sent for receiver approval.', 'success');
+            } else {
+                toast('Settlement created. Ask the receiver to approve it.', 'success');
+            }
+            setConfirmSettle(null);
+            mutate();
         } catch {
             toast('Network error', 'error');
         } finally {
             setSettling(false);
+        }
+    };
+
+    // Handle payer confirming they've paid on a pending/initiated settlement
+    const handleConfirmPaid = async (settlementId: string) => {
+        try {
+            const res = await fetch(`/api/settlements/${settlementId}/confirm`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ utrNumber: '' }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                toast(data.error || 'Failed to confirm payment', 'error');
+                return;
+            }
+            toast(data.message || 'Sent for receiver approval', 'success');
+            mutate();
+        } catch {
+            toast('Network error', 'error');
+        }
+    };
+
+    // Handle receiver approving a pending/initiated settlement (cash flow)
+    const handleReceiverDirectApprove = async (settlementId: string) => {
+        try {
+            // First move to paid_pending, then approve
+            await fetch(`/api/settlements/${settlementId}/confirm-by-receiver`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'approve' }),
+            });
+            // Now approve
+            const res = await fetch(`/api/settlements/${settlementId}/approve`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'approve' }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                toast(data.error || 'Failed to approve payment', 'error');
+                return;
+            }
+            toast(data.message || 'Payment approved!', 'success');
+            mutate();
+        } catch {
+            toast('Network error', 'error');
         }
     };
 
@@ -866,11 +924,11 @@ export default function SettlementsPage() {
                                         >
                                             {isAwaitingApproval ? (
                                                 <>
-                                                    <CheckCheck size={11} /> Waiting for receiver approval
+                                                    <CheckCheck size={11} /> {isReceiver ? 'Approve this payment' : 'Waiting for receiver approval'}
                                                 </>
                                             ) : (
                                                 <>
-                                                    <ShieldAlert size={11} /> Settlement request open
+                                                    <ShieldAlert size={11} /> {isSender ? 'Confirm you paid' : 'Pending payment'}
                                                 </>
                                             )}
                                         </Badge>
@@ -1044,6 +1102,20 @@ export default function SettlementsPage() {
                                                         Waiting for {settlement.to.name} to approve receipt
                                                     </span>
                                                 )}
+                                                {/* Payer can confirm they've paid on pending/initiated settlements */}
+                                                {isSender && isRecordedRequest && canInitiateSettlementPayment(settlement.status) && (
+                                                    <Button
+                                                        size="sm"
+                                                        leftIcon={<CheckCheck size={13} />}
+                                                        style={{
+                                                            background: 'linear-gradient(135deg, var(--accent-500), var(--accent-600))',
+                                                            boxShadow: '0 4px 16px rgba(var(--accent-500-rgb), 0.25)',
+                                                        }}
+                                                        onClick={() => handleConfirmPaid(settlement.settlementId!)}
+                                                    >
+                                                        I&apos;ve Paid - Send for Approval
+                                                    </Button>
+                                                )}
                                                 {settlement.source === 'computed' && (isSender || isReceiver) && (
                                                     <button
                                                         onClick={() => setConfirmSettle({ from: settlement.from.id, to: settlement.to.id, amount: settlement.amount, tripId })}
@@ -1056,18 +1128,39 @@ export default function SettlementsPage() {
                                                         Request manual settlement
                                                     </button>
                                                 )}
-                                                {settlement.source === 'recorded' && isReceiver && !isAwaitingApproval && (
-                                                    <span style={{
-                                                        fontSize: 'var(--text-xs)',
-                                                        color: 'var(--fg-muted)',
-                                                        textAlign: 'center',
-                                                        lineHeight: 1.4,
-                                                        padding: '4px 12px',
-                                                        background: 'rgba(var(--accent-500-rgb), 0.06)',
-                                                        borderRadius: 'var(--radius-lg)',
-                                                    }}>
-                                                        Waiting for {settlement.from.name} to submit payment confirmation
-                                                    </span>
+                                                {/* Receiver sees approve button even for pending/initiated (cash) settlements */}
+                                                {settlement.source === 'recorded' && isReceiver && !isAwaitingApproval && !isCompletedSettlementStatus(settlement.status) && (
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center', width: '100%' }}>
+                                                        <span style={{
+                                                            fontSize: 'var(--text-xs)',
+                                                            color: 'var(--fg-muted)',
+                                                            textAlign: 'center',
+                                                            lineHeight: 1.4,
+                                                        }}>
+                                                            {settlement.from.name} says they paid you. Already received?
+                                                        </span>
+                                                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+                                                            <Button
+                                                                size="sm"
+                                                                leftIcon={<CheckCheck size={13} />}
+                                                                style={{
+                                                                    background: 'linear-gradient(135deg, var(--color-success), #059669)',
+                                                                    boxShadow: '0 4px 16px rgba(16, 185, 129, 0.22)',
+                                                                }}
+                                                                onClick={() => handleReceiverDirectApprove(settlement.settlementId!)}
+                                                            >
+                                                                Yes, Approve
+                                                            </Button>
+                                                            <Button
+                                                                size="sm"
+                                                                variant="outline"
+                                                                leftIcon={<ShieldAlert size={13} />}
+                                                                onClick={() => toast('Waiting for payer to confirm via UPI', 'info')}
+                                                            >
+                                                                Not received
+                                                            </Button>
+                                                        </div>
+                                                    </div>
                                                 )}
                                                 {!isSender && !isReceiver && (
                                                     <Badge variant="accent">Between others</Badge>

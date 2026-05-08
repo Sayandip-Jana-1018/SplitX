@@ -1,0 +1,32 @@
+# ═══════════════════════════════════════════════════════════════
+#   SplitX — Prometheus Configuration
+# ═══════════════════════════════════════════════════════════════
+
+global:
+  scrape_interval: 15s        # Scrape targets every 15 seconds
+  evaluation_interval: 15s    # Evaluate alert rules every 15 seconds
+
+# ── Alert Rules ──
+rule_files:
+  - "alert-rules.yml"
+
+# ── Scrape Targets ──
+scrape_configs:
+  # SplitX Application Metrics
+  - job_name: "splitx-app"
+    metrics_path: "/api/metrics"
+    scrape_interval: 15s
+    scheme: http
+    authorization:
+      type: Bearer
+      credentials: "splitx-metrics-secret"
+    static_configs:
+      - targets: ["splitx:3000"]
+        labels:
+          app: "splitx"
+          env: "development"
+
+  # Prometheus Self-Monitoring
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]

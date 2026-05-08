@@ -1,0 +1,47 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: splitx-network-policy
+  namespace: splitx
+spec:
+  podSelector:
+    matchLabels:
+      app: splitx
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow traffic from ingress controller
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - port: 3000
+          protocol: TCP
+    # Allow traffic from Prometheus for metrics scraping
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: splitx
+          podSelector:
+            matchLabels:
+              app: prometheus
+      ports:
+        - port: 3000
+          protocol: TCP
+  egress:
+    # Allow DNS resolution
+    - to: []
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # Allow HTTPS outbound (for Neon DB, Supabase, APIs)
+    - to: []
+      ports:
+        - port: 443
+          protocol: TCP
+        - port: 5432
+          protocol: TCP

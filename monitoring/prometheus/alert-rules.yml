@@ -1,0 +1,53 @@
+# ═══════════════════════════════════════════════════════════════
+#   SplitX — Prometheus Alert Rules
+# ═══════════════════════════════════════════════════════════════
+
+groups:
+  - name: splitx-alerts
+    rules:
+      # ── High Error Rate ──
+      - alert: HighErrorRate
+        expr: |
+          (
+            sum(rate(splitx_http_requests_total{status_code=~"5.."}[5m]))
+            /
+            sum(rate(splitx_http_requests_total[5m]))
+          ) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High error rate detected (> 5%)"
+          description: "More than 5% of requests are returning 5xx errors over the last 5 minutes."
+
+      # ── High Latency ──
+      - alert: HighLatency
+        expr: |
+          histogram_quantile(0.95, sum(rate(splitx_http_request_duration_seconds_bucket[5m])) by (le))
+          > 2.0
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High p95 latency (> 2s)"
+          description: "95th percentile request latency exceeds 2 seconds."
+
+      # ── Application Down ──
+      - alert: ApplicationDown
+        expr: up{job="splitx-app"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "SplitX application is unreachable"
+          description: "Prometheus cannot scrape the SplitX metrics endpoint."
+
+      # ── High Request Rate (potential DDoS) ──
+      - alert: HighRequestRate
+        expr: sum(rate(splitx_http_requests_total[1m])) > 100
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Unusually high request rate (> 100 req/s)"
+          description: "Request rate exceeds normal thresholds. Possible DDoS or bot activity."

@@ -1,0 +1,158 @@
+// ═══════════════════════════════════════════════════════════════
+//   SplitX — Jenkins CI/CD Pipeline (Declarative)
+//   Stages: Checkout → Test → Lint → SonarQube → Docker → Trivy → Nexus → Deploy
+// ═══════════════════════════════════════════════════════════════
+
+pipeline {
+    agent any
+
+    environment {
+        APP_NAME        = 'splitx'
+        DOCKER_IMAGE    = "splitx-app"
+        ECR_REPO        = credentials('ecr-repo-url')        // Set in Jenkins credentials
+        AWS_REGION      = 'us-east-1'
+        SONAR_HOST_URL  = 'http://sonarqube:9000'
+        NEXUS_URL       = 'http://nexus:8082'
+        GIT_COMMIT_SHORT = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+    }
+
+    options {
+        timeout(time: 30, unit: 'MINUTES')
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+    }
+
+    stages {
+
+        // ── Stage 1: Checkout ──
+        stage('Checkout') {
+            steps {
+                checkout scm
+                echo "Building commit: ${GIT_COMMIT_SHORT}"
+            }
+        }
+
+        // ── Stage 2: Install Dependencies ──
+        stage('Install') {
+            steps {
+                sh 'npm ci --no-audit --no-fund'
+            }
+        }
+
+        // ── Stage 3: Test + Lint (Parallel) ──
+        stage('Quality Checks') {
+            parallel {
+                stage('Test') {
+                    steps {
+                        sh 'npm test'
+                    }
+                }
+                stage('Lint') {
+                    steps {
+                        sh 'npm run lint'
+                    }
+                }
+            }
+        }
+
+        // ── Stage 4: SonarQube Analysis ──
+        stage('SonarQube Analysis') {
+            steps {
+                withSonarQubeEnv('SonarQube') {
+                    sh '''
+                        npx sonar-scanner \
+                            -Dsonar.projectKey=splitx \
+                            -Dsonar.sources=src \
+                            -Dsonar.host.url=${SONAR_HOST_URL} \
+                            -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
+                    '''
+                }
+            }
+        }
+
+        // ── Stage 5: Build Docker Image ──
+        stage('Docker Build') {
+            steps {
+                script {
+                    docker.build("${DOCKER_IMAGE}:${GIT_COMMIT_SHORT}", "--no-cache .")
+                    docker.build("${DOCKER_IMAGE}:latest", ".")
+                }
+                echo "Docker image built: ${DOCKER_IMAGE}:${GIT_COMMIT_SHORT}"
+            }
+        }
+
+        // ── Stage 6: Trivy Security Scan ──
+        stage('Trivy Scan') {
+            steps {
+                sh """
+                    trivy image \
+                        --exit-code 1 \
+                        --severity CRITICAL \
+                        --no-progress \
+                        --format table \
+                        ${DOCKER_IMAGE}:${GIT_COMMIT_SHORT} || true
+                """
+                // Generate HTML report
+                sh """
+                    trivy image \
+                        --format template \
+                        --template "@/usr/local/share/trivy/templates/html.tpl" \
+                        --output trivy-report.html \
+                        ${DOCKER_IMAGE}:${GIT_COMMIT_SHORT} || true
+                """
+            }
+            post {
+                always {
+                    archiveArtifacts artifacts: 'trivy-report.html', allowEmptyArchive: true
+                }
+            }
+        }
+
+        // ── Stage 7: Push to Nexus Repository ──
+        stage('Nexus Push') {
+            steps {
+                script {
+                    sh """
+                        docker tag ${DOCKER_IMAGE}:${GIT_COMMIT_SHORT} ${NEXUS_URL}/${DOCKER_IMAGE}:${GIT_COMMIT_SHORT}
+                        docker tag ${DOCKER_IMAGE}:latest ${NEXUS_URL}/${DOCKER_IMAGE}:latest
+                        docker push ${NEXUS_URL}/${DOCKER_IMAGE}:${GIT_COMMIT_SHORT}
+                        docker push ${NEXUS_URL}/${DOCKER_IMAGE}:latest
+                    """
+                }
+                echo "Image pushed to Nexus: ${NEXUS_URL}/${DOCKER_IMAGE}:${GIT_COMMIT_SHORT}"
+            }
+        }
+
+        // ── Stage 8: Deploy to Kubernetes ──
+        stage('Deploy to K8s') {
+            when {
+                branch 'main'
+            }
+            steps {
+                script {
+                    sh """
+                        helm upgrade --install splitx ./helm/splitx \
+                            --namespace splitx \
+                            --create-namespace \
+                            --set image.repository=${DOCKER_IMAGE} \
+                            --set image.tag=${GIT_COMMIT_SHORT} \
+                            --wait --timeout 300s
+                    """
+                }
+                echo "Deployed to Kubernetes: ${DOCKER_IMAGE}:${GIT_COMMIT_SHORT}"
+            }
+        }
+    }
+
+    post {
+        success {
+            echo '✅ Pipeline completed successfully!'
+        }
+        failure {
+            echo '❌ Pipeline failed. Check logs above.'
+        }
+        always {
+            cleanWs()
+        }
+    }
+}

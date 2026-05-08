@@ -3,13 +3,11 @@ import type { NextRequest } from 'next/server';
 
 import { Ratelimit } from '@upstash/ratelimit';
 import { Redis } from '@upstash/redis';
+import { httpRequestsTotal, httpRequestDuration } from '@/lib/metrics';
 
 /**
  * Next.js Proxy — runs on every matched request.
- * Handles:
- * 1. Auth-based route protection & redirects
- * 2. Global API rate limiting using Upstash Redis
- * 3. Security headers
+ * Handles: Auth protection, Rate limiting, Security headers, Prometheus metrics
  */
 
 function getRatelimit() {
@@ -95,29 +93,30 @@ export async function proxy(request: NextRequest) {
         return NextResponse.next();
     }
 
-    // ── API Logging ──
+    // ── API Logging + Prometheus Metrics ──
     const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
     const method = request.method;
+    const route = pathname.split('/').slice(0, 4).join('/');
 
     console.log(`[API] ${method} ${pathname} — IP: ${ip} — ${new Date().toISOString()}`);
+
+    // Start Prometheus timer for request duration
+    const metricsTimer = httpRequestDuration.startTimer({ method, route });
 
     // ── Global Upstash Rate Limiting ──
     const ratelimit = getRatelimit();
     if (!ratelimit) {
         const response = NextResponse.next();
-        response.headers.set('X-DNS-Prefetch-Control', 'on');
-        response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
-        response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
-        response.headers.set('X-Content-Type-Options', 'nosniff');
-        response.headers.set('X-Frame-Options', 'DENY');
-        response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+        applySecurityHeaders(response);
+        httpRequestsTotal.inc({ method, route, status_code: '200' });
+        metricsTimer({ status_code: '200' });
         return response;
     }
 
     const id = ip;
     const { success, limit, reset, remaining } = await ratelimit.limit(id);
 
-    // Provide some minimal headers
+    const statusCode = success ? '200' : '429';
     const response = success ? NextResponse.next() : NextResponse.json(
         {
             success: false,
@@ -137,14 +136,23 @@ export async function proxy(request: NextRequest) {
     }
 
     // ── Security Headers ──
+    applySecurityHeaders(response);
+
+    // ── Record Prometheus metrics ──
+    httpRequestsTotal.inc({ method, route, status_code: statusCode });
+    metricsTimer({ status_code: statusCode });
+
+    return response;
+}
+
+/** Apply standard security headers to a response */
+function applySecurityHeaders(response: NextResponse) {
     response.headers.set('X-DNS-Prefetch-Control', 'on');
     response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
     response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
     response.headers.set('X-Content-Type-Options', 'nosniff');
     response.headers.set('X-Frame-Options', 'DENY');
     response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
-
-    return response;
 }
 
 export const config = {

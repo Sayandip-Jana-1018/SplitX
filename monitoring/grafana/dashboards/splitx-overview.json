@@ -1,0 +1,171 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "title": "Request Rate (req/s)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        {
+          "expr": "sum(rate(splitx_http_requests_total[5m]))",
+          "legendFormat": "Total Requests/s"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "fillOpacity": 15, "lineWidth": 2, "spanNulls": false }
+        }
+      }
+    },
+    {
+      "title": "Error Rate (%)",
+      "type": "gauge",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        {
+          "expr": "sum(rate(splitx_http_requests_total{status_code=~\"5..\"}[5m])) / sum(rate(splitx_http_requests_total[5m])) * 100",
+          "legendFormat": "Error %"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "red", "value": 5 }
+            ]
+          },
+          "unit": "percent", "max": 100
+        }
+      }
+    },
+    {
+      "title": "Request Latency (p95)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(splitx_http_request_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p95 Latency"
+        },
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(splitx_http_request_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p50 Latency"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": { "fillOpacity": 10, "lineWidth": 2 }
+        }
+      }
+    },
+    {
+      "title": "Transactions Created",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "splitx_transactions_created_total", "legendFormat": "Total" }
+      ],
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "fixed", "fixedColor": "green" } }
+      }
+    },
+    {
+      "title": "Settlements Completed",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "splitx_settlements_completed_total", "legendFormat": "Total" }
+      ],
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "fixed", "fixedColor": "blue" } }
+      }
+    },
+    {
+      "title": "AI Chat Requests",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "splitx_ai_chat_requests_total", "legendFormat": "Total" }
+      ],
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "fixed", "fixedColor": "purple" } }
+      }
+    },
+    {
+      "title": "Receipt Scans",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "splitx_receipt_scans_total", "legendFormat": "Total" }
+      ],
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "fixed", "fixedColor": "orange" } }
+      }
+    },
+    {
+      "title": "Requests by Route",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        {
+          "expr": "sum(rate(splitx_http_requests_total[5m])) by (route)",
+          "legendFormat": "{{ route }}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "custom": { "fillOpacity": 20, "lineWidth": 1, "stacking": { "mode": "normal" } } }
+      }
+    },
+    {
+      "title": "Node.js Memory Usage",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        {
+          "expr": "splitx_process_resident_memory_bytes / 1024 / 1024",
+          "legendFormat": "RSS (MB)"
+        },
+        {
+          "expr": "splitx_nodejs_heap_size_used_bytes / 1024 / 1024",
+          "legendFormat": "Heap Used (MB)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "decmbytes", "custom": { "fillOpacity": 15 } }
+      }
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["splitx", "application"],
+  "templating": {
+    "list": [
+      {
+        "name": "DS_PROMETHEUS",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": { "text": "Prometheus", "value": "Prometheus" }
+      }
+    ]
+  },
+  "time": { "from": "now-1h", "to": "now" },
+  "title": "SplitX — Operations & Business Dashboard",
+  "uid": "splitx-overview"
+}
