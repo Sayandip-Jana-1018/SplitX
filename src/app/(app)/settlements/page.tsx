@@ -1060,6 +1060,65 @@ export default function SettlementsPage() {
                                                         </Button>
                                                     </div>
                                                 )}
+                                                {/* Receiver actions for pending/initiated settlements (cash or reject) */}
+                                                {isReceiver && !canReceiverApprove && !isSettled && settlement.settlementId && canInitiateSettlementPayment(settlement.status) && (
+                                                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+                                                        <Button
+                                                            size="sm"
+                                                            leftIcon={<CheckCheck size={13} />}
+                                                            style={{
+                                                                background: 'linear-gradient(135deg, var(--color-success), #059669)',
+                                                                boxShadow: '0 4px 16px rgba(16, 185, 129, 0.22)',
+                                                            }}
+                                                            onClick={async () => {
+                                                                try {
+                                                                    const res = await fetch(`/api/settlements/${settlement.settlementId}/confirm-by-receiver`, {
+                                                                        method: 'POST',
+                                                                        headers: { 'Content-Type': 'application/json' },
+                                                                        body: JSON.stringify({ action: 'accept_cash' }),
+                                                                    });
+                                                                    const data = await res.json().catch(() => ({}));
+                                                                    if (!res.ok) {
+                                                                        toast(data.error || 'Failed to accept', 'error');
+                                                                        return;
+                                                                    }
+                                                                    toast('Cash payment confirmed ✓', 'success');
+                                                                    mutate();
+                                                                } catch {
+                                                                    toast('Network error', 'error');
+                                                                }
+                                                            }}
+                                                        >
+                                                            Accept (Cash)
+                                                        </Button>
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            leftIcon={<ShieldAlert size={13} />}
+                                                            style={{ borderColor: 'rgba(239, 68, 68, 0.3)', color: 'var(--color-error)' }}
+                                                            onClick={async () => {
+                                                                try {
+                                                                    const res = await fetch(`/api/settlements/${settlement.settlementId}/confirm-by-receiver`, {
+                                                                        method: 'POST',
+                                                                        headers: { 'Content-Type': 'application/json' },
+                                                                        body: JSON.stringify({ action: 'reject' }),
+                                                                    });
+                                                                    const data = await res.json().catch(() => ({}));
+                                                                    if (!res.ok) {
+                                                                        toast(data.error || 'Failed to reject', 'error');
+                                                                        return;
+                                                                    }
+                                                                    toast('Settlement rejected — sender notified', 'success');
+                                                                    mutate();
+                                                                } catch {
+                                                                    toast('Network error', 'error');
+                                                                }
+                                                            }}
+                                                        >
+                                                            Not Paid
+                                                        </Button>
+                                                    </div>
+                                                )}
                                                 {isReceiver && !canReceiverApprove && settlement.source === 'computed' && (
                                                     <Button size="sm" variant="outline"
                                                         leftIcon={<Bell size={13} />}

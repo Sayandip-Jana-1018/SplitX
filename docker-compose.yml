@@ -21,6 +21,9 @@ services:
       NODE_ENV: production
       PORT: 3000
       HOSTNAME: "0.0.0.0"
+      NEXTAUTH_URL: "http://localhost:3000"
+      DATABASE_URL: "postgresql://splitx:${POSTGRES_PASSWORD:-splitx_dev_password}@postgres:5432/splitx"
+      DIRECT_URL: "postgresql://splitx:${POSTGRES_PASSWORD:-splitx_dev_password}@postgres:5432/splitx"
       METRICS_TOKEN: ${METRICS_TOKEN:-splitx-metrics-secret}
     depends_on:
       postgres:
