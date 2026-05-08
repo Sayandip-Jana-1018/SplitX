@@ -706,18 +706,14 @@ export default function SettlementsPage() {
                                                     <Info size={13} style={{ flexShrink: 0, marginTop: 1, color: 'var(--accent-400)' }} />
                                                     <span>Debts are simplified to minimize total transfers. The amounts shown settle all balances in fewest payments.</span>
                                                 </div>
-                                                <div style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
-                                                    <div style={{ width: '100%', maxWidth: 540, margin: '0 auto' }}>
-                                                    <SettlementGraph
-                                                        members={graphMembers}
-                                                        settlements={graphSettlements}
-                                                        memberImages={graphMemberImages}
-                                                        compact
-                                                        performanceMode={mode}
-                                                        instanceId={activeSlideData?.groupId || 'group'}
-                                                    />
-                                                    </div>
-                                                </div>
+                                                <SettlementGraph
+                                                    members={graphMembers}
+                                                    settlements={graphSettlements}
+                                                    memberImages={graphMemberImages}
+                                                    compact
+                                                    performanceMode={mode}
+                                                    instanceId={activeSlideData?.groupId || 'group'}
+                                                />
                                             </>
                                         ) : (
                                             <div style={{ textAlign: 'center', padding: 'var(--space-8) 0' }}>
