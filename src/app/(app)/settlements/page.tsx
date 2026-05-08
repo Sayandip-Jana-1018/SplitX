@@ -710,7 +710,7 @@ export default function SettlementsPage() {
                                                     members={graphMembers}
                                                     settlements={graphSettlements}
                                                     memberImages={graphMemberImages}
-                                                    compact
+                                                    compact={!isDesktop}
                                                     performanceMode={mode}
                                                     instanceId={activeSlideData?.groupId || 'group'}
                                                 />
@@ -755,6 +755,7 @@ export default function SettlementsPage() {
                             flex: 1, padding: '9px 16px', borderRadius: 'var(--radius-lg)',
                             border: 'none', cursor: 'pointer',
                             fontSize: 'var(--text-sm)', fontWeight: 600,
+                            whiteSpace: 'nowrap',
                             background: tab === t
                                 ? 'linear-gradient(135deg, rgba(var(--accent-500-rgb), 0.15), rgba(var(--accent-500-rgb), 0.08))'
                                 : 'transparent',
