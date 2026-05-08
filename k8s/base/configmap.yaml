@@ -7,4 +7,4 @@ data:
   NODE_ENV: "production"
   NEXT_TELEMETRY_DISABLED: "1"
   PORT: "3000"
-  METRICS_TOKEN: "splitx-metrics-secret"
+  METRICS_TOKEN: "" # Set via K8s Secret in production
