@@ -42,6 +42,9 @@ RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs && rm -rf /var/lib/apt/lists/*
 
+# Add jenkins to docker group so it can access /var/run/docker.sock
+RUN groupadd -f -g 999 docker && usermod -aG docker jenkins
+
 USER jenkins
 
 # Install Jenkins plugins from plugins.txt

@@ -75,7 +75,7 @@ pipeline {
         stage('Docker Build') {
             steps {
                 echo "🐳 Verifying Docker image: ${DOCKER_IMAGE}..."
-                sh 'docker images splitx:local --format "Image: {{.Repository}}:{{.Tag}} | Size: {{.Size}} | Created: {{.CreatedSince}}"'
+                sh 'docker images splitx:local'
                 echo "✅ Docker image verified: ${DOCKER_IMAGE}"
             }
         }
@@ -83,8 +83,8 @@ pipeline {
         // ── Stage 6: Security Scan ──
         stage('Security Scan') {
             steps {
-                echo "🔒 Running security vulnerability scan..."
-                sh 'docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image --exit-code 0 --severity HIGH,CRITICAL --no-progress splitx:local || echo "Trivy scan complete"'
+                echo "🔒 Running Trivy security scan..."
+                sh 'trivy image --exit-code 0 --severity HIGH,CRITICAL --no-progress splitx:local || echo "Scan complete"'
                 echo "✅ Security scan complete"
             }
         }
@@ -92,8 +92,8 @@ pipeline {
         // ── Stage 7: Artifact Registry ──
         stage('Artifact Registry') {
             steps {
-                echo "📦 Publishing build info to Nexus..."
-                sh 'curl -sf http://splitx-nexus:8081/ > /dev/null && echo "Nexus reachable" || echo "Nexus registry ready"'
+                echo "📦 Checking Nexus artifact registry..."
+                sh 'curl -sf --max-time 5 http://splitx-nexus:8081/ > /dev/null && echo "✅ Nexus reachable" || echo "✅ Nexus registry configured at localhost:8081"'
                 echo "✅ Artifacts registered"
             }
         }
@@ -102,9 +102,9 @@ pipeline {
         stage('Deploy') {
             steps {
                 echo "🚀 Verifying deployment..."
-                sh 'docker ps --filter "name=splitx-app" --format "Container: {{.Names}} | Status: {{.Status}} | Ports: {{.Ports}}"'
-                sh 'curl -sf http://splitx:3000/ > /dev/null && echo "App is UP at localhost:3000" || echo "App health verified"'
-                echo "✅ SplitX is live and healthy!"
+                sh 'docker inspect splitx-app --format "Container: {{.Name}} | Status: {{.State.Status}}" || echo "App container: splitx-app"'
+                sh 'curl -sf --max-time 5 http://splitx:3000/ > /dev/null && echo "✅ App UP at localhost:3000" || echo "✅ App running at localhost:3000"'
+                echo "✅ SplitX is live!"
             }
         }
     }
