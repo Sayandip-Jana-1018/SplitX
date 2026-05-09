@@ -287,6 +287,7 @@ export default function SettlementGraph({
     instanceId = 'default',
     performanceMode = 'premium',
 }: SettlementGraphProps) {
+    const outerRef = useRef<HTMLDivElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const [size, setSize] = useState({ w: 360, h: compact ? 380 : 500 });
     const [nodes, setNodes] = useState<NodeState[]>([]);
@@ -328,27 +329,22 @@ export default function SettlementGraph({
         [bounds, compact, instanceId, members, nodes, settlements, size.h, size.w],
     );
     useEffect(() => {
-        if (!containerRef.current) return;
+        const el = outerRef.current;
+        if (!el) return;
 
-        function measure(el: Element) {
-            const width = (el as HTMLElement).offsetWidth || (el as HTMLElement).clientWidth;
+        function measure(target: Element) {
+            const width = (target as HTMLElement).offsetWidth || (target as HTMLElement).clientWidth;
             if (!width) return;
             const compactHeight = clamp(width * 0.98, 392, 452);
             const fullHeight = clamp(width * 1.02, 476, 580);
             setSize({ w: width, h: compact ? compactHeight : fullHeight });
         }
 
-        // Measure immediately
-        measure(containerRef.current);
-
-        // Also watch for any future layout changes
+        measure(el);
         const ro = new ResizeObserver((entries) => {
-            for (const entry of entries) {
-                measure(entry.target);
-            }
+            for (const entry of entries) measure(entry.target);
         });
-        ro.observe(containerRef.current);
-
+        ro.observe(el);
         return () => ro.disconnect();
     }, [compact]);
 
@@ -704,8 +700,9 @@ export default function SettlementGraph({
                 </div>
             </div>
 
+            {/* Outer div — full width, used only to measure container width via ResizeObserver */}
             <div
-                ref={containerRef}
+                ref={outerRef}
                 style={{
                     position: 'absolute',
                     top: summaryHeight,
@@ -713,14 +710,25 @@ export default function SettlementGraph({
                     right: 0,
                     bottom: 0,
                     touchAction: 'pan-y',
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'flex-start',
                 }}
             >
+                {/* Inner div — exactly size.w wide, centered; this is the drawing canvas */}
+                <div
+                    ref={containerRef}
+                    style={{
+                        position: 'relative',
+                        width: size.w,
+                        height: size.h,
+                        flexShrink: 0,
+                    }}
+                >
 
                 <svg
-                    width="100%"
+                    width={size.w}
                     height={size.h}
-                    viewBox={`0 0 ${size.w} ${size.h}`}
-                    preserveAspectRatio="xMidYMid meet"
                     style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none' }}
                 >
                 <defs>
@@ -818,6 +826,7 @@ export default function SettlementGraph({
                     );
                 })}
                 </svg>
+
 
                 {nodes.map((node, index) => {
                     const color = getAvatarColor(node.name);
@@ -997,7 +1006,8 @@ export default function SettlementGraph({
                         {formatCurrency(layout.settlement.amount)}
                     </div>
                 ))}
-            </div>
+                </div>{/* end containerRef inner drawing canvas */}
+            </div>{/* end outerRef measurement div */}
         </div>
     );
 }
