@@ -314,17 +314,28 @@ export default function SettlementGraph({
         [bounds, compact, instanceId, members, nodes, settlements, size.h, size.w],
     );
     useEffect(() => {
-        function onResize() {
-            if (!containerRef.current) return;
-            const width = containerRef.current.offsetWidth;
+        if (!containerRef.current) return;
+
+        function measure(el: Element) {
+            const width = (el as HTMLElement).offsetWidth || (el as HTMLElement).clientWidth;
+            if (!width) return;
             const compactHeight = clamp(width * 0.98, 392, 452);
             const fullHeight = clamp(width * 1.02, 476, 580);
             setSize({ w: width, h: compact ? compactHeight : fullHeight });
         }
 
-        onResize();
-        window.addEventListener('resize', onResize);
-        return () => window.removeEventListener('resize', onResize);
+        // Measure immediately
+        measure(containerRef.current);
+
+        // Also watch for any future layout changes
+        const ro = new ResizeObserver((entries) => {
+            for (const entry of entries) {
+                measure(entry.target);
+            }
+        });
+        ro.observe(containerRef.current);
+
+        return () => ro.disconnect();
     }, [compact]);
 
     const initialNodes = useMemo(() => {
