@@ -717,8 +717,10 @@ export default function SettlementGraph({
             >
 
                 <svg
-                    width={size.w}
+                    width="100%"
                     height={size.h}
+                    viewBox={`0 0 ${size.w} ${size.h}`}
+                    preserveAspectRatio="xMidYMid meet"
                     style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none' }}
                 >
                 <defs>
