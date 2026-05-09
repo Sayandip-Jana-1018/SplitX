@@ -11,6 +11,9 @@ pipeline {
         DOCKER_IMAGE = 'splitx:local'
         SONAR_HOST   = 'http://splitx-sonarqube:9000'
         SONAR_TOKEN  = 'sqp_dde8317a522329fea430855113d72b6f793bde82'
+        NEXUS_HOST   = 'splitx-nexus:8082'
+        NEXUS_USER   = 'admin'
+        NEXUS_PASS   = 'adminsj2003'
     }
 
     options {
@@ -92,9 +95,15 @@ pipeline {
         // ── Stage 7: Artifact Registry ──
         stage('Artifact Registry') {
             steps {
-                echo "📦 Checking Nexus artifact registry..."
-                sh 'curl -sf --max-time 5 http://splitx-nexus:8081/ > /dev/null && echo "✅ Nexus reachable" || echo "✅ Nexus registry configured at localhost:8081"'
-                echo "✅ Artifacts registered"
+                echo "📦 Pushing image to Nexus artifact registry..."
+                sh '''
+                    echo $NEXUS_PASS | docker login $NEXUS_HOST -u $NEXUS_USER --password-stdin
+                    docker tag splitx:local $NEXUS_HOST/splitx:latest
+                    docker tag splitx:local $NEXUS_HOST/splitx:${BUILD_NUMBER}
+                    docker push $NEXUS_HOST/splitx:latest
+                    docker push $NEXUS_HOST/splitx:${BUILD_NUMBER}
+                    echo "✅ Pushed splitx:latest and splitx:${BUILD_NUMBER} to Nexus"
+                '''
             }
         }
 
