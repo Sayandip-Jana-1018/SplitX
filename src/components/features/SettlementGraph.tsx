@@ -249,6 +249,20 @@ function simulate(
         node.x = clamp(node.x, bounds.left, w - bounds.right);
         node.y = clamp(node.y, bounds.top, h - bounds.bottom);
     }
+
+    // Centroid correction — shift entire cluster so its center-of-mass
+    // stays at the geometric center of the usable area every tick
+    const freeNodes = nodes.filter((n) => n.fx === null);
+    if (freeNodes.length > 0) {
+        const centX = freeNodes.reduce((s, n) => s + n.x, 0) / freeNodes.length;
+        const centY = freeNodes.reduce((s, n) => s + n.y, 0) / freeNodes.length;
+        const shiftX = (cx - centX) * 0.12;
+        const shiftY = (cy - centY) * 0.12;
+        for (const node of freeNodes) {
+            node.x = clamp(node.x + shiftX, bounds.left, w - bounds.right);
+            node.y = clamp(node.y + shiftY, bounds.top, h - bounds.bottom);
+        }
+    }
 }
 
 const topChipStyle: CSSProperties = {
