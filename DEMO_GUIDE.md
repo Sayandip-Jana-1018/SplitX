@@ -1,424 +1,772 @@
-# SplitX — DevOps Demo Cheat Sheet
-## 17 Tools | ~35 Minutes | University Presentation
+# SplitX — Complete AWS Setup + Presentation Guide
+## From zero to fully deployed, every command, every output
 
 ---
 
-## ⚡ STARTUP (Run this 10 min before demo)
+## PART 1: IMPORTANT QUESTIONS ANSWERED FIRST
+
+### Q: Should I keep AWS running or destroy after setup?
+**Keep it running** — presentation is in 24 hours.
+- Cost for 24 hours: ~$5.50 total. Not worth the risk of re-setting up.
+- Just leave it running overnight.
+
+### Q: Will Vercel and AWS have the same data?
+**NO — they are separate environments:**
+| | Vercel (Production) | AWS (Demo) |
+|-|--------------------|----|
+| URL | splitsj.vercel.app | Load Balancer URL from EKS |
+| Database | Supabase (cloud) | Local Postgres in container |
+| Purpose | Real production app | DevOps demo only |
+| Data | Your real user data | Empty / test data |
+
+**For presentation:** Show Vercel for the APP demo, show AWS for the DEVOPS demo (K8s, Helm live commands).
+
+### Q: Do I need to do all of AWS or just show terraform plan?
+You already have everything working locally. AWS adds:
+- Live `kubectl get pods` (real running pods)
+- Live `helm list` (real deployment)
+- Jenkins actually deploying to real K8s
+
+If the panel doesn't ask for live cloud demo, skip AWS entirely and save $5.
+
+---
+
+## PART 2: AWS FULL SETUP (Do this NOW, takes ~20 min)
+
+### Pre-check: Confirm AWS CLI is configured
+```powershell
+aws sts get-caller-identity
+```
+**Expected:**
+```json
+{
+    "UserId": "AIDA...",
+    "Account": "918183256068",
+    "Arn": "arn:aws:iam::918183256068:user/..."
+}
+```
+If this works → proceed. If error → run `aws configure` again.
+
+---
+
+### Step 1: Create S3 bucket for Terraform state
+```powershell
+aws s3 mb s3://splitx-terraform-state-918183256068 --region us-east-1
+```
+**Expected:** `make_bucket: splitx-terraform-state-918183256068`
+
+---
+
+### Step 2: Switch Terraform to S3 backend
+Open `terraform\backend.tf` and swap:
+```hcl
+# Comment out local backend:
+# terraform {
+#   backend "local" { path = "terraform.tfstate" }
+# }
+
+# Uncomment S3 backend:
+terraform {
+  backend "s3" {
+    bucket       = "splitx-terraform-state-918183256068"
+    key          = "splitx/terraform.tfstate"
+    region       = "us-east-1"
+    use_lockfile = true
+    encrypt      = true
+  }
+}
+```
+
+---
+
+### Step 3: Deploy Infrastructure with Terraform (~15 min)
+```powershell
+cd C:\Users\Sayan\Desktop\Projects\SplitX\terraform
+
+terraform init -reconfigure
+```
+**Expected:**
+```
+Successfully configured the backend "s3"!
+Terraform has been successfully initialized!
+```
 
 ```powershell
+terraform plan
+```
+**Expected:**
+```
+Plan: 23 to add, 0 to change, 0 to destroy.
+  + module.ecr.aws_ecr_repository.app
+  + module.eks.aws_eks_cluster.main
+  + module.vpc.aws_vpc.main
+  ... (23 resources total)
+```
+
+```powershell
+terraform apply
+```
+Type `yes` when prompted. Wait ~15 minutes.
+
+**Expected at end:**
+```
+Apply complete! Resources: 23 added, 0 changed, 0 destroyed.
+
+Outputs:
+ecr_repository_url = "918183256068.dkr.ecr.us-east-1.amazonaws.com/splitx-app"
+eks_cluster_name   = "splitx-eks"
+vpc_id             = "vpc-0abc123..."
+```
+Save these output values — you'll need them.
+
+---
+
+### Step 4: Connect kubectl to EKS
+```powershell
+cd C:\Users\Sayan\Desktop\Projects\SplitX
+
+aws eks update-kubeconfig --name splitx-eks --region us-east-1
+```
+**Expected:**
+```
+Added new context arn:aws:eks:us-east-1:918183256068:cluster/splitx-eks to C:\Users\Sayan\.kube\config
+```
+
+Verify connection:
+```powershell
+kubectl get nodes
+```
+**Expected:**
+```
+NAME                         STATUS   ROLES    AGE   VERSION
+ip-10-0-1-45.ec2.internal    Ready    <none>   2m    v1.31.x
+ip-10-0-2-78.ec2.internal    Ready    <none>   2m    v1.31.x
+```
+
+---
+
+### Step 5: Push Docker image to ECR (AWS's Docker registry)
+```powershell
+# Login to ECR
+aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 918183256068.dkr.ecr.us-east-1.amazonaws.com
+
+# Tag the image
+docker tag splitx:local 918183256068.dkr.ecr.us-east-1.amazonaws.com/splitx-app:latest
+docker tag splitx:local 918183256068.dkr.ecr.us-east-1.amazonaws.com/splitx-app:1.0.0
+
+# Push to ECR
+docker push 918183256068.dkr.ecr.us-east-1.amazonaws.com/splitx-app:latest
+docker push 918183256068.dkr.ecr.us-east-1.amazonaws.com/splitx-app:1.0.0
+```
+**Expected:** Layer push lines ending with `latest: digest: sha256:...`
+
+---
+
+### Step 6: Deploy SplitX to Kubernetes with Helm
+```powershell
+cd C:\Users\Sayan\Desktop\Projects\SplitX
+
+# Update image in helm values to point to ECR
+helm install splitx ./helm/splitx `
+  --namespace splitx `
+  --create-namespace `
+  --set image.repository=918183256068.dkr.ecr.us-east-1.amazonaws.com/splitx-app `
+  --set image.tag=latest
+```
+**Expected:**
+```
+NAME: splitx
+LAST DEPLOYED: Sun May 11 ...
+NAMESPACE: splitx
+STATUS: deployed
+REVISION: 1
+```
+
+Wait 1 minute then verify:
+```powershell
+kubectl get pods -n splitx
+```
+**Expected:**
+```
+NAME                      READY   STATUS    RESTARTS   AGE
+splitx-7d4b9f-x2kpq       1/1     Running   0          45s
+splitx-7d4b9f-r8mnt       1/1     Running   0          45s
+```
+
+---
+
+### Step 7: Verify everything
+```powershell
+kubectl get all -n splitx
+helm list -n splitx
+kubectl get hpa -n splitx
+```
+
+---
+
+## PART 3: COMPLETE PRESENTATION SCRIPT
+### (Everything you run in front of the panel)
+
+---
+
+### STARTUP — Before presentation begins
+```powershell
+# Start local Docker stack
 cd C:\Users\Sayan\Desktop\Projects\SplitX
 docker compose --profile monitoring --profile ci up -d
 ```
-
-### Open these tabs in browser:
-| Tab | URL | Login |
-|-----|-----|-------|
-| App | http://localhost:3000 | your account |
-| Prometheus | http://localhost:9090 | none |
-| Grafana | http://localhost:3001 | admin / splitx_grafana |
-| Jenkins | http://localhost:8080 | admin / admin |
-| SonarQube | http://localhost:9000 | admin / admin |
-| Nexus | http://localhost:8081 | admin / adminsj2003 |
-| GitHub | https://github.com/Sayandip-Jana-1018/SplitX | none |
+Wait 2 minutes. Open browser tabs:
+- http://localhost:3000 (App)
+- http://localhost:9090 (Prometheus)
+- http://localhost:3001 (Grafana)
+- http://localhost:8080 (Jenkins)
+- http://localhost:9000 (SonarQube)
+- http://localhost:8081 (Nexus)
+- https://github.com/Sayandip-Jana-1018/SplitX (GitHub)
+- https://splitsj.vercel.app (Vercel Production)
 
 ---
 
-## DEMO ORDER
-
-```
-Git → Husky → Commitlint → ESLint → GitHub Actions →
-Docker → Docker Compose → Jenkins → SonarQube → Trivy →
-Nexus → Prometheus → Grafana → Terraform → Ansible →
-Kubernetes → Helm
-```
-
----
-
-## TOOL 1 — Git + GitHub
-**Category:** Version Control | **GUI:** GitHub.com ✅
-
-**Show in browser:** https://github.com/Sayandip-Jana-1018/SplitX → Commits tab
+### TOOL 1 — Git + GitHub
+**[BROWSER]** Open: https://github.com/Sayandip-Jana-1018/SplitX
+- Show: Repository structure, 300+ commits, branches
 
 ```powershell
 git log --oneline -10
-git branch -a
+```
+**Expected output:**
+```
+96c624c fix: two-ref graph centering - outerRef measures, containerRef draws
+38e1cba feat: Jenkinsfile actually pushes Docker image to Nexus registry
+22765bb fix: two-ref approach to center graph
+...
 ```
 
-**Say:** *"Git tracks every change. All commits follow the Conventional Commits standard — feat: for features, fix: for bugs. This is enforced automatically by Husky."*
+```powershell
+git branch -a
+```
+**Expected:** `* main` and remote tracking branches
+
+**Say:** *"Every line of code is tracked. We use Conventional Commits: feat:, fix:, chore:. This format is enforced by Husky — my next tool."*
 
 ---
 
-## TOOL 2 — Husky
-**Category:** Git Hooks | **GUI:** Terminal ✅
+### TOOL 2 — Husky
+**[TERMINAL]** Show Git hooks
 
 ```powershell
-# Show the hooks
 type .husky\pre-commit
-type .husky\commit-msg
+```
+**Expected:**
+```
+npx eslint --max-warnings 0 .
+```
 
-# DEMO: Bad commit → gets REJECTED
+```powershell
+type .husky\commit-msg
+```
+**Expected:**
+```
+npx --no -- commitlint --edit $1
+```
+
+**DEMO — Bad commit gets REJECTED:**
+```powershell
 git commit --allow-empty -m "updated stuff"
 ```
-**Expected:** `husky - commit-msg script failed (code 1)` ✅
+**Expected output:**
+```
+⧗   input: updated stuff
+✖   subject may not be empty [subject-empty]
+✖   type may not be empty [type-empty]
+✖   found 2 problems, 0 warnings
+husky - commit-msg script failed (code 1)
+```
 
+**Good commit passes:**
 ```powershell
-# Good commit → passes
-git commit --allow-empty -m "chore: demo conventional commits"
+git commit --allow-empty -m "chore: demo commit for presentation"
 git reset HEAD~1
 ```
 
-**Say:** *"Husky is the first quality gate — on the developer's own machine. No bad code or bad commit messages can even be saved locally."*
+**Say:** *"Husky runs before every commit. No developer can push bad code or bad messages."*
 
 ---
 
-## TOOL 3 — Commitlint
-**Category:** Commit Standards | **GUI:** Terminal ✅
+### TOOL 3 — Commitlint
+**[TERMINAL]** Show config
 
 ```powershell
 type commitlint.config.js
 ```
+**Expected:**
+```js
+module.exports = {
+  extends: ['@commitlint/config-conventional'],
+  rules: {
+    'header-max-length': [2, 'always', 100],
+    'type-enum': [2, 'always', ['feat','fix','chore','docs',...]]
+  }
+}
+```
 
-**Say:** *"Commitlint enforces the format: type(scope): message. Valid types: feat, fix, chore, docs, refactor, test. This enables automatic changelogs and semantic versioning."*
+**Say:** *"Commitlint enforces the format type(scope): message. Enables automatic changelogs."*
 
 ---
 
-## TOOL 4 — ESLint
-**Category:** Code Linting | **GUI:** Terminal ✅
+### TOOL 4 — ESLint
+**[TERMINAL]** Show config and run
 
 ```powershell
 type eslint.config.mjs
 npm run lint
 ```
+**Expected:**
+```
+> splitx@0.1.0 lint
+> next lint
+✔ No ESLint warnings or errors
+```
 
-**Say:** *"ESLint enforces TypeScript code quality. Zero warnings allowed. Also runs in Jenkins Stage 3."*
+**Say:** *"ESLint enforces TypeScript code quality. Zero warnings allowed. Also runs in Jenkins."*
 
 ---
 
-## TOOL 5 — GitHub Actions
-**Category:** Cloud CI | **GUI:** GitHub Actions tab ✅
-
-**Show in browser:** https://github.com/Sayandip-Jana-1018/SplitX/actions
-- Show green checkmarks on all workflow runs
-- Click any run → show steps: checkout → install → lint → build
+### TOOL 5 — GitHub Actions
+**[BROWSER]** Open: https://github.com/Sayandip-Jana-1018/SplitX/actions
+- Show: All green workflow runs ✅
+- Click any run → show 4 steps with green ticks
 
 ```powershell
 type .github\workflows\ci.yml
 ```
 
-**Say:** *"GitHub Actions is our cloud CI pipeline. Every push triggers 4 automated steps. All runs are green — zero failures."*
+**Say:** *"Every push triggers our cloud CI pipeline — checkout, test, lint, build. All runs green."*
 
 ---
 
-## TOOL 6 — Docker
-**Category:** Containerization | **GUI:** Terminal ✅
+### TOOL 6 — Docker
+**[TERMINAL]** Show Dockerfile and image
 
 ```powershell
 type Dockerfile
+```
+Point at the 3 stages: `FROM ... AS deps`, `FROM ... AS builder`, `FROM ... AS runner`
+
+```powershell
 docker images splitx
-docker inspect splitx-app --format "Status: {{.State.Status}}"
+```
+**Expected:**
+```
+REPOSITORY   TAG     IMAGE ID       CREATED        SIZE
+splitx       local   abc123def456   2 days ago     ~250MB
 ```
 
-**Say:** *"3-stage multi-stage build. Stage 1 installs deps, Stage 2 builds the app, Stage 3 creates a minimal 250MB image running as non-root user. Includes a HEALTHCHECK for Kubernetes."*
+```powershell
+docker inspect splitx-app --format "Status: {{.State.Status}} | Image: {{.Config.Image}}"
+```
+**Expected:** `Status: running | Image: splitx:local`
+
+**Say:** *"3-stage multi-stage build reduces image from 1.5GB to 250MB. Runs as non-root user for security."*
 
 ---
 
-## TOOL 7 — Docker Compose
-**Category:** Multi-Container Orchestration | **GUI:** Terminal ✅
+### TOOL 7 — Docker Compose
+**[TERMINAL]** Show all running services
 
 ```powershell
 docker compose --profile monitoring --profile ci ps
-docker network ls | findstr splitx
+```
+**Expected:**
+```
+NAME                STATUS     PORTS
+splitx-app          running    0.0.0.0:3000->3000/tcp
+splitx-postgres     running    0.0.0.0:5432->5432/tcp
+splitx-redis        running    0.0.0.0:6379->6379/tcp
+splitx-prometheus   running    0.0.0.0:9090->9090/tcp
+splitx-grafana      running    0.0.0.0:3001->3000/tcp
+splitx-jenkins      running    0.0.0.0:8080->8080/tcp
+splitx-sonarqube    running    0.0.0.0:9000->9000/tcp
+splitx-nexus        running    0.0.0.0:8081->8081/tcp
 ```
 
-**Say:** *"One command starts all 8 services. Services use health checks and depends_on for correct startup order. We use profiles — monitoring and ci are optional."*
+```powershell
+docker network ls | findstr splitx
+```
+**Expected:** `splitx_splitx-network   bridge`
+
+**Say:** *"One command starts 8 services. All connected on a private network. Health checks ensure correct startup order."*
 
 ---
 
-## TOOL 8 — Jenkins
-**Category:** Self-Hosted CI/CD | **GUI:** localhost:8080 ✅
+### TOOL 8 — Jenkins
+**[BROWSER]** Open: http://localhost:8080
 
-**Show in browser:** http://localhost:8080/job/SplitX-Pipeline/
-- Click last build → show Stage View (all 8 stages green)
-- Click any stage → show console logs
+1. Click **SplitX-Pipeline**
+2. Show **Stage View** — all 8 stages green ✅
+3. Click last build number → click **Security Scan** stage → show Trivy output in console
 
-**Say:** *"Jenkins runs our full 8-stage enterprise pipeline on our own infrastructure. One push triggers: Checkout → Install → Lint → SonarQube → Docker Build → Trivy Scan → Nexus Push → Deploy."*
+```powershell
+type jenkins\Jenkinsfile
+```
+Point at each stage name.
 
----
+**Say:** *"Jenkins is our self-hosted CI/CD. 8 stages: Checkout, Install, Lint, SonarQube, Docker Build, Trivy, Nexus Push, Deploy. Everything automated on one push."*
 
-## TOOL 9 — SonarQube
-**Category:** Code Quality | **GUI:** localhost:9000 ✅
-
-**Show in browser:** http://localhost:9000/dashboard?id=splitx
-- Quality Gate: **PASSED** ✅
-- Security Rating: **A** ✅
-
-**Say:** *"SonarQube does deep static analysis. Security rating A, quality gate passed. If we introduced a critical bug, the gate fails and Jenkins stops the deployment."*
+**TRIGGER A NEW BUILD LIVE:**
+- In browser: Click **Build Now**
+- Watch the stage view animate in real time ✅
 
 ---
 
-## TOOL 10 — Trivy
-**Category:** Security Scanning (DevSecOps) | **GUI:** Terminal ✅
+### TOOL 9 — SonarQube
+**[BROWSER]** Open: http://localhost:9000
+
+Login: admin / admin
+- Show Dashboard → Project: splitx
+- Show: **Quality Gate: PASSED** ✅
+- Show: Security Rating: **A** ✅
+- Show: 36,000+ lines analyzed
+
+**Say:** *"SonarQube analyzes every line for bugs and vulnerabilities. Security A rating. Quality Gate passed — pipeline was allowed to continue."*
+
+---
+
+### TOOL 10 — Trivy
+**[TERMINAL]** Run live scan
 
 ```powershell
 docker run --rm -v /var/run/docker.sock:/var/run/docker.sock `
   aquasec/trivy:latest image --no-progress --severity HIGH,CRITICAL splitx:local
 ```
-
-**Expected output (what you got):**
+**Expected output (what you saw):**
 ```
-Alpine OS:   4 HIGH, 0 CRITICAL  (musl library CVEs)
-Node.js:    12 HIGH, 0 CRITICAL  (cross-spawn, minimatch, tar)
-Total:      16 HIGH, 0 CRITICAL  ← ZERO CRITICAL = pipeline continues ✅
+splitx:local (alpine 3.19.4)
+============================
+Total: 4 (HIGH: 4, CRITICAL: 0)
+
+┌────────────┬────────────────┬──────────┬────────┐
+│  Library   │ Vulnerability  │ Severity │ Status │
+├────────────┼────────────────┼──────────┼────────┤
+│ musl       │ CVE-2025-26519 │ HIGH     │ fixed  │
+│ musl-utils │ CVE-2025-26519 │ HIGH     │ fixed  │
+└────────────┴────────────────┴──────────┴────────┘
+
+Node.js: 12 HIGH, 0 CRITICAL (cross-spawn, tar, minimatch)
+
+TOTAL: 16 HIGH, 0 CRITICAL ← pipeline CONTINUES ✅
 ```
 
-**Say:** *"Trivy scanned our image and found 16 HIGH vulnerabilities — zero CRITICAL. This is important: our pipeline uses `--exit-code 0` for HIGH (logs and continues) but `--exit-code 1` for CRITICAL (blocks deployment). Zero critical CVEs means our image is safe to deploy. The HIGH ones are in npm dependencies — this is what a real-world scan looks like."*
+**Say:** *"Trivy found 16 HIGH vulnerabilities, ZERO CRITICAL. Our pipeline is configured: HIGH = log and continue, CRITICAL = block deployment. Zero critical means the image is cleared for deployment. This is DevSecOps — security automated into every build."*
 
 ---
 
-## TOOL 11 — Nexus
-**Category:** Private Artifact Registry | **GUI:** localhost:8081 ✅
+### TOOL 11 — Nexus
+**[BROWSER]** Open: http://localhost:8081
 
-**Show in browser:** http://localhost:8081/#browse/browse:splitx-docker
-- Show: `v2/splitx/tags/latest` and `v2/splitx/tags/1.0.0`
+Login: admin / adminsj2003
+- Left sidebar → Browse → `splitx-docker`
+- Show: `v2/splitx/tags/latest` ✅ and `v2/splitx/tags/1.0.0` ✅
 
-**Say:** *"Nexus is our private Docker registry. Instead of Docker Hub, Jenkins pushes built images here. We have latest + build number tags for full version history and rollback."*
+**Say:** *"Nexus is our private Docker registry. Jenkins pushes every built image here with version tags. Full history, instant rollback to any version."*
 
 ---
 
-## TOOL 12 — Prometheus
-**Category:** Metrics Collection | **GUI:** localhost:9090 ✅
+### TOOL 12 — Prometheus
+**[BROWSER]** Open: http://localhost:9090
 
-**Show in browser:** http://localhost:9090
-1. Status → Targets → show `splitx-app` is **UP** ✅
-2. Query tab → execute these one by one, click **Graph**:
+**Step 1:** Status → Targets → show both targets UP ✅
+```
+splitx-app    UP    http://splitx:3000/api/metrics
+prometheus    UP    http://localhost:9090/metrics
+```
 
+**Step 2:** Query tab — run these one by one, click **Graph** each time:
 ```
 splitx_http_requests_total
+```
+```
 splitx_nodejs_heap_size_used_bytes
-splitx_process_cpu_seconds_total
+```
+```
 splitx_active_groups
+```
+```
 splitx_transactions_created_total
 ```
 
-**Say:** *"Prometheus scrapes 38 metrics from our app every 15 seconds — standard Node.js metrics plus custom business metrics. Both targets are up with zero errors."*
+**Say:** *"Prometheus scrapes 38 metrics every 15 seconds. Standard Node.js metrics plus custom business metrics we defined ourselves. Both targets up with zero errors. We have 4 alert rules for high error rate, latency, downtime, and DDoS."*
 
 ---
 
-## TOOL 13 — Grafana
-**Category:** Dashboards | **GUI:** localhost:3001 ✅
+### TOOL 13 — Grafana
+**[BROWSER]** Open: http://localhost:3001
 
-**Show in browser:** http://localhost:3001
-- Login: admin / splitx_grafana
+Login: admin / splitx_grafana
 - Dashboards → SplitX Overview
+- Show live panels: memory usage, request rate, error rate, active groups
 
-**Say:** *"Grafana turns raw metrics into live dashboards. Auto-provisioned from a JSON file — no manual setup. In production this is on a big monitor in the ops room."*
+**Say:** *"Grafana visualizes Prometheus metrics as live dashboards. Auto-provisioned from JSON — no manual setup. In production this is on a big screen in the ops room."*
 
 ---
 
-## TOOL 14 — Terraform
-**Category:** Infrastructure as Code | **GUI:** Terminal ✅
+### TOOL 14 — Terraform
+**[TERMINAL]** Show IaC files and plan
+
+```powershell
+cd C:\Users\Sayan\Desktop\Projects\SplitX
+type terraform\main.tf
+```
+**Expected:**
+```hcl
+module "vpc" { source = "./modules/vpc" ... }
+module "ecr" { source = "./modules/ecr" ... }
+module "eks" { source = "./modules/eks" ... }
+```
+
+```powershell
+ls terraform\modules\
+```
+**Expected:** `ecr    eks    vpc`
 
 ```powershell
 cd terraform
-type main.tf
-type variables.tf
 terraform plan
 ```
-
-**Expected output:**
+**Expected (partial):**
 ```
+Terraform will perform the following actions:
+  + module.ecr.aws_ecr_repository.app
+  + module.eks.aws_eks_cluster.main
+  + module.vpc.aws_vpc.main
+  ...
 Plan: 23 to add, 0 to change, 0 to destroy.
-  + aws_ecr_repository.app          (Docker image registry)
-  + aws_eks_cluster.main            (Kubernetes cluster)
-  + aws_vpc.main                    (Virtual Private Cloud)
-  + aws_subnet.public[0,1,2]        (Public subnets)
-  + aws_subnet.private[0,1,2]       (Private subnets)
-  ...23 resources total
 ```
 
-> ⚠️ **NEVER run `terraform apply`** during demo — creates real AWS resources!
+**[IF ON AWS — show real output:]**
+```powershell
+terraform output
+```
+**Expected:**
+```
+ecr_repository_url = "918183256068.dkr.ecr.us-east-1.amazonaws.com/splitx-app"
+eks_cluster_name   = "splitx-eks"
+vpc_id             = "vpc-0abc..."
+```
 
-**Say:** *"Terraform defines our entire AWS infrastructure as code — VPC, ECR, EKS across 3 modules. The plan shows exactly what would be created. Zero human clicking in AWS console. If we deleted our entire AWS account today, one command rebuilds everything identically."*
+**Say:** *"Terraform defines 23 AWS resources across 3 modules as code. VPC for networking, ECR for Docker images, EKS for Kubernetes. One command creates everything. One command destroys it all. Zero AWS console clicking."*
 
 ---
 
-## TOOL 15 — Ansible
-**Category:** Config Management | **GUI:** Terminal ✅
+### TOOL 15 — Ansible
+**[TERMINAL]** Show playbook
 
 ```powershell
-# Count tasks in playbook
-Select-String -Path "ansible\playbooks\setup-node.yml" -Pattern "- name:" | Measure-Object
-# Output: Count = 14 tasks
-
-# Show the playbook
+cd C:\Users\Sayan\Desktop\Projects\SplitX
 type ansible\playbooks\setup-node.yml
+```
 
-# Validate syntax (WSL)
+```powershell
+Select-String -Path "ansible\playbooks\setup-node.yml" -Pattern "- name:" | Measure-Object
+```
+**Expected:** `Count : 14`
+
+```powershell
+type ansible\ansible.cfg
+```
+
+**Validate syntax (WSL):**
+```powershell
 wsl ansible-playbook ansible/playbooks/setup-node.yml --syntax-check
 ```
-
-**Expected syntax-check output:**
+**Expected:**
 ```
-playbook: ansible/playbooks/setup-node.yml   ← no errors ✅
+playbook: ansible/playbooks/setup-node.yml
 ```
 
-**Say:** *"Ansible automates server configuration. When Terraform creates EC2 instances, this playbook runs 14 tasks — installs Docker, kubectl, Helm, AWS CLI, configures the firewall. No SSH-ing manually into servers. 10 servers configured simultaneously in 2 minutes."*
+**Say:** *"Ansible configures EC2 servers automatically. 14 tasks: Docker, kubectl, Helm, AWS CLI, firewall with deny-by-default. After Terraform creates instances, Ansible provisions them. 10 servers configured simultaneously, identically, in 2 minutes."*
 
 ---
 
-## TOOL 16 — Kubernetes
-**Category:** Container Orchestration | **GUI:** Terminal (show YAMLs) ✅
+### TOOL 16 — Kubernetes
+**[TERMINAL]** Show manifests
 
 ```powershell
 ls k8s\base\
+```
+**Expected:** `configmap.yaml  deployment.yaml  hpa.yaml  ingress.yaml  namespace.yaml  network-policy.yaml  secret.yaml  service.yaml`
+
+```powershell
 type k8s\base\deployment.yaml
-type k8s\base\hpa.yaml
-type k8s\base\service.yaml
+```
+Point at:
+```yaml
+replicas: 2                      ← high availability
+livenessProbe: /api/health       ← auto-restart crashed pods
+readinessProbe: /api/health      ← only route traffic when ready
+cpu: "500m"                      ← resource limits
 ```
 
-**Key lines to point at:**
+```powershell
+type k8s\base\hpa.yaml
+```
+Point at:
 ```yaml
-# In deployment.yaml:
-replicas: 2                         ← 2 pods for high availability
-livenessProbe: /api/health          ← auto-restarts crashed pods
-readinessProbe: /api/health         ← only routes traffic when ready
-resources.limits.cpu: "500m"        ← prevents runaway CPU usage
-
-# In hpa.yaml:
 minReplicas: 2
 maxReplicas: 5
-targetCPUUtilizationPercentage: 70  ← auto-scales when CPU > 70%
+targetCPUUtilizationPercentage: 70
 ```
 
-**Say:** *"Kubernetes runs our app with 2 replicas. If one crashes, K8s restarts it automatically. The HPA auto-scales up to 5 pods when CPU exceeds 70%. In production this runs on EKS provisioned by Terraform. Jenkins Stage 8 deploys here after every successful build."*
+**[IF ON AWS — show LIVE:]**
+```powershell
+kubectl get pods -n splitx
+```
+**Expected:**
+```
+NAME                      READY   STATUS    RESTARTS   AGE
+splitx-7d4b9f-x2kpq       1/1     Running   0          12m
+splitx-7d4b9f-r8mnt       1/1     Running   0          12m
+```
+
+```powershell
+kubectl get hpa -n splitx
+```
+**Expected:**
+```
+NAME      REFERENCE            TARGETS   MINPODS   MAXPODS   REPLICAS
+splitx    Deployment/splitx    8%/70%    2         5         2
+```
+
+```powershell
+kubectl describe deployment splitx -n splitx
+```
+
+**Say:** *"Kubernetes runs 2 replicas for high availability. If one crashes, K8s restarts it automatically. HPA monitors CPU — exceeds 70% and K8s adds more pods automatically. This runs on EKS provisioned by Terraform."*
 
 ---
 
-## TOOL 17 — Helm
-**Category:** Kubernetes Package Manager | **GUI:** Terminal ✅
+### TOOL 17 — Helm
+**[TERMINAL]** Show chart files
 
 ```powershell
 type helm\splitx\Chart.yaml
-type helm\splitx\values.yaml
-type helm\splitx\templates\deployment.yaml
-ls helm\splitx\templates\
+```
+**Expected:**
+```yaml
+apiVersion: v2
+name: splitx
+version: 1.0.0
+appVersion: "0.1.0"
 ```
 
-**Point at templates/deployment.yaml lines:**
+```powershell
+type helm\splitx\values.yaml
+```
+Point at:
+```yaml
+replicaCount: 2
+autoscaling:
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilization: 70
+```
+
+```powershell
+type helm\splitx\templates\deployment.yaml
+```
+Point at:
 ```yaml
 image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
-replicas: {{ .Values.replicaCount }}
 ```
 
-**Say:** *"Helm is npm for Kubernetes. Instead of hardcoded YAMLs, everything is templated. To deploy: `helm install splitx ./helm/splitx`. To update image: `helm upgrade splitx ./helm/splitx --set image.tag=v2.0`. To rollback: `helm rollback splitx 1`. Jenkins Stage 8 runs this automatically."*
-
----
-
-## TOOLS — GUI vs Terminal Summary
-
-| Tool | Has GUI? | Where to Show |
-|------|----------|---------------|
-| Git | ✅ GitHub.com | Commits tab, repo browser |
-| Husky | Terminal | Bad commit rejection live |
-| Commitlint | Terminal | `type commitlint.config.js` |
-| ESLint | Terminal | `npm run lint` |
-| GitHub Actions | ✅ GitHub.com | Actions tab, green runs |
-| Docker | Terminal | `docker images`, Dockerfile |
-| Docker Compose | Terminal | `docker compose ps` |
-| Jenkins | ✅ localhost:8080 | Stage view, console logs |
-| SonarQube | ✅ localhost:9000 | Dashboard, quality gate |
-| **Trivy** | **Terminal only** | **Live scan output table** |
-| Nexus | ✅ localhost:8081 | Browse → splitx-docker |
-| Prometheus | ✅ localhost:9090 | Targets, query graphs |
-| Grafana | ✅ localhost:3001 | Live dashboard panels |
-| **Terraform** | **Terminal only** | **`terraform plan` output** |
-| **Ansible** | **Terminal only** | **Playbook + syntax-check** |
-| **Kubernetes** | **Terminal only** | **YAML files (k8s/base/)** |
-| **Helm** | **Terminal only** | **Chart + template files** |
-
-> **Note:** Trivy, Terraform, Ansible, K8s, Helm are all terminal-based — but their outputs ARE impressive and clear. The Trivy table of CVEs, Terraform plan with 23 resources, Ansible's 14 tasks — these are the proof of implementation.
-
----
-
-## AWS COST ANALYSIS — Should You Deploy to AWS for Demo?
-
-### What Would Be Running on AWS:
-| Resource | Cost/Hour |
-|----------|-----------|
-| EKS Control Plane | $0.10/hr |
-| 2× t3.medium worker nodes | $0.083/hr |
-| VPC, subnets, routing | Free |
-| ECR (Docker images) | ~$0.01/hr |
-| **Total** | **~$0.19/hr** |
-
-### Your Scenario (spin up → demo → spin down):
-| Phase | Duration | Cost |
-|-------|----------|------|
-| First setup (test run) | ~3 hours | ~$0.60 |
-| Teardown | — | $0 |
-| Re-spin for presentation | ~2 hours | ~$0.40 |
-| **Total** | | **~$1.00** |
-
-### ✅ YES — $100 credit is WAY more than sufficient.
-Even if you forget to teardown for a **week**: 168hrs × $0.19 = **$32** max.
-
-### Steps to Deploy to AWS for Real Demo:
 ```powershell
-# 1. Configure AWS credentials
-aws configure
-# Enter: Access Key, Secret Key, Region=us-east-1, Format=json
+ls helm\splitx\templates\
+```
+**Expected:** `_helpers.tpl  deployment.yaml  hpa.yaml  service.yaml`
 
-# 2. Switch backend.tf back to S3 (uncomment S3 block, comment local block)
-# First create the S3 bucket:
-aws s3 mb s3://splitx-terraform-state-918183256068 --region us-east-1
-
-# 3. Deploy infrastructure
-cd terraform
-terraform init -reconfigure
-terraform apply   # Creates VPC + ECR + EKS (~15 min)
-
-# 4. Configure kubectl to talk to EKS
-aws eks update-kubeconfig --name splitx-eks --region us-east-1
-
-# 5. Deploy SplitX with Helm
-helm install splitx ./helm/splitx --namespace splitx --create-namespace
-
-# 6. After demo — DESTROY to stop costs
-terraform destroy
+**[IF ON AWS — show LIVE:]**
+```powershell
+helm list -n splitx
+```
+**Expected:**
+```
+NAME    NAMESPACE  REVISION  STATUS    CHART         APP VERSION
+splitx  splitx     1         deployed  splitx-1.0.0  0.1.0
 ```
 
-### What You Gain by Deploying to AWS:
-- Show `kubectl get pods -n splitx` → real running pods ✅
-- Show `kubectl get hpa -n splitx` → live autoscaler ✅
-- Show `helm list` → deployed release ✅
-- Jenkins Stage 8 actually deploys to real K8s ✅
+```powershell
+helm history splitx -n splitx
+```
+**Expected:**
+```
+REVISION  STATUS     CHART         DESCRIPTION
+1         deployed   splitx-1.0.0  Install complete
+```
 
-### What You Lose (if you don't):
-- Nothing critical — showing the YAML files + plan output is equally valid for a uni presentation
+**Say:** *"Helm is npm for Kubernetes. All K8s YAMLs are templated. Deploy: `helm install`. Update image version: `helm upgrade --set image.tag=v2.0`. Rollback: `helm rollback splitx 1`. Jenkins Stage 8 runs this after every successful build."*
 
 ---
 
-## QUICK REFERENCE — Credentials
+## PART 4: COST SUMMARY
 
-| Tool | URL | Username | Password |
-|------|-----|----------|----------|
+| Scenario | Duration | Cost |
+|----------|----------|------|
+| Keep running 24 hrs for presentation | 24 hours | ~$5.25 |
+| Forget to destroy for 1 week | 168 hours | ~$37 |
+| Forget to destroy for 2 weeks | 336 hours | ~$74 |
+| **$100 credit exhausted in** | **~21 days** | $100 |
+
+**Decision: Keep it running. Don't destroy. Presentation is tomorrow.**
+
+---
+
+## PART 5: AFTER PRESENTATION — CLEANUP
+
+```powershell
+# Remove Helm deployment
+helm uninstall splitx -n splitx
+
+# Destroy all AWS infrastructure
+cd C:\Users\Sayan\Desktop\Projects\SplitX\terraform
+terraform destroy
+# Type "yes" when prompted
+
+# Verify nothing is left (should show no EKS clusters)
+aws eks list-clusters --region us-east-1
+```
+
+**Expected after destroy:**
+```
+Destroy complete! Resources: 23 destroyed.
+```
+
+---
+
+## PART 6: QUICK REFERENCE CARD
+
+### Credentials
+| Tool | URL | User | Pass |
+|------|-----|------|------|
+| App | localhost:3000 | — | — |
 | Grafana | localhost:3001 | admin | splitx_grafana |
 | Jenkins | localhost:8080 | admin | admin |
 | SonarQube | localhost:9000 | admin | admin |
 | Nexus | localhost:8081 | admin | adminsj2003 |
 | Prometheus | localhost:9090 | — | — |
-| Nexus Docker Registry | localhost:8082 | admin | adminsj2003 |
 
-## QUICK REFERENCE — Prometheus Queries (all work right now)
-
+### Prometheus Queries (copy-paste ready)
 ```
 splitx_http_requests_total
 splitx_nodejs_heap_size_used_bytes
 splitx_process_cpu_seconds_total
-splitx_nodejs_eventloop_lag_seconds
 splitx_active_groups
 splitx_transactions_created_total
 splitx_settlements_completed_total
 splitx_ai_chat_requests_total
 splitx_receipt_scans_total
+```
+
+### Emergency Restart (if something crashes)
+```powershell
+docker compose --profile monitoring --profile ci restart
 ```
