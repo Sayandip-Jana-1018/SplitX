@@ -1,4 +1,4 @@
-# ⚡ SplitX ~ Smart Expense Splitting & Settlement (MOBILE FIRST)
+﻿# âš¡ SplitX ~ Smart Expense Splitting & Settlement (MOBILE FIRST)
 
 > A production-grade, full-stack expense-splitting web app built with **Next.js 16**, **Prisma**, **PostgreSQL (Neon)**, and **NextAuth v5**. Features glassmorphic UI, AI-powered receipt scanning (Tesseract OCR + OpenAI Vision), Gemini AI chat assistant, real-time group chat with avatars, debt simplification with transparent calculation breakdowns, Balance Journey history timelines, CSV/print exports, real-time analytics, smart notifications, colorful themed navigation, backend security hardening, and 12 color themes.
 
@@ -47,21 +47,73 @@
 
 ---
 
-## Local + CI Workflow
+## 🚀 DevOps Pipeline — 19 Tools
 
-- Local development: `npm install` then `npm run dev`
-- Local production-style container run: `docker compose up --build`
-- CI pipeline: `.github/workflows/ci.yml` runs `npm test`, `npm run lint`, and `npm run build` on PRs and `main`
-- Optional Docker validation can be enabled in GitHub Actions by setting the repository variable `ENABLE_DOCKER_CI=true`
-- Docker uses your existing `.env` file, so keep production secrets out of the repo and configure them through environment variables / GitHub Secrets
+SplitX implements a **production-grade, end-to-end DevOps pipeline** covering every phase from code commit to live deployment, observability, and GitOps.
+
+### All 19 Tools
+
+| # | Tool | Category | Demo Access |
+|---|------|----------|-------------|
+| 01 | **Git + GitHub** | Source Control | github.com/Sayandip-Jana-1018/SplitX |
+| 02 | **Husky** | Git Hooks | Blocks bad commits locally |
+| 03 | **Commitlint** | Commit Standards | Enforces feat:, fix:, chore: format |
+| 04 | **ESLint** | Static Analysis | npm run lint — zero warnings |
+| 05 | **GitHub Actions** | Cloud CI | .github/workflows/ci.yml |
+| 06 | **Docker** | Containerization | docker build, docker images |
+| 07 | **Docker Compose** | Multi-container | docker compose --profile monitoring up -d |
+| 08 | **Jenkins** | CI Orchestrator | localhost:8080 — 9-stage pipeline |
+| 09 | **SonarQube** | Code Quality Gate | localhost:9000 — Quality Gate PASSED |
+| 10 | **Trivy** | CVE Security Scan | Live container vulnerability table |
+| 11 | **Nexus** | Artifact Registry | localhost:8081 — Docker image store |
+| 12 | **Prometheus** | Metrics Collector | localhost:9090 — 10+ custom metrics |
+| 13 | **Grafana** | Metrics + Logs | localhost:3001 — admin / splitx_grafana |
+| 14 | **Loki + Promtail** | Log Aggregation | Grafana → SplitX — Live Logs Dashboard |
+| 15 | **Terraform** | Infrastructure-as-Code | terraform plan — 23 AWS resources |
+| 16 | **Ansible** | Configuration Management | ansible-playbook setup-node.yml |
+| 17 | **Kubernetes** | Container Orchestration | kubectl get pods -n splitx |
+| 18 | **Helm** | K8s Package Manager | helm list -n splitx |
+| 19 | **ArgoCD** | GitOps / CD | https://localhost:8090 — admin / naKYWtsJZxuFRBsc |
+
+### Jenkins 9-Stage Pipeline
+
+| Stage | What it does |
+|---|---|
+| 1 | Checkout source from GitHub |
+| 2 | Install dependencies (npm ci) |
+| 3 | ESLint static analysis |
+| 4 | SonarQube code quality gate |
+| 5 | Docker build and tag image |
+| 6 | Trivy CVE vulnerability scan |
+| 7 | Push image to Nexus registry |
+| 8 | Helm deploy to Kubernetes |
+| 9 | GitOps Sync — update values-dev.yaml so ArgoCD auto-deploys |
+
+### Observability Stack
+
+**Metrics (Prometheus + Grafana):** Custom splitx_* metrics — HTTP rate, heap memory, CPU, active groups, transactions, settlements, AI chat calls, receipt scans.
+
+**Logs (Loki + Promtail):** Collects Docker container logs and ships to Loki. The Grafana 'SplitX — Live Logs Dashboard' shows 4 stat cards, area charts for log throughput and error rate, and a live terminal log stream refreshing every 5s.
+
+### GitOps with ArgoCD
+
+ArgoCD monitors GitHub and auto-syncs Kubernetes state with every commit to main. The spiderweb deployment tree (App → Service → Deployment → ReplicaSet → Pod) is visible with the actual commit SHA and author. Local demo uses Kind (Kubernetes-in-Docker) — identical architecture to AWS EKS at zero cloud cost.
 
 ---
 
-## 🏗️ Architecture Overview
+## 💻 Local + CI Workflow
+
+- Start all services: `docker compose --profile monitoring --profile ci up -d`
+- ArgoCD port-forward (keep terminal open): `kubectl port-forward svc/argocd-server -n argocd 8090:443`
+- CI pipeline: `.github/workflows/ci.yml` runs npm test, lint, and build on every PR and push to main
+- Docker uses your `.env` file — keep production secrets in GitHub Secrets / AWS Secrets Manager
+
+
+## ðŸ—ï¸ Architecture Overview
 
 ```mermaid
 graph TB
-    subgraph Client["🖥️ Frontend — Next.js 16 App Router"]
+    subgraph Client["ðŸ–¥ï¸ Frontend â€” Next.js 16 App Router"]
         Landing["Landing Page"]
         Auth["Auth Pages<br/>(Login / Register)"]
         Dashboard["Dashboard"]
@@ -73,13 +125,13 @@ graph TB
         AdminHealth["Admin Health Dashboard"]
     end
 
-    subgraph Components["🧩 Component Library"]
+    subgraph Components["ðŸ§© Component Library"]
         UI["UI Components<br/>(Card, Button, Avatar, Modal, Toast,<br/>AmountPad, Confetti, GlobalSearch,<br/>PullToRefresh, Skeleton, Icons, EmptyState)"]
         Features["Feature Components<br/>(OnboardingTour, ThemeSelector,<br/>ClipboardBanner, NotificationBanner,<br/>NotificationPanel, AIChatPanel,<br/>SplitSelector, GroupInvite,<br/>SettlementGraph, SplitByItems)"]
         Charts["Charts<br/>(SpendingCharts via Recharts)"]
     end
 
-    subgraph Hooks["🪝 Custom Hooks"]
+    subgraph Hooks["ðŸª Custom Hooks"]
         H1["useTheme"]
         H2["useHaptics"]
         H3["useAnimatedNumber"]
@@ -88,7 +140,7 @@ graph TB
         H6["useCurrentUser"]
     end
 
-    subgraph API["🔌 API Routes — Next.js Route Handlers"]
+    subgraph API["ðŸ”Œ API Routes â€” Next.js Route Handlers"]
         AuthAPI["POST /api/auth/*<br/>POST /api/register"]
         MeAPI["GET /api/me<br/>GET /api/me/avatar"]
         GroupsAPI["GET/POST /api/groups<br/>GET/PUT /api/groups/:id<br/>GET /api/groups/:id/balances<br/>GET /api/groups/:id/balance-history<br/>POST /api/groups/join"]
@@ -104,7 +156,7 @@ graph TB
         HealthAPI["GET /api/admin/health"]
     end
 
-    subgraph Backend["⚙️ Backend Services"]
+    subgraph Backend["âš™ï¸ Backend Services"]
         PrismaORM["Prisma ORM"]
         AuthLib["NextAuth v5"]
         Parser["Transaction Parser<br/>(OCR + regex + voice)"]
@@ -118,7 +170,7 @@ graph TB
         FeatureFlags["Feature Flags"]
     end
 
-    subgraph DB["🗄️ Database — PostgreSQL (Neon)"]
+    subgraph DB["ðŸ—„ï¸ Database â€” PostgreSQL (Neon)"]
         Users["Users"]
         GroupsDB["Groups"]
         Members["GroupMembers"]
@@ -142,7 +194,7 @@ graph TB
 
 ---
 
-## 🗃️ Database Schema (Entity-Relationship)
+## ðŸ—ƒï¸ Database Schema (Entity-Relationship)
 
 ```mermaid
 erDiagram
@@ -265,23 +317,23 @@ erDiagram
 
 ---
 
-## ✨ Features
+## âœ¨ Features
 
 ### Core Functionality
 | Feature | Description |
 |---|---|
 | **Expense Tracking** | Create, edit, soft-delete expenses with categories, payment methods, and receipt URLs |
 | **Group Management** | Create groups, invite via link/code, manage members with admin roles |
-| **Group Deletion** | Owner-only soft delete with atomic cascade — soft-deletes all transactions, cancels pending settlements, notifies all members |
-| **Member Removal** | Owner/admin removes member → equal splits auto-recalculated, orphaned SplitItems cleaned, all members notified |
+| **Group Deletion** | Owner-only soft delete with atomic cascade â€” soft-deletes all transactions, cancels pending settlements, notifies all members |
+| **Member Removal** | Owner/admin removes member â†’ equal splits auto-recalculated, orphaned SplitItems cleaned, all members notified |
 | **Trip Scoping** | Organize expenses within trips per group with date ranges and currency |
-| **Split Types** | Equal, percentage, custom, and item-based splitting — backend validates split sums equal total and all user IDs are group members |
+| **Split Types** | Equal, percentage, custom, and item-based splitting â€” backend validates split sums equal total and all user IDs are group members |
 | **Settlements** | Track who owes whom, centered card layout with "Pay via UPI" and subtle "Mark Settled" text link for cash/offline payments |
 | **Settlement Transparency** | Per-group info tooltips explain simplified transfers; global view has expandable per-group breakdown showing how each group contributes to pairwise debts |
 | **Balance Journey** | Group-level running balance timeline for the current user with before/delta/after values, route-change explanations, filters, CSV export, and print-to-PDF support |
 | **Settlement Security** | Self-settlement block, 60s duplicate check (pending + initiated + completed), sender + recipient membership verification, **over-settlement guard** (rejects amounts exceeding actual debt with clear error), soft-delete filters |
-| **UPI Payment Notifications** | All group members notified on UPI payment — receiver gets ✅, others get 💸 |
-| **Transaction Edit Notifications** | All group members notified when any expense is edited (✏️) |
+| **UPI Payment Notifications** | All group members notified on UPI payment â€” receiver gets âœ…, others get ðŸ’¸ |
+| **Transaction Edit Notifications** | All group members notified when any expense is edited (âœï¸) |
 | **Debt Simplification** | Dual algorithm: greedy netting + optimized exact-match pruning (auto-picks fewer transfers) |
 | **Per-Group Settlement Graphs** | Swipeable carousel with per-group settlement visualization, subtle animated money-flow routes, and a premium global pairwise overview |
 | **Analytics Dashboard** | API-backed monthly trends, category breakdown, budget vs actual comparison, and smart insights |
@@ -292,19 +344,19 @@ erDiagram
 ### AI & Smart Features
 | Feature | Description |
 |---|---|
-| **🤖 AI Chat Assistant** | Gemini-powered conversational assistant — ask about spending, debts, groups in natural language |
-| **🎙️ AI Voice Input** | Talk naturally to add expenses (e.g., "I paid 500 for pizza for Sneh and Ankit at Domino's"). Extracts amount, title, merchant, category, and assigns the correct payer/participants instantly. |
+| **ðŸ¤– AI Chat Assistant** | Gemini-powered conversational assistant â€” ask about spending, debts, groups in natural language |
+| **ðŸŽ™ï¸ AI Voice Input** | Talk naturally to add expenses (e.g., "I paid 500 for pizza for Sneh and Ankit at Domino's"). Extracts amount, title, merchant, category, and assigns the correct payer/participants instantly. |
 | **Receipt Scanner (OCR)** | Dual-mode scanner: **Basic** (Tesseract.js, on-device) and **Advanced** (OpenAI Vision API, cloud-based with itemized receipt parsing) |
 | **Advanced Receipt AI** | GPT-4o-mini Vision extracts merchant, date, individual items with quantities, taxes, subtotal, total, and auto-categorizes |
 | **Smart Receipt Split** | Interactive itemized splitting: scan a receipt, then drag/tap to assign items to specific members with auto-calculated taxes |
 | **Settlement Chat Messages** | Auto-post payment messages in group chat when settlements are completed, with green accent styling |
-| **Scan Mode Toggle** | Premium pill-style toggle (⚡ Basic / ✨ AI Scan) with mode description and dynamic privacy notes |
+| **Scan Mode Toggle** | Premium pill-style toggle (âš¡ Basic / âœ¨ AI Scan) with mode description and dynamic privacy notes |
 | **Live Camera Capture** | getUserMedia viewfinder with real-time scan guide overlay |
 | **Group Chat** | Real-time group messaging with sender avatars, date separators, payment reminders, and system messages |
-| **Chat Avatars** | Profile photos displayed for all messages — both own (right side) and others (left side) |
+| **Chat Avatars** | Profile photos displayed for all messages â€” both own (right side) and others (left side) |
 | **Clipboard Paste** | Auto-detect UPI transaction text from clipboard |
 | **Transaction Parser** | Regex engine parses UPI/bank SMS into structured data |
-| **Smart Notifications** | Real-time notification panel with type-based icons, unread badges, mark-all-read, 30s auto-polling — sender/recipient must share a group (anti-spam) |
+| **Smart Notifications** | Real-time notification panel with type-based icons, unread badges, mark-all-read, 30s auto-polling â€” sender/recipient must share a group (anti-spam) |
 | **Smart Insights** | AI-generated spending insights: overspend alerts, savings detection, trend change analysis |
 | **Global Search** | Search across transactions, groups, and members |
 | **Expense Drafts & Impact Preview** | New-expense form autosaves drafts locally, warns about likely duplicates, and previews who will owe or be owed more before submit |
@@ -345,13 +397,13 @@ erDiagram
 | **Soft Deletes** | All destructive operations (group delete, transaction delete, settlement cancel) use soft deletes with `deletedAt` guards on all queries including DELETE endpoints |
 | **Over-Settlement Guard** | Server-side pairwise debt calculation prevents settling more than what's owed; graceful degradation on calculation failure |
 | **Permission Model** | Delete group = owner only, remove member = owner/admin only, delete/edit transaction = payer or group owner only, view split details = any visible group member |
-| **Input Validation** | Zod schemas on all mutations including notification POST; custom splits validated (sum = total, user IDs ∈ group members); settlement recipient must be group member |
-| **Anti-Spam** | Notification POST requires sender & recipient share ≥1 group; duplicate settlement check covers pending/initiated/completed within 60s |
+| **Input Validation** | Zod schemas on all mutations including notification POST; custom splits validated (sum = total, user IDs âˆˆ group members); settlement recipient must be group member |
+| **Anti-Spam** | Notification POST requires sender & recipient share â‰¥1 group; duplicate settlement check covers pending/initiated/completed within 60s |
 | **Performance Indexes** | Composite DB indexes on `Settlement(tripId, status)` and `Notification(userId, read)` for optimized queries |
 
 ---
 
-## 🛠️ Tech Stack
+## ðŸ› ï¸ Tech Stack
 
 | Layer | Technology |
 |---|---|
@@ -374,73 +426,73 @@ erDiagram
 
 ---
 
-## 📁 Project Structure
+## ðŸ“ Project Structure
 
 ```
 src/
-├── app/
-│   ├── (app)/                    # Authenticated app shell
-│   │   ├── layout.tsx            # Sidebar, header, bottom nav, FAB, AI chat
-│   │   ├── dashboard/            # Home — stats, balance hero, quick actions
-│   │   ├── history/              # App-level Balance Journey entry and group chooser
-│   │   ├── groups/               # Group list & group detail (balances, members, activity, journey)
-│   │   ├── transactions/         # List/timeline view, new, scan, receipts
-│   │   ├── settlements/          # Settlement tracker with status management
-│   │   ├── analytics/            # Spending charts & breakdowns
-│   │   ├── settings/             # Profile, theme, account settings
-│   │   └── admin/health/         # System health dashboard
-│   ├── (auth)/                   # Login & register pages
-│   ├── api/                      # Next.js API route handlers
-│   │   ├── auth/                 # NextAuth endpoints
-│   │   ├── register/             # User registration
-│   │   ├── me/                   # Current user profile, avatar, and account export
-│   │   ├── groups/               # CRUD + join + balances + balance history
-│   │   ├── transactions/         # CRUD with split management
-│   │   ├── settlements/          # Create & list settlements
-│   │   ├── trips/                # Trip management
-│   │   ├── search/               # Global search across entities
-│   │   ├── notifications/        # GET (list + unread) / PATCH (mark read)
-│   │   ├── budgets/              # GET (by month) / POST (upsert per category)
-│   │   ├── analytics/            # Enhanced analytics with AI insights
-│   │   ├── ai/chat/              # Gemini-powered AI assistant
-│   │   ├── ai/parse-voice/       # Gemini-powered voice transaction parser
-│   │   ├── receipt-scan/         # OpenAI Vision receipt scanner
-│   │   └── admin/health/         # System diagnostics endpoint
-│   ├── invite/                   # Public invite accept page
-│   ├── join/                     # Group join flow
-│   └── page.tsx                  # Landing page
-├── components/
-│   ├── ui/                       # 27 reusable UI components (incl. EmptyState)
-│   ├── features/                 # 10 feature-specific components (incl. NotificationPanel, AIChatPanel)
-│   ├── charts/                   # Recharts-based spending charts
-│   └── providers/                # Theme & session providers
-├── hooks/                        # 6 custom React hooks
-├── lib/                          # 11 utility modules
-│   ├── auth.ts                   # NextAuth configuration
-│   ├── db.ts                     # Prisma client singleton
-│   ├── settlement.ts             # Dual settlement algorithm (greedy + optimized)
-│   ├── transactionParser.ts      # UPI/SMS regex parser
-│   ├── voiceParser.ts            # Local fallback parser for voice input
-│   ├── export.ts                 # CSV/JSON export + balance journey export
-│   ├── groupFinance.ts           # Shared balance and balance-history derivation engine
-│   ├── auditPayloads.ts          # Audit snapshot helpers for mutations
-│   ├── upi.ts                    # UPI deep-link generator
-│   ├── validators.ts             # Zod schemas
-│   ├── utils.ts                  # General utilities
-│   ├── featureFlags.ts           # Feature toggle system
-│   ├── apiResponse.ts            # Standardized API response helpers
-│   ├── rateLimit.ts              # Sliding-window rate limiter
-│   ├── recomputeBalances.ts      # Group balance recomputation
-│   ├── notifications.ts          # Notification creation helpers
-│   ├── auditLog.ts               # Audit log recording
-│   └── middleware.ts             # API rate limiting & logging
-└── prisma/
-    └── schema.prisma             # Database schema (13 models)
+â”œâ”€â”€ app/
+â”‚   â”œâ”€â”€ (app)/                    # Authenticated app shell
+â”‚   â”‚   â”œâ”€â”€ layout.tsx            # Sidebar, header, bottom nav, FAB, AI chat
+â”‚   â”‚   â”œâ”€â”€ dashboard/            # Home â€” stats, balance hero, quick actions
+â”‚   â”‚   â”œâ”€â”€ history/              # App-level Balance Journey entry and group chooser
+â”‚   â”‚   â”œâ”€â”€ groups/               # Group list & group detail (balances, members, activity, journey)
+â”‚   â”‚   â”œâ”€â”€ transactions/         # List/timeline view, new, scan, receipts
+â”‚   â”‚   â”œâ”€â”€ settlements/          # Settlement tracker with status management
+â”‚   â”‚   â”œâ”€â”€ analytics/            # Spending charts & breakdowns
+â”‚   â”‚   â”œâ”€â”€ settings/             # Profile, theme, account settings
+â”‚   â”‚   â””â”€â”€ admin/health/         # System health dashboard
+â”‚   â”œâ”€â”€ (auth)/                   # Login & register pages
+â”‚   â”œâ”€â”€ api/                      # Next.js API route handlers
+â”‚   â”‚   â”œâ”€â”€ auth/                 # NextAuth endpoints
+â”‚   â”‚   â”œâ”€â”€ register/             # User registration
+â”‚   â”‚   â”œâ”€â”€ me/                   # Current user profile, avatar, and account export
+â”‚   â”‚   â”œâ”€â”€ groups/               # CRUD + join + balances + balance history
+â”‚   â”‚   â”œâ”€â”€ transactions/         # CRUD with split management
+â”‚   â”‚   â”œâ”€â”€ settlements/          # Create & list settlements
+â”‚   â”‚   â”œâ”€â”€ trips/                # Trip management
+â”‚   â”‚   â”œâ”€â”€ search/               # Global search across entities
+â”‚   â”‚   â”œâ”€â”€ notifications/        # GET (list + unread) / PATCH (mark read)
+â”‚   â”‚   â”œâ”€â”€ budgets/              # GET (by month) / POST (upsert per category)
+â”‚   â”‚   â”œâ”€â”€ analytics/            # Enhanced analytics with AI insights
+â”‚   â”‚   â”œâ”€â”€ ai/chat/              # Gemini-powered AI assistant
+â”‚   â”‚   â”œâ”€â”€ ai/parse-voice/       # Gemini-powered voice transaction parser
+â”‚   â”‚   â”œâ”€â”€ receipt-scan/         # OpenAI Vision receipt scanner
+â”‚   â”‚   â””â”€â”€ admin/health/         # System diagnostics endpoint
+â”‚   â”œâ”€â”€ invite/                   # Public invite accept page
+â”‚   â”œâ”€â”€ join/                     # Group join flow
+â”‚   â””â”€â”€ page.tsx                  # Landing page
+â”œâ”€â”€ components/
+â”‚   â”œâ”€â”€ ui/                       # 27 reusable UI components (incl. EmptyState)
+â”‚   â”œâ”€â”€ features/                 # 10 feature-specific components (incl. NotificationPanel, AIChatPanel)
+â”‚   â”œâ”€â”€ charts/                   # Recharts-based spending charts
+â”‚   â””â”€â”€ providers/                # Theme & session providers
+â”œâ”€â”€ hooks/                        # 6 custom React hooks
+â”œâ”€â”€ lib/                          # 11 utility modules
+â”‚   â”œâ”€â”€ auth.ts                   # NextAuth configuration
+â”‚   â”œâ”€â”€ db.ts                     # Prisma client singleton
+â”‚   â”œâ”€â”€ settlement.ts             # Dual settlement algorithm (greedy + optimized)
+â”‚   â”œâ”€â”€ transactionParser.ts      # UPI/SMS regex parser
+â”‚   â”œâ”€â”€ voiceParser.ts            # Local fallback parser for voice input
+â”‚   â”œâ”€â”€ export.ts                 # CSV/JSON export + balance journey export
+â”‚   â”œâ”€â”€ groupFinance.ts           # Shared balance and balance-history derivation engine
+â”‚   â”œâ”€â”€ auditPayloads.ts          # Audit snapshot helpers for mutations
+â”‚   â”œâ”€â”€ upi.ts                    # UPI deep-link generator
+â”‚   â”œâ”€â”€ validators.ts             # Zod schemas
+â”‚   â”œâ”€â”€ utils.ts                  # General utilities
+â”‚   â”œâ”€â”€ featureFlags.ts           # Feature toggle system
+â”‚   â”œâ”€â”€ apiResponse.ts            # Standardized API response helpers
+â”‚   â”œâ”€â”€ rateLimit.ts              # Sliding-window rate limiter
+â”‚   â”œâ”€â”€ recomputeBalances.ts      # Group balance recomputation
+â”‚   â”œâ”€â”€ notifications.ts          # Notification creation helpers
+â”‚   â”œâ”€â”€ auditLog.ts               # Audit log recording
+â”‚   â””â”€â”€ middleware.ts             # API rate limiting & logging
+â””â”€â”€ prisma/
+    â””â”€â”€ schema.prisma             # Database schema (13 models)
 ```
 
 ---
 
-## 🚀 Getting Started
+## ðŸš€ Getting Started
 
 ### Prerequisites
 
@@ -474,10 +526,10 @@ GOOGLE_CLIENT_SECRET="your-google-client-secret"
 GITHUB_ID="your-github-id"
 GITHUB_SECRET="your-github-secret"
 
-# AI (optional — works with local fallback)
+# AI (optional â€” works with local fallback)
 GEMINI_API_KEY="your-gemini-api-key"
 
-# OpenAI Vision (optional — for advanced receipt scanning)
+# OpenAI Vision (optional â€” for advanced receipt scanning)
 OPENAI_API_KEY="your-openai-api-key"
 ```
 
@@ -505,7 +557,7 @@ npm start
 
 ---
 
-## 🔑 API Reference
+## ðŸ”‘ API Reference
 
 ### Core APIs
 | Method | Endpoint | Description |
@@ -517,20 +569,20 @@ npm start
 | `GET` | `/api/groups` | List user's groups (filters soft-deleted) |
 | `POST` | `/api/groups` | Create a new group |
 | `GET` | `/api/groups/:id` | Get group details with members & balances |
-| `DELETE` | `/api/groups/:id` | **Soft-delete group** (owner only) — cascades to transactions & settlements, notifies all members |
+| `DELETE` | `/api/groups/:id` | **Soft-delete group** (owner only) â€” cascades to transactions & settlements, notifies all members |
 | `DELETE` | `/api/groups/:id/members` | **Remove member** (owner/admin) - recalculates equal splits, cleans orphaned data |
 | `GET` | `/api/groups/:id/balances` | Compute balances & suggested settlements (group members only) |
 | `GET` | `/api/groups/:id/balance-history` | Derive the current user's balance timeline with explanations, deltas, and route summaries |
 | `POST` | `/api/groups/join` | Join a group via invite code |
-| `GET` | `/api/settlements/by-group` | **Batch endpoint** — all per-group settlements + global overview in one call |
+| `GET` | `/api/settlements/by-group` | **Batch endpoint** â€” all per-group settlements + global overview in one call |
 | `GET` | `/api/transactions` | List transactions (supports `?limit=`) |
 | `POST` | `/api/transactions` | Create transaction with splits |
-| `PUT` | `/api/transactions/:id` | Update transaction — notifies all group members |
-| `DELETE` | `/api/transactions/:id` | **Soft-delete** transaction — notifies all group members |
+| `PUT` | `/api/transactions/:id` | Update transaction â€” notifies all group members |
+| `DELETE` | `/api/transactions/:id` | **Soft-delete** transaction â€” notifies all group members |
 | `GET` | `/api/settlements` | List settlements |
 | `POST` | `/api/settlements` | Create or update settlement |
 | `POST` | `/api/settlements/:id/pay` | Generate UPI deep-link and mark as initiated |
-| `POST` | `/api/settlements/:id/confirm` | Confirm UPI payment — notifies **all** group members |
+| `POST` | `/api/settlements/:id/confirm` | Confirm UPI payment â€” notifies **all** group members |
 | `GET` | `/api/trips` | List trips |
 | `POST` | `/api/trips` | Create a trip |
 | `GET` | `/api/search?q=` | Global search |
@@ -544,19 +596,19 @@ npm start
 | `GET` | `/api/budgets?month=&year=` | List budgets for a month |
 | `POST` | `/api/budgets` | Create/update budget for a category |
 | `GET` | `/api/analytics` | Enhanced analytics (trends, categories, budget comparison, insights) |
-| `POST` | `/api/ai/chat` | AI assistant — send message, get contextual response |
+| `POST` | `/api/ai/chat` | AI assistant â€” send message, get contextual response |
 | `POST` | `/api/ai/parse-voice`| Parse natural language transcripts into structured transaction objects |
 | `POST` | `/api/receipt-scan` | Advanced receipt scan via OpenAI Vision (returns items, taxes, total) |
 | `GET` | `/api/admin/health` | System health diagnostics |
 
 ---
 
-## 🧮 Debt Simplification Algorithm
+## ðŸ§® Debt Simplification Algorithm
 
 SplitX uses a **dual-algorithm approach** to minimize settlement transfers:
 
 ### Algorithm 1: Greedy Netting
-1. Compute each member's **net balance** (total paid − total owed)
+1. Compute each member's **net balance** (total paid âˆ’ total owed)
 2. Separate into **debtors** (negative balance) and **creditors** (positive balance)
 3. Sort debtors by largest debt, creditors by largest credit
 4. Iteratively match the largest debtor with the largest creditor
@@ -564,14 +616,14 @@ SplitX uses a **dual-algorithm approach** to minimize settlement transfers:
 
 ### Algorithm 2: Optimized Exact-Match Pruning
 1. Compute net balances (same as above)
-2. **Phase 1 — Exact matches**: Find debtors and creditors with matching amounts and pair them directly (one transfer each)
-3. **Phase 2 — Sorted merge**: Pair remaining debtors/creditors by size
+2. **Phase 1 â€” Exact matches**: Find debtors and creditors with matching amounts and pair them directly (one transfer each)
+3. **Phase 2 â€” Sorted merge**: Pair remaining debtors/creditors by size
 
 The engine runs both algorithms and **automatically picks the one with fewer transfers**, reporting savings when applicable.
 
 ---
 
-## 🎨 Theming System
+## ðŸŽ¨ Theming System
 
 SplitX uses a **CSS custom properties** design system with HSL-based color tokens:
 
@@ -587,11 +639,11 @@ Theme preference is persisted in `localStorage` and applied via CSS class on `<h
 
 ---
 
-## 📱 PWA-Ready Features
+## ðŸ“± PWA-Ready Features
 
-- **Fluid responsive design** — `clamp(14px, 3.6vw, 16px)` base font scales across all phone sizes (6.5" to 7.0"+)
-- **viewport-fit: cover** — proper notch/safe-area handling on all devices
-- **Auto-generated service worker** — `@ducanh2912/next-pwa` with cache-busting (no stale assets)
+- **Fluid responsive design** â€” `clamp(14px, 3.6vw, 16px)` base font scales across all phone sizes (6.5" to 7.0"+)
+- **viewport-fit: cover** â€” proper notch/safe-area handling on all devices
+- **Auto-generated service worker** â€” `@ducanh2912/next-pwa` with cache-busting (no stale assets)
 - **Responsive layout** with mobile-first bottom navigation + FAB
 - **Pull-to-refresh** touch gesture on dashboard
 - **Haptic feedback** via Vibration API
@@ -610,6 +662,6 @@ Theme preference is persisted in `localStorage` and applied via CSS class on `<h
 
 ---
 
-## 📄 License
+## ðŸ“„ License
 
 This project is private and not open-source.

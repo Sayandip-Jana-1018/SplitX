@@ -1,0 +1,201 @@
+{
+  "__inputs": [],
+  "__requires": [
+    { "type": "grafana", "id": "grafana", "name": "Grafana", "version": "11.0.0" },
+    { "type": "datasource", "id": "loki", "name": "Loki", "version": "1.0.0" }
+  ],
+  "annotations": { "list": [] },
+  "description": "SplitX — Centralized Log Intelligence powered by Loki + Promtail",
+  "editable": true,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 20,
+      "title": "📊 Log Intelligence — Real-time Stats",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "loki", "uid": "P8E80F9AEF21F6940" },
+      "description": "Total log lines ingested in the last 15 minutes",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "fixedColor": "blue", "mode": "fixed" },
+          "mappings": [],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 500 }, { "color": "red", "value": 1000 }] },
+          "unit": "short"
+        }
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 1 },
+      "id": 5,
+      "options": { "colorMode": "background", "graphMode": "area", "justifyMode": "center", "orientation": "horizontal", "reduceOptions": { "calcs": ["sum"], "fields": "", "values": false }, "text": {}, "textMode": "auto" },
+      "targets": [{ "datasource": { "type": "loki", "uid": "P8E80F9AEF21F6940" }, "expr": "sum(count_over_time({job=\"docker\"} [15m]))", "legendFormat": "Total Logs", "refId": "A" }],
+      "title": "📝 Total Log Lines (15m)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "loki", "uid": "P8E80F9AEF21F6940" },
+      "description": "Error log lines in last 15 minutes",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "fixedColor": "red", "mode": "fixed" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 5 }, { "color": "red", "value": 20 }] },
+          "unit": "short"
+        }
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 1 },
+      "id": 6,
+      "options": { "colorMode": "background", "graphMode": "area", "justifyMode": "center", "orientation": "horizontal", "reduceOptions": { "calcs": ["sum"], "fields": "", "values": false }, "text": {}, "textMode": "auto" },
+      "targets": [{ "datasource": { "type": "loki", "uid": "P8E80F9AEF21F6940" }, "expr": "sum(count_over_time({job=\"docker\"} |~ \"(?i)(error|err|exception|fatal)\" [15m]))", "legendFormat": "Errors", "refId": "A" }],
+      "title": "🚨 Errors (15m)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "loki", "uid": "P8E80F9AEF21F6940" },
+      "description": "Stdout log lines",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "fixedColor": "green", "mode": "fixed" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] },
+          "unit": "short"
+        }
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 1 },
+      "id": 7,
+      "options": { "colorMode": "background", "graphMode": "area", "justifyMode": "center", "orientation": "horizontal", "reduceOptions": { "calcs": ["sum"], "fields": "", "values": false }, "text": {}, "textMode": "auto" },
+      "targets": [{ "datasource": { "type": "loki", "uid": "P8E80F9AEF21F6940" }, "expr": "sum(count_over_time({job=\"docker\", stream=\"stdout\"} [15m]))", "legendFormat": "Stdout", "refId": "A" }],
+      "title": "✅ Stdout Lines (15m)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "loki", "uid": "P8E80F9AEF21F6940" },
+      "description": "Stderr log lines — high values indicate errors",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "fixedColor": "orange", "mode": "fixed" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 10 }, { "color": "red", "value": 50 }] },
+          "unit": "short"
+        }
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 1 },
+      "id": 8,
+      "options": { "colorMode": "background", "graphMode": "area", "justifyMode": "center", "orientation": "horizontal", "reduceOptions": { "calcs": ["sum"], "fields": "", "values": false }, "text": {}, "textMode": "auto" },
+      "targets": [{ "datasource": { "type": "loki", "uid": "P8E80F9AEF21F6940" }, "expr": "sum(count_over_time({job=\"docker\", stream=\"stderr\"} [15m]))", "legendFormat": "Stderr", "refId": "A" }],
+      "title": "⚠️ Stderr Lines (15m)",
+      "type": "stat"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 },
+      "id": 21,
+      "title": "📈 Log Rate Trends — Area Charts",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "loki", "uid": "P8E80F9AEF21F6940" },
+      "description": "Log throughput over time — shows system activity peaks",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "Lines/min",
+            "axisPlacement": "auto",
+            "drawStyle": "line",
+            "fillOpacity": 30,
+            "gradientMode": "scheme",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 4,
+            "scaleDistribution": { "type": "linear" },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": { "group": "A", "mode": "none" },
+            "thresholdsStyle": { "mode": "off" }
+          },
+          "mappings": [],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 80 }] },
+          "unit": "short"
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
+      "id": 2,
+      "options": { "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [
+        { "datasource": { "type": "loki", "uid": "P8E80F9AEF21F6940" }, "expr": "sum(rate({job=\"docker\", stream=\"stdout\"} [1m])) * 60", "legendFormat": "stdout", "refId": "A" },
+        { "datasource": { "type": "loki", "uid": "P8E80F9AEF21F6940" }, "expr": "sum(rate({job=\"docker\", stream=\"stderr\"} [1m])) * 60", "legendFormat": "stderr", "refId": "B" }
+      ],
+      "title": "📡 Log Throughput — stdout vs stderr (Area)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "loki", "uid": "P8E80F9AEF21F6940" },
+      "description": "Error spikes visualized as area — immediate visual alarm",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "fixedColor": "dark-red", "mode": "fixed" },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisLabel": "Errors/min",
+            "drawStyle": "line",
+            "fillOpacity": 50,
+            "gradientMode": "opacity",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": { "group": "A", "mode": "none" },
+            "thresholdsStyle": { "mode": "area" }
+          },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 3 }, { "color": "red", "value": 10 }] },
+          "unit": "short"
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
+      "id": 3,
+      "options": { "legend": { "calcs": ["mean", "max", "sum"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "single", "sort": "none" } },
+      "targets": [{ "datasource": { "type": "loki", "uid": "P8E80F9AEF21F6940" }, "expr": "sum(rate({job=\"docker\"} |~ \"(?i)(error|err|exception|fatal)\" [1m])) * 60", "legendFormat": "Error Rate", "refId": "A" }],
+      "title": "🔥 Error Rate — Gradient Area Chart",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 14 },
+      "id": 22,
+      "title": "🔴 Live Log Stream — All SplitX Containers",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "loki", "uid": "P8E80F9AEF21F6940" },
+      "description": "Real-time logs from ALL splitx containers",
+      "gridPos": { "h": 14, "w": 24, "x": 0, "y": 15 },
+      "id": 4,
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": false
+      },
+      "targets": [{ "datasource": { "type": "loki", "uid": "P8E80F9AEF21F6940" }, "expr": "{job=\"docker\"}", "legendFormat": "", "queryType": "range", "refId": "A" }],
+      "title": "🌐 Live Log Stream — All Containers",
+      "type": "logs"
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 38,
+  "tags": ["splitx", "logs", "loki"],
+  "templating": { "list": [] },
+  "time": { "from": "now-15m", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "SplitX — Live Logs Dashboard",
+  "uid": "splitx-logs",
+  "version": 3
+}

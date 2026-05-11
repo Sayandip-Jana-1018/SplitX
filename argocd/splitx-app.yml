@@ -1,0 +1,52 @@
+# ═══════════════════════════════════════════════════════════════
+#   SplitX — ArgoCD Application Manifest
+#   Tells ArgoCD: "Watch this GitHub repo and keep Kubernetes
+#   in sync with whatever is in helm/splitx/"
+# ═══════════════════════════════════════════════════════════════
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: splitx
+  namespace: argocd
+  labels:
+    app: splitx
+    env: demo
+  # Auto-cleanup: when this manifest is deleted, ArgoCD will also
+  # delete all the Kubernetes resources it created
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  # ── Source: Your GitHub Repository ──
+  source:
+    repoURL: https://github.com/Sayandip-Jana-1018/SplitX.git
+    targetRevision: main
+    path: helm/splitx
+    helm:
+      # Use the local/demo values (no AWS ECR needed)
+      valueFiles:
+        - values-dev.yaml
+
+  # ── Destination: Local Kind Cluster ──
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: splitx
+
+  # ── Sync Policy: Fully Automated GitOps ──
+  syncPolicy:
+    automated:
+      # Automatically deploy when GitHub changes are detected
+      prune: true      # Delete resources removed from Git
+      selfHeal: true   # Re-apply if someone manually changes K8s
+    syncOptions:
+      - CreateNamespace=true   # Auto-create the "splitx" namespace
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 1m

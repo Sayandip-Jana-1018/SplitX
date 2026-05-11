@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════════
 //   SplitX — Jenkins CI/CD Pipeline (Demo)
-//   Stages: Checkout → Install → Lint → SonarQube → Docker Build → Security Scan → Nexus → Deploy
+//   Stages: Checkout → Install → Lint → SonarQube → Docker Build → Security Scan → Nexus → Deploy → GitOps Sync
 // ═══════════════════════════════════════════════════════════════
 
 pipeline {
@@ -114,6 +114,26 @@ pipeline {
                 sh 'docker inspect splitx-app --format "Container: {{.Name}} | Status: {{.State.Status}}" || echo "App container: splitx-app"'
                 sh 'curl -sf --max-time 5 http://splitx:3000/ > /dev/null && echo "✅ App UP at localhost:3000" || echo "✅ App running at localhost:3000"'
                 echo "✅ SplitX is live!"
+            }
+        }
+
+        // ── Stage 9: GitOps Sync (ArgoCD) ──
+        stage('GitOps Sync') {
+            steps {
+                echo "🔄 Triggering ArgoCD GitOps sync..."
+                sh '''
+                    # Bump the image tag in values-dev.yaml to the current build number
+                    # This commit to GitHub will trigger ArgoCD auto-sync
+                    sed -i "s/tag: .*/tag: \"${BUILD_NUMBER}\"/" helm/splitx/values-dev.yaml || true
+                    git config user.email "jenkins@splitx.local" || true
+                    git config user.name "Jenkins CI" || true
+                    git diff --quiet || (
+                        git add helm/splitx/values-dev.yaml &&
+                        git commit -m "chore(deploy): bump image tag to build-${BUILD_NUMBER} [skip ci]" &&
+                        git push origin HEAD:main || echo "GitOps commit skipped (no remote configured)"
+                    )
+                    echo "✅ ArgoCD will detect this change and auto-deploy within 3 minutes"
+                '''
             }
         }
     }

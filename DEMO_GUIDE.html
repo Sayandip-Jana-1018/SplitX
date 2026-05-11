@@ -96,8 +96,8 @@
   <h1>⚡ SplitX — DevOps Demo Guide</h1>
   <p>Complete presentation script with exact commands and expected outputs</p>
   <div class="meta-row">
-    <span class="meta-badge">17 Tools</span>
-    <span class="meta-badge">~35 Minutes</span>
+    <span class="meta-badge">19 Tools</span>
+    <span class="meta-badge">~40 Minutes</span>
     <span class="meta-badge">University Presentation</span>
     <span class="meta-badge">Ctrl+P → Save as PDF</span>
   </div>
@@ -116,10 +116,11 @@ docker compose --profile monitoring --profile ci up -d</pre>
     <tr><th>Tool</th><th>URL</th><th>Login</th></tr>
     <tr><td>SplitX App</td><td>http://localhost:3000</td><td>your account</td></tr>
     <tr><td>Prometheus</td><td>http://localhost:9090</td><td>—</td></tr>
-    <tr><td>Grafana</td><td>http://localhost:3001</td><td>admin / splitx_grafana</td></tr>
+    <tr><td>Grafana (Metrics + Logs)</td><td>http://localhost:3001</td><td>admin / splitx_grafana</td></tr>
     <tr><td>Jenkins</td><td>http://localhost:8080</td><td>admin / admin</td></tr>
     <tr><td>SonarQube</td><td>http://localhost:9000</td><td>admin / admin</td></tr>
     <tr><td>Nexus</td><td>http://localhost:8081</td><td>admin / adminsj2003</td></tr>
+    <tr><td style="color:#9f7aea">ArgoCD ⭐ NEW</td><td>https://localhost:8090</td><td>admin / naKYWtsJZxuFRBsc</td></tr>
     <tr><td>GitHub</td><td>https://github.com/Sayandip-Jana-1018/SplitX</td><td>—</td></tr>
     <tr><td>Vercel (Production)</td><td>https://splitsj.vercel.app</td><td>—</td></tr>
   </table>
@@ -127,8 +128,8 @@ docker compose --profile monitoring --profile ci up -d</pre>
 
 <div class="flow">
 Git → Husky → Commitlint → ESLint → GitHub Actions → Docker → Docker Compose
-→ Jenkins → SonarQube → Trivy → Nexus → Prometheus → Grafana
-→ Terraform → Ansible → Kubernetes → Helm
+→ Jenkins → SonarQube → Trivy → Nexus → Prometheus → Grafana → <span style="color:#9ae6b4">Loki</span>
+→ Terraform → Ansible → Kubernetes → Helm → <span style="color:#b794f4">ArgoCD</span>
 </div>
 
 <!-- TOOLS 1-9 -->
@@ -498,6 +499,64 @@ splitx  splitx     1         <span style="color:#68d391">deployed</span>  splitx
   <div class="say-box">"Helm is npm for Kubernetes. All K8s YAMLs are templated — one values.yaml controls everything. Deploy: helm install. Update image: helm upgrade --set image.tag=v2.0. Rollback: helm rollback splitx 1. Jenkins Stage 8 runs this automatically after every build."</div>
 </div>
 
+
+<!-- TOOL 18: LOKI -->
+<div class="tool-card" style="border-top:3px solid;border-image:linear-gradient(90deg,#f6ad55,#68d391) 1">
+  <div class="tool-header">
+    <span class="tool-num">18</span>
+    <span class="tool-name">Loki + Promtail</span>
+    <span class="tool-cat">Centralized Logging</span>
+  </div>
+  <div class="tags"><span class="tag browser">Grafana Dashboard ✅</span><span class="tag terminal">Docker ✅</span></div>
+  <p><strong style="color:#f7fafc">Open Grafana → Dashboards → "SplitX — Live Logs Dashboard"</strong></p>
+  <p style="margin-top:8px">The dashboard has 3 sections:</p>
+  <ul style="margin:8px 0 8px 20px;font-size:12px;color:#a0aec0;line-height:1.8">
+    <li><strong style="color:#63b3ed">Row 1:</strong> 4 stat cards — Total Logs, Errors, Stdout, Stderr (last 15 min)</li>
+    <li><strong style="color:#68d391">Row 2:</strong> Smooth area charts — Log Throughput + Error Rate gradient</li>
+    <li><strong style="color:#fc8181">Row 3:</strong> Live terminal-style log stream (all containers, auto-refresh 5s)</li>
+  </ul>
+  <pre># Verify Loki is receiving logs:
+docker exec splitx-prometheus wget -qO- http://splitx-loki:3100/loki/api/v1/labels
+# Expected: {"status":"success","data":["filename","job","service_name","stream"]}
+
+# Check Promtail is shipping logs:
+docker logs splitx-promtail --tail 5</pre>
+  <div class="expected"><div class="label">Expected Loki Labels</div>
+{"status":"success","data":["filename","job","service_name","stream"]}</div>
+  <div class="say-box">"Prometheus watches numbers — CPU, memory, request counts. Loki watches text — what the application is actually saying. Together they give full-stack observability. When an error spike appears in Prometheus, I switch to the Loki dashboard and immediately see the error messages that caused it."</div>
+</div>
+
+<!-- TOOL 19: ARGOCD -->
+<div class="tool-card" style="border-top:3px solid;border-image:linear-gradient(90deg,#b794f4,#9f7aea) 1">
+  <div class="tool-header">
+    <span class="tool-num">19</span>
+    <span class="tool-name">ArgoCD</span>
+    <span class="tool-cat">GitOps / Continuous Delivery</span>
+  </div>
+  <div class="tags"><span class="tag browser">localhost:8090 ✅</span><span class="tag terminal">kubectl ✅</span></div>
+  <p><strong style="color:#f7fafc">Pre-req:</strong> Run in a dedicated terminal (keep open):</p>
+  <pre>kubectl config use-context kind-splitx-demo
+kubectl port-forward svc/argocd-server -n argocd 8090:443</pre>
+  <p style="margin-top:8px"><strong style="color:#f7fafc">Open:</strong> <code>https://localhost:8090</code> → click Advanced → Proceed</p>
+  <p style="margin-top:4px"><strong>Login:</strong> admin / naKYWtsJZxuFRBsc</p>
+  <p style="margin-top:12px"><strong style="color:#9ae6b4">What to show:</strong></p>
+  <ul style="margin:8px 0 8px 20px;font-size:12px;color:#a0aec0;line-height:1.8">
+    <li>Click the <strong>splitx</strong> application card → see the full Kubernetes deployment tree</li>
+    <li>The tree shows: App → Service → Deployment → ReplicaSet → Pod</li>
+    <li>"Synced to main (31bdcd4)" — your exact latest GitHub commit</li>
+    <li>Author and commit message are visible directly in ArgoCD</li>
+  </ul>
+  <pre># Verify ArgoCD from terminal:
+kubectl get pods -n argocd
+kubectl get application splitx -n argocd</pre>
+  <div class="expected"><div class="label">Expected</div>
+NAME                                STATUS  HEALTH
+argocd-server-xxx                   Running
+splitx    Synced    Degraded (expected without ECR image)</div>
+  <div class="tip">"Degraded + Synced" is the correct state for a local Kind demo. In production on EKS with ECR, the pod would be Healthy. The sync mechanism is identical.</div>
+  <div class="say-box">"This is GitOps — the deployment state is stored in Git, not in someone's head. When Jenkins pushes a new image tag to GitHub, ArgoCD detects that commit within 3 minutes and automatically re-deploys. No human touches kubectl in production. This eliminates configuration drift and makes rollbacks as simple as a git revert."</div>
+</div>
+
 </div><!-- end tools-grid part 2 -->
 <!-- QUICK REFERENCE -->
 <div class="section-title page-break">📋 Quick Reference Card</div>
@@ -511,6 +570,8 @@ splitx  splitx     1         <span style="color:#68d391">deployed</span>  splitx
     <tr><td class="highlight">SonarQube</td><td>:9000</td><td>admin</td><td>admin</td></tr>
     <tr><td class="highlight">Nexus</td><td>:8081</td><td>admin</td><td>adminsj2003</td></tr>
     <tr><td class="highlight">Prometheus</td><td>:9090</td><td>—</td><td>—</td></tr>
+    <tr><td style="color:#9f7aea">ArgoCD</td><td>:8090</td><td>admin</td><td>naKYWtsJZxuFRBsc</td></tr>
+    <tr><td style="color:#68d391">Loki</td><td>:3100 (internal)</td><td>—</td><td>—</td></tr>
   </table>
 </div>
 <div class="startup-box">
@@ -547,6 +608,8 @@ splitx_receipt_scans_total</pre>
   <tr><td class="highlight">Ansible</td><td>Terminal</td><td>Playbook + syntax-check</td></tr>
   <tr><td class="highlight">Kubernetes</td><td>Terminal (YAML) / <span class="highlight">Live on AWS</span></td><td>kubectl get pods/hpa</td></tr>
   <tr><td class="highlight">Helm</td><td>Terminal (files) / <span class="highlight">Live on AWS</span></td><td>helm list, helm history</td></tr>
+  <tr><td style="color:#68d391">Loki</td><td><span class="highlight">✅ Grafana :3001</span></td><td>SplitX — Live Logs Dashboard</td></tr>
+  <tr><td style="color:#9f7aea">ArgoCD</td><td><span class="highlight">✅ https://localhost:8090</span></td><td>Spiderweb deployment tree</td></tr>
 </table>
 
 <!-- AWS COST -->
@@ -639,7 +702,7 @@ docker exec splitx-jenkins cat /var/jenkins_home/secrets/initialAdminPassword</p
 </div>
 
 <div style="text-align:center;padding:24px;color:#4a5568;font-size:11px;border-top:1px solid #2d3748;margin-top:32px">
-  SplitX DevOps Demo Guide — 17 Tools — University Presentation<br>
+  SplitX DevOps Demo Guide — 19 Tools — University Presentation<br>
   Generated for Sayandip Jana | Ctrl+P → Save as PDF for best results
 </div>
 

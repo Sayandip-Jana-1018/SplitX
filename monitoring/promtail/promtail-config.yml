@@ -1,0 +1,44 @@
+# ═══════════════════════════════════════════════════════════════
+#   SplitX — Promtail Configuration (Minimal Working Config)
+#   Reads Docker JSON log files via filesystem glob
+#   Simple pipeline — no drop stages that could lose logs
+# ═══════════════════════════════════════════════════════════════
+
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+  log_level: info
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+    batchwait: 1s
+    batchsize: 102400
+
+scrape_configs:
+  # ── Read ALL Docker container JSON log files via glob ──
+  - job_name: docker-containers
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: docker
+          __path__: /var/lib/docker/containers/*/*-json.log
+
+    pipeline_stages:
+      # Docker log format: {"log":"message\n","stream":"stdout","time":"..."}
+      # Step 1: Extract fields from Docker JSON wrapper
+      - json:
+          expressions:
+            output: log
+            stream: stream
+
+      # Step 2: Replace raw line with actual log message
+      - output:
+          source: output
+
+      # Step 3: Label by stream (stdout/stderr)
+      - labels:
+          stream:

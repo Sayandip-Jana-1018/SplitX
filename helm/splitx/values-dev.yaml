@@ -1,13 +1,42 @@
-# Dev environment overrides — lower resources for local minikube
+# ═══════════════════════════════════════════════════════════════
+#   SplitX Helm — Dev/Kind Overrides
+#   Used by ArgoCD when deploying to local Kind cluster
+#   Image is pre-loaded into Kind — no ECR needed
+# ═══════════════════════════════════════════════════════════════
+
 replicaCount: 1
+
+image:
+  repository: splitx
+  tag: "local"
+  # CRITICAL: Never = use image pre-loaded into Kind, don't try to pull
+  pullPolicy: Never
+
+service:
+  type: NodePort
+  port: 80
+  targetPort: 3000
+  nodePort: 30000
 
 resources:
   requests:
-    memory: "64Mi"
-    cpu: "50m"
+    memory: "128Mi"
+    cpu: "100m"
   limits:
-    memory: "256Mi"
-    cpu: "250m"
+    memory: "384Mi"
+    cpu: "300m"
 
 autoscaling:
   enabled: false
+
+# Disable ingress for Kind — using NodePort instead
+ingress:
+  enabled: false
+
+env:
+  NODE_ENV: "production"
+  NEXT_TELEMETRY_DISABLED: "1"
+  PORT: "3000"
+  METRICS_TOKEN: "splitx-metrics-secret"
+  # Minimal DB for Kind demo — uses in-memory SQLite-style fallback
+  DATABASE_URL: "postgresql://splitx:splitx_dev_password@host.docker.internal:5432/splitx"

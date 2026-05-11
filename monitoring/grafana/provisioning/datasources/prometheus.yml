@@ -1,7 +1,12 @@
-# Auto-provision Prometheus as a Grafana datasource
+# ═══════════════════════════════════════════════════════════════
+#   SplitX — Grafana Datasources
+#   Auto-provisions both Prometheus (metrics) and Loki (logs)
+# ═══════════════════════════════════════════════════════════════
+
 apiVersion: 1
 
 datasources:
+  # ── Prometheus: Metrics ──
   - name: Prometheus
     type: prometheus
     access: proxy
@@ -10,3 +15,14 @@ datasources:
     editable: false
     jsonData:
       timeInterval: "15s"
+
+  # ── Loki: Logs ──
+  - name: Loki
+    type: loki
+    uid: P8E80F9AEF21F6940
+    access: proxy
+    url: http://loki:3100
+    isDefault: false
+    editable: false
+    jsonData:
+      maxLines: 1000
