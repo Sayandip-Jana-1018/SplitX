@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SplitX — DevOps Demo Guide</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Inter',sans-serif;background:#0f1117;color:#e2e8f0;font-size:13px;line-height:1.6}
+  @media print{
+    body{background:#fff;color:#1a202c;font-size:11px}
+    .page-break{page-break-before:always}
+    .no-print{display:none}
+    pre,code{background:#f7fafc!important;color:#1a202c!important;border:1px solid #e2e8f0!important}
+    .tool-card{break-inside:avoid;border:1px solid #e2e8f0!important;background:#fff!important}
+    h1,h2,h3{color:#1a202c!important}
+    .badge{border:1px solid #ccc!important}
+    .header{background:linear-gradient(135deg,#1a365d,#2b6cb0)!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .section-title{background:#2b6cb0!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .tag{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  }
+  .header{background:linear-gradient(135deg,#667eea,#764ba2);padding:36px 48px;color:#fff}
+  .header h1{font-size:28px;font-weight:800;letter-spacing:-0.5px}
+  .header p{opacity:0.85;margin-top:6px;font-size:14px}
+  .meta-row{display:flex;gap:20px;margin-top:16px;flex-wrap:wrap}
+  .meta-badge{background:rgba(255,255,255,0.2);padding:4px 14px;border-radius:20px;font-size:12px;font-weight:500}
+  .container{max-width:960px;margin:0 auto;padding:24px 32px}
+  .section-title{background:linear-gradient(90deg,#2d3748,#4a5568);color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin:28px 0 16px}
+  .startup-box{background:#1a202c;border:1px solid #2d3748;border-radius:10px;padding:20px 24px;margin-bottom:20px}
+  .startup-box h3{color:#68d391;font-size:14px;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+  pre{background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:14px 18px;font-family:'JetBrains Mono',monospace;font-size:11.5px;overflow-x:auto;margin:10px 0;color:#e6edf3}
+  code{font-family:'JetBrains Mono',monospace;background:#1e2433;padding:2px 7px;border-radius:4px;font-size:11px;color:#79c0ff}
+  .url-table{width:100%;border-collapse:collapse;margin:12px 0}
+  .url-table th{background:#2d3748;color:#a0aec0;text-transform:uppercase;font-size:10px;letter-spacing:0.5px;padding:8px 12px;text-align:left}
+  .url-table td{padding:8px 12px;border-bottom:1px solid #2d3748;font-size:12px}
+  .url-table tr:hover td{background:#1e2433}
+  .url-table td:first-child{font-weight:600;color:#63b3ed}
+  .url-table td:nth-child(2){font-family:'JetBrains Mono',monospace;color:#68d391;font-size:11px}
+  .url-table td:nth-child(3){color:#fbd38d;font-size:11px}
+  .tools-grid{display:grid;gap:16px}
+  .tool-card{background:#1a202c;border:1px solid #2d3748;border-radius:12px;padding:20px 24px;position:relative;overflow:hidden}
+  .tool-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
+  .tool-card.git::before{background:linear-gradient(90deg,#f6ad55,#ed8936)}
+  .tool-card.husky::before{background:linear-gradient(90deg,#68d391,#38a169)}
+  .tool-card.commitlint::before{background:linear-gradient(90deg,#76e4f7,#0bc5ea)}
+  .tool-card.eslint::before{background:linear-gradient(90deg,#9f7aea,#805ad5)}
+  .tool-card.ghactions::before{background:linear-gradient(90deg,#63b3ed,#3182ce)}
+  .tool-card.docker::before{background:linear-gradient(90deg,#76e4f7,#0987a0)}
+  .tool-card.compose::before{background:linear-gradient(90deg,#4299e1,#2b6cb0)}
+  .tool-card.jenkins::before{background:linear-gradient(90deg,#f6e05e,#d69e2e)}
+  .tool-card.sonar::before{background:linear-gradient(90deg,#fc8181,#e53e3e)}
+  .tool-card.trivy::before{background:linear-gradient(90deg,#f6ad55,#c05621)}
+  .tool-card.nexus::before{background:linear-gradient(90deg,#b794f4,#6b46c1)}
+  .tool-card.prometheus::before{background:linear-gradient(90deg,#fc8181,#c53030)}
+  .tool-card.grafana::before{background:linear-gradient(90deg,#f6ad55,#ed8936)}
+  .tool-card.terraform::before{background:linear-gradient(90deg,#9f7aea,#553c9a)}
+  .tool-card.ansible::before{background:linear-gradient(90deg,#fc8181,#9b2335)}
+  .tool-card.k8s::before{background:linear-gradient(90deg,#63b3ed,#2c5282)}
+  .tool-card.helm::before{background:linear-gradient(90deg,#76e4f7,#086f83)}
+  .tool-header{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+  .tool-num{background:#2d3748;color:#a0aec0;font-size:10px;font-weight:700;padding:3px 8px;border-radius:4px;font-family:'JetBrains Mono',monospace}
+  .tool-name{font-size:16px;font-weight:700;color:#f7fafc}
+  .tool-cat{font-size:11px;color:#718096;margin-left:auto}
+  .tags{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+  .tag{padding:3px 10px;border-radius:12px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.3px}
+  .tag.gui{background:#1c4532;color:#68d391;border:1px solid #276749}
+  .tag.terminal{background:#1a202c;color:#a0aec0;border:1px solid #4a5568}
+  .tag.browser{background:#1a365d;color:#90cdf4;border:1px solid #2c5282}
+  .step{display:flex;gap:10px;margin-bottom:8px;align-items:flex-start}
+  .step-num{background:#2b6cb0;color:#fff;font-size:10px;font-weight:700;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px}
+  .say-box{background:#1c4532;border-left:3px solid #38a169;border-radius:0 8px 8px 0;padding:10px 14px;margin-top:12px;font-size:12px;color:#9ae6b4;font-style:italic}
+  .expected{background:#0d1117;border:1px solid #30363d;border-left:3px solid #2b6cb0;border-radius:0 8px 8px 0;padding:10px 14px;margin:6px 0;font-family:'JetBrains Mono',monospace;font-size:11px;color:#e6edf3}
+  .expected .label{color:#4a5568;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px}
+  .warn{background:#2d1f00;border:1px solid #744210;border-radius:8px;padding:10px 14px;font-size:12px;color:#fbd38d;margin:10px 0}
+  .warn::before{content:'⚠️  '}
+  .tip{background:#1a365d;border:1px solid #2c5282;border-radius:8px;padding:10px 14px;font-size:12px;color:#90cdf4;margin:10px 0}
+  .tip::before{content:'💡  '}
+  .flow{background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:14px 18px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#e6edf3;margin:10px 0;text-align:center;letter-spacing:0.5px}
+  .two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:12px}
+  th{background:#2d3748;color:#a0aec0;padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:0.5px}
+  td{padding:8px 12px;border-bottom:1px solid #2d3748}
+  .highlight{color:#68d391;font-weight:600}
+  .red{color:#fc8181}
+  .blue{color:#63b3ed}
+  .yellow{color:#fbd38d}
+  h2{font-size:20px;color:#f7fafc;margin:24px 0 12px;font-weight:700}
+  h3{font-size:14px;color:#a0aec0;margin:12px 0 8px;font-weight:600}
+  p{margin:6px 0;font-size:12px;color:#a0aec0}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>⚡ SplitX — DevOps Demo Guide</h1>
+  <p>Complete presentation script with exact commands and expected outputs</p>
+  <div class="meta-row">
+    <span class="meta-badge">17 Tools</span>
+    <span class="meta-badge">~35 Minutes</span>
+    <span class="meta-badge">University Presentation</span>
+    <span class="meta-badge">Ctrl+P → Save as PDF</span>
+  </div>
+</div>
+
+<div class="container">
+
+<!-- STARTUP -->
+<div class="section-title">⚡ Pre-Demo Startup</div>
+<div class="startup-box">
+  <h3>▶ Step 1 — Start All Docker Services (10 min before)</h3>
+  <pre>cd C:\Users\Sayan\Desktop\Projects\SplitX
+docker compose --profile monitoring --profile ci up -d</pre>
+  <h3 style="margin-top:16px;color:#63b3ed">▶ Step 2 — Open These Browser Tabs</h3>
+  <table class="url-table">
+    <tr><th>Tool</th><th>URL</th><th>Login</th></tr>
+    <tr><td>SplitX App</td><td>http://localhost:3000</td><td>your account</td></tr>
+    <tr><td>Prometheus</td><td>http://localhost:9090</td><td>—</td></tr>
+    <tr><td>Grafana</td><td>http://localhost:3001</td><td>admin / splitx_grafana</td></tr>
+    <tr><td>Jenkins</td><td>http://localhost:8080</td><td>admin / admin</td></tr>
+    <tr><td>SonarQube</td><td>http://localhost:9000</td><td>admin / admin</td></tr>
+    <tr><td>Nexus</td><td>http://localhost:8081</td><td>admin / adminsj2003</td></tr>
+    <tr><td>GitHub</td><td>https://github.com/Sayandip-Jana-1018/SplitX</td><td>—</td></tr>
+    <tr><td>Vercel (Production)</td><td>https://splitsj.vercel.app</td><td>—</td></tr>
+  </table>
+</div>
+
+<div class="flow">
+Git → Husky → Commitlint → ESLint → GitHub Actions → Docker → Docker Compose
+→ Jenkins → SonarQube → Trivy → Nexus → Prometheus → Grafana
+→ Terraform → Ansible → Kubernetes → Helm
+</div>
+
+<!-- TOOLS 1-9 -->
+<div class="section-title">🛠 Tool-by-Tool Demo</div>
+<div class="tools-grid">
+
+<!-- TOOL 1 -->
+<div class="tool-card git">
+  <div class="tool-header">
+    <span class="tool-num">01</span>
+    <span class="tool-name">Git + GitHub</span>
+    <span class="tool-cat">Source Control</span>
+  </div>
+  <div class="tags"><span class="tag browser">Browser ✅</span><span class="tag terminal">Terminal ✅</span></div>
+  <p><strong style="color:#f7fafc">Show in browser:</strong> <code>https://github.com/Sayandip-Jana-1018/SplitX</code> → Commits tab</p>
+  <pre>git log --oneline -10
+git branch -a</pre>
+  <div class="expected"><div class="label">Expected Output</div>
+96c624c fix: two-ref graph centering
+38e1cba feat: push Docker image to Nexus
+22765bb fix: demo conventional commits
+...
+* main
+  remotes/origin/main</div>
+  <div class="say-box">"Git tracks every code change. All commits follow the Conventional Commits standard — feat:, fix:, chore:. This format is enforced automatically by Husky."</div>
+</div>
+
+<!-- TOOL 2 -->
+<div class="tool-card husky">
+  <div class="tool-header">
+    <span class="tool-num">02</span>
+    <span class="tool-name">Husky</span>
+    <span class="tool-cat">Git Hooks</span>
+  </div>
+  <div class="tags"><span class="tag terminal">Terminal — Live Demo ✅</span></div>
+  <pre>type .husky\pre-commit
+type .husky\commit-msg
+
+# BAD commit — will be REJECTED:
+git commit --allow-empty -m "updated stuff"</pre>
+  <div class="expected"><div class="label">Expected — Rejection</div>
+✖   subject may not be empty [subject-empty]
+✖   type may not be empty [type-empty]
+✖   found 2 problems, 0 warnings
+<span style="color:#fc8181">husky - commit-msg script failed (code 1)</span></div>
+  <pre># GOOD commit — passes:
+git commit --allow-empty -m "chore: demo conventional commits"
+git reset HEAD~1   # cleanup</pre>
+  <div class="say-box">"Husky is the first quality gate — on the developer's own machine. No bad code or bad messages can be committed."</div>
+</div>
+
+<!-- TOOL 3 -->
+<div class="tool-card commitlint">
+  <div class="tool-header">
+    <span class="tool-num">03</span>
+    <span class="tool-name">Commitlint</span>
+    <span class="tool-cat">Commit Standards</span>
+  </div>
+  <div class="tags"><span class="tag terminal">Terminal ✅</span></div>
+  <pre>type commitlint.config.js</pre>
+  <div class="expected"><div class="label">Expected Output</div>
+module.exports = {
+  extends: ['@commitlint/config-conventional'],
+  rules: {
+    'type-enum': [2, 'always', ['feat','fix','chore','docs','refactor','test','perf']],
+    'header-max-length': [2, 'always', 100]
+  }
+}</div>
+  <div class="say-box">"Commitlint enforces the format type(scope): message. Enables automatic changelog generation and semantic versioning."</div>
+</div>
+
+<!-- TOOL 4 -->
+<div class="tool-card eslint">
+  <div class="tool-header">
+    <span class="tool-num">04</span>
+    <span class="tool-name">ESLint</span>
+    <span class="tool-cat">Static Linting</span>
+  </div>
+  <div class="tags"><span class="tag terminal">Terminal ✅</span></div>
+  <pre>npm run lint</pre>
+  <div class="expected"><div class="label">Expected Output</div>
+<span style="color:#68d391">✔ No ESLint warnings or errors</span></div>
+  <div class="say-box">"ESLint enforces TypeScript code quality. Zero warnings allowed — if any rule fires, the pre-commit hook blocks the commit. Also runs in Jenkins Stage 3."</div>
+</div>
+
+<!-- TOOL 5 -->
+<div class="tool-card ghactions">
+  <div class="tool-header">
+    <span class="tool-num">05</span>
+    <span class="tool-name">GitHub Actions</span>
+    <span class="tool-cat">Cloud CI</span>
+  </div>
+  <div class="tags"><span class="tag browser">Browser ✅</span><span class="tag gui">GUI ✅</span></div>
+  <p><strong style="color:#f7fafc">Show in browser:</strong> <code>github.com/Sayandip-Jana-1018/SplitX/actions</code></p>
+  <p>→ Show all green ✅ workflow runs → Click any run → Show 4 steps with ticks</p>
+  <pre>type .github\workflows\ci.yml</pre>
+  <div class="say-box">"GitHub Actions is our cloud CI pipeline. Every push triggers 4 automated steps — checkout, test, lint, production build. All runs are green — zero failures."</div>
+</div>
+
+<!-- TOOL 6 -->
+<div class="tool-card docker">
+  <div class="tool-header">
+    <span class="tool-num">06</span>
+    <span class="tool-name">Docker</span>
+    <span class="tool-cat">Containerization</span>
+  </div>
+  <div class="tags"><span class="tag terminal">Terminal ✅</span></div>
+  <pre>type Dockerfile
+docker images splitx
+docker inspect splitx-app --format "Status: {{.State.Status}}"</pre>
+  <div class="expected"><div class="label">Expected — docker images</div>
+REPOSITORY   TAG     IMAGE ID       SIZE
+splitx       local   abc123def456   ~250MB</div>
+  <p style="margin-top:10px">Point at the 3 stages in Dockerfile: <code>AS deps</code> → <code>AS builder</code> → <code>AS runner</code></p>
+  <div class="say-box">"3-stage multi-stage build reduces image from 1.5GB to 250MB. Stage 3 runs as non-root user (UID 1001) for security. Includes HEALTHCHECK for Kubernetes probes."</div>
+</div>
+
+<!-- TOOL 7 -->
+<div class="tool-card compose">
+  <div class="tool-header">
+    <span class="tool-num">07</span>
+    <span class="tool-name">Docker Compose</span>
+    <span class="tool-cat">Multi-Container Orchestration</span>
+  </div>
+  <div class="tags"><span class="tag terminal">Terminal ✅</span></div>
+  <pre>docker compose --profile monitoring --profile ci ps
+docker network ls | findstr splitx</pre>
+  <div class="expected"><div class="label">Expected Output</div>
+NAME                STATUS     PORTS
+splitx-app          running    0.0.0.0:3000->3000/tcp
+splitx-postgres     running    0.0.0.0:5432->5432/tcp
+splitx-redis        running    0.0.0.0:6379->6379/tcp
+splitx-prometheus   running    0.0.0.0:9090->9090/tcp
+splitx-grafana      running    0.0.0.0:3001->3000/tcp
+splitx-jenkins      running    0.0.0.0:8080->8080/tcp
+splitx-sonarqube    running    0.0.0.0:9000->9000/tcp
+splitx-nexus        running    0.0.0.0:8081->8081/tcp</div>
+  <div class="say-box">"One command starts all 8 services. Health checks ensure correct startup order. Profiles let us run just the app, or add monitoring/CI tools as needed."</div>
+</div>
+
+<!-- TOOL 8 -->
+<div class="tool-card jenkins">
+  <div class="tool-header">
+    <span class="tool-num">08</span>
+    <span class="tool-name">Jenkins</span>
+    <span class="tool-cat">Self-Hosted CI/CD</span>
+  </div>
+  <div class="tags"><span class="tag browser">Browser ✅</span><span class="tag gui">GUI ✅</span></div>
+  <p><strong style="color:#f7fafc">Show in browser:</strong> <code>http://localhost:8080/job/SplitX-Pipeline/</code></p>
+  <div class="step"><span class="step-num">1</span><span>Click <strong>SplitX-Pipeline</strong> → Show Stage View (all 8 stages green)</span></div>
+  <div class="step"><span class="step-num">2</span><span>Click last build → click any stage → show console logs</span></div>
+  <div class="step"><span class="step-num">3</span><span>Click <strong>Build Now</strong> → watch pipeline animate live ✅</span></div>
+  <pre>type jenkins\Jenkinsfile</pre>
+  <table>
+    <tr><th>#</th><th>Stage</th><th>What It Does</th></tr>
+    <tr><td>1</td><td>Checkout</td><td>Clones repo from GitHub</td></tr>
+    <tr><td>2</td><td>Install</td><td>npm ci — installs dependencies</td></tr>
+    <tr><td>3</td><td>Lint &amp; Type Check</td><td>ESLint + TypeScript (parallel)</td></tr>
+    <tr><td>4</td><td>SonarQube Analysis</td><td>Static code quality scan</td></tr>
+    <tr><td>5</td><td>Docker Build</td><td>Builds production container</td></tr>
+    <tr><td>6</td><td>Security Scan</td><td>Trivy CVE scan</td></tr>
+    <tr><td>7</td><td>Artifact Registry</td><td>Pushes image to Nexus</td></tr>
+    <tr><td>8</td><td>Deploy</td><td>Helm deploy to Kubernetes</td></tr>
+  </table>
+  <div class="say-box">"Jenkins is our self-hosted CI/CD. Unlike GitHub Actions in the cloud, Jenkins runs on our own infrastructure — full control. One push triggers all 8 stages automatically."</div>
+</div>
+
+<!-- TOOL 9 -->
+<div class="tool-card sonar">
+  <div class="tool-header">
+    <span class="tool-num">09</span>
+    <span class="tool-name">SonarQube</span>
+    <span class="tool-cat">Code Quality</span>
+  </div>
+  <div class="tags"><span class="tag browser">Browser ✅</span><span class="tag gui">GUI ✅</span></div>
+  <p><strong style="color:#f7fafc">Show in browser:</strong> <code>http://localhost:9000</code> → Login: admin / admin</p>
+  <div class="step"><span class="step-num">1</span><span>Dashboard → Project: splitx</span></div>
+  <div class="step"><span class="step-num">2</span><span>Show: <span class="highlight">Quality Gate: PASSED ✅</span></span></div>
+  <div class="step"><span class="step-num">3</span><span>Show: Security Rating: <span class="highlight">A ✅</span></span></div>
+  <div class="step"><span class="step-num">4</span><span>Show: 36,000+ lines analyzed</span></div>
+  <div class="say-box">"SonarQube does deep static analysis on every Jenkins build. Security rating A. Quality Gate passed — pipeline was allowed to continue. If a critical bug was introduced, the gate fails and deployment is blocked."</div>
+</div>
+
+</div><!-- end tools-grid part 1 -->
+<div class="tools-grid" style="margin-top:16px">
+
+<!-- TOOL 10 -->
+<div class="tool-card trivy">
+  <div class="tool-header">
+    <span class="tool-num">10</span>
+    <span class="tool-name">Trivy</span>
+    <span class="tool-cat">DevSecOps — Security Scanning</span>
+  </div>
+  <div class="tags"><span class="tag terminal">Terminal — Live Scan ✅</span></div>
+  <pre>docker run --rm -v /var/run/docker.sock:/var/run/docker.sock `
+  aquasec/trivy:latest image --no-progress --severity HIGH,CRITICAL splitx:local</pre>
+  <div class="expected"><div class="label">Expected Output (what you got)</div>
+splitx:local (alpine 3.19.4)
+Total: 4 (HIGH: 4, <span style="color:#68d391">CRITICAL: 0</span>)
+
+Library     Vulnerability    Severity  Status
+musl        CVE-2025-26519   HIGH      fixed
+musl-utils  CVE-2025-26519   HIGH      fixed
+
+Node.js packages: 12 HIGH, <span style="color:#68d391">0 CRITICAL</span>
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+<span style="color:#68d391">TOTAL: 16 HIGH, 0 CRITICAL → Pipeline CONTINUES ✅</span></div>
+  <div class="say-box">"Trivy scanned our image — 16 HIGH vulnerabilities, ZERO CRITICAL. Our pipeline: HIGH = log and continue, CRITICAL = block deployment. Zero critical means the image is cleared for deployment. Security is automated into every build — this is DevSecOps."</div>
+</div>
+
+<!-- TOOL 11 -->
+<div class="tool-card nexus">
+  <div class="tool-header">
+    <span class="tool-num">11</span>
+    <span class="tool-name">Nexus</span>
+    <span class="tool-cat">Private Artifact Registry</span>
+  </div>
+  <div class="tags"><span class="tag browser">Browser ✅</span><span class="tag gui">GUI ✅</span></div>
+  <p><strong style="color:#f7fafc">Show in browser:</strong> <code>http://localhost:8081</code> → Login: admin / adminsj2003</p>
+  <div class="step"><span class="step-num">1</span><span>Left sidebar → Browse → <code>splitx-docker</code></span></div>
+  <div class="step"><span class="step-num">2</span><span>Show: <code>v2/splitx/tags/latest</code> ✅ and <code>v2/splitx/tags/1.0.0</code> ✅</span></div>
+  <div class="say-box">"Nexus is our private Docker registry — instead of public Docker Hub, Jenkins pushes every built image here. We have latest + build number tags. Full version history, instant rollback to any previous build."</div>
+</div>
+
+<!-- TOOL 12 -->
+<div class="tool-card prometheus">
+  <div class="tool-header">
+    <span class="tool-num">12</span>
+    <span class="tool-name">Prometheus</span>
+    <span class="tool-cat">Metrics Collection</span>
+  </div>
+  <div class="tags"><span class="tag browser">Browser ✅</span><span class="tag gui">GUI ✅</span></div>
+  <p><strong style="color:#f7fafc">Show in browser:</strong> <code>http://localhost:9090</code></p>
+  <div class="step"><span class="step-num">1</span><span>Status → Targets → show both targets <span class="highlight">UP ✅</span></span></div>
+  <div class="step"><span class="step-num">2</span><span>Query tab → run these one by one → click <strong>Graph</strong> each time:</span></div>
+  <pre>splitx_http_requests_total
+splitx_nodejs_heap_size_used_bytes
+splitx_process_cpu_seconds_total
+splitx_active_groups
+splitx_transactions_created_total</pre>
+  <div class="expected"><div class="label">Targets Status</div>
+splitx-app  <span style="color:#68d391">UP</span>  http://splitx:3000/api/metrics  (scraped 5s ago)
+prometheus  <span style="color:#68d391">UP</span>  http://localhost:9090/metrics</div>
+  <div class="say-box">"Prometheus scrapes 38 metrics from our app every 15 seconds. Standard Node.js metrics plus custom business metrics — transactions created, settlements completed, AI chats, receipt scans. Both targets up with zero errors. We have 4 alert rules: high error rate, high latency, app down, DDoS detection."</div>
+</div>
+
+<!-- TOOL 13 -->
+<div class="tool-card grafana">
+  <div class="tool-header">
+    <span class="tool-num">13</span>
+    <span class="tool-name">Grafana</span>
+    <span class="tool-cat">Dashboards &amp; Visualization</span>
+  </div>
+  <div class="tags"><span class="tag browser">Browser ✅</span><span class="tag gui">GUI ✅</span></div>
+  <p><strong style="color:#f7fafc">Show in browser:</strong> <code>http://localhost:3001</code> → admin / splitx_grafana</p>
+  <div class="step"><span class="step-num">1</span><span>Left sidebar → Dashboards → SplitX Overview</span></div>
+  <div class="step"><span class="step-num">2</span><span>Show live panels: memory, request rate, error rate, active groups</span></div>
+  <div class="say-box">"Grafana turns raw Prometheus metrics into live dashboards. This SplitX Overview dashboard auto-provisions from a JSON file — no manual setup needed. In production, this runs on a big monitor in the ops room."</div>
+</div>
+
+<!-- TOOL 14 -->
+<div class="tool-card terraform">
+  <div class="tool-header">
+    <span class="tool-num">14</span>
+    <span class="tool-name">Terraform</span>
+    <span class="tool-cat">Infrastructure as Code</span>
+  </div>
+  <div class="tags"><span class="tag terminal">Terminal ✅</span></div>
+  <pre>type terraform\main.tf
+ls terraform\modules\
+cd terraform
+terraform plan</pre>
+  <div class="expected"><div class="label">Expected — terraform plan</div>
+Terraform will perform the following actions:
+  + module.ecr.aws_ecr_repository.app
+  + module.eks.aws_eks_cluster.main
+  + module.vpc.aws_vpc.main
+  + module.vpc.aws_subnet.public[0,1,2]
+  + module.vpc.aws_subnet.private[0,1,2]
+  ...
+<span style="color:#68d391">Plan: 23 to add, 0 to change, 0 to destroy.</span></div>
+  <div class="warn">DO NOT run terraform apply during demo — creates real AWS resources!</div>
+  <div class="say-box">"Terraform defines our entire AWS infrastructure as code — VPC, ECR, EKS across 3 modules. The plan shows 23 resources that would be created. Zero AWS console clicking. If we deleted our entire account today, one command rebuilds everything identically."</div>
+</div>
+
+<!-- TOOL 15 -->
+<div class="tool-card ansible">
+  <div class="tool-header">
+    <span class="tool-num">15</span>
+    <span class="tool-name">Ansible</span>
+    <span class="tool-cat">Configuration Management</span>
+  </div>
+  <div class="tags"><span class="tag terminal">Terminal ✅</span></div>
+  <pre>type ansible\playbooks\setup-node.yml
+Select-String -Path "ansible\playbooks\setup-node.yml" -Pattern "- name:" | Measure-Object
+wsl ansible-playbook ansible/playbooks/setup-node.yml --syntax-check</pre>
+  <div class="expected"><div class="label">Expected Outputs</div>
+Count : 14   ← 14 automated tasks
+
+playbook: ansible/playbooks/setup-node.yml  ← no syntax errors ✅</div>
+  <table style="margin-top:10px;font-size:11px">
+    <tr><th>Task</th><th>What It Does</th></tr>
+    <tr><td>1-2</td><td>Update system packages, install dependencies</td></tr>
+    <tr><td>3-7</td><td>Install Docker Engine, start service, configure user</td></tr>
+    <tr><td>8-9</td><td>Install kubectl, verify</td></tr>
+    <tr><td>10</td><td>Install Helm</td></tr>
+    <tr><td>11-12</td><td>Install AWS CLI v2</td></tr>
+    <tr><td>13-14</td><td>Configure UFW firewall (deny-by-default), verify all tools</td></tr>
+  </table>
+  <div class="say-box">"Ansible automates EC2 server configuration. 14 tasks: Docker, kubectl, Helm, AWS CLI, firewall — all automated. 10 servers configured simultaneously, identically, in 2 minutes. No SSH-ing manually into servers."</div>
+</div>
+
+<!-- TOOL 16 -->
+<div class="tool-card k8s">
+  <div class="tool-header">
+    <span class="tool-num">16</span>
+    <span class="tool-name">Kubernetes</span>
+    <span class="tool-cat">Container Orchestration</span>
+  </div>
+  <div class="tags"><span class="tag terminal">Terminal ✅</span><span class="tag gui">Live on AWS ✅</span></div>
+  <pre>ls k8s\base\
+type k8s\base\deployment.yaml
+type k8s\base\hpa.yaml</pre>
+  <div class="expected"><div class="label">Key lines to point at in deployment.yaml</div>
+replicas: 2                       ← 2 pods, high availability
+livenessProbe: /api/health        ← auto-restart crashed pods
+readinessProbe: /api/health       ← only route traffic when ready
+resources.limits.cpu: "500m"      ← prevents runaway CPU
+
+# In hpa.yaml:
+minReplicas: 2
+maxReplicas: 5
+targetCPUUtilizationPercentage: 70  ← auto-scales on load</div>
+  <p style="margin-top:10px;color:#90cdf4"><strong>If deployed to AWS — run these LIVE:</strong></p>
+  <pre>kubectl get pods -n splitx
+kubectl get hpa -n splitx
+kubectl describe deployment splitx -n splitx</pre>
+  <div class="expected"><div class="label">Expected — kubectl get pods (on AWS)</div>
+NAME                    READY   STATUS    RESTARTS   AGE
+splitx-7d4b9f-x2kpq     1/1     Running   0          12m
+splitx-7d4b9f-r8mnt     1/1     Running   0          12m</div>
+  <div class="say-box">"Kubernetes runs 2 replicas — if one crashes, K8s restarts it automatically. HPA monitors CPU — exceeds 70% and K8s adds pods up to 5 automatically. This runs on the EKS cluster provisioned by Terraform. Jenkins Stage 8 deploys here on every successful build."</div>
+</div>
+
+<!-- TOOL 17 -->
+<div class="tool-card helm">
+  <div class="tool-header">
+    <span class="tool-num">17</span>
+    <span class="tool-name">Helm</span>
+    <span class="tool-cat">Kubernetes Package Manager</span>
+  </div>
+  <div class="tags"><span class="tag terminal">Terminal ✅</span><span class="tag gui">Live on AWS ✅</span></div>
+  <pre>type helm\splitx\Chart.yaml
+type helm\splitx\values.yaml
+ls helm\splitx\templates\
+type helm\splitx\templates\deployment.yaml</pre>
+  <div class="expected"><div class="label">Point at these lines in deployment.yaml template</div>
+image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+replicas: {{ .Values.replicaCount }}
+cpu: {{ .Values.resources.limits.cpu }}</div>
+  <p style="margin-top:10px;color:#90cdf4"><strong>If deployed to AWS — run these LIVE:</strong></p>
+  <pre>helm list -n splitx
+helm history splitx -n splitx</pre>
+  <div class="expected"><div class="label">Expected — helm list (on AWS)</div>
+NAME    NAMESPACE  REVISION  STATUS    CHART         APP VERSION
+splitx  splitx     1         <span style="color:#68d391">deployed</span>  splitx-1.0.0  0.1.0</div>
+  <div class="say-box">"Helm is npm for Kubernetes. All K8s YAMLs are templated — one values.yaml controls everything. Deploy: helm install. Update image: helm upgrade --set image.tag=v2.0. Rollback: helm rollback splitx 1. Jenkins Stage 8 runs this automatically after every build."</div>
+</div>
+
+</div><!-- end tools-grid part 2 -->
+<!-- QUICK REFERENCE -->
+<div class="section-title page-break">📋 Quick Reference Card</div>
+<div class="two-col">
+<div class="startup-box">
+  <h3 style="color:#63b3ed">🔑 Credentials</h3>
+  <table>
+    <tr><th>Tool</th><th>URL</th><th>User</th><th>Pass</th></tr>
+    <tr><td class="highlight">Grafana</td><td>:3001</td><td>admin</td><td>splitx_grafana</td></tr>
+    <tr><td class="highlight">Jenkins</td><td>:8080</td><td>admin</td><td>admin</td></tr>
+    <tr><td class="highlight">SonarQube</td><td>:9000</td><td>admin</td><td>admin</td></tr>
+    <tr><td class="highlight">Nexus</td><td>:8081</td><td>admin</td><td>adminsj2003</td></tr>
+    <tr><td class="highlight">Prometheus</td><td>:9090</td><td>—</td><td>—</td></tr>
+  </table>
+</div>
+<div class="startup-box">
+  <h3 style="color:#68d391">📊 Prometheus Queries</h3>
+  <pre style="font-size:10.5px">splitx_http_requests_total
+splitx_nodejs_heap_size_used_bytes
+splitx_process_cpu_seconds_total
+splitx_active_groups
+splitx_transactions_created_total
+splitx_settlements_completed_total
+splitx_ai_chat_requests_total
+splitx_receipt_scans_total</pre>
+</div>
+</div>
+
+<!-- GUI vs TERMINAL TABLE -->
+<div class="section-title">🖥 GUI vs Terminal — Per Tool</div>
+<table>
+  <tr><th>Tool</th><th>Has GUI?</th><th>Where</th></tr>
+  <tr><td class="highlight">Git</td><td><span class="highlight">✅ Browser</span></td><td>github.com/Sayandip-Jana-1018/SplitX</td></tr>
+  <tr><td class="highlight">Husky</td><td>Terminal</td><td>Live bad-commit rejection demo</td></tr>
+  <tr><td class="highlight">Commitlint</td><td>Terminal</td><td>type commitlint.config.js</td></tr>
+  <tr><td class="highlight">ESLint</td><td>Terminal</td><td>npm run lint → zero warnings</td></tr>
+  <tr><td class="highlight">GitHub Actions</td><td><span class="highlight">✅ Browser</span></td><td>github.com/.../actions — green runs</td></tr>
+  <tr><td class="highlight">Docker</td><td>Terminal</td><td>docker images, docker inspect</td></tr>
+  <tr><td class="highlight">Docker Compose</td><td>Terminal</td><td>docker compose ps — 8 services</td></tr>
+  <tr><td class="highlight">Jenkins</td><td><span class="highlight">✅ localhost:8080</span></td><td>Stage View, console logs, Build Now</td></tr>
+  <tr><td class="highlight">SonarQube</td><td><span class="highlight">✅ localhost:9000</span></td><td>Dashboard — Quality Gate PASSED</td></tr>
+  <tr><td class="highlight">Trivy</td><td>Terminal</td><td>Live CVE scan table output</td></tr>
+  <tr><td class="highlight">Nexus</td><td><span class="highlight">✅ localhost:8081</span></td><td>Browse → splitx-docker → tags</td></tr>
+  <tr><td class="highlight">Prometheus</td><td><span class="highlight">✅ localhost:9090</span></td><td>Targets UP, Query graphs</td></tr>
+  <tr><td class="highlight">Grafana</td><td><span class="highlight">✅ localhost:3001</span></td><td>SplitX Overview live dashboard</td></tr>
+  <tr><td class="highlight">Terraform</td><td>Terminal</td><td>terraform plan → 23 resources</td></tr>
+  <tr><td class="highlight">Ansible</td><td>Terminal</td><td>Playbook + syntax-check</td></tr>
+  <tr><td class="highlight">Kubernetes</td><td>Terminal (YAML) / <span class="highlight">Live on AWS</span></td><td>kubectl get pods/hpa</td></tr>
+  <tr><td class="highlight">Helm</td><td>Terminal (files) / <span class="highlight">Live on AWS</span></td><td>helm list, helm history</td></tr>
+</table>
+
+<!-- AWS COST -->
+<div class="section-title page-break">☁️ AWS Cost Analysis</div>
+<div class="two-col">
+<div class="startup-box">
+  <h3 style="color:#fbd38d">💰 Hourly Cost Breakdown</h3>
+  <table>
+    <tr><th>Resource</th><th>Per Hour</th><th>Per Day</th></tr>
+    <tr><td>EKS Control Plane</td><td>$0.10</td><td>$2.40</td></tr>
+    <tr><td>2× t3.medium EC2</td><td>$0.083</td><td>$2.00</td></tr>
+    <tr><td>Load Balancer</td><td>$0.025</td><td>$0.60</td></tr>
+    <tr><td>ECR Storage</td><td>$0.01</td><td>$0.24</td></tr>
+    <tr><td class="highlight">TOTAL</td><td class="highlight">~$0.22</td><td class="highlight">~$5.25</td></tr>
+  </table>
+</div>
+<div class="startup-box">
+  <h3 style="color:#68d391">📅 Your Scenario (24hr presentation)</h3>
+  <table>
+    <tr><th>Phase</th><th>Duration</th><th>Cost</th></tr>
+    <tr><td>First setup + testing</td><td>3-4 hours</td><td>~$0.90</td></tr>
+    <tr><td>Keep running overnight</td><td>20 hours</td><td>~$4.40</td></tr>
+    <tr><td>During presentation</td><td>2 hours</td><td>~$0.45</td></tr>
+    <tr><td class="highlight">TOTAL</td><td>~24 hrs</td><td class="highlight">~$6</td></tr>
+  </table>
+  <div class="tip" style="margin-top:12px">$100 credit lasts ~21 days even if you forget to destroy!</div>
+</div>
+</div>
+
+<!-- AWS SETUP STEPS -->
+<div class="section-title">🚀 AWS Deployment — Full Steps</div>
+<div class="startup-box">
+  <h3 style="margin-bottom:12px">Step 1 — Verify AWS CLI</h3>
+  <pre>aws sts get-caller-identity</pre>
+  <div class="expected"><div class="label">Expected</div>{"Account": "918183256068", "Arn": "arn:aws:iam::918183256068:user/..."}</div>
+
+  <h3 style="margin:16px 0 12px">Step 2 — Create S3 Bucket for Terraform State</h3>
+  <pre>aws s3 mb s3://splitx-terraform-state-918183256068 --region us-east-1</pre>
+
+  <h3 style="margin:16px 0 12px">Step 3 — Switch backend.tf to S3 (edit the file)</h3>
+  <pre># Comment out local backend, uncomment S3 backend in terraform/backend.tf</pre>
+
+  <h3 style="margin:16px 0 12px">Step 4 — Deploy Infrastructure (~15 min)</h3>
+  <pre>cd terraform
+terraform init -reconfigure
+terraform apply   # type "yes"</pre>
+  <div class="expected"><div class="label">Expected at end</div>
+Apply complete! Resources: 23 added, 0 changed, 0 destroyed.
+Outputs:
+  eks_cluster_name   = "splitx-eks"
+  ecr_repository_url = "918183256068.dkr.ecr.us-east-1.amazonaws.com/splitx-app"</div>
+
+  <h3 style="margin:16px 0 12px">Step 5 — Connect kubectl to EKS</h3>
+  <pre>aws eks update-kubeconfig --name splitx-eks --region us-east-1
+kubectl get nodes</pre>
+
+  <h3 style="margin:16px 0 12px">Step 6 — Push Image to ECR</h3>
+  <pre>aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 918183256068.dkr.ecr.us-east-1.amazonaws.com
+docker tag splitx:local 918183256068.dkr.ecr.us-east-1.amazonaws.com/splitx-app:latest
+docker push 918183256068.dkr.ecr.us-east-1.amazonaws.com/splitx-app:latest</pre>
+
+  <h3 style="margin:16px 0 12px">Step 7 — Deploy with Helm</h3>
+  <pre>cd ..
+helm install splitx ./helm/splitx --namespace splitx --create-namespace `
+  --set image.repository=918183256068.dkr.ecr.us-east-1.amazonaws.com/splitx-app `
+  --set image.tag=latest</pre>
+
+  <h3 style="margin:16px 0 12px">Step 8 — Verify Everything</h3>
+  <pre>kubectl get pods -n splitx
+kubectl get hpa -n splitx
+helm list -n splitx</pre>
+
+  <div class="warn" style="margin-top:16px">After presentation: run <code>terraform destroy</code> to stop all charges</div>
+</div>
+
+<!-- EMERGENCY -->
+<div class="section-title">🆘 Emergency Commands</div>
+<div class="startup-box">
+  <pre># Restart all local services if something crashes:
+docker compose --profile monitoring --profile ci restart
+
+# Check which containers are unhealthy:
+docker compose --profile monitoring --profile ci ps
+
+# View logs for a service:
+docker compose logs splitx-app --tail 30
+
+# Get Jenkins admin password (if locked out):
+docker exec splitx-jenkins cat /var/jenkins_home/secrets/initialAdminPassword</pre>
+</div>
+
+<div style="text-align:center;padding:24px;color:#4a5568;font-size:11px;border-top:1px solid #2d3748;margin-top:32px">
+  SplitX DevOps Demo Guide — 17 Tools — University Presentation<br>
+  Generated for Sayandip Jana | Ctrl+P → Save as PDF for best results
+</div>
+
+</div><!-- container -->
+</body>
+</html>
