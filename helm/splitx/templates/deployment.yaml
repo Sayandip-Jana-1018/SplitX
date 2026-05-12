@@ -27,6 +27,10 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - containerPort: {{ .Values.service.targetPort }}
+          envFrom:
+            - secretRef:
+                name: splitx-env
+                optional: true
           env:
             {{- range $key, $value := .Values.env }}
             - name: {{ $key }}
