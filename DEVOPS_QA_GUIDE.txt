@@ -1,0 +1,891 @@
+═══════════════════════════════════════════════════════════════════════
+  SplitX — DevOps Tools Q&A Reference Guide
+  For INT377 Presentation — Sayandip Jana (12308059)
+  PART 1: Code Quality + CI/CD Tools
+═══════════════════════════════════════════════════════════════════════
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TOOL 01 — GIT + GITHUB
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+WHAT IT IS:
+  Git is a distributed version control system. GitHub is the remote
+  hosting service for the Git repository. Every change to the codebase
+  is tracked, timestamped, and attributed to a developer.
+
+WHAT WE USE IT FOR IN SPLITX:
+  - Tracks 96+ commits across the entire project lifecycle
+  - The GitHub repo is the "Single Source of Truth" for both the
+    Application code AND the Infrastructure code (Terraform, Helm, K8s)
+  - GitHub Actions CI pipeline triggers automatically on every push
+  - ArgoCD watches the GitHub repo for deployment changes
+
+KEY NUMBERS:
+  - 96+ commits
+  - All commits follow Conventional Commits standard (enforced by Husky)
+  - Repo: github.com/Sayandip-Jana-1018/SplitX
+
+TRICKY QUESTIONS:
+
+Q: "You have both GitHub Actions AND Jenkins. Why do you need both?"
+A: They serve different purposes. GitHub Actions handles lightweight,
+   fast checks — code linting, type checking, basic build validation.
+   These run in the cloud instantly on every push. Jenkins handles the
+   heavy, stateful pipeline — SonarQube analysis, Docker builds, Trivy
+   scans, pushing to Nexus, and triggering ArgoCD. Jenkins runs on our
+   own infrastructure so we have full control over the environment,
+   secrets, and installed tools like Trivy and Docker.
+
+Q: "What is Conventional Commits and why does it matter?"
+A: It's a standard format: type(scope): description
+   e.g. feat: add group expense tracking
+        fix: correct payment calculation
+        chore: update dependencies
+   It matters because it makes the git log machine-readable. Tools
+   like semantic-release can auto-generate changelogs from these.
+   More importantly, it forces developers to think clearly about what
+   they are changing before committing.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TOOL 02 — HUSKY + COMMITLINT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+WHAT IT IS:
+  Husky is a tool that hooks into Git's lifecycle events. It intercepts
+  actions like "commit" and "push" and runs custom scripts before
+  allowing them to proceed.
+  Commitlint is one such script — it validates the commit message format.
+
+WHAT WE USE IT FOR IN SPLITX:
+  - The .husky/ folder contains a commit-msg hook
+  - When a developer runs `git commit`, Husky intercepts it BEFORE the
+    commit is saved
+  - It passes the commit message to Commitlint for validation
+  - If the message doesn't follow the Conventional Commits format
+    (e.g., "added new feature"), the commit is BLOCKED with red errors:
+    ✖ subject may not be empty [subject-empty]
+    ✖ type may not be empty [type-empty]
+    ✖ found 2 problems, 0 warnings
+
+CONFIG FILE: commitlint.config.js
+  Allowed types: feat, fix, docs, style, refactor, perf, test,
+                 build, ci, chore, revert
+  Rules enforced:
+  - Message cannot be in UPPER-CASE
+  - Message cannot exceed 100 characters
+
+TRICKY QUESTIONS:
+
+Q: "Can a developer bypass Husky and push bad commits?"
+A: Yes, with `git commit --no-verify` a developer can skip hooks.
+   This is why Husky is a "first line of defense" only. The real
+   enforcement happens in GitHub Actions (in the cloud), which runs
+   on every push and cannot be bypassed by any local flag.
+
+Q: "What is the difference between Husky and Commitlint?"
+A: Husky is the hook runner — it intercepts Git events and runs scripts.
+   Commitlint is one specific script that Husky runs. Husky could also
+   run ESLint, tests, or any other script before a commit. They work
+   together but are separate tools with separate responsibilities.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TOOL 03 — ESLINT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+WHAT IT IS:
+  ESLint is a static code analyzer for JavaScript/TypeScript. It reads
+  your code WITHOUT running it and flags bad patterns, potential bugs,
+  and style violations.
+
+WHAT WE USE IT FOR IN SPLITX:
+  - Enforces Next.js and React best practices (next/recommended rules)
+  - Prevents common bugs like unused variables, missing dependencies
+    in React hooks, and improper async/await usage
+  - Runs in THREE places:
+    1. VS Code editor — real-time red underlines as you type
+    2. Pre-commit (via Husky) — blocks commits with errors
+    3. GitHub Actions & Jenkins — blocks merges and builds
+
+CONFIG FILE: eslint.config.mjs
+  Extends: next/core-web-vitals, next/typescript rules
+
+TRICKY QUESTIONS:
+
+Q: "ESLint only catches style issues, right?"
+A: No, ESLint catches real bugs too. For example: a missing dependency
+   in a React useEffect hook will cause infinite loops at runtime.
+   ESLint catches this statically before the code is even run.
+   It also catches security issues like using `eval()` or `innerHTML`.
+
+Q: "What is the difference between ESLint and SonarQube?"
+A: ESLint is developer-side — it's fast, lightweight, runs in the editor
+   and on every commit. It's great for catching obvious issues early.
+   SonarQube is a full-scale quality platform — it tracks technical debt
+   over time, shows trends, calculates coverage, and provides a
+   Quality Gate that can block an entire CI build. They complement
+   each other: ESLint is the quick filter, SonarQube is the deep audit.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TOOL 04 — GITHUB ACTIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+WHAT IT IS:
+  GitHub Actions is a cloud-native CI platform built into GitHub.
+  It runs automated workflows defined as YAML files inside .github/
+  whenever specific events happen (push, pull_request, schedule).
+
+WHAT WE USE IT FOR IN SPLITX:
+  - Triggers on every push to the main branch
+  - Runs: Checkout → Setup Node → Install Dependencies → ESLint →
+           Build → Validate Docker image
+  - Acts as a fast, cloud-enforced quality gate
+  - Provides green/red checkmarks on every GitHub commit
+
+LOCATION: .github/workflows/
+
+TRICKY QUESTIONS:
+
+Q: "You have both GitHub Actions AND Jenkins. Isn't that redundant?"
+A: No. GitHub Actions is fast (runs in 1-2 minutes on every push) and
+   requires zero infrastructure. Jenkins is our self-hosted pipeline
+   that runs the heavy tools — SonarQube analysis, Trivy scans, Nexus
+   pushes — which require our own Docker network and installed tools.
+   Think of GitHub Actions as the quick pre-screening and Jenkins as
+   the full medical examination.
+
+Q: "What happens if GitHub Actions fails?"
+A: The commit is marked with a red ✖ on GitHub. If it's a Pull Request,
+   the PR is blocked from merging until the checks pass. This enforces
+   code quality as a hard gate, not just a suggestion.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TOOL 05 — JENKINS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+WHAT IT IS:
+  Jenkins is a self-hosted, open-source automation server. It orchestrates
+  the entire CI/CD pipeline using a Jenkinsfile stored in the repository.
+  "Pipeline as Code" — the CI/CD definition lives in Git alongside the app.
+
+WHAT WE USE IT FOR IN SPLITX:
+  Runs a 9-stage pipeline (defined in jenkins/Jenkinsfile):
+  Stage 1: Checkout        — pulls latest code from GitHub main branch
+  Stage 2: Install         — runs npm ci to install all Node dependencies
+  Stage 3: Lint            — runs ESLint across the entire codebase
+  Stage 4: SonarQube       — runs sonar-scanner, sends code to SonarQube
+  Stage 5: Docker Build    — verifies the Docker image exists and is valid
+  Stage 6: Security Scan   — runs Trivy against the Docker image
+  Stage 7: Artifact Push   — pushes image to Nexus with :latest and :buildNum tags
+  Stage 8: Deploy          — verifies the running container is responding
+  Stage 9: GitOps Sync     — bumps image tag in values-dev.yaml and pushes
+                             to GitHub, triggering ArgoCD auto-sync
+
+KEY FILE: jenkins/Dockerfile.jenkins
+  Jenkins runs inside Docker. We built a custom Jenkins image that has
+  Docker CLI, Node.js, and Trivy pre-installed inside it.
+
+KEY FILE: jenkins/plugins.txt
+  Lists plugins (BlueOcean, Pipeline, Git) that auto-install on startup.
+
+KEY FILE: jenkins/job.xml + create-job.sh
+  Automates Jenkins job setup via API. No manual clicking required —
+  the pipeline job exists automatically when Jenkins container boots.
+
+TRICKY QUESTIONS:
+
+Q: "Why do you need Jenkins if you already have GitHub Actions?"
+A: GitHub Actions runs in GitHub's cloud and doesn't have access to
+   our private Docker network (where SonarQube and Nexus run locally).
+   Jenkins runs inside our Docker Compose network alongside SonarQube
+   and Nexus, so it can reach http://splitx-sonarqube:9000 directly.
+   Also, Jenkins gives us full control — custom tools, custom agents,
+   unlimited build time.
+
+Q: "Why do you need ArgoCD if Jenkins can deploy with kubectl?"
+A: This is the key GitOps question. Jenkins COULD deploy directly with
+   kubectl, but that means Jenkins needs cluster admin credentials — a
+   huge security risk. With ArgoCD, Jenkins never touches Kubernetes.
+   Jenkins only pushes a code change to GitHub. ArgoCD, which lives
+   inside the cluster, detects that change and pulls the new deployment.
+   The cluster pulls from Git; Git doesn't push to the cluster.
+   This is more secure and also provides self-healing and drift detection.
+
+Q: "What is Pipeline as Code?"
+A: Instead of configuring the CI pipeline through a GUI (clicking
+   buttons in Jenkins UI), the entire pipeline is written as code in
+   a Jenkinsfile stored in the Git repository. This means the pipeline
+   itself is version-controlled, peer-reviewed, and auditable.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TOOL 06 — SONARQUBE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+WHAT IT IS:
+  SonarQube is a continuous code quality and security inspection platform.
+  It analyzes source code deeply and tracks quality over time.
+
+WHAT WE USE IT FOR IN SPLITX:
+  - Jenkins sends our src/ folder to SonarQube during Stage 4
+  - SonarQube analyzes for: Bugs, Vulnerabilities, Code Smells,
+    Security Hotspots, Code Duplication, and Test Coverage
+  - Result: a "Quality Gate" — either PASSED or FAILED
+  - Our project shows: Quality Gate PASSED, 0 Open Issues (Security),
+    38 Reliability issues (open), 624 Maintainability issues
+  - Running at: http://localhost:9000
+  - Analyzing 364 Lines of Code in the src/ folder
+
+KEY CONCEPTS:
+  Quality Gate: A configurable threshold. If too many bugs or the
+                error rate is too high, the gate FAILS and blocks
+                the Jenkins build from proceeding to Docker build.
+  Technical Debt: SonarQube calculates how many hours it would take
+                  a developer to fix all code smell issues.
+
+TRICKY QUESTIONS:
+
+Q: "SonarQube shows 624 Maintainability issues — isn't that bad?"
+A: Maintainability issues are code smells, not bugs. They are things
+   like overly complex functions or duplicate string literals. They
+   don't break the app but make it harder to maintain over time.
+   The critical ones are Bugs (0) and Vulnerabilities (0), which
+   affect correctness and security. Our Quality Gate passed, meaning
+   the thresholds for critical issues are all met.
+
+Q: "What is the difference between SonarQube and Trivy?"
+A: SonarQube analyzes SOURCE CODE before it's built — it looks at
+   TypeScript/JavaScript files for bugs and bad patterns.
+   Trivy scans the compiled DOCKER IMAGE after it's built — it looks
+   at the OS packages, npm dependencies, and system libraries inside
+   the container for known CVE vulnerabilities.
+   They work at completely different layers of the stack.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TOOL 07 — TRIVY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+WHAT IT IS:
+  Trivy (by Aqua Security) is an open-source vulnerability scanner for
+  container images, file systems, and Git repositories.
+
+WHAT WE USE IT FOR IN SPLITX:
+  - Jenkins Stage 6 runs: trivy image --exit-code 0 --severity HIGH,CRITICAL
+  - Trivy downloads the latest CVE (Common Vulnerabilities and Exposures)
+    database and scans every OS package and npm library inside the
+    splitx:local Docker image
+  - Reports vulnerabilities by severity: LOW, MEDIUM, HIGH, CRITICAL
+  - Installed directly inside the Jenkins Docker container
+
+TRICKY QUESTIONS:
+
+Q: "What is a CVE?"
+A: CVE stands for Common Vulnerabilities and Exposures. It's a public
+   database maintained by NIST that catalogs known security flaws in
+   software. For example, CVE-2021-44228 is the infamous Log4Shell
+   vulnerability. Trivy checks your container's packages against this
+   database.
+
+Q: "We set --exit-code 0, doesn't that mean Trivy never fails the build?"
+A: Yes, for this demo. In a real production pipeline, we'd set
+   --exit-code 1 --severity CRITICAL which would fail the Jenkins build
+   if any critical vulnerability is found. We used exit-code 0 here to
+   ensure the pipeline completes for demonstration purposes, while still
+   producing the full vulnerability report in the logs.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TOOL 08 — DOCKER + DOCKER COMPOSE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+WHAT IT IS:
+  Docker packages an application and all its dependencies into a
+  standardized, isolated unit called a container. Docker Compose
+  orchestrates multiple containers together as a single local stack.
+
+WHAT WE USE IT FOR IN SPLITX:
+  Our Dockerfile (multi-stage build):
+  Stage 1 (deps):    Installs npm dependencies only
+  Stage 2 (builder): Copies deps, runs `npm run build` to compile Next.js
+  Stage 3 (runner):  Copies ONLY the compiled output — no source code,
+                     no node_modules — into a minimal production image.
+  Result: A 430MB image that contains only what's needed to RUN the app.
+
+  Our docker-compose.yml runs the entire local dev stack:
+  - splitx-app (Next.js app on port 3000)
+  - splitx-postgres (PostgreSQL database on port 5432)
+  - splitx-redis (Redis cache on port 6379)
+  - splitx-jenkins (CI/CD server on port 8080)
+  - splitx-sonarqube (Code quality on port 9000)
+  - splitx-nexus (Artifact registry on port 8081)
+  - splitx-prometheus (Metrics on port 9090)
+  - splitx-grafana (Dashboards on port 3001)
+  - splitx-loki (Log aggregation on port 3100)
+  - splitx-promtail (Log collector)
+
+KEY CONCEPT — Multi-Stage Build:
+  Without multi-stage: The final image would contain TypeScript source
+  files, all devDependencies, and the Node.js compiler. ~2GB+.
+  With multi-stage: The final image contains ONLY the compiled .js files
+  and production dependencies. ~430MB. Smaller = faster to pull, less
+  attack surface.
+
+TRICKY QUESTIONS:
+
+Q: "What is the difference between a Docker image and a container?"
+A: An image is a static, read-only blueprint — like a class in OOP.
+   A container is a running instance of that image — like an object.
+   You can run 10 containers from the same image simultaneously.
+
+Q: "Why use Docker Compose for local dev but Kubernetes for production?"
+A: Docker Compose is simple and designed for single-machine local
+   development. Kubernetes is designed for multi-node, highly available
+   production clusters with auto-scaling, self-healing, rolling updates,
+   and load balancing. Kubernetes has far more overhead and complexity
+   that isn't needed locally but is essential in production.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TOOL 09 — NEXUS REPOSITORY MANAGER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+WHAT IT IS:
+  Sonatype Nexus is a private artifact repository manager. It can store
+  Docker images, npm packages, Maven JARs, and more. It acts as a
+  private alternative to Docker Hub or npm registry.
+
+WHAT WE USE IT FOR IN SPLITX:
+  - Jenkins Stage 7 pushes the Docker image to Nexus with TWO tags:
+    → splitx:latest (always the most recent build)
+    → splitx:42 (where 42 is the Jenkins build number — immutable)
+  - Running at: http://localhost:8081 (UI) / localhost:8082 (Docker registry)
+  - Repository name: splitx-docker-hosted
+  - Browse path: v2 → splitx → manifests → tags → latest
+
+KEY CONCEPT — Why Two Tags?
+  :latest is convenient for "give me the newest version".
+  :42 (build number) is immutable and traceable. If build 45 breaks
+  production, you can roll back to exactly :43 or :42 with certainty.
+  "latest" can change; build numbers never do.
+
+TRICKY QUESTIONS:
+
+Q: "Why use Nexus instead of just pushing to Docker Hub?"
+A: Three reasons:
+   1. PRIVACY: Our app code is inside the image. We don't want it on
+      a public registry.
+   2. SPEED: Nexus is on our local network. Pulling an image from a
+      local Nexus is 10x faster than pulling from Docker Hub.
+   3. CONTROL: We control retention policies, access control, and can
+      run it fully offline without internet dependency.
+
+Q: "You also push to AWS ECR. Why both Nexus and ECR?"
+A: Nexus is our LOCAL artifact store used in the local Jenkins pipeline.
+   AWS ECR (Elastic Container Registry) is our CLOUD artifact store
+   used by Kubernetes (EKS) when it needs to pull the image to run pods.
+   EKS nodes cannot reach our local Nexus (it's on our laptop). So
+   Nexus serves local Jenkins, and ECR serves the AWS cluster.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+END OF PART 1
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+????????????????????????????????????????????????????????????????????
+  PART 2: Infrastructure + Observability + GitOps Tools
+????????????????????????????????????????????????????????????????????
+
+????????????????????????????????????????????????????????????????????
+TOOL 10 � TERRAFORM (Infrastructure as Code)
+????????????????????????????????????????????????????????????????????
+
+WHAT IT IS:
+  Terraform by HashiCorp is an Infrastructure as Code (IaC) tool.
+  Instead of clicking through the AWS console to create servers and
+  networks, you describe your infrastructure in .tf files and Terraform
+  creates, updates, and destroys it automatically via the AWS API.
+
+WHAT WE USE IT FOR IN SPLITX:
+  Terraform creates 24 AWS resources from 3 modules:
+
+  MODULE 1 � VPC (Virtual Private Cloud):
+    - 1 VPC named splitx-vpc-dev
+    - 2 Public subnets (us-east-1a, us-east-1b) � for Load Balancers
+    - 2 Private subnets � for EKS worker nodes
+    - Internet Gateway, Route Tables, NAT Gateway
+
+  MODULE 2 � ECR (Elastic Container Registry):
+    - 1 private Docker image registry: splitx-app
+    - Our AWS-native equivalent of Nexus, accessible to EKS nodes
+
+  MODULE 3 � EKS (Elastic Kubernetes Service):
+    - 1 Kubernetes control plane (managed by AWS)
+    - 1 Node Group: 2x t3.small EC2 instances (worker nodes)
+    - IAM Roles for nodes (permissions to pull from ECR)
+    - Cluster version: Kubernetes 1.31
+
+KEY FILES IN terraform/ FOLDER:
+  main.tf         � Composes the 3 modules together
+  variables.tf    � Declares input variables (region, instance type etc.)
+  terraform.tfvars � Actual values for variables (splitx, us-east-1, t3.small)
+  outputs.tf      � Prints the VPC ID, ECR URL, EKS endpoint after apply
+  versions.tf     � Pins the Terraform and AWS provider versions
+
+KEY TERRAFORM COMMANDS:
+  terraform init     � Downloads the AWS provider plugin
+  terraform plan     � Shows what WOULD be created (dry run)
+  terraform apply    � Actually creates the resources on AWS
+  terraform destroy  � Deletes everything (cleanup after demo)
+  terraform state list � Lists all resources Terraform manages
+
+HOW TO PROVE IT IN THE PRESENTATION:
+  AWS Console ? EKS ? splitx-eks-dev (the cluster name matches terraform.tfvars)
+  AWS Console ? VPC ? splitx-vpc-dev (the VPC name matches the Terraform code)
+  Terminal: terraform state list (shows 24 resources managed)
+
+TRICKY QUESTIONS:
+
+Q: "What is the difference between Terraform and Ansible?"
+A: Terraform is for PROVISIONING � creating the infrastructure itself
+   (EC2 servers, VPCs, Kubernetes clusters). It talks to cloud APIs.
+   Ansible is for CONFIGURATION � taking an existing server and
+   installing software on it (Docker, kubectl, Helm). It talks to
+   servers over SSH.
+   Terraform builds the house. Ansible furnishes it.
+
+Q: "What is the terraform.tfstate file and why is it important?"
+A: This is Terraform's memory. It maps the resources in your .tf files
+   to the actual AWS resource IDs. Without it, Terraform doesn't know
+   that the EKS cluster 'splitx-eks-dev' in AWS corresponds to the
+   module.eks block in your code. If you lose this file, Terraform
+   loses track and may try to create duplicate resources.
+
+Q: "What is idempotency in Terraform?"
+A: Running 	erraform apply twice produces the same result. If the
+   infrastructure already matches the code, Terraform makes zero changes.
+   It only acts on the DIFFERENCE between desired state (code) and
+   actual state (AWS). This is idempotency � safe to run repeatedly.
+
+Q: "Why use modules in Terraform?"
+A: Modules keep code DRY (Don't Repeat Yourself). Our VPC, ECR, and EKS
+   configs are each in separate module folders. If we need to deploy a
+   staging environment, we reuse the same modules with different variable
+   values. No code duplication.
+
+????????????????????????????????????????????????????????????????????
+TOOL 11 � ANSIBLE
+????????????????????????????????????????????????????????????????????
+
+WHAT IT IS:
+  Ansible is an agentless configuration management and automation tool.
+  Agentless means you don't install anything on the target servers.
+  Ansible SSH-es into servers from your control machine and runs tasks.
+
+WHAT WE USE IT FOR IN SPLITX:
+  One playbook: ansible/playbooks/setup-node.yml
+  Configures fresh EC2 Ubuntu instances with everything they need:
+  1. System Updates     � apt update && apt upgrade
+  2. Required packages  � curl, wget, htop, jq, unzip
+  3. Docker Engine      � adds Docker repo, installs docker-ce, starts service
+  4. kubectl            � downloads v1.31.0 CLI binary
+  5. Helm               � installs via official shell script
+  6. AWS CLI v2         � downloads and installs for ECR authentication
+  7. Firewall (UFW)     � opens ports: 22 (SSH), 80, 443, 6443 (K8s API)
+  8. Verification       � prints all tool versions to confirm success
+
+KEY FILES:
+  ansible.cfg         � Settings: remote_user=ubuntu, become=sudo
+  inventory/hosts.ini � The list of EC2 IPs to configure
+                        (commented out since EKS manages nodes automatically)
+
+KEY CONCEPT � become: true
+  This means Ansible runs all tasks as root (sudo) on the target server.
+  Without this, it couldn't install system packages.
+
+TRICKY QUESTIONS:
+
+Q: "If EKS manages the nodes automatically, why do you need Ansible?"
+A: You're right that for EKS specifically, AWS manages the node lifecycle.
+   Ansible would be used if we were running self-managed EC2 instances
+   (without EKS) or if we needed to configure additional software on
+   the nodes beyond what the EKS AMI provides. In our setup, Ansible
+   is prepared for that scenario � configuring standalone EC2s if the
+   project grew beyond managed Kubernetes.
+
+Q: "What is the difference between push-based and pull-based
+   configuration management?"
+A: Ansible is PUSH-based � the control machine pushes commands to servers.
+   Tools like Chef or Puppet are PULL-based � agents on each server
+   regularly check a central server for new configuration.
+   Push is simpler and requires no agent installation. Pull is better
+   for very large fleets where you can't SSH to every server.
+
+Q: "What does idempotency mean in Ansible?"
+A: Running the same Ansible playbook multiple times produces the same
+   result. If Docker is already installed, Ansible won't install it again.
+   Tasks use state: present (install if not there) rather than
+   commands like apt-get install (which always tries to run).
+
+????????????????????????????????????????????????????????????????????
+TOOL 12 � KUBERNETES (EKS)
+????????????????????????????????????????????????????????????????????
+
+WHAT IT IS:
+  Kubernetes (K8s) is an open-source container orchestration system.
+  It manages containers at scale � scheduling, scaling, healing, and
+  networking them across a cluster of machines.
+  AWS EKS (Elastic Kubernetes Service) is the managed Kubernetes offering
+  where AWS handles the control plane (the brain of the cluster).
+
+OUR CLUSTER:
+  Name:    splitx-eks-dev
+  Version: Kubernetes 1.31
+  Nodes:   2x t3.small EC2 instances
+  Region:  us-east-1 (N. Virginia)
+  URL:     https://552DFA60455BC3BCD02A96C5E8874FF5.gr7.us-east-1.eks.amazonaws.com
+
+KEY KUBERNETES OBJECTS IN OUR k8s/base/ FOLDER:
+
+  deployment.yaml � The Application Runner
+    Tells K8s: Run 2 copies (replicas) of the splitx container.
+    Image: pulled from AWS ECR.
+    If a pod crashes, the Deployment controller restarts it immediately.
+
+  service.yaml � The Internal Load Balancer
+    Creates a stable internal IP for the deployment.
+    Pods get new IPs when they restart; Service IP never changes.
+    Type: LoadBalancer � creates an AWS ELB with a public DNS name.
+
+  ingress.yaml � The External Router
+    Routes external HTTP traffic to the Service based on path/domain.
+
+  hpa.yaml � Horizontal Pod Autoscaler
+    Watches CPU and memory metrics.
+    Automatically scales from 2 pods up to 5 pods if CPU > 70%.
+    Scales back down when traffic drops.
+
+  configmap.yaml � Non-secret environment variables (NODE_ENV, PORT)
+  secret.yaml    � Sensitive variables (DATABASE_URL, NEXTAUTH_SECRET)
+  network-policy.yaml � Zero-trust firewall: only Ingress can reach pods.
+
+KEY COMMANDS DEMONSTRATED:
+  kubectl get nodes              � shows 2 Ready worker nodes
+  kubectl get pods -n splitx     � shows 2 pods at 1/1 Running
+  kubectl get svc -n splitx      � shows LoadBalancer with public DNS
+  kubectl get hpa -n splitx      � shows autoscaler config
+
+TRICKY QUESTIONS:
+
+Q: "What is the difference between a Pod, Deployment, and Service?"
+A: A POD is the smallest unit � one or more containers running together.
+   A DEPLOYMENT manages pods � it defines how many should run, which
+   image to use, and ensures the desired count is always maintained.
+   A SERVICE provides network access to pods � it's the stable endpoint
+   other apps or users use to reach the pods. Pods die and get new IPs;
+   the Service IP stays the same.
+
+Q: "What does it mean that EKS is 'managed'?"
+A: AWS manages the Kubernetes control plane (the API server, etcd
+   database, scheduler). We never SSH into the control plane servers.
+   We only manage the worker nodes (EC2 instances) where our pods run.
+   If the control plane crashes, AWS fixes it automatically.
+
+Q: "What is a Namespace in Kubernetes?"
+A: A Namespace is a virtual cluster within the physical cluster. We use
+   the 'splitx' namespace for our app and 'monitoring' for Prometheus/
+   Grafana. It provides isolation � resources in one namespace are
+   logically separated from resources in another. It's like separate
+   folders in the same filesystem.
+
+????????????????????????????????????????????????????????????????????
+TOOL 13 � HELM
+????????????????????????????????????????????????????????????????????
+
+WHAT IT IS:
+  Helm is the package manager for Kubernetes. It bundles multiple YAML
+  manifests into a single "Chart" and allows dynamic values injection
+  so the same chart works in Dev, Staging, and Production.
+
+OUR HELM CHART STRUCTURE (helm/splitx/):
+  Chart.yaml        � Chart name (splitx), version (1.0.0), app version (0.1.0)
+  values.yaml       � Default base configuration
+  values-dev.yaml   � Local Kind cluster overrides (image: splitx:local, 1 replica)
+  values-prod.yaml  � AWS EKS overrides (image: ECR URL, 2 replicas, HPA enabled)
+  templates/        � The actual Kubernetes YAML templates with {{ }} variables
+    deployment.yaml � Template for the Deployment object
+    service.yaml    � Template for the Service object
+    hpa.yaml        � Template for Horizontal Pod Autoscaler
+    _helpers.tpl    � Reusable naming functions
+
+HOW VALUES WORK:
+  In templates/deployment.yaml:
+    image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+  
+  When running locally (values-dev.yaml):
+    ? image: "splitx:local"
+  
+  When running on AWS (values-prod.yaml):
+    ? image: "918183256068.dkr.ecr.us-east-1.amazonaws.com/splitx-app:latest"
+
+KEY HELM COMMANDS:
+  helm install splitx ./helm/splitx -n splitx   � First deployment
+  helm upgrade splitx ./helm/splitx -n splitx   � Update deployment
+  helm rollback splitx 1 -n splitx              � Rollback to revision 1
+  helm list -n splitx                           � Show all releases
+  helm history splitx -n splitx                 � Show all revisions
+
+TRICKY QUESTIONS:
+
+Q: "What is the difference between the k8s/ folder and the helm/ folder?"
+A: The k8s/base/ folder has hardcoded, static YAML files. They work but
+   are rigid � different files needed for each environment.
+   The helm/ folder is dynamic � one set of templates + different values
+   files = deploy to any environment. Helm also adds revision tracking
+   and rollback capability. Helm is what we actually use; k8s/base/ is
+   the raw reference showing what Helm generates underneath.
+
+Q: "What is a Helm release vs a Helm chart?"
+A: A CHART is the package definition (the blueprint � like an npm package).
+   A RELEASE is an installed instance of a chart in a cluster
+   (like running 
+pm install creates node_modules).
+   We can have multiple releases of the same chart in different namespaces
+   with different configurations.
+
+????????????????????????????????????????????????????????????????????
+TOOL 14 � ARGOCD (GITOPS)
+????????????????????????????????????????????????????????????????????
+
+WHAT IT IS:
+  ArgoCD is a declarative GitOps continuous delivery tool for Kubernetes.
+  GitOps = using Git as the single source of truth for the desired
+  state of your infrastructure and applications.
+
+WHAT WE USE IT FOR IN SPLITX:
+  ArgoCD runs inside Kubernetes and continuously watches our GitHub repo.
+  It compares the Helm chart in the GitHub repo with what is actually
+  running in Kubernetes. If there is a difference, it syncs them.
+
+  Our argocd/splitx-app.yml defines:
+  - SOURCE: github.com/Sayandip-Jana-1018/SplitX ? main branch ? helm/splitx/
+  - DESTINATION: Local Kind cluster ? splitx namespace
+  - POLICY: automated (prune: true, selfHeal: true)
+
+CURRENT STATE (verified in presentation):
+  - Sync Status: SYNCED (latest commit: 8c4a28c)
+  - Commit: "feat: add Loki centralized logging, ArgoCD GitOps, AWS setup guide"
+  - Author: Sayandip-Jana-1018 visible in ArgoCD UI
+  - Health: Degraded (expected � Kind cluster can't pull from ECR)
+  - The deployment TREE is visible: App ? Service ? Deployment ? RS ? Pod
+
+KEY CONCEPTS:
+  selfHeal: true � If someone manually runs kubectl to change something
+                   in the cluster, ArgoCD detects the drift and reverts
+                   it back to match GitHub. No configuration drift possible.
+  prune: true    � If you delete a YAML file from GitHub, ArgoCD
+                   automatically deletes the corresponding K8s resource.
+
+FLOW: Jenkins pushes new image tag to GitHub ? ArgoCD detects commit
+      within 3 minutes ? ArgoCD syncs ? Kubernetes rolls out new pods.
+      Jenkins NEVER directly touches Kubernetes.
+
+TRICKY QUESTIONS:
+
+Q: "Why use ArgoCD when Jenkins can deploy directly with kubectl apply?"
+A: Three reasons:
+   1. SECURITY: Jenkins would need cluster admin credentials � if Jenkins
+      is compromised, the attacker owns the cluster. With ArgoCD, the
+      cluster pulls from Git, Jenkins never gets cluster access.
+   2. SELF-HEALING: ArgoCD constantly watches the cluster. If someone
+      manually changes something, ArgoCD reverts it in minutes.
+      Jenkins only deploys when triggered � it doesn't watch.
+   3. AUDITABILITY: Every deployment is a Git commit with an author,
+      timestamp, and message. Full audit trail. Rolling back = git revert.
+
+Q: "What is Configuration Drift and how does ArgoCD prevent it?"
+A: Configuration drift is when the actual state of a server slowly
+   diverges from the intended state due to manual changes, failed
+   deploys, or hotfixes. Over time, nobody knows what is actually
+   running in production.
+   ArgoCD prevents this with selfHeal: true � it continuously reconciles
+   the cluster state with Git. Git IS the ground truth; the cluster
+   must always match it.
+
+Q: "GitOps vs DevOps � what's the difference?"
+A: DevOps is a culture/philosophy of collaboration between Dev and Ops.
+   GitOps is a specific implementation pattern for CD (Continuous
+   Delivery) where Git is the single source of truth for deployment.
+   GitOps is a subset of DevOps, specifically applying to the delivery
+   and operations side.
+
+????????????????????????????????????????????????????????????????????
+TOOL 15 � PROMETHEUS
+????????????????????????????????????????????????????????????????????
+
+WHAT IT IS:
+  Prometheus is an open-source monitoring and alerting system.
+  It collects TIME-SERIES METRICS � numerical measurements with timestamps.
+  Examples: CPU usage, memory usage, HTTP request count, error rate.
+
+WHAT WE USE IT FOR IN SPLITX:
+  Config file: monitoring/prometheus/prometheus.yml
+  Scrape interval: every 15 seconds
+  
+  SCRAPE TARGETS (what Prometheus collects data from):
+  - splitx-app: scrapes /api/metrics endpoint (our custom app metrics)
+    with Bearer token auth (splitx-metrics-secret)
+  - prometheus itself: scrapes its own /metrics for self-monitoring
+  
+  CUSTOM METRICS our app exposes at /api/metrics:
+  - splitx_http_requests_total (counter by status code)
+  - splitx_http_request_duration_seconds (histogram of response times)
+
+  ALERT RULES (alert-rules.yml) � 4 configured:
+  1. HighErrorRate    � fires if >5% of requests return 5xx for 2 minutes
+  2. HighLatency      � fires if p95 latency >2 seconds for 3 minutes
+  3. ApplicationDown  � fires if /api/metrics unreachable for 1 minute
+  4. HighRequestRate  � fires if >100 requests/second for 2 minutes
+
+TRICKY QUESTIONS:
+
+Q: "What is a time-series database?"
+A: A time-series database stores data points indexed by time.
+   Each metric is a series of (timestamp, value) pairs.
+   e.g., cpu_usage at 10:00:00 = 45%, at 10:00:15 = 47%, at 10:00:30 = 43%
+   This lets you query "what was the CPU doing over the last hour" and
+   draw graphs. Prometheus has its own built-in TSDB.
+
+Q: "What is a scrape interval and why 15 seconds?"
+A: Prometheus PULLS (scrapes) metrics from targets on a schedule.
+   Every 15 seconds, Prometheus sends an HTTP GET to /api/metrics and
+   records the values. 15s is a good balance � fine enough for graphs
+   to be useful, not so frequent that it adds significant overhead.
+
+Q: "What is PromQL?"
+A: Prometheus Query Language. Used to query the time-series data.
+   Example: rate(splitx_http_requests_total[5m]) gives you requests
+   per second averaged over the last 5 minutes. The alert rules use
+   PromQL expressions to define the trigger conditions.
+
+????????????????????????????????????????????????????????????????????
+TOOL 16 � GRAFANA
+????????????????????????????????????????????????????????????????????
+
+WHAT IT IS:
+  Grafana is an open-source data visualization and dashboarding platform.
+  It connects to data sources (Prometheus, Loki, etc.) and renders
+  beautiful graphs, charts, and tables.
+
+WHAT WE USE IT FOR IN SPLITX:
+  Running at: http://localhost:3001
+  Two data sources configured:
+  - PROMETHEUS (for metrics/numbers) � graphs of CPU, requests, latency
+  - LOKI (for logs/text) � searchable log streams from all containers
+  
+  One custom dashboard: monitoring/grafana/dashboards/splitx-logs.json
+  Uses the Loki query: {job="docker"} to show all container logs
+
+KEY CONCEPT � "Single Pane of Glass":
+  Without Grafana, you'd need to check Prometheus for metrics (numbers)
+  and a separate log tool for logs (text). Grafana unifies both into
+  one screen. When an alert fires (CPU spike), you can immediately
+  correlate it with the Loki logs from the same time window to see
+  what error messages caused it.
+
+TRICKY QUESTIONS:
+
+Q: "Prometheus has its own UI � why do you need Grafana?"
+A: Prometheus UI is for ad-hoc PromQL queries during debugging. It's
+   not designed for ongoing monitoring. Grafana provides persistent
+   dashboards, multi-source correlation (Prometheus + Loki together),
+   alert visualization, and a much better UI for sharing with a team.
+   In production, nobody looks at the Prometheus UI � they use Grafana.
+
+????????????????????????????????????????????????????????????????????
+TOOL 17 � LOKI + PROMTAIL
+????????????????????????????????????????????????????????????????????
+
+WHAT IT IS:
+  Loki is a log aggregation system by Grafana Labs, designed to work
+  alongside Prometheus. It stores and indexes logs efficiently.
+  Promtail is Loki's log collector � it runs on each node and ships
+  logs to Loki, similar to how a Prometheus exporter ships metrics.
+
+WHAT WE USE IT FOR IN SPLITX:
+  - Promtail runs as a container, reads Docker container logs from
+    /var/lib/docker/containers on the host
+  - Ships those logs to Loki at http://splitx-loki:3100
+  - Grafana connects to Loki as a datasource
+  - In Grafana Explore, query: {job="docker"} to see all container logs
+  - Can filter: {job="docker", container_name="splitx-app"}
+
+KEY DIFFERENCE FROM ELASTICSEARCH:
+  Loki does NOT index the full content of log lines (like ELK stack).
+  It only indexes LABELS (metadata like container_name, filename, job).
+  The actual log content is compressed and stored as raw text chunks.
+  This makes Loki much cheaper and faster for storage, but you can
+  only filter by labels, not full-text search within log content.
+
+TRICKY QUESTIONS:
+
+Q: "What is the difference between Prometheus and Loki?"
+A: Prometheus collects METRICS � numbers with timestamps.
+   e.g., "At 10:00, CPU was 72%"
+   Loki collects LOGS � text lines with timestamps.
+   e.g., "At 10:00: ERROR: DatabaseConnectionFailed at db.ts:42"
+   Metrics tell you SOMETHING IS WRONG. Logs tell you EXACTLY WHAT IS WRONG.
+   They are complementary, not alternatives.
+
+Q: "What is Promtail doing exactly?"
+A: Promtail is the log shipper. It reads the raw Docker log files from
+   the host filesystem, attaches labels (container_name, filename, job),
+   and sends the labeled log streams to Loki via HTTP.
+   Without Promtail, logs would stay on disk and never reach Loki.
+
+????????????????????????????????????????????????????????????????????
+COMPLETE PIPELINE FLOW (End-to-End)
+????????????????????????????????????????????????????????????????????
+
+Developer writes code ? Husky checks commit message format (Commitlint)
+? Code pushed to GitHub ? GitHub Actions runs fast CI (Lint + Build)
+? Jenkins detects push ? Runs full pipeline:
+   - ESLint code quality check
+   - SonarQube deep code analysis (Quality Gate)
+   - Docker image build
+   - Trivy security scan
+   - Push image to Nexus (local) with :latest and :buildNumber tags
+   - Verify deployment is running
+   - Commit new image tag to GitHub (triggering GitOps)
+? ArgoCD detects the new commit in GitHub (within 3 minutes)
+? ArgoCD syncs Helm chart to Kubernetes cluster
+? Kubernetes pulls Docker image from AWS ECR
+? Rolling update: new pods start, old pods terminate
+? Load Balancer routes traffic to new pods
+? Prometheus scrapes /api/metrics every 15 seconds
+? Loki/Promtail collects all container logs
+? Grafana dashboards show real-time metrics AND logs in one place
+? Alert rules fire if error rate >5% or latency >2s
+
+TOTAL: 17 Tools, 1 Pipeline, Zero Manual Steps.
+
+????????????????????????????????????????????????????????????????????
+KEY NUMBERS TO REMEMBER
+????????????????????????????????????????????????????????????????????
+
+  96+     commits in the repository
+  17      DevOps tools integrated
+  24      AWS resources provisioned by Terraform
+  9       Jenkins pipeline stages
+  2       EKS worker nodes (t3.small)
+  2?5     Pod auto-scaling range (HPA)
+  15s     Prometheus scrape interval
+  3 min   ArgoCD sync detection time
+  4       Prometheus alert rules configured
+  430 MB  Docker image size (multi-stage build)
+  3000    App port (Next.js)
+  8080    Jenkins port
+  9000    SonarQube port
+  8081    Nexus port
+  9090    Prometheus port
+  3001    Grafana port
+  3100    Loki port
+  8090    ArgoCD port (local Kind via port-forward)
+
+????????????????????????????????????????????????????????????????????
+END OF GUIDE
+????????????????????????????????????????????????????????????????????
