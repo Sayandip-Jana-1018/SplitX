@@ -391,6 +391,7 @@ export default function TransactionsPage() {
                                     animate={{ opacity: 1, y: 0 }}
                                     exit={{ opacity: 0, scale: 0.95 }}
                                     transition={{ duration: 0.3, delay: Math.min(i * 0.03, 0.3) }}
+                                    style={{ minWidth: 0, maxWidth: '100%' }}
                                 >
                                     <div style={{
                                         ...glass,
@@ -398,6 +399,8 @@ export default function TransactionsPage() {
                                         padding: 'var(--space-3) var(--space-4)',
                                         cursor: editingId === txn.id ? 'default' : 'pointer',
                                         transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+                                        minWidth: 0,
+                                        maxWidth: '100%',
                                     }}
                                         onMouseEnter={(e) => {
                                             if (editingId !== txn.id) {
@@ -553,7 +556,7 @@ export default function TransactionsPage() {
                                         ) : (
                                             <div style={{
                                                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                                                gap: 12, padding: 4
+                                                gap: 12, padding: 4, minWidth: 0, maxWidth: '100%'
                                             }}>
                                                 {/* Left Section: Icon and Details */}
                                                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, flex: 1, minWidth: 0 }}>
@@ -569,10 +572,11 @@ export default function TransactionsPage() {
                                                     </div>
 
                                                     {/* Text Content */}
-                                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, flex: 1, minWidth: 0 }}>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, flex: 1, minWidth: 0, maxWidth: '100%' }}>
                                                         <div className="font-display" style={{
                                                             fontSize: 16, fontWeight: 700,
                                                             color: 'var(--fg-primary)', letterSpacing: '-0.3px',
+                                                            width: '100%', minWidth: 0, maxWidth: '100%', textAlign: 'center',
                                                             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                                                         }}>
                                                             {txn.title}
@@ -580,6 +584,7 @@ export default function TransactionsPage() {
                                                         <div className="font-display" style={{
                                                             fontSize: 13, color: 'var(--fg-tertiary)', fontWeight: 500,
                                                             display: 'flex', gap: 6, alignItems: 'center', justifyContent: 'center',
+                                                            width: '100%', minWidth: 0, maxWidth: '100%',
                                                             flexWrap: 'nowrap', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
                                                         }}>
                                                             <span>Paid by {payerName.split(' ')[0]}</span>
@@ -587,7 +592,7 @@ export default function TransactionsPage() {
                                                             <span>{timeAgo(txn.createdAt)}</span>
                                                         </div>
                                                         {txn.method && (
-                                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, marginTop: 4 }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, marginTop: 4, maxWidth: '100%', flexWrap: 'wrap' }}>
                                                                 <div style={{
                                                                     display: 'inline-flex', alignItems: 'center', gap: 4,
                                                                     background: 'var(--surface-sunken)', padding: '3px 8px',
