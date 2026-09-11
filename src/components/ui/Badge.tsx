@@ -16,38 +16,32 @@ const variantStyles: Record<BadgeVariant, React.CSSProperties> = {
     default: {
         background: 'var(--bg-tertiary)',
         color: 'var(--fg-secondary)',
-        border: '1px solid var(--border-default)',
     },
     success: {
         background: 'var(--color-success-bg)',
         color: 'var(--color-success)',
-        border: '1px solid var(--color-success-border)',
     },
     warning: {
         background: 'var(--color-warning-bg)',
         color: 'var(--color-warning)',
-        border: '1px solid var(--color-warning-border)',
     },
     error: {
         background: 'var(--color-error-bg)',
         color: 'var(--color-error)',
-        border: '1px solid var(--color-error-border)',
     },
     info: {
         background: 'var(--color-info-bg)',
         color: 'var(--color-info)',
-        border: '1px solid var(--color-info-border)',
     },
     accent: {
-        background: 'rgba(var(--accent-500-rgb), 0.1)',
-        color: 'var(--accent-500)',
-        border: '1px solid rgba(var(--accent-500-rgb), 0.2)',
+        background: 'var(--accent-soft)',
+        color: 'var(--accent-strong)',
     },
 };
 
 const sizeStyles: Record<BadgeSize, React.CSSProperties> = {
-    sm: { padding: '2px 8px', fontSize: 'var(--text-xs)' },
-    md: { padding: '4px 12px', fontSize: 'var(--text-sm)' },
+    sm: { height: 22, padding: '0 9px', fontSize: 11.5 },
+    md: { height: 28, padding: '0 12px', fontSize: 13 },
 };
 
 export default function Badge({ children, variant = 'default', size = 'sm', className }: BadgeProps) {
@@ -57,11 +51,12 @@ export default function Badge({ children, variant = 'default', size = 'sm', clas
             style={{
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: 4,
+                gap: 5,
                 borderRadius: 'var(--radius-full)',
-                fontWeight: 500,
+                fontWeight: 600,
                 whiteSpace: 'nowrap',
-                lineHeight: 1.4,
+                lineHeight: 1,
+                letterSpacing: '-0.005em',
                 ...variantStyles[variant],
                 ...sizeStyles[size],
             }}

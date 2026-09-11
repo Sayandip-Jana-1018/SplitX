@@ -1,0 +1,44 @@
+.brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--fg-primary);
+    text-decoration: none;
+}
+
+.mark {
+    position: relative;
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    overflow: hidden;
+    background: var(--accent-gradient);
+    color: var(--fg-on-accent);
+    box-shadow:
+        0 1px 0 rgba(255, 255, 255, 0.35) inset,
+        0 6px 16px -6px rgba(var(--accent-500-rgb), 0.65);
+}
+
+.mark::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.3), transparent 55%);
+    pointer-events: none;
+}
+
+.mark > svg {
+    position: relative;
+    z-index: 1;
+}
+
+.word {
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.x {
+    color: var(--accent-strong);
+}

@@ -16,6 +16,8 @@ import {
 const SettleSchema = z.object({
     tripId: z.string().cuid(),
     toUserId: z.string().cuid(),
+    /** Set when the receiver records a payment made to them (e.g. cash) on the debtor's behalf. */
+    fromUserId: z.string().cuid().optional(),
     amount: z.number().int().positive(),
     method: z.string().default('upi'),
     note: z.string().optional(),
@@ -340,7 +342,9 @@ export async function GET(req: Request) {
     }
 }
 
-// POST /api/settlements — create or resume a settlement request
+// POST /api/settlements — create or resume a settlement request.
+// Normally the caller is the debtor. A receiver may also record a payment made
+// to them (e.g. cash handed over in person) by passing `fromUserId`.
 export async function POST(req: Request) {
     try {
         const session = await auth();
@@ -357,12 +361,20 @@ export async function POST(req: Request) {
         const user = await prisma.user.findUnique({ where: { email: session.user.email } });
         if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
+        const debtorId = parsed.data.fromUserId ?? user.id;
+        const recordedByReceiver = debtorId !== user.id;
+
+        // ── Security: receivers may only record payments made to themselves ──
+        if (recordedByReceiver && parsed.data.toUserId !== user.id) {
+            return NextResponse.json({ error: 'You can only record payments made to you' }, { status: 403 });
+        }
+
         // ── Security: Block self-settlement ──
-        if (user.id === parsed.data.toUserId) {
+        if (debtorId === parsed.data.toUserId) {
             return NextResponse.json({ error: 'Cannot settle with yourself' }, { status: 400 });
         }
 
-        // ── Security: Verify the trip exists and user is a member ──
+        // ── Security: Verify the trip exists and everyone involved is a member ──
         const trip = await prisma.trip.findUnique({
             where: { id: parsed.data.tripId },
             include: {
@@ -377,6 +389,9 @@ export async function POST(req: Request) {
         if (!memberIds.includes(user.id)) {
             return NextResponse.json({ error: 'You are not a member of this group' }, { status: 403 });
         }
+        if (!memberIds.includes(debtorId)) {
+            return NextResponse.json({ error: 'Payer is not a member of this group' }, { status: 403 });
+        }
         if (!memberIds.includes(parsed.data.toUserId)) {
             return NextResponse.json({ error: 'Recipient is not a member of this group' }, { status: 403 });
         }
@@ -385,7 +400,7 @@ export async function POST(req: Request) {
         const openRequest = await prisma.settlement.findFirst({
             where: {
                 tripId: parsed.data.tripId,
-                fromId: user.id,
+                fromId: debtorId,
                 toId: parsed.data.toUserId,
                 amount: parsed.data.amount,
                 status: { in: ['pending', 'initiated', 'paid_pending'] },
@@ -408,7 +423,7 @@ export async function POST(req: Request) {
         const duplicate = await prisma.settlement.findFirst({
             where: {
                 tripId: parsed.data.tripId,
-                fromId: user.id,
+                fromId: debtorId,
                 toId: parsed.data.toUserId,
                 amount: parsed.data.amount,
                 status: { in: ['completed', 'confirmed'] },
@@ -424,11 +439,9 @@ export async function POST(req: Request) {
         }
 
         // ── Security: Over-settlement guard ──
-        // Use the user's NET BALANCE in the group (not pairwise debt) because
+        // Use the debtor's NET BALANCE in the group (not pairwise debt) because
         // the settlement page uses greedy netting which may route all of a user's
         // debt through a single person (simplified transfers).
-        // e.g., if you owe ₹339 to A and ₹83 to B, greedy netting may say
-        //       "pay ₹422 to A" — so the max per-person limit = total net owed.
         try {
             const tripTxns = await prisma.transaction.findMany({
                 where: { tripId: parsed.data.tripId, deletedAt: null },
@@ -442,44 +455,40 @@ export async function POST(req: Request) {
                 },
             });
 
-            // Calculate net balance for the settling user
             // Positive = they are owed, Negative = they owe
-            let userBalance = 0;
+            let debtorBalance = 0;
             for (const txn of tripTxns) {
-                if (txn.payerId === user.id) {
-                    userBalance += txn.amount; // they paid this much
+                if (txn.payerId === debtorId) {
+                    debtorBalance += txn.amount;
                 }
-                const userSplit = txn.splits.find(s => s.userId === user.id);
-                if (userSplit) {
-                    userBalance -= userSplit.amount; // they owe this much
+                const debtorSplit = txn.splits.find(s => s.userId === debtorId);
+                if (debtorSplit) {
+                    debtorBalance -= debtorSplit.amount;
                 }
             }
-            // Account for completed settlements
             for (const s of completedSetts) {
-                if (s.fromId === user.id) {
-                    userBalance += s.amount; // paid off debt
-                }
-                if (s.toId === user.id) {
-                    userBalance -= s.amount; // received payment
-                }
+                if (s.fromId === debtorId) debtorBalance += s.amount;
+                if (s.toId === debtorId) debtorBalance -= s.amount;
             }
 
-            // If balance >= 0, user doesn't owe anything
-            if (userBalance >= 0) {
+            if (debtorBalance >= 0) {
                 return NextResponse.json(
-                    { error: `You don't owe anything in this group.` },
+                    { error: recordedByReceiver ? 'They don’t owe anything in this group.' : 'You don’t owe anything in this group.' },
                     { status: 400 }
                 );
             }
 
-            // User's total debt = abs(negative balance)
-            const totalDebt = Math.abs(userBalance);
+            const totalDebt = Math.abs(debtorBalance);
 
             // Allow small tolerance (₹1 = 100 paise) for rounding
             if (parsed.data.amount > totalDebt + 100) {
                 const owedFormatted = `₹${(totalDebt / 100).toLocaleString('en-IN')}`;
                 return NextResponse.json(
-                    { error: `Settlement amount exceeds what you owe. Your net balance is ${owedFormatted} in this group.` },
+                    {
+                        error: recordedByReceiver
+                            ? `That’s more than they owe. Their net balance is ${owedFormatted} in this group.`
+                            : `Settlement amount exceeds what you owe. Your net balance is ${owedFormatted} in this group.`,
+                    },
                     { status: 400 }
                 );
             }
@@ -492,7 +501,7 @@ export async function POST(req: Request) {
         const settlement = await prisma.settlement.create({
             data: {
                 tripId: parsed.data.tripId,
-                fromId: user.id,
+                fromId: debtorId,
                 toId: parsed.data.toUserId,
                 amount: parsed.data.amount,
                 method: parsed.data.method,
@@ -515,11 +524,12 @@ export async function POST(req: Request) {
                 groupId: trip.group.id,
                 tripId: trip.id,
                 status: settlement.status,
+                recordedByReceiver,
                 after: serializeSettlementAuditSnapshot({
                     id: settlement.id,
                     tripId: settlement.trip.id,
                     tripTitle: settlement.trip.title,
-                    fromId: user.id,
+                    fromId: debtorId,
                     fromName: settlement.from.name,
                     toId: parsed.data.toUserId,
                     toName: settlement.to.name,
@@ -534,14 +544,18 @@ export async function POST(req: Request) {
             },
         });
 
-        await createNotification({
-            userId: parsed.data.toUserId,
-            actorId: user.id,
-            type: 'group_activity',
-            title: 'Settlement request created',
-            body: `${user.name || 'Someone'} created a ${parsed.data.method} settlement request for ₹${(parsed.data.amount / 100).toLocaleString('en-IN')}.`,
-            link: '/settlements',
-        });
+        // Receivers recording their own receipt are confirmed via
+        // /confirm-by-receiver, which notifies the payer — skip the request ping.
+        if (!recordedByReceiver) {
+            await createNotification({
+                userId: parsed.data.toUserId,
+                actorId: user.id,
+                type: 'group_activity',
+                title: 'Settlement request created',
+                body: `${user.name || 'Someone'} created a ${parsed.data.method} settlement request for ₹${(parsed.data.amount / 100).toLocaleString('en-IN')}.`,
+                link: '/settlements',
+            });
+        }
 
         return NextResponse.json(settlement, { status: 201 });
     } catch (error) {

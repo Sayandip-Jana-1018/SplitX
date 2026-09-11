@@ -1,159 +1,65 @@
 /* ═══════════════════════════════════════════════════════════════
-   Card Component — Ultra-Premium Glassmorphism
-   Iridescent glass with shimmer overlay, animated gradient borders,
-   layered depth, and accent glow on hover
+   Card — solid, softly elevated surface
    ═══════════════════════════════════════════════════════════════ */
 
 .card {
-    background: var(--surface-card);
-    border: 1px solid var(--border-glass, var(--border-default));
-    border-radius: var(--surface-radius);
+    position: relative;
     min-width: 0;
-    overflow: hidden;
-    position: relative;
-    box-shadow: var(--shadow-card, var(--shadow-sm));
-    backdrop-filter: blur(16px) saturate(1.3);
-    -webkit-backdrop-filter: blur(16px) saturate(1.3);
+    overflow: clip;
+    background: var(--surface-card);
+    border: 1px solid var(--border-default);
+    border-radius: var(--surface-radius);
+    box-shadow: var(--shadow-card);
     transition:
-        transform 0.4s cubic-bezier(0.16, 1, 0.3, 1),
-        box-shadow 0.4s cubic-bezier(0.16, 1, 0.3, 1),
-        border-color 0.4s cubic-bezier(0.16, 1, 0.3, 1),
-        background 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        box-shadow var(--duration-normal) var(--ease-out),
+        border-color var(--duration-normal) var(--ease-out),
+        background-color var(--duration-normal) var(--ease-out);
 }
 
-/* ── Iridescent shimmer overlay for depth ── */
-[data-theme="dark"] .card::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    background: linear-gradient(135deg,
-            rgba(255, 255, 255, 0.06) 0%,
-            rgba(255, 255, 255, 0.01) 25%,
-            transparent 50%,
-            rgba(var(--accent-500-rgb), 0.03) 75%,
-            rgba(var(--accent-500-rgb), 0.04) 100%);
-    pointer-events: none;
-    z-index: 0;
-}
+.compact { padding: 12px 14px; }
+.normal { padding: 16px 18px; }
+.spacious { padding: 24px; }
 
-/* ── Top edge light (simulates 3D glass reflection) ── */
-[data-theme="dark"] .card::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 10%;
-    right: 10%;
-    height: 1px;
-    background: linear-gradient(90deg,
-            transparent,
-            rgba(255, 255, 255, 0.12),
-            transparent);
-    pointer-events: none;
-    z-index: 1;
-}
-
-.card>* {
-    position: relative;
-    z-index: 1;
-}
-
-/* ── Interactive card ── */
-.card.interactive {
+.interactive {
     cursor: pointer;
 }
 
-.card.interactive:hover {
-    transform: translateY(-3px) scale(1.005);
-    border-color: rgba(var(--accent-500-rgb), 0.22);
-    box-shadow: var(--shadow-card-hover,
-            0 8px 32px rgba(0, 0, 0, 0.3),
-            0 0 0 1px rgba(var(--accent-500-rgb), 0.1),
-            0 0 24px rgba(var(--accent-500-rgb), 0.05));
-    background: var(--surface-card-hover);
+@media (hover: hover) and (pointer: fine) {
+    .interactive:hover {
+        border-color: var(--border-strong);
+        box-shadow: var(--shadow-card-hover);
+    }
 }
 
-.card.interactive:active {
-    transform: translateY(0) scale(0.98);
-}
-
-/* ── Padding variants ── */
-.compact {
-    padding: var(--space-3);
-}
-
-.normal {
-    padding: var(--space-4);
-}
-
-.spacious {
-    padding: var(--space-6);
-}
-
-/* ── Glass variant — stronger frosted iridescent glass ── */
 .glass {
-    background: var(--bg-glass);
-    backdrop-filter: blur(28px) saturate(1.5);
-    -webkit-backdrop-filter: blur(28px) saturate(1.5);
-    border: 1px solid var(--border-glass);
+    background: var(--surface-card);
 }
 
-[data-theme="dark"] .glass::before {
-    background: linear-gradient(135deg,
-            rgba(255, 255, 255, 0.08) 0%,
-            rgba(var(--accent-500-rgb), 0.04) 30%,
-            transparent 50%,
-            rgba(var(--accent-500-rgb), 0.05) 80%,
-            rgba(var(--accent-500-rgb), 0.03) 100%);
-}
-
-[data-theme="light"] .glass {
-    background: rgba(255, 255, 255, 0.7);
-    border: 1px solid rgba(0, 0, 0, 0.06);
-}
-
-/* ── Elevated ── */
 .elevated {
-    box-shadow: var(--shadow-lg);
-    border-color: transparent;
+    box-shadow: var(--shadow-md);
 }
 
-/* ── Glow — animated accent border glow ── */
 .glow {
-    border-color: rgba(var(--accent-500-rgb), 0.12);
-    box-shadow: var(--shadow-card, var(--shadow-sm)),
-        0 0 0 1px rgba(var(--accent-500-rgb), 0.06);
+    border-color: rgba(var(--accent-500-rgb), 0.2);
+    box-shadow: var(--shadow-card), 0 0 0 4px rgba(var(--accent-500-rgb), 0.05);
 }
 
-.glow:hover {
-    box-shadow:
-        0 0 36px rgba(var(--accent-500-rgb), 0.16),
-        0 0 12px rgba(var(--accent-500-rgb), 0.10),
-        0 8px 28px rgba(0, 0, 0, 0.25),
-        inset 0 1px 0 rgba(255, 255, 255, 0.05);
-    border-color: rgba(var(--accent-500-rgb), 0.32);
-    transform: translateY(-3px);
-}
-
-/* ── Card Header ── */
 .header {
-    padding: var(--space-4) var(--space-4) 0;
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: var(--space-3);
+    padding: var(--space-4) var(--space-4) 0;
 }
 
-/* ── Card Body ── */
 .body {
     padding: var(--space-4);
 }
 
-/* ── Card Footer ── */
 .footer {
-    padding: 0 var(--space-4) var(--space-4);
     display: flex;
     align-items: center;
     justify-content: flex-end;
     gap: var(--space-2);
+    padding: 0 var(--space-4) var(--space-4);
 }

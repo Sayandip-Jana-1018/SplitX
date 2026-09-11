@@ -64,22 +64,34 @@ export function formatDate(date: Date | string): string {
 
 /** Get initials from name: "Sayan Das" → "SD" */
 export function getInitials(name: string): string {
-    return name
-        .split(' ')
-        .map((n) => n[0])
-        .join('')
-        .toUpperCase()
-        .slice(0, 2);
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return '?';
+    const first = parts[0][0] ?? '';
+    const last = parts.length > 1 ? parts[parts.length - 1][0] ?? '' : '';
+    return (first + last).toUpperCase();
 }
 
-/** Generate a random pastel color for avatars */
-export function getAvatarColor(name: string): string {
+/** Stable hue (0-359) derived from a name — used for avatar fallbacks */
+export function getAvatarHue(name: string): number {
     let hash = 0;
     for (let i = 0; i < name.length; i++) {
         hash = name.charCodeAt(i) + ((hash << 5) - hash);
     }
-    const hue = Math.abs(hash) % 360;
-    return `hsl(${hue}, 70%, 60%)`;
+    return Math.abs(hash) % 360;
+}
+
+/** Generate a stable pastel color for avatars */
+export function getAvatarColor(name: string): string {
+    return `hsl(${getAvatarHue(name)}, 70%, 60%)`;
+}
+
+/** Time-of-day greeting for an hour (0-23) */
+export function getGreeting(hour: number): { text: string; emoji: string } {
+    if (hour < 5) return { text: 'Good night', emoji: '🌙' };
+    if (hour < 12) return { text: 'Good morning', emoji: '☀️' };
+    if (hour < 17) return { text: 'Good afternoon', emoji: '🌤️' };
+    if (hour < 21) return { text: 'Good evening', emoji: '🌆' };
+    return { text: 'Good night', emoji: '🌙' };
 }
 
 /** cn — merge class names, filtering falsy values */
@@ -103,12 +115,15 @@ export function debounce<T extends (...args: unknown[]) => unknown>(
 export const CATEGORIES: Record<string, { label: string; emoji: string }> = {
     general: { label: 'General', emoji: '🏷️' },
     food: { label: 'Food & Drinks', emoji: '🍕' },
+    groceries: { label: 'Groceries', emoji: '🛒' },
     transport: { label: 'Transport', emoji: '🚗' },
+    fuel: { label: 'Fuel', emoji: '⛽' },
+    stay: { label: 'Stay', emoji: '🏨' },
     shopping: { label: 'Shopping', emoji: '🛍️' },
     tickets: { label: 'Tickets & Entry', emoji: '🎫' },
-    fuel: { label: 'Fuel', emoji: '⛽' },
-    medical: { label: 'Medical', emoji: '🏥' },
     entertainment: { label: 'Entertainment', emoji: '🎮' },
+    bills: { label: 'Bills', emoji: '🧾' },
+    medical: { label: 'Medical', emoji: '🏥' },
     other: { label: 'Other', emoji: '✏️' },
 };
 

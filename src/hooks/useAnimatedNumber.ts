@@ -3,41 +3,40 @@
 import { useEffect, useRef, useState } from 'react';
 
 /**
- * Animate a number from 0 → target using requestAnimationFrame.
- * Returns the current animated value as a formatted string.
+ * Smoothly animates between numeric values (count-up on first mount,
+ * then tweening from the previous value). Respects reduced motion.
  */
 export function useAnimatedNumber(
     target: number,
-    duration: number = 1200,
+    duration: number = 900,
     formatter?: (val: number) => string
 ): string {
     const [current, setCurrent] = useState(0);
-    const startTime = useRef<number | null>(null);
-    const rafRef = useRef<number | null>(null);
+    const valueRef = useRef(0);
 
     useEffect(() => {
-        startTime.current = null;
+        const from = valueRef.current;
+        if (from === target) return;
 
-        const animate = (timestamp: number) => {
-            if (!startTime.current) startTime.current = timestamp;
-            const elapsed = timestamp - startTime.current;
-            const progress = Math.min(elapsed / duration, 1);
-            // Ease out cubic
-            const eased = 1 - Math.pow(1 - progress, 3);
-            setCurrent(Math.round(eased * target));
+        const reduceMotion = typeof window !== 'undefined'
+            && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const total = reduceMotion ? 1 : duration;
+        let frame = 0;
+        let start: number | null = null;
 
-            if (progress < 1) {
-                rafRef.current = requestAnimationFrame(animate);
-            }
+        const tick = (timestamp: number) => {
+            if (start === null) start = timestamp;
+            const progress = Math.min((timestamp - start) / total, 1);
+            const eased = 1 - Math.pow(1 - progress, 4);
+            const next = Math.round(from + (target - from) * eased);
+            valueRef.current = next;
+            setCurrent(next);
+            if (progress < 1) frame = requestAnimationFrame(tick);
         };
 
-        rafRef.current = requestAnimationFrame(animate);
-
-        return () => {
-            if (rafRef.current) cancelAnimationFrame(rafRef.current);
-        };
+        frame = requestAnimationFrame(tick);
+        return () => cancelAnimationFrame(frame);
     }, [target, duration]);
 
-    if (formatter) return formatter(current);
-    return current.toString();
+    return formatter ? formatter(current) : current.toString();
 }

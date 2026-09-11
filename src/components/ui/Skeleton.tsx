@@ -7,6 +7,7 @@ interface SkeletonProps {
     variant?: 'text' | 'circle' | 'card' | 'stat' | 'rectangular';
     width?: string | number;
     height?: string | number;
+    radius?: string | number;
     className?: string;
     lines?: number;
 }
@@ -15,32 +16,29 @@ export default function Skeleton({
     variant = 'text',
     width,
     height,
+    radius,
     className,
     lines = 1,
 }: SkeletonProps) {
     if (variant === 'stat') {
         return (
-            <div className={cn(styles.skeleton, styles.stat, className)}>
+            <div className={cn(styles.panel, styles.stat, className)}>
                 <div className={cn(styles.shimmer, styles.statIcon)} />
-                <div style={{ flex: 1 }}>
-                    <div className={cn(styles.shimmer, styles.statLabel)} />
-                    <div className={cn(styles.shimmer, styles.statValue)} />
-                </div>
+                <div className={cn(styles.shimmer, styles.statLabel)} />
+                <div className={cn(styles.shimmer, styles.statValue)} />
             </div>
         );
     }
 
     if (variant === 'card') {
         return (
-            <div className={cn(styles.skeleton, styles.card, className)}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <div className={cn(styles.shimmer, styles.cardIcon)} />
-                    <div style={{ flex: 1 }}>
-                        <div className={cn(styles.shimmer, styles.cardTitle)} />
-                        <div className={cn(styles.shimmer, styles.cardSubtitle)} />
-                    </div>
-                    <div className={cn(styles.shimmer, styles.cardAmount)} />
+            <div className={cn(styles.panel, styles.row, className)}>
+                <div className={cn(styles.shimmer, styles.rowIcon)} />
+                <div style={{ flex: 1 }}>
+                    <div className={cn(styles.shimmer, styles.rowTitle)} />
+                    <div className={cn(styles.shimmer, styles.rowSubtitle)} />
                 </div>
+                <div className={cn(styles.shimmer, styles.rowAmount)} />
             </div>
         );
     }
@@ -61,23 +59,22 @@ export default function Skeleton({
                 style={{
                     width: width || '100%',
                     height: height || 20,
-                    borderRadius: 'var(--radius-md)',
+                    borderRadius: radius ?? 'var(--radius-lg)',
                 }}
             />
         );
     }
 
-    // text variant with lines
     return (
         <div className={cn(styles.textGroup, className)}>
-            {Array.from({ length: lines }).map((_, i) => (
+            {Array.from({ length: lines }).map((_, index) => (
                 <div
-                    key={i}
+                    key={index}
                     className={styles.shimmer}
                     style={{
-                        width: i === lines - 1 && lines > 1 ? '70%' : width || '100%',
-                        height: height || 14,
-                        borderRadius: 'var(--radius-sm)',
+                        width: index === lines - 1 && lines > 1 ? '70%' : width || '100%',
+                        height: height || 12,
+                        borderRadius: radius ?? 6,
                     }}
                 />
             ))}
@@ -85,149 +82,85 @@ export default function Skeleton({
     );
 }
 
-/** Pre-built skeleton layouts for common patterns */
+/** A grouped list of placeholder rows, mirroring ListGroup + ListRow. */
+export function ListSkeleton({ rows = 4 }: { rows?: number }) {
+    return (
+        <div className={cn(styles.panel, styles.list)}>
+            {Array.from({ length: rows }).map((_, index) => (
+                <div key={index} className={styles.listRow}>
+                    <div className={cn(styles.shimmer, styles.rowIcon)} />
+                    <div style={{ flex: 1 }}>
+                        <div className={cn(styles.shimmer, styles.rowTitle)} style={{ width: `${58 - (index % 3) * 10}%` }} />
+                        <div className={cn(styles.shimmer, styles.rowSubtitle)} />
+                    </div>
+                    <div className={cn(styles.shimmer, styles.rowAmount)} />
+                </div>
+            ))}
+        </div>
+    );
+}
+
 export function DashboardSkeleton() {
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
-            {/* Hero Balance Card */}
-            <div style={{
-                background: 'var(--bg-glass)',
-                backdropFilter: 'blur(20px)',
-                border: '1px solid var(--border-glass)',
-                borderRadius: 'var(--radius-2xl)',
-                padding: 'var(--space-5)',
-            }}>
-                <div style={{ display: 'flex', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
-                    <Skeleton variant="circle" width={36} height={36} />
-                    <div style={{ marginLeft: 12 }}>
-                        <Skeleton width={80} height={10} />
-                        <div style={{ marginTop: 6 }}><Skeleton width={140} height={14} /></div>
+        <div className={styles.stack}>
+            <div className={styles.centerStack}>
+                <Skeleton width={110} height={11} />
+                <Skeleton width={170} height={24} radius={8} />
+            </div>
+            <div className={cn(styles.shimmer, styles.hero)} />
+            <div className={styles.quick}>
+                {Array.from({ length: 4 }).map((_, index) => (
+                    <div key={index} className={styles.centerStack}>
+                        <div className={cn(styles.shimmer, styles.quickTile)} />
+                        <Skeleton width={44} height={10} />
                     </div>
-                </div>
-                <Skeleton width={200} height={36} />
-                <div style={{ marginTop: 12 }}><Skeleton width={160} height={12} /></div>
-                <div style={{ display: 'flex', gap: 'var(--space-3)', marginTop: 'var(--space-4)' }}>
-                    <Skeleton variant="rectangular" height={56} />
-                    <Skeleton variant="rectangular" height={56} />
-                </div>
+                ))}
             </div>
-
-            {/* Greeting */}
-            <div>
-                <Skeleton width={180} height={14} />
-                <div style={{ marginTop: 6 }}><Skeleton width={260} height={20} /></div>
-            </div>
-
-            {/* Stats grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 'var(--space-3)' }}>
-                <Skeleton variant="stat" />
-                <Skeleton variant="stat" />
-            </div>
-
-            {/* Recent Transactions */}
-            <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                    <Skeleton width={140} height={14} />
-                    <Skeleton width={60} height={12} />
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-                    <Skeleton variant="card" />
-                    <Skeleton variant="card" />
-                    <Skeleton variant="card" />
-                </div>
-            </div>
-
-            {/* Quick Actions */}
-            <div>
-                <Skeleton width={120} height={14} />
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 'var(--space-3)', marginTop: 12 }}>
-                    <Skeleton variant="rectangular" height={72} />
-                    <Skeleton variant="rectangular" height={72} />
-                    <Skeleton variant="rectangular" height={72} />
-                </div>
-            </div>
+            <ListSkeleton rows={3} />
+            <ListSkeleton rows={3} />
         </div>
     );
 }
 
-/** Skeleton for transaction list page */
 export function TransactionSkeleton() {
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-            {/* Search bar */}
-            <Skeleton variant="rectangular" height={44} />
-            {/* Filter chips */}
-            <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-                <Skeleton variant="rectangular" width={80} height={32} />
-                <Skeleton variant="rectangular" width={100} height={32} />
-                <Skeleton variant="rectangular" width={70} height={32} />
-            </div>
-            {/* Transaction cards */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-                {Array.from({ length: 5 }).map((_, i) => (
-                    <Skeleton key={i} variant="card" />
-                ))}
-            </div>
+        <div className={styles.stack}>
+            <Skeleton variant="rectangular" height={112} radius="var(--radius-2xl)" />
+            <Skeleton variant="rectangular" height={48} radius="var(--radius-full)" />
+            <ListSkeleton rows={5} />
         </div>
     );
 }
 
-/** Skeleton for settlements page */
 export function SettlementSkeleton() {
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-            {/* Summary row */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 'var(--space-3)' }}>
-                <Skeleton variant="stat" />
-                <Skeleton variant="stat" />
-            </div>
-            {/* Section header */}
-            <Skeleton width={140} height={16} />
-            {/* Settlement cards */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-                {Array.from({ length: 3 }).map((_, i) => (
-                    <Skeleton key={i} variant="card" />
-                ))}
-            </div>
+        <div className={styles.stack}>
+            <div className={cn(styles.shimmer, styles.hero)} style={{ height: 168 }} />
+            <Skeleton variant="rectangular" height={44} radius="var(--radius-full)" />
+            <ListSkeleton rows={3} />
         </div>
     );
 }
 
-/** Skeleton for groups grid */
 export function GroupCardSkeleton() {
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-            {/* Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Skeleton width={160} height={24} />
-                <Skeleton variant="rectangular" width={120} height={36} />
+        <div className={styles.stack}>
+            <div className={styles.twoUp}>
+                <Skeleton variant="rectangular" height={48} radius="var(--radius-full)" />
+                <Skeleton variant="rectangular" height={48} radius="var(--radius-full)" />
             </div>
-            {/* Group cards */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-                {Array.from({ length: 3 }).map((_, i) => (
-                    <div key={i} style={{
-                        padding: 'var(--space-4)',
-                        borderRadius: 'var(--radius-xl)',
-                        background: 'var(--surface-card)',
-                        border: '1px solid var(--border-default)',
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-                            <Skeleton variant="circle" width={44} height={44} />
-                            <div style={{ flex: 1 }}>
-                                <Skeleton width={140} height={16} />
-                                <div style={{ marginTop: 6 }}>
-                                    <Skeleton width={200} height={12} />
-                                </div>
-                            </div>
-                        </div>
-                        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-                            <Skeleton variant="rectangular" width={80} height={24} />
-                            <Skeleton variant="rectangular" width={100} height={24} />
+            {Array.from({ length: 3 }).map((_, index) => (
+                <div key={index} className={cn(styles.panel, styles.groupCard)}>
+                    <div className={styles.row} style={{ padding: 0, border: 0, boxShadow: 'none', background: 'transparent' }}>
+                        <div className={cn(styles.shimmer, styles.groupEmoji)} />
+                        <div style={{ flex: 1 }}>
+                            <div className={cn(styles.shimmer, styles.rowTitle)} />
+                            <div className={cn(styles.shimmer, styles.rowSubtitle)} />
                         </div>
                     </div>
-                ))}
-            </div>
+                    <div className={cn(styles.shimmer)} style={{ height: 30, borderRadius: 12 }} />
+                </div>
+            ))}
         </div>
     );
 }
-

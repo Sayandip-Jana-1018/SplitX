@@ -13,6 +13,8 @@ const ActionSchema = z.object({
     action: z.enum(['confirm', 'accept_cash', 'reject']).default('confirm'),
 });
 
+const formatRupees = (paise: number) => `₹${(paise / 100).toLocaleString('en-IN')}`;
+
 // POST /api/settlements/:id/confirm-by-receiver
 // Allows the receiver to move a pending/initiated settlement to paid_pending
 // so that the /approve endpoint can then finalize it.
@@ -64,23 +66,16 @@ export async function POST(
 
         // ── REJECT: Cancel the settlement and notify sender ──
         if (action === 'reject') {
-            if (isCompletedSettlementStatus(settlement.status)) {
-                return NextResponse.json(
-                    { error: 'Cannot reject a completed settlement' },
-                    { status: 400 }
-                );
-            }
             await prisma.settlement.update({
                 where: { id },
                 data: { status: 'cancelled' },
             });
-            // Notify sender
             try {
                 await createNotification({
                     userId: settlement.fromId,
                     type: 'settlement_rejected',
                     title: 'Settlement Rejected',
-                    body: `${settlement.to.name} rejected the settlement of ₹${settlement.amount}`,
+                    body: `${settlement.to.name || 'The receiver'} marked your ${formatRupees(settlement.amount)} payment as not received`,
                     link: '/settlements',
                 });
             } catch { /* notification failures are non-critical */ }
@@ -89,23 +84,16 @@ export async function POST(
 
         // ── ACCEPT CASH: Directly complete (offline payment confirmed) ──
         if (action === 'accept_cash') {
-            if (isCompletedSettlementStatus(settlement.status)) {
-                return NextResponse.json(
-                    { error: 'Already completed' },
-                    { status: 400 }
-                );
-            }
             await prisma.settlement.update({
                 where: { id },
                 data: { status: 'completed', method: 'cash' },
             });
-            // Notify sender
             try {
                 await createNotification({
                     userId: settlement.fromId,
                     type: 'settlement_completed',
                     title: 'Settlement Completed',
-                    body: `${settlement.to.name} confirmed receiving ₹${settlement.amount} (cash)`,
+                    body: `${settlement.to.name || 'The receiver'} confirmed receiving ${formatRupees(settlement.amount)} in cash`,
                     link: '/settlements',
                 });
             } catch { /* notification failures are non-critical */ }

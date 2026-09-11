@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type CSSProperties } from 'react';
 import styles from './avatar.module.css';
-import { cn, getInitials, getAvatarColor } from '@/lib/utils';
+import { cn, getAvatarHue, getInitials } from '@/lib/utils';
 
 type AvatarSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
 
@@ -12,58 +12,59 @@ interface AvatarProps {
     size?: AvatarSize;
     ring?: boolean;
     className?: string;
+    style?: CSSProperties;
 }
 
-export default function Avatar({ name, image, size = 'md', ring, className }: AvatarProps) {
-    const initials = getInitials(name);
-    const bgColor = getAvatarColor(name);
-    const [imgError, setImgError] = useState(false);
-
-    const showImage = image && !imgError;
+export default function Avatar({ name, image, size = 'md', ring, className, style }: AvatarProps) {
+    const [failedSrc, setFailedSrc] = useState<string | null>(null);
+    const showImage = Boolean(image) && failedSrc !== image;
+    const hue = getAvatarHue(name || '?');
+    const fallbackBackground = `linear-gradient(135deg, hsl(${hue} 72% 62%), hsl(${(hue + 38) % 360} 68% 48%))`;
 
     return (
-        <div
+        <span
             className={cn(styles.avatar, styles[size], ring && styles.ring, className)}
-            style={{ backgroundColor: showImage ? undefined : bgColor }}
+            style={showImage ? style : { background: fallbackBackground, ...style }}
             title={name}
         >
             {showImage ? (
                 /* eslint-disable-next-line @next/next/no-img-element */
                 <img
-                    src={image}
+                    src={image as string}
                     alt={name}
                     className={styles.image}
-                    onError={() => setImgError(true)}
+                    onError={() => setFailedSrc(image ?? null)}
                     referrerPolicy="no-referrer"
+                    loading="lazy"
+                    decoding="async"
+                    draggable={false}
                 />
             ) : (
-                initials
+                <span className={styles.initials}>{getInitials(name || '?')}</span>
             )}
-        </div>
+        </span>
     );
 }
 
-// Avatar Group — stacks avatars with overlap
 interface AvatarGroupProps {
     users: Array<{ name: string; image?: string | null }>;
     max?: number;
     size?: AvatarSize;
+    className?: string;
 }
 
-export function AvatarGroup({ users, max = 4, size = 'sm' }: AvatarGroupProps) {
+export function AvatarGroup({ users, max = 4, size = 'sm', className }: AvatarGroupProps) {
     const visible = users.slice(0, max);
     const remaining = users.length - max;
 
     return (
-        <div className={styles.group}>
-            {visible.map((user, i) => (
-                <Avatar key={i} name={user.name} image={user.image} size={size} />
+        <span className={cn(styles.group, className)}>
+            {visible.map((user, index) => (
+                <Avatar key={`${user.name}-${index}`} name={user.name} image={user.image} size={size} />
             ))}
             {remaining > 0 && (
-                <div className={cn(styles.avatar, styles[size], styles.overflow)}>
-                    +{remaining}
-                </div>
+                <span className={cn(styles.avatar, styles[size], styles.overflow)}>+{remaining}</span>
             )}
-        </div>
+        </span>
     );
 }

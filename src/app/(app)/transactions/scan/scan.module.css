@@ -1,0 +1,598 @@
+/* ═══════════════════════════════════════════════════════════════
+   Scan receipt
+   ═══════════════════════════════════════════════════════════════ */
+
+.page {
+    display: flex;
+    flex-direction: column;
+    padding: 6px 0 24px;
+}
+
+.stack {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.modeLabel {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.twoUp {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    width: 100%;
+}
+
+/* Viewfinder-style corner brackets, shared by the drop zone and scan frames. */
+.corners,
+.frameCorners,
+.guide {
+    --corner: rgba(var(--accent-500-rgb), 0.75);
+    position: absolute;
+    pointer-events: none;
+    background:
+        linear-gradient(var(--corner), var(--corner)) left top / 26px 3px,
+        linear-gradient(var(--corner), var(--corner)) left top / 3px 26px,
+        linear-gradient(var(--corner), var(--corner)) right top / 26px 3px,
+        linear-gradient(var(--corner), var(--corner)) right top / 3px 26px,
+        linear-gradient(var(--corner), var(--corner)) left bottom / 26px 3px,
+        linear-gradient(var(--corner), var(--corner)) left bottom / 3px 26px,
+        linear-gradient(var(--corner), var(--corner)) right bottom / 26px 3px,
+        linear-gradient(var(--corner), var(--corner)) right bottom / 3px 26px;
+    background-repeat: no-repeat;
+}
+
+.corners {
+    inset: 16px;
+}
+
+/* ── Drop zone ── */
+.dropzone {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 260px;
+    padding: 30px 24px;
+    border-radius: 28px;
+    background:
+        radial-gradient(120% 90% at 50% 0%, rgba(var(--accent-500-rgb), 0.14), transparent 62%),
+        var(--surface-card);
+    border: 1px solid var(--border-default);
+    box-shadow: var(--shadow-card);
+    color: var(--fg-primary);
+    text-align: center;
+    transition: border-color 200ms ease, box-shadow 200ms ease;
+}
+
+.dropzoneActive {
+    border-color: var(--accent-500);
+    box-shadow: 0 0 0 4px var(--accent-ring), var(--shadow-card);
+}
+
+.dropIcon {
+    display: grid;
+    place-items: center;
+    width: 72px;
+    height: 72px;
+    margin-bottom: 8px;
+    border-radius: 24px;
+    background: var(--accent-gradient);
+    color: var(--fg-on-accent);
+    box-shadow: 0 16px 36px rgba(var(--accent-500-rgb), 0.35);
+}
+
+.dropTitle {
+    font-size: 17px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+}
+
+.dropText {
+    max-width: 300px;
+    font-size: 13.5px;
+    line-height: 1.5;
+    color: var(--fg-secondary);
+}
+
+.dropHint {
+    margin-top: 6px;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--fg-muted);
+}
+
+/* ── How it works ── */
+.steps {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 8px;
+    border-radius: 18px;
+    background: var(--surface-card);
+    border: 1px solid var(--border-default);
+    text-align: center;
+}
+
+.stepIcon {
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 12px;
+    background: var(--accent-soft);
+    color: var(--accent-strong);
+}
+
+.stepText {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 11.5px;
+    line-height: 1.35;
+    color: var(--fg-tertiary);
+}
+
+.stepText strong {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--fg-primary);
+}
+
+.privacy {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--fg-muted);
+    text-align: center;
+}
+
+.privacy svg {
+    flex-shrink: 0;
+    color: var(--color-success);
+}
+
+/* ── Loading ── */
+.scanCard {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 18px;
+    border-radius: 28px;
+    background: var(--surface-card);
+    border: 1px solid var(--border-default);
+    box-shadow: var(--shadow-card);
+    text-align: center;
+}
+
+.previewFrame {
+    position: relative;
+    width: 100%;
+    height: 240px;
+    margin-bottom: 10px;
+    overflow: hidden;
+    border-radius: 20px;
+    background: #000;
+}
+
+.previewImage {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0.72;
+}
+
+.scanBeam {
+    position: absolute;
+    right: 6%;
+    left: 6%;
+    height: 3px;
+    border-radius: 3px;
+    background: linear-gradient(90deg, transparent, var(--accent-300), var(--accent-500), var(--accent-300), transparent);
+    box-shadow: 0 0 18px var(--accent-500), 0 0 48px rgba(var(--accent-500-rgb), 0.45);
+}
+
+.frameCorners {
+    --corner: rgba(255, 255, 255, 0.9);
+    inset: 14px;
+}
+
+.scanTitle {
+    font-size: 16px;
+    font-weight: 800;
+}
+
+.scanText {
+    margin-bottom: 8px;
+    font-size: 13px;
+    color: var(--fg-tertiary);
+}
+
+.progressWrap {
+    width: 100%;
+}
+
+.scanPct {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--accent-strong);
+    font-variant-numeric: tabular-nums;
+}
+
+/* ── Result ── */
+.resultHead {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    border-radius: 20px;
+    background: var(--surface-card);
+    border: 1px solid var(--border-default);
+    box-shadow: var(--shadow-card);
+}
+
+.thumb {
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
+    object-fit: cover;
+    background: var(--bg-tertiary);
+}
+
+.resultHeadText {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.resultEyebrow {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--fg-tertiary);
+}
+
+.resultTitle {
+    font-size: 15px;
+    font-weight: 700;
+}
+
+.receipt {
+    padding: 20px 18px 18px;
+    border-radius: 22px;
+    background: var(--surface-card);
+    border: 1px solid var(--border-default);
+    box-shadow: var(--shadow-card);
+}
+
+.receiptTop {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding-bottom: 14px;
+    border-bottom: 1px dashed var(--border-strong);
+    text-align: center;
+}
+
+.receiptMerchant {
+    font-size: 18px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    overflow-wrap: anywhere;
+}
+
+.receiptDate {
+    font-size: 12px;
+    color: var(--fg-tertiary);
+}
+
+.items {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 6px 0;
+    list-style: none;
+}
+
+.item {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 9px 0;
+    border-bottom: 1px solid var(--border-subtle);
+    font-size: 13.5px;
+}
+
+.item:last-child {
+    border-bottom: 0;
+}
+
+.itemName {
+    min-width: 0;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.itemQty {
+    margin-left: 6px;
+    font-size: 12px;
+    color: var(--fg-tertiary);
+}
+
+.itemPrice {
+    flex-shrink: 0;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.totals {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-top: 12px;
+    border-top: 1px dashed var(--border-strong);
+}
+
+.totalRow {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12.5px;
+    color: var(--fg-tertiary);
+    font-variant-numeric: tabular-nums;
+}
+
+.grandTotal {
+    margin-top: 4px;
+    font-size: 17px;
+    font-weight: 800;
+    color: var(--fg-primary);
+}
+
+.amountCard {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 22px 18px;
+    border-radius: 22px;
+    background: var(--surface-card);
+    border: 1px solid var(--border-default);
+    box-shadow: var(--shadow-card);
+    text-align: center;
+}
+
+.amountLabel {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--fg-tertiary);
+}
+
+.amountValue {
+    font-size: clamp(2rem, 9vw, 2.5rem);
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    font-variant-numeric: tabular-nums;
+}
+
+.amountMissing {
+    color: var(--fg-muted);
+}
+
+.amountHint {
+    font-size: 12.5px;
+    color: var(--fg-tertiary);
+}
+
+.fieldValue {
+    max-width: 190px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--fg-secondary);
+}
+
+.mono {
+    font-family: var(--font-mono);
+    letter-spacing: 0.03em;
+}
+
+.raw {
+    border-radius: 16px;
+    background: var(--surface-card);
+    border: 1px solid var(--border-default);
+}
+
+.raw summary {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 12px 14px;
+    list-style: none;
+    cursor: pointer;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--fg-tertiary);
+}
+
+.raw summary::-webkit-details-marker {
+    display: none;
+}
+
+.raw pre {
+    max-height: 180px;
+    margin: 0;
+    padding: 0 14px 14px;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--fg-secondary);
+}
+
+.actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/* ── Error ── */
+.errorCard {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 28px 20px 20px;
+    border-radius: 28px;
+    background: var(--surface-card);
+    border: 1px solid var(--border-default);
+    box-shadow: var(--shadow-card);
+    text-align: center;
+}
+
+.errorIcon {
+    display: grid;
+    place-items: center;
+    width: 64px;
+    height: 64px;
+    border-radius: 22px;
+    background: var(--color-error-bg);
+    color: var(--color-error);
+}
+
+.errorTitle {
+    font-size: 18px;
+    font-weight: 800;
+}
+
+.errorText {
+    max-width: 300px;
+    margin-bottom: 6px;
+    font-size: 13.5px;
+    line-height: 1.55;
+    color: var(--fg-tertiary);
+}
+
+/* ── Live camera ── */
+.camera {
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-modal);
+    display: flex;
+    flex-direction: column;
+    background: #000;
+    color: #fff;
+}
+
+.cameraBar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: calc(env(safe-area-inset-top, 0px) + 14px) 18px 12px;
+}
+
+.cameraTitle {
+    font-size: 14px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.82);
+}
+
+.cameraButton {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    color: #fff;
+}
+
+.cameraSpacer {
+    width: 44px;
+    height: 44px;
+}
+
+.cameraStage {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 14px;
+    border-radius: 24px;
+}
+
+.video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    background: #111;
+}
+
+.guide {
+    --corner: rgba(255, 255, 255, 0.95);
+    top: 50%;
+    left: 50%;
+    width: min(72%, 300px);
+    aspect-ratio: 3 / 4;
+    transform: translate(-50%, -50%);
+    border-radius: 18px;
+    box-shadow: 0 0 0 4000px rgba(0, 0, 0, 0.35);
+}
+
+.cameraControls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 22px 34px calc(env(safe-area-inset-bottom, 0px) + 26px);
+}
+
+.shutter {
+    display: grid;
+    place-items: center;
+    width: 78px;
+    height: 78px;
+    border-radius: 50%;
+    border: 4px solid rgba(255, 255, 255, 0.85);
+}
+
+.shutterInner {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: #fff;
+}

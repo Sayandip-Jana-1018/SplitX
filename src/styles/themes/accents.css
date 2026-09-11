@@ -1,123 +1,33 @@
 /* ═══════════════════════════════════════════════════════════════
-   Accent Color Palettes
-   8 themes × 10 shades each
-   Applied via: <html data-accent="blue|purple|green|...">
+   Accent palettes — full 50→950 scale per palette.
+   Applied via <html data-palette="…"> (set before first paint).
+   Legacy palette ids are mapped onto the curated set so saved
+   preferences keep working.
    ═══════════════════════════════════════════════════════════════ */
 
-/* ── Blue (Default — warm periwinkle-violet for dark mode) ── */
-[data-accent="blue"] {
-    --accent-50: #eef0ff;
-    --accent-100: #dfe3ff;
-    --accent-200: #c6cbff;
-    --accent-300: #a4a8fd;
-    --accent-400: #8183f9;
-    --accent-500: #6366f1;
-    --accent-600: #5046e5;
-    --accent-700: #4338ca;
-    --accent-800: #3730a3;
-    --accent-900: #312e81;
-    --accent-950: #1e1b4b;
-    --accent-500-rgb: 99, 102, 241;
-}
-
-/* ── Purple ── */
-[data-accent="purple"] {
-    --accent-50: #faf5ff;
-    --accent-100: #f3e8ff;
-    --accent-200: #e9d5ff;
-    --accent-300: #d8b4fe;
-    --accent-400: #c084fc;
-    --accent-500: #a855f7;
-    --accent-600: #9333ea;
-    --accent-700: #7e22ce;
-    --accent-800: #6b21a8;
-    --accent-900: #581c87;
-    --accent-950: #3b0764;
-    --accent-500-rgb: 168, 85, 247;
-}
-
-/* ── Green ── */
-[data-accent="green"] {
-    --accent-50: #ecfdf5;
-    --accent-100: #d1fae5;
-    --accent-200: #a7f3d0;
-    --accent-300: #6ee7b7;
-    --accent-400: #34d399;
-    --accent-500: #10b981;
-    --accent-600: #059669;
-    --accent-700: #047857;
-    --accent-800: #065f46;
-    --accent-900: #064e3b;
-    --accent-950: #022c22;
-    --accent-500-rgb: 16, 185, 129;
-}
-
-/* ── Orange ── */
-[data-accent="orange"] {
-    --accent-50: #fff7ed;
-    --accent-100: #ffedd5;
-    --accent-200: #fed7aa;
-    --accent-300: #fdba74;
-    --accent-400: #fb923c;
-    --accent-500: #f97316;
-    --accent-600: #ea580c;
-    --accent-700: #c2410c;
-    --accent-800: #9a3412;
-    --accent-900: #7c2d12;
-    --accent-950: #431407;
-    --accent-500-rgb: 249, 115, 22;
-}
-
-/* ── Pink ── */
-[data-accent="pink"] {
-    --accent-50: #fdf2f8;
-    --accent-100: #fce7f3;
-    --accent-200: #fbcfe8;
-    --accent-300: #f9a8d4;
-    --accent-400: #f472b6;
-    --accent-500: #ec4899;
-    --accent-600: #db2777;
-    --accent-700: #be185d;
-    --accent-800: #9d174d;
-    --accent-900: #831843;
-    --accent-950: #500724;
-    --accent-500-rgb: 236, 72, 153;
-}
-
-/* ── Red ── */
-[data-accent="red"] {
-    --accent-50: #fef2f2;
-    --accent-100: #fee2e2;
-    --accent-200: #fecaca;
-    --accent-300: #fca5a5;
-    --accent-400: #f87171;
-    --accent-500: #ef4444;
-    --accent-600: #dc2626;
-    --accent-700: #b91c1c;
-    --accent-800: #991b1b;
-    --accent-900: #7f1d1d;
-    --accent-950: #450a0a;
-    --accent-500-rgb: 239, 68, 68;
-}
-
-/* ── Teal ── */
-[data-accent="teal"] {
-    --accent-50: #f0fdfa;
-    --accent-100: #ccfbf1;
-    --accent-200: #99f6e4;
-    --accent-300: #5eead4;
-    --accent-400: #2dd4bf;
-    --accent-500: #14b8a6;
-    --accent-600: #0d9488;
-    --accent-700: #0f766e;
-    --accent-800: #115e59;
-    --accent-900: #134e4a;
-    --accent-950: #042f2e;
-    --accent-500-rgb: 20, 184, 166;
+/* ── Amethyst (default · violet) ── */
+:root,
+[data-palette="amethyst-haze"],
+[data-palette="pastel-dreams"],
+[data-palette="lavender-mist"] {
+    --accent-50: #f5f3ff;
+    --accent-100: #ede9fe;
+    --accent-200: #ddd6fe;
+    --accent-300: #c4b5fd;
+    --accent-400: #a78bfa;
+    --accent-500: #8b5cf6;
+    --accent-600: #7c3aed;
+    --accent-700: #6d28d9;
+    --accent-800: #5b21b6;
+    --accent-900: #4c1d95;
+    --accent-950: #2e1065;
+    --accent-500-rgb: 139, 92, 246;
+    --fg-on-accent: #ffffff;
 }
 
 /* ── Indigo ── */
-[data-accent="indigo"] {
+[data-palette="cosmic-night"],
+[data-palette="midnight-indigo"] {
     --accent-50: #eef2ff;
     --accent-100: #e0e7ff;
     --accent-200: #c7d2fe;
@@ -130,4 +40,202 @@
     --accent-900: #312e81;
     --accent-950: #1e1b4b;
     --accent-500-rgb: 99, 102, 241;
+    --fg-on-accent: #ffffff;
+}
+
+/* ── Blue ── */
+[data-palette="bold-tech"] {
+    --accent-50: #eff6ff;
+    --accent-100: #dbeafe;
+    --accent-200: #bfdbfe;
+    --accent-300: #93c5fd;
+    --accent-400: #60a5fa;
+    --accent-500: #3b82f6;
+    --accent-600: #2563eb;
+    --accent-700: #1d4ed8;
+    --accent-800: #1e40af;
+    --accent-900: #1e3a8a;
+    --accent-950: #172554;
+    --accent-500-rgb: 59, 130, 246;
+    --fg-on-accent: #ffffff;
+}
+
+/* ── Sky ── */
+[data-palette="sky-blue"] {
+    --accent-50: #f0f9ff;
+    --accent-100: #e0f2fe;
+    --accent-200: #bae6fd;
+    --accent-300: #7dd3fc;
+    --accent-400: #38bdf8;
+    --accent-500: #0ea5e9;
+    --accent-600: #0284c7;
+    --accent-700: #0369a1;
+    --accent-800: #075985;
+    --accent-900: #0c4a6e;
+    --accent-950: #082f49;
+    --accent-500-rgb: 14, 165, 233;
+    --fg-on-accent: #ffffff;
+}
+
+/* ── Cyan ── */
+[data-palette="ocean-breeze"] {
+    --accent-50: #ecfeff;
+    --accent-100: #cffafe;
+    --accent-200: #a5f3fc;
+    --accent-300: #67e8f9;
+    --accent-400: #22d3ee;
+    --accent-500: #06b6d4;
+    --accent-600: #0891b2;
+    --accent-700: #0e7490;
+    --accent-800: #155e75;
+    --accent-900: #164e63;
+    --accent-950: #083344;
+    --accent-500-rgb: 6, 182, 212;
+    --fg-on-accent: #ffffff;
+}
+
+/* ── Teal ── */
+[data-palette="perpetuity"] {
+    --accent-50: #f0fdfa;
+    --accent-100: #ccfbf1;
+    --accent-200: #99f6e4;
+    --accent-300: #5eead4;
+    --accent-400: #2dd4bf;
+    --accent-500: #14b8a6;
+    --accent-600: #0d9488;
+    --accent-700: #0f766e;
+    --accent-800: #115e59;
+    --accent-900: #134e4a;
+    --accent-950: #042f2e;
+    --accent-500-rgb: 20, 184, 166;
+    --fg-on-accent: #ffffff;
+}
+
+/* ── Emerald ── */
+[data-palette="emerald-glow"] {
+    --accent-50: #ecfdf5;
+    --accent-100: #d1fae5;
+    --accent-200: #a7f3d0;
+    --accent-300: #6ee7b7;
+    --accent-400: #34d399;
+    --accent-500: #10b981;
+    --accent-600: #059669;
+    --accent-700: #047857;
+    --accent-800: #065f46;
+    --accent-900: #064e3b;
+    --accent-950: #022c22;
+    --accent-500-rgb: 16, 185, 129;
+    --fg-on-accent: #ffffff;
+}
+
+/* ── Lime ── */
+[data-palette="lime-fusion"] {
+    --accent-50: #f7fee7;
+    --accent-100: #ecfccb;
+    --accent-200: #d9f99d;
+    --accent-300: #bef264;
+    --accent-400: #a3e635;
+    --accent-500: #84cc16;
+    --accent-600: #65a30d;
+    --accent-700: #4d7c0f;
+    --accent-800: #3f6212;
+    --accent-900: #365314;
+    --accent-950: #1a2e05;
+    --accent-500-rgb: 132, 204, 22;
+    --fg-on-accent: #1a2e05;
+}
+
+/* ── Amber ── */
+[data-palette="amber-minimal"] {
+    --accent-50: #fffbeb;
+    --accent-100: #fef3c7;
+    --accent-200: #fde68a;
+    --accent-300: #fcd34d;
+    --accent-400: #fbbf24;
+    --accent-500: #f59e0b;
+    --accent-600: #d97706;
+    --accent-700: #b45309;
+    --accent-800: #92400e;
+    --accent-900: #78350f;
+    --accent-950: #451a03;
+    --accent-500-rgb: 245, 158, 11;
+    --fg-on-accent: #451a03;
+}
+
+/* ── Orange ── */
+[data-palette="solar-dusk"],
+[data-palette="tangerine"] {
+    --accent-50: #fff7ed;
+    --accent-100: #ffedd5;
+    --accent-200: #fed7aa;
+    --accent-300: #fdba74;
+    --accent-400: #fb923c;
+    --accent-500: #f97316;
+    --accent-600: #ea580c;
+    --accent-700: #c2410c;
+    --accent-800: #9a3412;
+    --accent-900: #7c2d12;
+    --accent-950: #431407;
+    --accent-500-rgb: 249, 115, 22;
+    --fg-on-accent: #ffffff;
+}
+
+/* ── Rose ── */
+[data-palette="cherry-blossom"],
+[data-palette="warm-coral"] {
+    --accent-50: #fff1f2;
+    --accent-100: #ffe4e6;
+    --accent-200: #fecdd3;
+    --accent-300: #fda4af;
+    --accent-400: #fb7185;
+    --accent-500: #f43f5e;
+    --accent-600: #e11d48;
+    --accent-700: #be123c;
+    --accent-800: #9f1239;
+    --accent-900: #881337;
+    --accent-950: #4c0519;
+    --accent-500-rgb: 244, 63, 94;
+    --fg-on-accent: #ffffff;
+}
+
+/* ── Pink ── */
+[data-palette="quantum-rose"] {
+    --accent-50: #fdf2f8;
+    --accent-100: #fce7f3;
+    --accent-200: #fbcfe8;
+    --accent-300: #f9a8d4;
+    --accent-400: #f472b6;
+    --accent-500: #ec4899;
+    --accent-600: #db2777;
+    --accent-700: #be185d;
+    --accent-800: #9d174d;
+    --accent-900: #831843;
+    --accent-950: #500724;
+    --accent-500-rgb: 236, 72, 153;
+    --fg-on-accent: #ffffff;
+}
+
+/* ── Fuchsia ── */
+[data-palette="cyberpunk"] {
+    --accent-50: #fdf4ff;
+    --accent-100: #fae8ff;
+    --accent-200: #f5d0fe;
+    --accent-300: #f0abfc;
+    --accent-400: #e879f9;
+    --accent-500: #d946ef;
+    --accent-600: #c026d3;
+    --accent-700: #a21caf;
+    --accent-800: #86198f;
+    --accent-900: #701a75;
+    --accent-950: #4a044e;
+    --accent-500-rgb: 217, 70, 239;
+    --fg-on-accent: #ffffff;
+}
+
+/* ── Contrast tuning for bright palettes on light canvas ── */
+[data-theme="light"][data-palette="lime-fusion"],
+[data-theme="light"][data-palette="amber-minimal"],
+[data-theme="light"][data-palette="ocean-breeze"],
+[data-theme="light"][data-palette="sky-blue"] {
+    --accent-strong: var(--accent-700);
 }

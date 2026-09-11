@@ -1,318 +1,154 @@
 /* ═══════════════════════════════════════════════════════════════
-   Contacts Page — Premium Glassmorphic Styling
+   Contacts
    ═══════════════════════════════════════════════════════════════ */
 
-.contactsContainer {
+.page {
     display: flex;
     flex-direction: column;
-    gap: var(--space-4);
+    gap: 18px;
+    padding-top: 6px;
+}
+
+.toolbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+}
+
+.clearButton {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--bg-tertiary);
+    color: var(--fg-tertiary);
+}
+
+.sections {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.letterBlock {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.letter {
+    padding: 0 6px;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    color: var(--fg-tertiary);
+}
+
+/* ── Contact card sheet ── */
+.card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    text-align: center;
+}
+
+.cardName {
+    margin-top: 10px;
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    overflow-wrap: anywhere;
+}
+
+.cardMeta {
+    margin-bottom: 4px;
+    font-size: 13px;
+    color: var(--fg-tertiary);
+    overflow-wrap: anywhere;
+}
+
+.cardActions {
+    width: 100%;
+    margin-top: 16px;
     text-align: left;
 }
 
-/* ── Subheader ── */
-.subheader {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.subheaderText {
-    color: var(--fg-tertiary);
-    font-size: var(--text-xs);
-}
-
-.addBtn {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 8px 14px;
-    border-radius: var(--radius-full);
-    background: linear-gradient(135deg, var(--accent-500), var(--accent-600));
-    border: none;
-    color: white;
-    font-size: var(--text-xs);
-    font-weight: 700;
-    cursor: pointer;
-    box-shadow: 0 4px 16px rgba(var(--accent-500-rgb), 0.3);
-    transition: all 0.2s;
-}
-
-.addBtn:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 6px 24px rgba(var(--accent-500-rgb), 0.4);
-}
-
-.addBtn:active {
-    transform: scale(0.97);
-}
-
-/* ── Search Bar ── */
-.searchBar {
-    position: relative;
-}
-
-.searchInput {
-    width: 100%;
-    padding: 12px 42px;
-    border-radius: var(--radius-xl);
-    border: 1.5px solid var(--border-glass);
-    background: var(--bg-glass);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    color: var(--fg-primary);
-    font-size: var(--text-sm);
-    outline: none;
-    transition: all 0.2s;
-}
-
-.searchInput::placeholder {
-    color: var(--fg-muted);
-}
-
-.searchInput:focus {
-    border-color: rgba(var(--accent-500-rgb), 0.3);
-    box-shadow: 0 0 0 3px rgba(var(--accent-500-rgb), 0.08);
-}
-
-.searchIcon {
-    position: absolute;
-    left: 14px;
-    top: 50%;
-    transform: translateY(-50%);
-    color: var(--fg-muted);
-    pointer-events: none;
-}
-
-/* ── Contact Cards ── */
-.contactList {
+/* ── Sheets ── */
+.sheet {
     display: flex;
     flex-direction: column;
-    gap: var(--space-2);
+    gap: 14px;
 }
 
-.contactCard {
-    position: relative;
+.loadingBlock {
+    display: grid;
+    place-items: center;
+    padding: 36px 0;
+    color: var(--accent-500);
+}
+
+.shareGrid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.shareOption {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 6px;
+    border-radius: 18px;
+    background: var(--surface-card);
+    border: 1px solid var(--border-default);
+    color: var(--fg-secondary);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.shareIcon {
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 14px;
+    background: var(--accent-soft);
+    color: var(--accent-strong);
+}
+
+.linkBox {
     display: flex;
     align-items: center;
-    gap: var(--space-3);
-    padding: var(--space-3) var(--space-4);
-    border-radius: var(--radius-xl);
-    background: var(--bg-glass);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid var(--border-glass);
-    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-    overflow: hidden;
+    gap: 10px;
+    padding: 8px 8px 8px 14px;
+    border-radius: 16px;
+    background: var(--surface-input);
+    border: 1px solid var(--border-default);
 }
 
-.contactCard::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 15%;
-    right: 15%;
-    height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.06), transparent);
-    pointer-events: none;
-}
-
-.contactCard:hover {
-    transform: translateY(-2px);
-    border-color: rgba(var(--accent-500-rgb), 0.15);
-    box-shadow: var(--shadow-card-hover);
-}
-
-.contactAvatar {
-    width: 44px;
-    height: 44px;
-    border-radius: var(--radius-lg);
-    background: linear-gradient(135deg, rgba(var(--accent-500-rgb), 0.12), rgba(var(--accent-500-rgb), 0.04));
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 18px;
-    font-weight: 700;
-    color: var(--accent-400);
-    flex-shrink: 0;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
-}
-
-.contactInfo {
+.linkText {
     flex: 1;
     min-width: 0;
-}
-
-.contactName {
-    font-size: var(--text-sm);
-    font-weight: 700;
-    color: var(--fg-primary);
-    margin-bottom: 2px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-}
-
-.contactMeta {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-}
-
-.contactEmail {
-    font-size: var(--text-xs);
-    color: var(--fg-tertiary);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.linkedBadge {
-    display: inline-flex;
-    align-items: center;
-    gap: 3px;
-    padding: 2px 8px;
-    border-radius: var(--radius-full);
-    background: rgba(52, 211, 153, 0.1);
-    border: 1px solid rgba(52, 211, 153, 0.15);
-    color: #34d399;
-    font-size: 10px;
-    font-weight: 600;
-    flex-shrink: 0;
-}
-
-/* ── Action Buttons ── */
-.contactActions {
-    display: flex;
-    gap: var(--space-1);
-    flex-shrink: 0;
-}
-
-.actionBtn {
-    width: 34px;
-    height: 34px;
-    border-radius: var(--radius-lg);
-    border: 1px solid var(--border-glass);
-    background: var(--bg-glass);
+    font-family: var(--font-mono);
+    font-size: 12.5px;
     color: var(--fg-secondary);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.2s;
 }
 
-.actionBtn:hover {
-    background: rgba(var(--accent-500-rgb), 0.1);
-    border-color: rgba(var(--accent-500-rgb), 0.2);
-    color: var(--accent-400);
+.groupEmoji {
+    font-size: 20px;
+    line-height: 1;
 }
 
-.actionBtnDanger:hover {
-    background: rgba(239, 68, 68, 0.1);
-    border-color: rgba(239, 68, 68, 0.2);
-    color: #ef4444;
-}
-
-/* ── Empty State ── */
-.emptyState {
-    padding: var(--space-10) var(--space-4);
-    text-align: center;
-    border-radius: var(--radius-2xl);
-    background: linear-gradient(135deg, rgba(var(--accent-500-rgb), 0.04), var(--bg-glass));
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid var(--border-glass);
-}
-
-.emptyIcon {
-    width: 64px;
-    height: 64px;
-    border-radius: var(--radius-2xl);
-    background: rgba(var(--accent-500-rgb), 0.08);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 0 auto var(--space-4);
-    color: var(--accent-400);
-}
-
-.emptyTitle {
-    font-size: var(--text-base);
-    font-weight: 700;
-    margin-bottom: 4px;
-    color: var(--fg-primary);
-}
-
-.emptyDesc {
-    font-size: var(--text-sm);
-    color: var(--fg-tertiary);
-    margin-bottom: var(--space-5);
-}
-
-/* ── Add Contact Form ── */
-.formField {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    text-align: left;
-}
-
-.formLabel {
-    font-size: var(--text-xs);
-    font-weight: 600;
-    color: var(--fg-secondary);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-.formInput {
-    padding: 10px 14px;
-    border-radius: var(--radius-lg);
-    border: 1.5px solid var(--border-glass);
-    background: var(--surface-input);
-    color: var(--fg-primary);
-    font-size: var(--text-sm);
-    outline: none;
-    transition: all 0.2s;
-}
-
-.formInput::placeholder {
-    color: var(--fg-muted);
-}
-
-.formInput:focus {
-    border-color: rgba(var(--accent-500-rgb), 0.4);
-    box-shadow: 0 0 0 3px rgba(var(--accent-500-rgb), 0.08);
-}
-
-/* ── Stats Row ── */
-.statsRow {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: var(--space-2);
-}
-
-.statCard {
-    padding: var(--space-3);
-    border-radius: var(--radius-xl);
-    background: var(--bg-glass);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid var(--border-glass);
-    text-align: center;
-}
-
-.statValue {
-    font-size: var(--text-lg);
-    font-weight: 800;
-    background: linear-gradient(135deg, var(--accent-400), var(--accent-500));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-}
-
-.statLabel {
-    font-size: 10px;
-    color: var(--fg-tertiary);
-    margin-top: 2px;
+@media (hover: hover) and (pointer: fine) {
+    .shareOption:hover {
+        border-color: var(--border-strong);
+        color: var(--fg-primary);
+    }
 }

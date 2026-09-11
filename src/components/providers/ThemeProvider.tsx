@@ -3,7 +3,7 @@
 import { createContext, useContext } from 'react';
 import { MotionConfig } from 'framer-motion';
 import { useTheme, COLOR_PALETTES } from '@/hooks/useTheme';
-import type { PaletteId, ColorPalette } from '@/hooks/useTheme';
+import type { PaletteId, ColorPalette, ThemePreference } from '@/hooks/useTheme';
 
 type ThemeContextType = ReturnType<typeof useTheme>;
 
@@ -15,20 +15,21 @@ export function useThemeContext() {
     return ctx;
 }
 
+/**
+ * Theme attributes are applied before first paint by the inline bootstrap
+ * script in app/layout.tsx, so nothing here needs to hide the UI.
+ */
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const themeValues = useTheme();
 
     return (
         <ThemeContext.Provider value={themeValues}>
-            <MotionConfig reducedMotion="user" transition={{ type: 'spring', stiffness: 320, damping: 30 }}>
-                <div style={themeValues.mounted ? undefined : { visibility: 'hidden' }}>
-                    {children}
-                </div>
+            <MotionConfig reducedMotion="user" transition={{ type: 'spring', stiffness: 380, damping: 34 }}>
+                {children}
             </MotionConfig>
         </ThemeContext.Provider>
     );
 }
 
-// Re-export for consumers
 export { COLOR_PALETTES };
-export type { PaletteId, ColorPalette };
+export type { PaletteId, ColorPalette, ThemePreference };

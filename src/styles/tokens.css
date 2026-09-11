@@ -1,97 +1,71 @@
 /* ═══════════════════════════════════════════════════════════════
-   SplitX Design Tokens
-   All spacing, sizing, typography, and elevation values live here.
+   SplitX Design Tokens — "Aurora" design language
+   Theme-independent scales: spacing, radius, type, motion, layers.
+   Colors live in themes/light.css, themes/dark.css and themes/accents.css.
    ═══════════════════════════════════════════════════════════════ */
 
 :root {
-  /* ── Spacing Scale ── */
+  /* ── Spacing (4px grid) ── */
   --space-0: 0;
-  --space-1: 0.25rem;
-  /* 4px */
-  --space-2: 0.5rem;
-  /* 8px */
-  --space-3: 0.75rem;
-  /* 12px */
-  --space-4: 1rem;
-  /* 16px */
-  --space-5: 1.25rem;
-  /* 20px */
-  --space-6: 1.5rem;
-  /* 24px */
-  --space-8: 2rem;
-  /* 32px */
-  --space-10: 2.5rem;
-  /* 40px */
-  --space-12: 3rem;
-  /* 48px */
-  --space-16: 4rem;
-  /* 64px */
-  --space-20: 5rem;
-  /* 80px */
-  --space-24: 6rem;
-  /* 96px */
+  --space-1: 0.25rem;  /* 4  */
+  --space-2: 0.5rem;   /* 8  */
+  --space-3: 0.75rem;  /* 12 */
+  --space-4: 1rem;     /* 16 */
+  --space-5: 1.25rem;  /* 20 */
+  --space-6: 1.5rem;   /* 24 */
+  --space-7: 1.75rem;  /* 28 */
+  --space-8: 2rem;     /* 32 */
+  --space-10: 2.5rem;  /* 40 */
+  --space-12: 3rem;    /* 48 */
+  --space-16: 4rem;    /* 64 */
+  --space-20: 5rem;    /* 80 */
+  --space-24: 6rem;    /* 96 */
 
-  /* ── Border Radius ── */
-  --radius-sm: 0.375rem;
-  /* 6px */
-  --radius-md: 0.5rem;
-  /* 8px */
-  --radius-lg: 0.75rem;
-  /* 12px */
-  --radius-xl: 1rem;
-  /* 16px */
-  --radius-2xl: 1.25rem;
-  /* 20px */
-  --radius-3xl: 1.5rem;
-  /* 24px */
+  /* ── Layout rhythm ── */
+  --gutter: clamp(16px, 4.8vw, 24px);
+  --space-page: var(--gutter);
+  --section-gap: 28px;
+  --stack-gap: 10px;
+
+  /* ── Radius ── */
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+  --radius-2xl: 22px;
+  --radius-3xl: 28px;
   --radius-full: 9999px;
-
-  /* ── Shadows (light mode defaults, dark overridden in dark.css) ── */
-  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.05);
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
-  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
-  --shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-  --shadow-glow: 0 0 20px rgba(var(--accent-500-rgb), 0.3);
-  --shadow-glow-lg: 0 0 40px rgba(var(--accent-500-rgb), 0.4);
+  --surface-radius: var(--radius-2xl);
 
   /* ── Typography ── */
-  --font-sans: var(--font-geist), 'Segoe UI', system-ui, sans-serif;
-  --font-display: var(--font-geist), 'Segoe UI', system-ui, sans-serif;
-  --font-editorial: var(--font-playfair), Georgia, serif;
-  --font-mono: var(--font-jetbrains-mono), 'Fira Code', monospace;
-  --text-2xs: 0.6875rem;
-  --surface-radius: 24px;
-  --touch-target: 44px;
-  --space-page: clamp(18px, 4vw, 40px);
-  --sidebar-width: 264px;
-  --dock-height: 84px;
+  --font-sans: var(--font-geist), 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-display: var(--font-sans);
+  --font-editorial: var(--font-sans);
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, 'SF Mono', Menlo, monospace;
 
-  --text-xs: 0.75rem;
-  /* 12px */
-  --text-sm: 0.875rem;
-  /* 14px */
-  --text-base: 1rem;
-  /* 16px */
-  --text-lg: 1.125rem;
-  /* 18px */
-  --text-xl: 1.25rem;
-  /* 20px */
-  --text-2xl: 1.5rem;
-  /* 24px */
-  --text-3xl: 1.875rem;
-  /* 30px */
-  --text-4xl: 2.25rem;
-  /* 36px */
-  --text-5xl: 3rem;
-  /* 48px */
-  --text-6xl: 3.75rem;
-  /* 60px */
+  --text-2xs: 0.6875rem;  /* 11 */
+  --text-xs: 0.75rem;     /* 12 */
+  --text-sm: 0.875rem;    /* 14 */
+  --text-md: 0.9375rem;   /* 15 */
+  --text-base: 1rem;      /* 16 */
+  --text-lg: 1.125rem;    /* 18 */
+  --text-xl: 1.25rem;     /* 20 */
+  --text-2xl: 1.5rem;     /* 24 */
+  --text-3xl: 1.875rem;   /* 30 */
+  --text-4xl: 2.25rem;    /* 36 */
+  --text-5xl: 2.75rem;    /* 44 */
+  --text-6xl: 3.5rem;     /* 56 */
 
-  --leading-tight: 1.25;
+  --leading-tight: 1.15;
+  --leading-snug: 1.3;
   --leading-normal: 1.5;
-  --leading-relaxed: 1.625;
+  --leading-relaxed: 1.6;
+
+  --tracking-tighter: -0.035em;
+  --tracking-tight: -0.02em;
+  --tracking-wide: 0.08em;
+  --tracking-wider: 0.14em;
 
   --weight-normal: 400;
   --weight-medium: 500;
@@ -99,27 +73,57 @@
   --weight-bold: 700;
   --weight-extrabold: 800;
 
-  /* ── Z-Index Scale ── */
+  /* ── Motion ── */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-emphasized: cubic-bezier(0.2, 0, 0, 1);
+  --duration-instant: 90ms;
+  --duration-fast: 160ms;
+  --duration-normal: 240ms;
+  --duration-slow: 380ms;
+  --duration-slower: 560ms;
+
+  /* ── Layers ── */
+  --z-base: 1;
   --z-dropdown: 100;
   --z-sticky: 200;
   --z-fixed: 300;
-  --z-modal-backdrop: 400;
-  --z-modal: 500;
+  --z-drawer-backdrop: 400;
+  --z-drawer: 410;
   --z-popover: 600;
-  --z-toast: 700;
-  --z-tooltip: 800;
+  --z-modal-backdrop: 9990;
+  --z-modal: 9991;
+  --z-toast: 10050;
+  --z-tooltip: 10100;
 
-  /* ── Transitions ── */
-  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
-  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
-  --duration-fast: 150ms;
-  --duration-normal: 250ms;
-  --duration-slow: 350ms;
-
-  /* ── Container ── */
+  /* ── Layout ── */
   --container-sm: 640px;
   --container-md: 768px;
   --container-lg: 1024px;
   --container-xl: 1280px;
+  --content-max: 560px;
+  --header-height: 60px;
+  --dock-height: 66px;
+  --dock-clearance: calc(var(--dock-height) + 40px + env(safe-area-inset-bottom, 0px));
+  --sidebar-width: 272px;
+  --touch-target: 44px;
+
+  /* ── Hero surface (deep accent "card") — readable in every theme ── */
+  --hero-gradient:
+    radial-gradient(120% 90% at 100% 0%, rgba(255, 255, 255, 0.16) 0%, transparent 45%),
+    radial-gradient(90% 80% at 0% 100%, color-mix(in oklab, var(--accent-400) 55%, transparent) 0%, transparent 62%),
+    linear-gradient(150deg, var(--accent-600) 0%, var(--accent-800) 58%, var(--accent-950) 100%);
+  --surface-hero: var(--hero-gradient);
+  --hero-text: #ffffff;
+  --hero-muted: rgba(255, 255, 255, 0.74);
+  --hero-subtle: rgba(255, 255, 255, 0.12);
+  --hero-border: rgba(255, 255, 255, 0.16);
+  --hero-accent: var(--accent-200);
+  --shadow-hero:
+    0 1px 0 rgba(255, 255, 255, 0.12) inset,
+    0 22px 44px -22px color-mix(in srgb, var(--accent-700) 70%, transparent),
+    0 10px 20px -12px rgba(0, 0, 0, 0.25);
+
+  --accent-gradient: linear-gradient(135deg, var(--accent-500) 0%, var(--accent-600) 100%);
 }

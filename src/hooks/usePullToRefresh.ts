@@ -25,7 +25,7 @@ export function usePullToRefresh({
     const handleTouchStart = useCallback((e: TouchEvent) => {
         if (disabled || refreshing) return;
         const el = containerRef.current;
-        if (!el || el.scrollTop > 0) return;
+        if (!el || el.scrollTop > 0 || window.scrollY > 0) return;
         const touchY = e.touches[0].clientY - el.getBoundingClientRect().top;
         if (touchY > activationHeight) {
             canPullRef.current = false;
@@ -38,7 +38,7 @@ export function usePullToRefresh({
     const handleTouchMove = useCallback((e: TouchEvent) => {
         if (!canPullRef.current || disabled || refreshing) return;
         const el = containerRef.current;
-        if (!el || el.scrollTop > 0) {
+        if (!el || el.scrollTop > 0 || window.scrollY > 0) {
             canPullRef.current = false;
             setPulling(false);
             setPullDistance(0);

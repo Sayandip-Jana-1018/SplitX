@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { AlertTriangle, RefreshCw, WifiOff } from 'lucide-react';
+import { AlertTriangle, RefreshCw, WifiOff, ServerCrash } from 'lucide-react';
 import Button from '@/components/ui/Button';
 
 interface ErrorStateProps {
@@ -17,73 +17,66 @@ export default function ErrorState({
     onRetry,
     variant = 'default',
 }: ErrorStateProps) {
-    const Icon = variant === 'network' || variant === 'restricted' || variant === 'offline' ? WifiOff : AlertTriangle;
-    const iconColor = variant === 'network' || variant === 'restricted'
-        ? 'var(--color-warning)'
-        : variant === 'offline'
-            ? 'var(--color-error)'
-            : variant === 'server'
-                ? 'var(--accent-500)'
-                : 'var(--color-error)';
+    const isNetwork = variant === 'network' || variant === 'restricted' || variant === 'offline';
+    const Icon = isNetwork ? WifiOff : variant === 'server' ? ServerCrash : AlertTriangle;
+    const tone = isNetwork ? 'warning' : 'error';
 
     return (
         <motion.div
-            initial={{ opacity: 0, y: 12 }}
+            initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
+            transition={{ type: 'spring', stiffness: 320, damping: 30 }}
+            role="alert"
             style={{
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'center',
                 textAlign: 'center',
-                padding: 'var(--space-8) var(--space-4)',
-                gap: 'var(--space-3)',
-                minHeight: 200,
+                gap: 10,
+                padding: '36px 24px',
+                marginTop: 8,
+                borderRadius: 'var(--radius-2xl)',
+                background: 'var(--surface-card)',
+                border: '1px solid var(--border-default)',
+                boxShadow: 'var(--shadow-card)',
             }}
         >
             <motion.div
                 initial={{ scale: 0.8, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
-                transition={{ delay: 0.1, type: 'spring', stiffness: 300 }}
+                transition={{ delay: 0.06, type: 'spring', stiffness: 360, damping: 22 }}
                 style={{
-                    width: 56,
-                    height: 56,
-                    borderRadius: '50%',
-                    background: `color-mix(in srgb, ${iconColor} 12%, transparent)`,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
+                    width: 60,
+                    height: 60,
+                    borderRadius: 20,
+                    display: 'grid',
+                    placeItems: 'center',
+                    marginBottom: 4,
+                    background: `var(--color-${tone}-bg)`,
+                    color: `var(--color-${tone})`,
                 }}
             >
-                <Icon size={28} style={{ color: iconColor }} />
+                <Icon size={26} />
             </motion.div>
 
-            <h3 style={{
-                fontWeight: 600,
-                fontSize: 'var(--text-base)',
-                color: 'var(--fg-primary)',
-            }}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--fg-primary)' }}>
                 {title}
             </h3>
 
-            <p style={{
-                fontSize: 'var(--text-sm)',
-                color: 'var(--fg-tertiary)',
-                maxWidth: 280,
-                lineHeight: 1.5,
-            }}>
+            <p style={{ maxWidth: 300, fontSize: 13.5, lineHeight: 1.55, color: 'var(--fg-tertiary)' }}>
                 {message}
             </p>
 
             {onRetry && (
                 <Button
-                    variant="outline"
-                    size="sm"
-                    leftIcon={<RefreshCw size={14} />}
+                    variant="secondary"
+                    size="md"
+                    leftIcon={<RefreshCw size={15} />}
                     onClick={onRetry}
-                    style={{ marginTop: 'var(--space-2)' }}
+                    style={{ marginTop: 8 }}
                 >
-                    Try Again
+                    Try again
                 </Button>
             )}
         </motion.div>

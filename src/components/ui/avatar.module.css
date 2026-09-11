@@ -3,43 +3,27 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    border-radius: var(--radius-full);
-    font-weight: var(--weight-semibold);
-    color: white;
-    overflow: hidden;
     flex-shrink: 0;
+    overflow: hidden;
+    border-radius: 50%;
+    background-color: var(--bg-tertiary);
+    color: #fff;
+    font-weight: 700;
+    letter-spacing: 0.01em;
     user-select: none;
+    vertical-align: middle;
 }
 
-.xs {
-    width: 24px;
-    height: 24px;
-    font-size: 10px;
+.initials {
+    line-height: 1;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.16);
 }
 
-.sm {
-    width: 32px;
-    height: 32px;
-    font-size: 12px;
-}
-
-.md {
-    width: 40px;
-    height: 40px;
-    font-size: 14px;
-}
-
-.lg {
-    width: 48px;
-    height: 48px;
-    font-size: 16px;
-}
-
-.xl {
-    width: 56px;
-    height: 56px;
-    font-size: 20px;
-}
+.xs { width: 24px; height: 24px; font-size: 9.5px; }
+.sm { width: 32px; height: 32px; font-size: 12px; }
+.md { width: 40px; height: 40px; font-size: 14px; }
+.lg { width: 52px; height: 52px; font-size: 18px; }
+.xl { width: 72px; height: 72px; font-size: 24px; }
 
 .image {
     width: 100%;
@@ -47,40 +31,26 @@
     object-fit: cover;
 }
 
-/* ── Ring for selected state ── */
 .ring {
-    box-shadow: 0 0 0 3px var(--bg-primary), 0 0 0 5px var(--accent-500);
+    box-shadow: 0 0 0 2px var(--avatar-ring, var(--surface-card)), 0 0 0 4px var(--accent-500);
 }
 
-/* ── Avatar Group ── */
 .group {
-    display: flex;
+    display: inline-flex;
     align-items: center;
 }
 
 .group .avatar {
-    border: 2px solid var(--bg-primary);
+    box-shadow: 0 0 0 2px var(--avatar-ring, var(--surface-card));
 }
 
-.group .avatar+.avatar {
-    margin-left: -10px;
+.group .avatar + .avatar {
+    margin-left: -8px;
 }
 
 .overflow {
     background: var(--bg-tertiary);
     color: var(--fg-secondary);
-    font-size: var(--text-xs);
-    font-weight: var(--weight-medium);
-}
-
-/* ── Online indicator ── */
-.indicator {
-    position: absolute;
-    bottom: 0;
-    right: 0;
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    border: 2px solid var(--bg-primary);
-    background: var(--color-success);
+    font-size: 11px;
+    font-weight: 700;
 }

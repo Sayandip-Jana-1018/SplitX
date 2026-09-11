@@ -5,7 +5,7 @@ import { motion, HTMLMotionProps } from 'framer-motion';
 import styles from './button.module.css';
 import { cn } from '@/lib/utils';
 
-type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'outline';
+type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'outline' | 'soft' | 'success';
 type ButtonSize = 'sm' | 'md' | 'lg' | 'xl';
 
 interface ButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'onAnimationStart' | 'onDrag' | 'onDragEnd' | 'onDragStart'> {
@@ -31,31 +31,33 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
             rightIcon,
             className,
             disabled,
+            type = 'button',
             ...props
         },
         ref
     ) => {
+        const inactive = disabled || loading;
         return (
             <motion.button
                 ref={ref}
+                type={type}
                 aria-busy={loading || undefined}
-                whileTap={{ scale: 0.97 }}
-                whileHover={{ scale: 1.01 }}
-                transition={{ type: 'spring', stiffness: 400, damping: 17 }}
+                whileTap={inactive ? undefined : { scale: 0.97 }}
+                transition={{ type: 'spring', stiffness: 520, damping: 30 }}
                 className={cn(
                     styles.button,
                     styles[variant],
                     styles[size],
                     fullWidth && styles.fullWidth,
                     iconOnly && styles.iconOnly,
+                    loading && styles.loading,
                     className
                 )}
-                disabled={disabled || loading}
-                {...(props as HTMLMotionProps<"button">)}
+                disabled={inactive}
+                {...(props as HTMLMotionProps<'button'>)}
             >
-                {loading && <span className={styles.spinner} />}
-                {!loading && leftIcon}
-                {!iconOnly && children}
+                {loading ? <span className={styles.spinner} aria-hidden="true" /> : leftIcon}
+                {!iconOnly && children !== undefined && children !== null && <span className={styles.label}>{children}</span>}
                 {!loading && rightIcon}
             </motion.button>
         );

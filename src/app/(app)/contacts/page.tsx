@@ -1,16 +1,45 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useMemo, useState } from 'react';
+import useSWR from 'swr';
 import {
-    UserPlus, Search, Send, Trash2, Share2,
-    Users, UserCheck, Inbox, ExternalLink,
-    Loader2,
+    Check,
+    Copy,
+    Link2,
+    Mail,
+    MessageCircle,
+    MessageSquare,
+    Search,
+    Send,
+    Share2,
+    Trash2,
+    UserCheck,
+    UserPlus,
+    Users,
+    X,
 } from 'lucide-react';
+import Avatar from '@/components/ui/Avatar';
 import Button from '@/components/ui/Button';
+import EmptyState from '@/components/ui/EmptyState';
+import ErrorState from '@/components/ui/ErrorState';
+import { Input } from '@/components/ui/Input';
 import Modal from '@/components/ui/Modal';
-import { useCurrentUser } from '@/hooks/useCurrentUser';
+import { ListSkeleton } from '@/components/ui/Skeleton';
+import {
+    IconButton,
+    IconTile,
+    ListGroup,
+    ListRow,
+    Notice,
+    Segmented,
+    Spinner,
+    Stagger,
+    StaggerItem,
+    Tag,
+} from '@/components/ui/kit';
 import { useToast } from '@/components/ui/Toast';
+import { getNetworkErrorCopy, NetworkTaggedError } from '@/lib/networkErrors';
+import { fetcher } from '@/lib/swr';
 import styles from './contacts.module.css';
 
 interface Contact {
@@ -34,637 +63,518 @@ interface GroupOption {
     members: { userId: string }[];
 }
 
-/* ── Gravatar URL helper ── */
-function getGravatarUrl(email: string, size = 88): string {
-    // Use simple hash for Gravatar - works without md5 library via Gravatar's API
-    const hash = email.trim().toLowerCase();
-    return `https://www.gravatar.com/avatar/${hashCode(hash)}?s=${size}&d=404`;
+type Filter = 'all' | 'onApp' | 'invite';
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const JSON_HEADERS = { 'Content-Type': 'application/json' };
+const EMPTY_FORM = { name: '', email: '', phone: '' };
+
+const firstName = (name?: string | null) => (name || 'Contact').trim().split(/\s+/)[0];
+
+function errorMessage(data: unknown, fallback: string) {
+    const error = (data as { error?: unknown } | null)?.error;
+    return typeof error === 'string' && error ? error : fallback;
 }
 
-function hashCode(str: string): string {
-    // Simple hash - for proper Gravatar we'd need MD5, but we'll use the
-    // identicon endpoint which accepts any hash
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-        const char = str.charCodeAt(i);
-        hash = ((hash << 5) - hash) + char;
-        hash = hash & hash;
-    }
-    return Math.abs(hash).toString(16).padStart(8, '0');
+function letterFor(name: string) {
+    const first = name.trim().charAt(0).toUpperCase();
+    return /[A-Z]/.test(first) ? first : '#';
 }
 
 export default function ContactsPage() {
-    useCurrentUser();
     const { toast } = useToast();
-    const [contacts, setContacts] = useState<Contact[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [searchQuery, setSearchQuery] = useState('');
-    const [showAddModal, setShowAddModal] = useState(false);
+    const { data, error, isLoading, mutate } = useSWR<Contact[]>('/api/contacts', fetcher);
+    const contacts = useMemo(() => (Array.isArray(data) ? data : []), [data]);
 
-    // Form state
-    const [formName, setFormName] = useState('');
-    const [formEmail, setFormEmail] = useState('');
-    const [formPhone, setFormPhone] = useState('');
+    const [query, setQuery] = useState('');
+    const [filter, setFilter] = useState<Filter>('all');
+
+    const [addOpen, setAddOpen] = useState(false);
+    const [form, setForm] = useState(EMPTY_FORM);
     const [formError, setFormError] = useState('');
     const [saving, setSaving] = useState(false);
 
-    // Group invite modal
-    const [inviteContact, setInviteContact] = useState<Contact | null>(null);
-    const [groups, setGroups] = useState<GroupOption[]>([]);
-    const [loadingGroups, setLoadingGroups] = useState(false);
-    const [sendingInvite, setSendingInvite] = useState<string | null>(null);
+    const [selected, setSelected] = useState<Contact | null>(null);
+    const [confirmRemove, setConfirmRemove] = useState(false);
+    const [removing, setRemoving] = useState(false);
 
-    // Share modal
-    const [shareContact, setShareContact] = useState<Contact | null>(null);
+    const [groupPickerFor, setGroupPickerFor] = useState<Contact | null>(null);
+    const [sendingTo, setSendingTo] = useState<string | null>(null);
+    const groupsQuery = useSWR<GroupOption[]>(groupPickerFor ? '/api/groups' : null, fetcher);
+
+    const [shareFor, setShareFor] = useState<Contact | null>(null);
     const [shareData, setShareData] = useState<{ message: string; url: string } | null>(null);
-    const [loadingShare, setLoadingShare] = useState(false);
     const [copied, setCopied] = useState(false);
 
-    // Avatar error tracking (for Gravatar fallback)
-    const [avatarErrors, setAvatarErrors] = useState<Set<string>>(new Set());
+    const onAppCount = contacts.filter((contact) => contact.linkedUser).length;
+    const inviteCount = contacts.length - onAppCount;
 
-    // Fetch contacts
-    const loadContacts = useCallback(async () => {
-        try {
-            const res = await fetch('/api/contacts');
-            if (res.ok) {
-                const data = await res.json();
-                setContacts(data);
-            }
-        } catch {
-            // silent
-        } finally {
-            setLoading(false);
+    const sections = useMemo(() => {
+        const q = query.trim().toLowerCase();
+        const visible = contacts
+            .filter((contact) => filter === 'all' || (filter === 'onApp' ? Boolean(contact.linkedUser) : !contact.linkedUser))
+            .filter((contact) => !q
+                || contact.name.toLowerCase().includes(q)
+                || contact.email.toLowerCase().includes(q)
+                || (contact.phone || '').includes(q))
+            .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+
+        const grouped = new Map<string, Contact[]>();
+        for (const contact of visible) {
+            const letter = letterFor(contact.name);
+            grouped.set(letter, [...(grouped.get(letter) ?? []), contact]);
         }
-    }, []);
+        return Array.from(grouped.entries());
+    }, [contacts, filter, query]);
 
-    useEffect(() => { loadContacts(); }, [loadContacts]);
-
-    // Filtered contacts
-    const filteredContacts = useMemo(() => {
-        if (!searchQuery.trim()) return contacts;
-        const q = searchQuery.toLowerCase();
-        return contacts.filter(
-            c => c.name.toLowerCase().includes(q) || c.email.toLowerCase().includes(q)
-        );
-    }, [contacts, searchQuery]);
-
-    // Stats
-    const totalContacts = contacts.length;
-    const linkedCount = contacts.filter(c => c.linkedUser).length;
-    const pendingCount = totalContacts - linkedCount;
-
-    // Add contact
-    const handleAdd = async () => {
+    /* ── Add ── */
+    const addContact = async () => {
         setFormError('');
-        if (!formName.trim()) { setFormError('Name is required'); return; }
-        if (!formEmail.trim() || !formEmail.includes('@')) { setFormError('Valid email is required'); return; }
+        const name = form.name.trim();
+        const email = form.email.trim();
+        const phone = form.phone.trim();
+        if (!name) {
+            setFormError('Add a name for this contact');
+            return;
+        }
+        if (!EMAIL_PATTERN.test(email)) {
+            setFormError('Enter a valid email address');
+            return;
+        }
 
         setSaving(true);
         try {
             const res = await fetch('/api/contacts', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: formName.trim(), email: formEmail.trim(), phone: formPhone.trim() || undefined }),
+                headers: JSON_HEADERS,
+                body: JSON.stringify({ name, email, phone: phone || undefined }),
             });
-
-            if (res.ok) {
-                const newContact = await res.json();
-                setContacts(prev => [newContact, ...prev]);
-                setShowAddModal(false);
-                setFormName(''); setFormEmail(''); setFormPhone('');
-                toast('Contact added!', 'success');
+            const payload = await res.json().catch(() => null);
+            if (res.ok && payload) {
+                const created = payload as Contact;
+                await mutate((prev) => [created, ...(prev ?? [])], { revalidate: false });
+                setAddOpen(false);
+                setForm(EMPTY_FORM);
+                toast(created.linkedUser ? `${firstName(name)} is already on SplitX` : `${firstName(name)} added`, 'success');
             } else {
-                const err = await res.json();
-                setFormError(err.error || 'Failed to add contact');
+                setFormError(errorMessage(payload, 'Could not add this contact'));
             }
         } catch {
-            setFormError('Something went wrong');
+            setFormError('Network error — try again');
         } finally {
             setSaving(false);
         }
     };
 
-    // Delete contact
-    const handleDelete = async (contactId: string) => {
+    /* ── Contact sheet ── */
+    const closeContact = () => {
+        setSelected(null);
+        setConfirmRemove(false);
+    };
+
+    const removeContact = async () => {
+        if (!selected) return;
+        if (!confirmRemove) {
+            setConfirmRemove(true);
+            return;
+        }
+        setRemoving(true);
         try {
-            const res = await fetch(`/api/contacts?id=${contactId}`, { method: 'DELETE' });
+            const res = await fetch(`/api/contacts?id=${encodeURIComponent(selected.id)}`, { method: 'DELETE' });
             if (res.ok) {
-                setContacts(prev => prev.filter(c => c.id !== contactId));
-                toast('Contact removed', 'success');
+                const removedId = selected.id;
+                await mutate((prev) => (prev ?? []).filter((contact) => contact.id !== removedId), { revalidate: false });
+                toast(`${firstName(selected.name)} removed`, 'success');
+                closeContact();
+            } else {
+                toast(errorMessage(await res.json().catch(() => null), 'Could not remove this contact'), 'error');
             }
         } catch {
-            // silent
+            toast('Network error — try again', 'error');
+        } finally {
+            setRemoving(false);
         }
     };
 
-    // ── Group Invite Flow ──
-    const openGroupPicker = async (contact: Contact) => {
-        setInviteContact(contact);
-        setLoadingGroups(true);
-        try {
-            const res = await fetch('/api/groups');
-            if (res.ok) {
-                const data = await res.json();
-                setGroups(data);
-            }
-        } catch {
-            toast('Failed to load groups', 'error');
-        } finally {
-            setLoadingGroups(false);
-        }
+    /* ── Group invite ── */
+    const openGroupPicker = (contact: Contact) => {
+        closeContact();
+        setGroupPickerFor(contact);
     };
 
     const sendGroupInvite = async (groupId: string) => {
-        if (!inviteContact?.linkedUser) return;
-        setSendingInvite(groupId);
+        const invitee = groupPickerFor?.linkedUser;
+        if (!groupPickerFor || !invitee) return;
+        setSendingTo(groupId);
         try {
             const res = await fetch('/api/invitations', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ groupId, inviteeId: inviteContact.linkedUser.id }),
+                headers: JSON_HEADERS,
+                body: JSON.stringify({ groupId, inviteeId: invitee.id }),
             });
-            const data = await res.json();
+            const payload = await res.json().catch(() => null);
             if (res.ok) {
-                toast(`Invitation sent to ${inviteContact.name}!`, 'success');
-                setInviteContact(null);
+                toast(`Invite sent to ${firstName(groupPickerFor.name)}`, 'success');
+                setGroupPickerFor(null);
             } else {
-                toast(data.error || 'Failed to send invitation', 'error');
+                toast(errorMessage(payload, 'Could not send the invite'), 'error');
             }
         } catch {
-            toast('Network error', 'error');
+            toast('Network error — try again', 'error');
         } finally {
-            setSendingInvite(null);
+            setSendingTo(null);
         }
     };
 
-    // ── Share Flow ──
-    const openShareModal = async (contact: Contact) => {
-        setShareContact(contact);
-        setLoadingShare(true);
+    /* ── Share invite ── */
+    const openShare = async (contact: Contact) => {
+        closeContact();
+        setShareFor(contact);
+        setShareData(null);
         setCopied(false);
         try {
             const res = await fetch('/api/contacts/invite', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: JSON_HEADERS,
                 body: JSON.stringify({ contactId: contact.id }),
             });
             if (res.ok) {
-                const data = await res.json();
-                setShareData({ message: data.message, url: data.inviteUrl });
+                const payload = await res.json();
+                setShareData({ message: payload.message, url: payload.inviteUrl });
+            } else {
+                toast('Could not create an invite link', 'error');
+                setShareFor(null);
             }
         } catch {
-            toast('Failed to generate invite', 'error');
-        } finally {
-            setLoadingShare(false);
+            toast('Network error — try again', 'error');
+            setShareFor(null);
         }
     };
 
-    const shareViaWhatsApp = () => {
-        if (!shareData || !shareContact) return;
-        const text = encodeURIComponent(shareData.message);
-        const phone = shareContact.phone?.replace(/[^0-9]/g, '') || '';
-        const url = phone ? `https://wa.me/${phone}?text=${text}` : `https://wa.me/?text=${text}`;
-        window.open(url, '_blank');
-    };
+    const digits = (shareFor?.phone || '').replace(/[^0-9]/g, '');
 
-    const shareViaSMS = () => {
-        if (!shareData || !shareContact) return;
-        const body = encodeURIComponent(shareData.message);
-        const phone = shareContact.phone?.replace(/[^0-9]/g, '') || '';
-        window.open(`sms:${phone}?body=${body}`, '_blank');
-    };
-
-    const shareViaEmail = () => {
-        if (!shareData || !shareContact) return;
-        const subject = encodeURIComponent('Join me on SplitX!');
-        const body = encodeURIComponent(shareData.message);
-        window.open(`mailto:${shareContact.email}?subject=${subject}&body=${body}`, '_blank');
-    };
-
-    const shareViaCopy = () => {
+    const copyLink = async () => {
         if (!shareData) return;
-        navigator.clipboard.writeText(shareData.url);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
+        try {
+            await navigator.clipboard.writeText(shareData.url);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        } catch {
+            toast('Could not copy the link', 'error');
+        }
     };
 
-    // Get initials
-    const getInitials = (name: string) => {
-        return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+    const nativeShare = async () => {
+        if (!shareData) return;
+        if (navigator.share) {
+            try {
+                await navigator.share({ title: 'Join me on SplitX', text: shareData.message });
+            } catch { /* dismissed */ }
+        } else {
+            copyLink();
+        }
     };
 
-    // Get avatar image URL: linkedUser image > Gravatar > initials
-    const getAvatarImage = (contact: Contact): string | null => {
-        if (contact.linkedUser?.image) return contact.linkedUser.image;
-        if (!avatarErrors.has(contact.id)) return getGravatarUrl(contact.email);
-        return null;
-    };
-
-    if (loading) {
+    if (isLoading && !data) {
         return (
-            <div className={styles.contactsContainer}>
-                {[...Array(4)].map((_, i) => (
-                    <div key={i} className={styles.contactCard} style={{
-                        animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-                        animationDelay: `${i * 150}ms`,
-                    }}>
-                        <div className={styles.contactAvatar} style={{ background: 'rgba(var(--accent-500-rgb), 0.06)' }} />
-                        <div style={{ flex: 1 }}>
-                            <div style={{ width: '60%', height: 14, borderRadius: 8, background: 'rgba(var(--accent-500-rgb), 0.08)', marginBottom: 8 }} />
-                            <div style={{ width: '80%', height: 10, borderRadius: 6, background: 'rgba(var(--accent-500-rgb), 0.05)' }} />
-                        </div>
-                    </div>
-                ))}
+            <div className={styles.page}>
+                <ListSkeleton rows={6} />
             </div>
         );
     }
 
+    if (error && !data) {
+        const variant = error instanceof NetworkTaggedError ? error.variant : 'default';
+        const copy = getNetworkErrorCopy(variant);
+        return <ErrorState variant={variant} title={copy.title} message={copy.message} onRetry={() => mutate()} />;
+    }
+
     return (
-        <div className={styles.contactsContainer}>
-            {/* ═══ STATS ROW ═══ */}
-            <div className={styles.statsRow}>
-                <div className={styles.statCard}>
-                    <div className={styles.statValue}>{totalContacts}</div>
-                    <div className={styles.statLabel}>Total</div>
-                </div>
-                <div className={styles.statCard}>
-                    <div className={styles.statValue}>{linkedCount}</div>
-                    <div className={styles.statLabel}>On App</div>
-                </div>
-                <div className={styles.statCard}>
-                    <div className={styles.statValue}>{pendingCount}</div>
-                    <div className={styles.statLabel}>Invite</div>
-                </div>
-            </div>
+        <>
+            <Stagger className={styles.page}>
+                {contacts.length === 0 ? (
+                    <StaggerItem>
+                        <EmptyState
+                            icon={<Users size={26} />}
+                            title="Your people live here"
+                            description="Add friends once and split with them in any group — we’ll tell you who’s already on SplitX."
+                            actionLabel="Add a contact"
+                            actionIcon={<UserPlus size={16} />}
+                            onAction={() => setAddOpen(true)}
+                        />
+                    </StaggerItem>
+                ) : (
+                    <>
+                        <StaggerItem>
+                            <Segmented<Filter>
+                                ariaLabel="Filter contacts"
+                                value={filter}
+                                onChange={setFilter}
+                                options={[
+                                    { value: 'all', label: 'All', count: contacts.length },
+                                    { value: 'onApp', label: 'On SplitX', count: onAppCount },
+                                    { value: 'invite', label: 'To invite', count: inviteCount },
+                                ]}
+                            />
+                        </StaggerItem>
 
-            {/* ═══ SUBHEADER ═══ */}
-            <div className={styles.subheader}>
-                <p className={styles.subheaderText}>
-                    {totalContacts} contact{totalContacts !== 1 ? 's' : ''} · Manage your split buddies
-                </p>
-                <button className={styles.addBtn} onClick={() => setShowAddModal(true)}>
-                    <UserPlus size={14} /> Add Contact
-                </button>
-            </div>
+                        <StaggerItem>
+                            <div className={styles.toolbar}>
+                                <Input
+                                    aria-label="Search contacts"
+                                    placeholder="Search name, email or phone"
+                                    value={query}
+                                    onChange={(event) => setQuery(event.target.value)}
+                                    leftIcon={<Search size={17} />}
+                                    rightSlot={query ? (
+                                        <button type="button" className={styles.clearButton} onClick={() => setQuery('')} aria-label="Clear search">
+                                            <X size={14} />
+                                        </button>
+                                    ) : undefined}
+                                />
+                                <IconButton icon={<UserPlus size={19} />} label="Add contact" variant="solid" size="lg" onClick={() => setAddOpen(true)} />
+                            </div>
+                        </StaggerItem>
 
-            {/* ═══ SEARCH ═══ */}
-            {contacts.length > 0 && (
-                <div className={styles.searchBar}>
-                    <Search size={16} className={styles.searchIcon} />
-                    <input
-                        className={styles.searchInput}
-                        placeholder="Search contacts..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                    />
-                </div>
-            )}
-
-            {/* ═══ CONTACT LIST ═══ */}
-            {filteredContacts.length === 0 && contacts.length === 0 ? (
-                <motion.div
-                    className={styles.emptyState}
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                >
-                    <div className={styles.emptyIcon}>
-                        <Inbox size={28} />
-                    </div>
-                    <h3 className={styles.emptyTitle}>No contacts yet</h3>
-                    <p className={styles.emptyDesc}>Add friends to split expenses with them</p>
-                    <Button
-                        size="sm"
-                        leftIcon={<UserPlus size={14} />}
-                        onClick={() => setShowAddModal(true)}
-                        style={{
-                            background: 'linear-gradient(135deg, var(--accent-500), var(--accent-600))',
-                            boxShadow: '0 4px 20px rgba(var(--accent-500-rgb), 0.3)',
-                        }}
-                    >
-                        Add Your First Contact
-                    </Button>
-                </motion.div>
-            ) : (
-                <div className={styles.contactList}>
-                    <AnimatePresence mode="popLayout">
-                        {filteredContacts.map((contact, i) => {
-                            const avatarImg = getAvatarImage(contact);
-                            return (
-                                <motion.div
-                                    key={contact.id}
-                                    className={styles.contactCard}
-                                    initial={{ opacity: 0, y: 20 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    exit={{ opacity: 0, x: -100 }}
-                                    transition={{ delay: i * 0.04, duration: 0.3 }}
-                                    layout
+                        {inviteCount > 0 && filter === 'all' && !query && (
+                            <StaggerItem>
+                                <Notice
+                                    tone="info"
+                                    icon={<Send size={16} />}
+                                    title={`${inviteCount} ${inviteCount === 1 ? 'friend isn’t' : 'friends aren’t'} on SplitX yet`}
+                                    action={<Button size="sm" variant="soft" onClick={() => setFilter('invite')}>Invite</Button>}
                                 >
-                                    {/* Avatar — image or initials */}
-                                    <div className={styles.contactAvatar} style={avatarImg ? { padding: 0, overflow: 'hidden' } : undefined}>
-                                        {avatarImg ? (
-                                            /* eslint-disable-next-line @next/next/no-img-element */
-                                            <img
-                                                src={avatarImg}
-                                                alt={contact.name}
-                                                style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }}
-                                                onError={() => setAvatarErrors(prev => new Set(prev).add(contact.id))}
-                                            />
-                                        ) : (
-                                            getInitials(contact.name)
-                                        )}
-                                    </div>
-
-                                    <div className={styles.contactInfo}>
-                                        <div className={styles.contactName}>{contact.name}</div>
-                                        <div className={styles.contactMeta}>
-                                            <span className={styles.contactEmail}>{contact.email}</span>
-                                            {contact.linkedUser && (
-                                                <span className={styles.linkedBadge}>
-                                                    <UserCheck size={10} /> On App
-                                                </span>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    <div className={styles.contactActions}>
-                                        {/* Invite to Group (only for linked/on-app users) */}
-                                        {contact.linkedUser && (
-                                            <button
-                                                className={styles.actionBtn}
-                                                title="Invite to Group"
-                                                onClick={() => openGroupPicker(contact)}
-                                            >
-                                                <Users size={14} />
-                                            </button>
-                                        )}
-
-                                        {/* Share / External Invite */}
-                                        <button
-                                            className={styles.actionBtn}
-                                            title="Share Invite"
-                                            onClick={() => openShareModal(contact)}
-                                        >
-                                            <Share2 size={14} />
-                                        </button>
-
-                                        {/* Delete */}
-                                        <button
-                                            className={`${styles.actionBtn} ${styles.actionBtnDanger}`}
-                                            title="Remove Contact"
-                                            onClick={() => handleDelete(contact.id)}
-                                        >
-                                            <Trash2 size={14} />
-                                        </button>
-                                    </div>
-                                </motion.div>
-                            );
-                        })}
-                    </AnimatePresence>
-
-                    {filteredContacts.length === 0 && searchQuery && (
-                        <div style={{ textAlign: 'center', padding: 'var(--space-6)', color: 'var(--fg-tertiary)' }}>
-                            No contacts matching &quot;{searchQuery}&quot;
-                        </div>
-                    )}
-                </div>
-            )}
-
-            {/* ═══ ADD CONTACT MODAL ═══ */}
-            <Modal
-                isOpen={showAddModal}
-                onClose={() => { setShowAddModal(false); setFormError(''); }}
-                title="Add Contact"
-                size="small"
-            >
-                <AnimatePresence mode="wait">
-                    <motion.div
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}
-                    >
-                        {formError && (
-                            <motion.div
-                                initial={{ opacity: 0, height: 0 }}
-                                animate={{ opacity: 1, height: 'auto' }}
-                                style={{
-                                    padding: '8px 12px', borderRadius: 'var(--radius-lg)',
-                                    background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.15)',
-                                    color: '#ef4444', fontSize: 'var(--text-xs)',
-                                }}
-                            >
-                                {formError}
-                            </motion.div>
+                                    Invite them so they can see balances and settle up in the app.
+                                </Notice>
+                            </StaggerItem>
                         )}
 
-                        <div className={styles.formField}>
-                            <label className={styles.formLabel}>Name</label>
-                            <input
-                                className={styles.formInput}
-                                placeholder="e.g. Rahul Sharma"
-                                value={formName}
-                                onChange={(e) => setFormName(e.target.value)}
-                                autoFocus
-                            />
-                        </div>
-
-                        <div className={styles.formField}>
-                            <label className={styles.formLabel}>Email</label>
-                            <input
-                                className={styles.formInput}
-                                type="email"
-                                placeholder="rahul@example.com"
-                                value={formEmail}
-                                onChange={(e) => setFormEmail(e.target.value)}
-                            />
-                        </div>
-
-                        <div className={styles.formField}>
-                            <label className={styles.formLabel}>Phone (optional)</label>
-                            <input
-                                className={styles.formInput}
-                                type="tel"
-                                placeholder="+91 98765 43210"
-                                value={formPhone}
-                                onChange={(e) => setFormPhone(e.target.value)}
-                            />
-                        </div>
-
-                        <Button
-                            fullWidth
-                            size="lg"
-                            disabled={!formName.trim() || !formEmail.trim()}
-                            loading={saving}
-                            leftIcon={<UserPlus size={18} />}
-                            onClick={handleAdd}
-                            style={{
-                                background: 'linear-gradient(135deg, var(--accent-500), var(--accent-600))',
-                                boxShadow: '0 4px 20px rgba(var(--accent-500-rgb), 0.3)',
-                                marginTop: 'var(--space-2)',
-                            }}
-                        >
-                            Add Contact
-                        </Button>
-                    </motion.div>
-                </AnimatePresence>
-            </Modal>
-
-            {/* ═══ GROUP PICKER MODAL ═══ */}
-            <Modal
-                isOpen={!!inviteContact}
-                onClose={() => setInviteContact(null)}
-                title={`Invite ${inviteContact?.name || ''} to Group`}
-                size="small"
-            >
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-                    {loadingGroups ? (
-                        <div style={{ textAlign: 'center', padding: 'var(--space-6)' }}>
-                            <Loader2 size={24} style={{ color: 'var(--accent-500)', animation: 'spin 1s linear infinite', margin: '0 auto' }} />
-                            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--fg-tertiary)', marginTop: 'var(--space-2)' }}>Loading groups...</p>
-                        </div>
-                    ) : groups.length === 0 ? (
-                        <div style={{ textAlign: 'center', padding: 'var(--space-6)' }}>
-                            <Users size={32} style={{ color: 'var(--fg-muted)', margin: '0 auto var(--space-2)' }} />
-                            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--fg-tertiary)' }}>No groups yet. Create one first!</p>
-                        </div>
-                    ) : (
-                        <>
-                            <p style={{ fontSize: 'var(--text-xs)', color: 'var(--fg-tertiary)', marginBottom: 'var(--space-1)' }}>
-                                Select a group to invite {inviteContact?.name} to:
-                            </p>
-                            {groups.map((group) => {
-                                const isAlreadyMember = inviteContact?.linkedUser
-                                    ? group.members?.some(m => m.userId === inviteContact.linkedUser!.id)
-                                    : false;
-                                const isSending = sendingInvite === group.id;
-
-                                return (
-                                    <button
-                                        key={group.id}
-                                        onClick={() => !isAlreadyMember && !isSending && sendGroupInvite(group.id)}
-                                        disabled={isAlreadyMember || isSending}
-                                        style={{
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: 'var(--space-3)',
-                                            padding: 'var(--space-3) var(--space-4)',
-                                            borderRadius: 'var(--radius-lg)',
-                                            border: '1px solid var(--border-default)',
-                                            background: isAlreadyMember
-                                                ? 'rgba(var(--accent-500-rgb), 0.04)'
-                                                : 'var(--bg-secondary)',
-                                            cursor: isAlreadyMember ? 'not-allowed' : 'pointer',
-                                            color: 'var(--fg-primary)',
-                                            fontSize: 'var(--text-sm)',
-                                            fontWeight: 600,
-                                            transition: 'all 0.15s ease',
-                                            opacity: isAlreadyMember ? 0.5 : 1,
-                                            textAlign: 'left',
-                                            width: '100%',
-                                        }}
-                                    >
-                                        <span style={{ fontSize: 24 }}>{group.emoji}</span>
-                                        <span style={{ flex: 1 }}>{group.name}</span>
-                                        {isAlreadyMember ? (
-                                            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--fg-tertiary)' }}>Already in</span>
-                                        ) : isSending ? (
-                                            <Loader2 size={16} style={{ color: 'var(--accent-500)', animation: 'spin 1s linear infinite' }} />
-                                        ) : (
-                                            <Send size={14} style={{ color: 'var(--accent-500)' }} />
-                                        )}
-                                    </button>
-                                );
-                            })}
-                        </>
-                    )}
-                </div>
-            </Modal>
-
-            {/* ═══ SHARE MODAL ═══ */}
-            <Modal
-                isOpen={!!shareContact}
-                onClose={() => { setShareContact(null); setShareData(null); setCopied(false); }}
-                title={`Invite ${shareContact?.name || ''}`}
-                size="small"
-            >
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-                    {loadingShare ? (
-                        <div style={{ textAlign: 'center', padding: 'var(--space-6)' }}>
-                            <Loader2 size={24} style={{ color: 'var(--accent-500)', animation: 'spin 1s linear infinite', margin: '0 auto' }} />
-                        </div>
-                    ) : (
-                        <>
-                            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--fg-secondary)', textAlign: 'center', marginBottom: 'var(--space-2)' }}>
-                                Choose how to send the invite:
-                            </p>
-
-                            {/* WhatsApp */}
-                            <button onClick={shareViaWhatsApp} style={{
-                                display: 'flex', alignItems: 'center', gap: 'var(--space-3)',
-                                padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-lg)',
-                                border: '1px solid var(--border-default)', background: 'var(--bg-secondary)',
-                                cursor: 'pointer', color: 'var(--fg-primary)', fontSize: 'var(--text-sm)',
-                                fontWeight: 600, transition: 'all 0.15s ease', width: '100%',
-                            }}>
-                                <span style={{ fontSize: 24 }}>💬</span>
-                                <span style={{ flex: 1, textAlign: 'left' }}>WhatsApp</span>
-                                <ExternalLink size={14} style={{ color: 'var(--fg-tertiary)' }} />
-                            </button>
-
-                            {/* SMS */}
-                            <button onClick={shareViaSMS} style={{
-                                display: 'flex', alignItems: 'center', gap: 'var(--space-3)',
-                                padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-lg)',
-                                border: '1px solid var(--border-default)', background: 'var(--bg-secondary)',
-                                cursor: 'pointer', color: 'var(--fg-primary)', fontSize: 'var(--text-sm)',
-                                fontWeight: 600, transition: 'all 0.15s ease', width: '100%',
-                            }}>
-                                <span style={{ fontSize: 24 }}>📱</span>
-                                <span style={{ flex: 1, textAlign: 'left' }}>SMS / iMessage</span>
-                                <ExternalLink size={14} style={{ color: 'var(--fg-tertiary)' }} />
-                            </button>
-
-                            {/* Email */}
-                            <button onClick={shareViaEmail} style={{
-                                display: 'flex', alignItems: 'center', gap: 'var(--space-3)',
-                                padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-lg)',
-                                border: '1px solid var(--border-default)', background: 'var(--bg-secondary)',
-                                cursor: 'pointer', color: 'var(--fg-primary)', fontSize: 'var(--text-sm)',
-                                fontWeight: 600, transition: 'all 0.15s ease', width: '100%',
-                            }}>
-                                <span style={{ fontSize: 24 }}>✉️</span>
-                                <span style={{ flex: 1, textAlign: 'left' }}>Email to {shareContact?.email}</span>
-                                <ExternalLink size={14} style={{ color: 'var(--fg-tertiary)' }} />
-                            </button>
-
-                            {/* Copy Link */}
-                            <button onClick={shareViaCopy} style={{
-                                display: 'flex', alignItems: 'center', gap: 'var(--space-3)',
-                                padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-lg)',
-                                border: '1px solid var(--border-default)',
-                                background: copied ? 'rgba(var(--accent-500-rgb), 0.08)' : 'var(--bg-secondary)',
-                                cursor: 'pointer', color: copied ? 'var(--accent-500)' : 'var(--fg-primary)',
-                                fontSize: 'var(--text-sm)', fontWeight: 600, transition: 'all 0.15s ease', width: '100%',
-                            }}>
-                                <span style={{ fontSize: 24 }}>{copied ? '✅' : '🔗'}</span>
-                                <span style={{ flex: 1, textAlign: 'left' }}>{copied ? 'Copied!' : 'Copy Invite Link'}</span>
-                            </button>
-
-                            {/* URL preview */}
-                            {shareData && (
-                                <div style={{
-                                    padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)',
-                                    background: 'var(--bg-tertiary)', fontSize: 'var(--text-xs)',
-                                    color: 'var(--fg-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis',
-                                    whiteSpace: 'nowrap',
-                                }}>
-                                    {shareData.url}
+                        <StaggerItem>
+                            {sections.length === 0 ? (
+                                <EmptyState
+                                    compact
+                                    icon={<Search size={22} />}
+                                    title="No matches"
+                                    description={query ? `Nobody matches “${query}”.` : 'No contacts in this list yet.'}
+                                />
+                            ) : (
+                                <div className={styles.sections}>
+                                    {sections.map(([letter, list]) => (
+                                        <div key={letter} className={styles.letterBlock}>
+                                            <span className={styles.letter}>{letter}</span>
+                                            <ListGroup>
+                                                {list.map((contact) => (
+                                                    <ListRow
+                                                        key={contact.id}
+                                                        onClick={() => setSelected(contact)}
+                                                        leading={<Avatar name={contact.name} image={contact.linkedUser?.image} size="md" />}
+                                                        title={contact.name}
+                                                        subtitle={contact.email}
+                                                        trailing={contact.linkedUser
+                                                            ? <Tag tone="success" icon={<UserCheck size={11} />}>On SplitX</Tag>
+                                                            : undefined}
+                                                        chevron
+                                                    />
+                                                ))}
+                                            </ListGroup>
+                                        </div>
+                                    ))}
                                 </div>
                             )}
-                        </>
-                    )}
+                        </StaggerItem>
+                    </>
+                )}
+            </Stagger>
+
+            {/* ── Add contact ── */}
+            <Modal
+                isOpen={addOpen}
+                onClose={() => {
+                    if (saving) return;
+                    setAddOpen(false);
+                    setFormError('');
+                }}
+                title="Add contact"
+                size="small"
+            >
+                <div className={styles.sheet}>
+                    {formError && <Notice tone="danger">{formError}</Notice>}
+                    <Input
+                        label="Name"
+                        placeholder="e.g. Rahul Sharma"
+                        value={form.name}
+                        onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
+                        autoComplete="name"
+                        autoFocus
+                    />
+                    <Input
+                        label="Email"
+                        type="email"
+                        inputMode="email"
+                        placeholder="rahul@example.com"
+                        value={form.email}
+                        onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))}
+                        autoComplete="email"
+                        autoCapitalize="none"
+                    />
+                    <Input
+                        label="Phone (optional)"
+                        type="tel"
+                        inputMode="tel"
+                        placeholder="+91 98765 43210"
+                        value={form.phone}
+                        onChange={(event) => setForm((prev) => ({ ...prev, phone: event.target.value }))}
+                        autoComplete="tel"
+                        hint="Used to open WhatsApp or SMS invites"
+                    />
+                    <Button
+                        fullWidth
+                        size="lg"
+                        loading={saving}
+                        disabled={!form.name.trim() || !form.email.trim()}
+                        leftIcon={<UserPlus size={18} />}
+                        onClick={addContact}
+                    >
+                        Add contact
+                    </Button>
                 </div>
             </Modal>
-        </div>
+
+            {/* ── Contact card ── */}
+            <Modal isOpen={Boolean(selected)} onClose={closeContact} title="Contact" size="small">
+                {selected && (
+                    <div className={styles.card}>
+                        <Avatar name={selected.name} image={selected.linkedUser?.image} size="xl" />
+                        <p className={styles.cardName}>{selected.name}</p>
+                        <p className={styles.cardMeta}>
+                            {selected.email}
+                            {selected.phone ? ` · ${selected.phone}` : ''}
+                        </p>
+                        {selected.linkedUser
+                            ? <Tag tone="success" icon={<UserCheck size={11} />}>On SplitX</Tag>
+                            : <Tag tone="warning">Not on SplitX yet</Tag>}
+                        <ListGroup className={styles.cardActions}>
+                            {selected.linkedUser && (
+                                <ListRow
+                                    onClick={() => openGroupPicker(selected)}
+                                    leading={<IconTile><Users size={18} /></IconTile>}
+                                    title="Add to a group"
+                                    subtitle="Invite them to one of your groups"
+                                    chevron
+                                />
+                            )}
+                            <ListRow
+                                onClick={() => openShare(selected)}
+                                leading={<IconTile tone="neutral"><Share2 size={18} /></IconTile>}
+                                title={selected.linkedUser ? 'Share invite link' : 'Invite to SplitX'}
+                                subtitle="WhatsApp, SMS, email or a link"
+                                chevron
+                            />
+                            <ListRow
+                                onClick={removing ? undefined : removeContact}
+                                leading={<IconTile tone="danger">{removing ? <Spinner size={16} /> : <Trash2 size={18} />}</IconTile>}
+                                title={confirmRemove ? 'Tap again to remove' : 'Remove contact'}
+                                subtitle={confirmRemove ? 'This won’t affect shared groups' : undefined}
+                                tone="danger"
+                            />
+                        </ListGroup>
+                    </div>
+                )}
+            </Modal>
+
+            {/* ── Group picker ── */}
+            <Modal
+                isOpen={Boolean(groupPickerFor)}
+                onClose={() => setGroupPickerFor(null)}
+                title={`Add ${firstName(groupPickerFor?.name)} to a group`}
+                size="small"
+            >
+                {groupsQuery.isLoading && !groupsQuery.data ? (
+                    <ListSkeleton rows={3} />
+                ) : (groupsQuery.data ?? []).length === 0 ? (
+                    <EmptyState
+                        compact
+                        variant="plain"
+                        icon={<Users size={22} />}
+                        title="No groups yet"
+                        description="Create a group first, then invite your friends to it."
+                        actionLabel="Create a group"
+                        actionHref="/groups?create=1"
+                    />
+                ) : (
+                    <ListGroup>
+                        {(groupsQuery.data ?? []).map((group) => {
+                            const alreadyIn = group.members?.some((member) => member.userId === groupPickerFor?.linkedUser?.id);
+                            const sending = sendingTo === group.id;
+                            return (
+                                <ListRow
+                                    key={group.id}
+                                    onClick={alreadyIn || sendingTo ? undefined : () => sendGroupInvite(group.id)}
+                                    leading={<IconTile tone="neutral"><span className={styles.groupEmoji}>{group.emoji}</span></IconTile>}
+                                    title={group.name}
+                                    subtitle={`${group.members?.length ?? 0} members`}
+                                    trailing={alreadyIn
+                                        ? <Tag tone="success">In group</Tag>
+                                        : sending ? <Spinner size={16} /> : <Tag tone="accent" icon={<Send size={11} />}>Invite</Tag>}
+                                    disabled={alreadyIn}
+                                />
+                            );
+                        })}
+                    </ListGroup>
+                )}
+            </Modal>
+
+            {/* ── Share invite ── */}
+            <Modal
+                isOpen={Boolean(shareFor)}
+                onClose={() => {
+                    setShareFor(null);
+                    setShareData(null);
+                }}
+                title={`Invite ${firstName(shareFor?.name)}`}
+                size="small"
+            >
+                {!shareData ? (
+                    <div className={styles.loadingBlock}><Spinner size={24} /></div>
+                ) : (
+                    <div className={styles.sheet}>
+                        <div className={styles.shareGrid}>
+                            <button
+                                type="button"
+                                className={styles.shareOption}
+                                onClick={() => window.open(`https://wa.me/${digits}?text=${encodeURIComponent(shareData.message)}`, '_blank')}
+                            >
+                                <span className={styles.shareIcon}><MessageCircle size={18} /></span>
+                                WhatsApp
+                            </button>
+                            <button
+                                type="button"
+                                className={styles.shareOption}
+                                onClick={() => window.open(`sms:${digits}?body=${encodeURIComponent(shareData.message)}`, '_blank')}
+                            >
+                                <span className={styles.shareIcon}><MessageSquare size={18} /></span>
+                                SMS
+                            </button>
+                            <button
+                                type="button"
+                                className={styles.shareOption}
+                                onClick={() => window.open(`mailto:${shareFor?.email ?? ''}?subject=${encodeURIComponent('Join me on SplitX')}&body=${encodeURIComponent(shareData.message)}`, '_blank')}
+                            >
+                                <span className={styles.shareIcon}><Mail size={18} /></span>
+                                Email
+                            </button>
+                        </div>
+                        <div className={styles.linkBox}>
+                            <Link2 size={16} style={{ color: 'var(--fg-muted)', flexShrink: 0 }} />
+                            <span className={styles.linkText}>{shareData.url}</span>
+                            <Button size="sm" variant={copied ? 'soft' : 'secondary'} onClick={copyLink} leftIcon={copied ? <Check size={14} /> : <Copy size={14} />}>
+                                {copied ? 'Copied' : 'Copy'}
+                            </Button>
+                        </div>
+                        <Button fullWidth leftIcon={<Share2 size={16} />} onClick={nativeShare}>More ways to share</Button>
+                    </div>
+                )}
+            </Modal>
+        </>
     );
 }

@@ -23,7 +23,8 @@ export async function POST(
 
         const { id } = await params;
         const body = await req.json().catch(() => ({}));
-        const { utrNumber } = body as { utrNumber?: string };
+        const { utrNumber, method } = body as { utrNumber?: string; method?: string };
+        const paidInCash = method === 'cash';
 
         const user = await prisma.user.findUnique({ where: { email: session.user.email } });
         if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
@@ -75,7 +76,7 @@ export async function POST(
             data: {
                 status: 'paid_pending',
                 ...(utrNumber ? { utrNumber } : {}),
-                method: 'upi',
+                method: paidInCash ? 'cash' : 'upi',
             },
         });
 
@@ -125,7 +126,7 @@ export async function POST(
             actorId: user.id,
             type: 'settlement_approval_request',
             title: 'Payment approval needed',
-            body: `${settlement.from.name || 'Someone'} says they paid you ₹${(settlement.amount / 100).toLocaleString('en-IN')}. Approve it once you receive the money${utrNumber ? ` (UTR: ${utrNumber})` : ''}.`,
+            body: `${settlement.from.name || 'Someone'} says they paid you ₹${(settlement.amount / 100).toLocaleString('en-IN')}${paidInCash ? ' in cash' : ''}. Approve it once you receive the money${utrNumber ? ` (UTR: ${utrNumber})` : ''}.`,
             link: '/settlements',
         });
 

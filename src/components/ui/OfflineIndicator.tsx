@@ -2,8 +2,51 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { WifiOff, Wifi } from 'lucide-react';
+import { WifiOff, Wifi, ShieldAlert } from 'lucide-react';
 import { onRestrictedNetworkSignal } from '@/lib/networkErrors';
+
+type StatusTone = 'offline' | 'online' | 'restricted';
+
+const TONE_STYLES: Record<StatusTone, { bg: string; fg: string }> = {
+    offline: { bg: 'var(--fg-primary)', fg: 'var(--fg-inverse)' },
+    online: { bg: 'linear-gradient(135deg, #10b981, #059669)', fg: '#fff' },
+    restricted: { bg: 'linear-gradient(135deg, #f59e0b, #d97706)', fg: '#fff' },
+};
+
+function StatusPill({ tone, icon, children }: { tone: StatusTone; icon: React.ReactNode; children: React.ReactNode }) {
+    const style = TONE_STYLES[tone];
+    return (
+        <motion.div
+            role="status"
+            initial={{ y: -40, opacity: 0, scale: 0.96 }}
+            animate={{ y: 0, opacity: 1, scale: 1 }}
+            exit={{ y: -30, opacity: 0, scale: 0.96 }}
+            transition={{ type: 'spring', damping: 24, stiffness: 360 }}
+            style={{
+                position: 'fixed',
+                top: 'calc(env(safe-area-inset-top, 0px) + 10px)',
+                left: '50%',
+                x: '-50%',
+                zIndex: 10000,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                maxWidth: 'calc(100vw - 24px)',
+                padding: '10px 16px',
+                borderRadius: 999,
+                background: style.bg,
+                color: style.fg,
+                fontSize: 13,
+                fontWeight: 600,
+                boxShadow: 'var(--shadow-lg)',
+                whiteSpace: 'nowrap',
+            }}
+        >
+            {icon}
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{children}</span>
+        </motion.div>
+    );
+}
 
 export default function OfflineIndicator() {
     const [isOnline, setIsOnline] = useState(true);
@@ -12,18 +55,18 @@ export default function OfflineIndicator() {
 
     useEffect(() => {
         let restrictedTimer: number | null = null;
+        let reconnectTimer: number | null = null;
         const handleOnline = () => {
             setIsOnline(true);
             setShowReconnected(true);
-            setTimeout(() => setShowReconnected(false), 2500);
+            reconnectTimer = window.setTimeout(() => setShowReconnected(false), 2500);
         };
         const handleOffline = () => {
             setIsOnline(false);
             setShowReconnected(false);
         };
 
-        // Check initial state
-        const t = setTimeout(() => setIsOnline(navigator.onLine), 0);
+        const initial = window.setTimeout(() => setIsOnline(navigator.onLine), 0);
         const cleanupRestricted = onRestrictedNetworkSignal(() => {
             if (!navigator.onLine) return;
             setShowRestricted(true);
@@ -35,8 +78,9 @@ export default function OfflineIndicator() {
         window.addEventListener('offline', handleOffline);
 
         return () => {
-            clearTimeout(t);
+            window.clearTimeout(initial);
             if (restrictedTimer) window.clearTimeout(restrictedTimer);
+            if (reconnectTimer) window.clearTimeout(reconnectTimer);
             cleanupRestricted();
             window.removeEventListener('online', handleOnline);
             window.removeEventListener('offline', handleOffline);
@@ -46,91 +90,19 @@ export default function OfflineIndicator() {
     return (
         <AnimatePresence>
             {!isOnline && (
-                <motion.div
-                    initial={{ y: -50, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    exit={{ y: -50, opacity: 0 }}
-                    transition={{ type: 'spring', damping: 20, stiffness: 300 }}
-                    style={{
-                        position: 'fixed',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        zIndex: 10000,
-                        background: 'linear-gradient(135deg, #ef4444, #dc2626)',
-                        color: 'white',
-                        padding: '8px 16px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: 8,
-                        fontSize: '13px',
-                        fontWeight: 600,
-                        backdropFilter: 'blur(10px)',
-                    }}
-                >
-                    <motion.div
-                        animate={{ rotate: [0, -10, 10, -10, 0] }}
-                        transition={{ duration: 0.5, repeat: Infinity, repeatDelay: 2 }}
-                    >
-                        <WifiOff size={16} />
-                    </motion.div>
-                    You&apos;re offline — changes will sync when reconnected
-                </motion.div>
+                <StatusPill key="offline" tone="offline" icon={<WifiOff size={15} />}>
+                    You&apos;re offline — changes sync when you reconnect
+                </StatusPill>
             )}
-            {showReconnected && isOnline && (
-                <motion.div
-                    initial={{ y: -50, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    exit={{ y: -50, opacity: 0 }}
-                    transition={{ type: 'spring', damping: 20, stiffness: 300 }}
-                    style={{
-                        position: 'fixed',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        zIndex: 10000,
-                        background: 'linear-gradient(135deg, #10b981, #059669)',
-                        color: 'white',
-                        padding: '8px 16px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: 8,
-                        fontSize: '13px',
-                        fontWeight: 600,
-                    }}
-                >
-                    <Wifi size={16} />
-                    Back online!
-                </motion.div>
+            {isOnline && showReconnected && (
+                <StatusPill key="online" tone="online" icon={<Wifi size={15} />}>
+                    Back online
+                </StatusPill>
             )}
-            {showRestricted && isOnline && (
-                <motion.div
-                    initial={{ y: -50, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    exit={{ y: -50, opacity: 0 }}
-                    transition={{ type: 'spring', damping: 20, stiffness: 300 }}
-                    style={{
-                        position: 'fixed',
-                        top: showReconnected ? 42 : 0,
-                        left: 0,
-                        right: 0,
-                        zIndex: 9999,
-                        background: 'linear-gradient(135deg, #f59e0b, #d97706)',
-                        color: 'white',
-                        padding: '8px 16px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: 8,
-                        fontSize: '13px',
-                        fontWeight: 600,
-                    }}
-                >
-                    <WifiOff size={16} />
-                    This network may be blocking SplitX. Try another network and try again.
-                </motion.div>
+            {isOnline && !showReconnected && showRestricted && (
+                <StatusPill key="restricted" tone="restricted" icon={<ShieldAlert size={15} />}>
+                    This network may be blocking SplitX
+                </StatusPill>
             )}
         </AnimatePresence>
     );

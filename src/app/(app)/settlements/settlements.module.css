@@ -1,0 +1,344 @@
+/* ═══════════════════════════════════════════════════════════════
+   Settle up
+   ═══════════════════════════════════════════════════════════════ */
+
+.page {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    padding-top: 6px;
+}
+
+/* ── Summary ── */
+.summary {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.summaryTile {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+    padding: 16px;
+    border-radius: 22px;
+    border: 1px solid var(--border-default);
+    background: var(--surface-card);
+    box-shadow: var(--shadow-card);
+}
+
+.summaryTileOwe {
+    background: linear-gradient(165deg, var(--color-error-bg) 0%, var(--surface-card) 72%);
+}
+
+.summaryTileOwed {
+    background: linear-gradient(165deg, var(--color-success-bg) 0%, var(--surface-card) 72%);
+}
+
+.summaryHead {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--fg-secondary);
+}
+
+.summaryIcon {
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    border-radius: 10px;
+}
+
+.iconOwe {
+    background: var(--color-error-bg);
+    color: var(--color-error);
+}
+
+.iconOwed {
+    background: var(--color-success-bg);
+    color: var(--color-success);
+}
+
+.summaryValue {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: clamp(1.25rem, 6vw, 1.625rem);
+    font-weight: 800;
+    letter-spacing: -0.035em;
+    color: var(--fg-primary);
+    font-variant-numeric: tabular-nums;
+}
+
+.netLine {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding-top: 2px;
+    font-size: 13px;
+    color: var(--fg-tertiary);
+}
+
+.netLine strong {
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+}
+
+/* ── Transfers ── */
+.list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.transfer {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 16px;
+    border-radius: 24px;
+    background: var(--surface-card);
+    border: 1px solid var(--border-default);
+    box-shadow: var(--shadow-card);
+}
+
+.transferSettled {
+    opacity: 0.86;
+}
+
+.transferTop {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.pair {
+    position: relative;
+    display: flex;
+    flex-shrink: 0;
+    padding-bottom: 4px;
+    --avatar-ring: var(--surface-card);
+}
+
+.pair > :nth-child(2) {
+    margin-left: -12px;
+    box-shadow: 0 0 0 2.5px var(--surface-card);
+}
+
+.pairArrow {
+    position: absolute;
+    bottom: -2px;
+    left: 50%;
+    display: grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--surface-card);
+    color: var(--fg-secondary);
+    box-shadow: var(--shadow-sm);
+    transform: translateX(-50%);
+}
+
+.transferText {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.transferTitle {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: var(--fg-primary);
+}
+
+.transferSub {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    font-size: 12.5px;
+    color: var(--fg-tertiary);
+}
+
+.transferAmount {
+    flex-shrink: 0;
+    font-size: 19px;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    font-variant-numeric: tabular-nums;
+}
+
+.amountOut { color: var(--color-error); }
+.amountIn { color: var(--color-success); }
+.amountNeutral { color: var(--fg-primary); }
+
+.transferActions {
+    display: flex;
+    gap: 8px;
+}
+
+.transferActions > * {
+    flex: 1;
+}
+
+.transferNote {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border-radius: 14px;
+    background: var(--bg-tertiary);
+    font-size: 12.5px;
+    line-height: 1.4;
+    color: var(--fg-secondary);
+}
+
+/* ── Flow map ── */
+.flowCard {
+    overflow: hidden;
+    border-radius: 24px;
+    background: var(--surface-card);
+    border: 1px solid var(--border-default);
+    box-shadow: var(--shadow-card);
+}
+
+.flowToggle {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 14px 16px;
+    text-align: left;
+}
+
+.flowText {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.flowTitle {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--fg-primary);
+}
+
+.flowSubtitle {
+    font-size: 12.5px;
+    color: var(--fg-tertiary);
+}
+
+.flowChevron {
+    flex-shrink: 0;
+    color: var(--fg-muted);
+    transition: transform var(--duration-normal) var(--ease-out);
+}
+
+.flowChevronOpen {
+    transform: rotate(180deg);
+}
+
+.flowBody {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 0 12px 12px;
+}
+
+/* ── Footer ── */
+.footerActions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.footerAction {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 6px 12px;
+    border-radius: 20px;
+    background: var(--surface-card);
+    border: 1px solid var(--border-default);
+    box-shadow: var(--shadow-xs);
+    color: var(--fg-secondary);
+    font-size: 12px;
+    font-weight: 600;
+    transition: border-color var(--duration-fast) var(--ease-out);
+}
+
+.footerIcon {
+    display: grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    border-radius: 13px;
+    background: var(--accent-soft);
+    color: var(--accent-strong);
+}
+
+/* ── Confirm sheet ── */
+.confirm {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    text-align: center;
+}
+
+.confirmPair {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 4px;
+}
+
+.confirmAmount {
+    font-size: 30px;
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    font-variant-numeric: tabular-nums;
+}
+
+.confirmText {
+    max-width: 300px;
+    font-size: 13.5px;
+    line-height: 1.55;
+    color: var(--fg-tertiary);
+}
+
+.twoUp {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    width: 100%;
+    margin-top: 8px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .footerAction:hover { border-color: var(--border-strong); color: var(--fg-primary); }
+}
+
+@media (min-width: 768px) {
+    .list {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+    }
+}

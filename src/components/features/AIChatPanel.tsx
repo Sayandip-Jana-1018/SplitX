@@ -1,12 +1,25 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { AnimatePresence, motion, useDragControls, type PanInfo } from 'framer-motion';
 import {
-    ArrowLeft, X, Send, Sparkles, Bot, User,
-    TrendingUp, Users, Wallet, Receipt, HelpCircle, Zap,
+    ArrowUp,
+    Bot,
+    HelpCircle,
+    Receipt,
+    RotateCcw,
+    Sparkles,
+    TrendingUp,
+    Users,
+    Wallet,
+    X,
+    Zap,
 } from 'lucide-react';
 import { isFeatureEnabled } from '@/lib/featureFlags';
+import { useIsClient, useMediaQuery } from '@/hooks/useMediaQuery';
+import { cn } from '@/lib/utils';
+import styles from './assistant.module.css';
 
 interface ChatMsg {
     id: string;
@@ -14,661 +27,306 @@ interface ChatMsg {
     content: string;
 }
 
-const QUICK_ACTIONS = [
-    { icon: <Wallet size={16} />, label: 'Who owes me?', query: 'Who owes me?', gradient: 'linear-gradient(135deg, var(--accent-500), var(--accent-600))' },
-    { icon: <TrendingUp size={16} />, label: 'My spending', query: 'My spending breakdown', gradient: 'linear-gradient(135deg, #8b5cf6, #7c3aed)' },
-    { icon: <Receipt size={16} />, label: 'My balance', query: 'Show my balance summary', gradient: 'linear-gradient(135deg, #3b82f6, #2563eb)' },
-    { icon: <Users size={16} />, label: 'My groups', query: 'My groups', gradient: 'linear-gradient(135deg, #f59e0b, #d97706)' },
-    { icon: <Zap size={16} />, label: 'Recent activity', query: 'Recent transactions', gradient: 'linear-gradient(135deg, #ec4899, #db2777)' },
-    { icon: <HelpCircle size={16} />, label: 'Settle up', query: 'How to settle up?', gradient: 'linear-gradient(135deg, #06b6d4, #0891b2)' },
+const SUGGESTIONS = [
+    { icon: <Wallet size={16} />, label: 'Who owes me?', query: 'Who owes me?' },
+    { icon: <TrendingUp size={16} />, label: 'My spending', query: 'My spending breakdown' },
+    { icon: <Receipt size={16} />, label: 'Balance summary', query: 'Show my balance summary' },
+    { icon: <Users size={16} />, label: 'My groups', query: 'My groups' },
+    { icon: <Zap size={16} />, label: 'Recent activity', query: 'Recent transactions' },
+    { icon: <HelpCircle size={16} />, label: 'How to settle', query: 'How to settle up?' },
 ];
 
 const FOLLOW_UPS = [
-    { label: '💰 Who owes me?', query: 'Who owes me?' },
-    { label: '📊 My balance', query: 'Show my balance' },
-    { label: '💱 Settle up', query: 'How to settle up?' },
-    { label: '🧾 Recent', query: 'Recent transactions' },
+    { label: 'Who owes me?', query: 'Who owes me?' },
+    { label: 'My balance', query: 'Show my balance' },
+    { label: 'Settle up', query: 'How to settle up?' },
+    { label: 'Recent', query: 'Recent transactions' },
 ];
 
-/** Render markdown-like formatting for AI responses */
+function renderBold(text: string) {
+    return text.split(/(\*\*.*?\*\*)/g).map((part, index) =>
+        part.startsWith('**') && part.endsWith('**')
+            ? <strong key={index} className={styles.fmtStrong}>{part.slice(2, -2)}</strong>
+            : <span key={index}>{part}</span>
+    );
+}
+
+/** Lightweight markdown-ish renderer for assistant replies. */
 function FormattedMessage({ content }: { content: string }) {
-    const lines = content.split('\n');
-
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {lines.map((line, i) => {
-                // Bold text: **text**
-                const renderBold = (text: string) => {
-                    return text.split(/(\*\*.*?\*\*)/g).map((part, j) => {
-                        if (part.startsWith('**') && part.endsWith('**')) {
-                            return (
-                                <span key={j} style={{
-                                    fontWeight: 700,
-                                    color: 'var(--fg-primary)',
-                                }}>{part.slice(2, -2)}</span>
-                            );
-                        }
-                        return <span key={j}>{part}</span>;
-                    });
-                };
-
-                // Bullet points
-                if (line.trimStart().startsWith('•') || line.trimStart().startsWith('- ')) {
-                    const text = line.replace(/^\s*[•\-]\s*/, '');
+        <div>
+            {content.split('\n').map((line, index) => {
+                const trimmed = line.trimStart();
+                if (trimmed.startsWith('•') || trimmed.startsWith('- ')) {
                     return (
-                        <div key={i} style={{
-                            display: 'flex',
-                            gap: 6,
-                            paddingLeft: 2,
-                            marginTop: 1,
-                        }}>
-                            <span style={{
-                                color: 'var(--accent-400)',
-                                flexShrink: 0,
-                                fontSize: 10,
-                                marginTop: 2,
-                            }}>●</span>
-                            <span style={{ flex: 1 }}>{renderBold(text)}</span>
+                        <div key={index} className={cn(styles.fmtLine, styles.fmtBullet)}>
+                            <span className={styles.fmtDot} />
+                            <span>{renderBold(line.replace(/^\s*[•-]\s*/, ''))}</span>
                         </div>
                     );
                 }
-
-                // Empty line → spacer
-                if (line.trim() === '') {
-                    return <div key={i} style={{ height: 5 }} />;
-                }
-
-                return <div key={i}>{renderBold(line)}</div>;
+                if (!line.trim()) return <div key={index} className={styles.fmtSpacer} />;
+                return <div key={index} className={styles.fmtLine}>{renderBold(line)}</div>;
             })}
         </div>
     );
 }
 
-export default function AIChatPanel() {
-    const [open, setOpen] = useState(false);
+let messageCounter = 0;
+const nextMessageId = () => {
+    messageCounter += 1;
+    return `msg-${messageCounter}`;
+};
+
+export default function AIChatPanel({
+    open,
+    onOpenChange,
+}: {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+}) {
     const [messages, setMessages] = useState<ChatMsg[]>([]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
-    const [mounted, setMounted] = useState(false);
-    const chatEndRef = useRef<HTMLDivElement>(null);
+    const mounted = useIsClient();
+    const isSheet = useMediaQuery('(max-width: 639px)');
+    const endRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
-    const panelRef = useRef<HTMLDivElement>(null);
+    const dragControls = useDragControls();
 
-    useEffect(() => { setMounted(true); }, []);
+    const close = useCallback(() => onOpenChange(false), [onOpenChange]);
+
+    useEffect(() => {
+        endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }, [messages, loading]);
 
     useEffect(() => {
         if (!open) return;
-        const handler = (e: MouseEvent) => {
-            if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
-                setOpen(false);
-            }
+        const previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        const focusTimer = isSheet ? 0 : window.setTimeout(() => inputRef.current?.focus({ preventScroll: true }), 240);
+        const onKey = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') close();
         };
-        document.addEventListener('mousedown', handler);
-        return () => document.removeEventListener('mousedown', handler);
-    }, [open]);
-
-    useEffect(() => {
-        chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages]);
-
-    useEffect(() => {
-        if (open && inputRef.current) {
-            setTimeout(() => inputRef.current?.focus(), 100);
-        }
-    }, [open]);
+        window.addEventListener('keydown', onKey);
+        return () => {
+            document.body.style.overflow = previousOverflow;
+            window.clearTimeout(focusTimer);
+            window.removeEventListener('keydown', onKey);
+        };
+    }, [open, close, isSheet]);
 
     const sendMessage = useCallback(async (text: string) => {
-        if (!text.trim() || loading) return;
+        const trimmed = text.trim();
+        if (!trimmed || loading) return;
 
-        const userMsg: ChatMsg = {
-            id: Date.now().toString(),
-            role: 'user',
-            content: text.trim(),
-        };
-        setMessages(prev => [...prev, userMsg]);
+        setMessages((previous) => [...previous, { id: nextMessageId(), role: 'user', content: trimmed }]);
         setInput('');
         setLoading(true);
 
         try {
-            const res = await fetch('/api/ai/chat', {
+            const response = await fetch('/api/ai/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: text.trim() }),
+                body: JSON.stringify({ message: trimmed }),
             });
-            const data = await res.json();
-            setMessages(prev => [...prev, {
-                id: (Date.now() + 1).toString(),
+            const data = await response.json();
+            setMessages((previous) => [...previous, {
+                id: nextMessageId(),
                 role: 'assistant',
                 content: data.reply || data.error || 'Something went wrong.',
             }]);
         } catch {
-            setMessages(prev => [...prev, {
-                id: (Date.now() + 1).toString(),
+            setMessages((previous) => [...previous, {
+                id: nextMessageId(),
                 role: 'assistant',
-                content: 'Network error. Please try again.',
+                content: 'I could not reach the network. Please try again.',
             }]);
         } finally {
             setLoading(false);
         }
     }, [loading]);
 
-    const clearChat = useCallback(() => {
-        setMessages([]);
-    }, []);
+    const handleDragEnd = (_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
+        if (info.offset.y > 120 || info.velocity.y > 650) close();
+    };
+
+    const startDrag = (event: React.PointerEvent) => {
+        if (isSheet) dragControls.start(event);
+    };
 
     if (!isFeatureEnabled('aiChat') || !mounted) return null;
 
     const hasMessages = messages.length > 0;
 
-    return (
-        <>
-            {/* ── Floating Action Button ── */}
-            <AnimatePresence>
-                {!open && (
-                    <motion.button
-                        initial={{ scale: 0, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        exit={{ scale: 0, opacity: 0 }}
-                        transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-                        onClick={() => setOpen(true)}
-                        whileTap={{ scale: 0.9 }}
-                        whileHover={{ scale: 1.08 }}
-                        aria-label="AI Assistant"
-                        style={{
-                            position: 'fixed',
-                            bottom: 88,
-                            right: 20,
-                            width: 52,
-                            height: 52,
-                            borderRadius: '50%',
-                            background: 'linear-gradient(135deg, var(--accent-500) 0%, var(--accent-600) 50%, var(--accent-700, var(--accent-600)) 100%)',
-                            border: 'none',
-                            color: '#fff',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            boxShadow: '0 4px 24px rgba(var(--accent-500-rgb), 0.45), 0 0 0 4px rgba(var(--accent-500-rgb), 0.1)',
-                            zIndex: 90,
-                        }}
+    return createPortal(
+        <AnimatePresence>
+            {open && (
+                <motion.div
+                    key="assistant-overlay"
+                    className={cn(styles.overlay, !isSheet && styles.overlayDesktop)}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    onClick={close}
+                >
+                    <motion.section
+                        role="dialog"
+                        aria-modal="true"
+                        aria-label="SplitX AI assistant"
+                        className={cn(styles.panel, isSheet ? styles.panelSheet : styles.panelFloating)}
+                        initial={isSheet ? { y: '100%' } : { opacity: 0, y: 24, scale: 0.97 }}
+                        animate={isSheet ? { y: 0 } : { opacity: 1, y: 0, scale: 1 }}
+                        exit={isSheet ? { y: '100%' } : { opacity: 0, y: 16, scale: 0.98 }}
+                        transition={{ type: 'spring', damping: 36, stiffness: 380 }}
+                        drag={isSheet ? 'y' : false}
+                        dragListener={false}
+                        dragControls={dragControls}
+                        dragConstraints={{ top: 0, bottom: 0 }}
+                        dragElastic={{ top: 0, bottom: 0.7 }}
+                        onDragEnd={handleDragEnd}
+                        onClick={(event) => event.stopPropagation()}
                     >
-                        <Sparkles size={22} />
-                    </motion.button>
-                )}
-            </AnimatePresence>
-
-            {/* ── Chat Panel ── */}
-            <AnimatePresence>
-                {open && (
-                    <motion.div
-                        ref={panelRef}
-                        initial={{ opacity: 0, y: 50, scale: 0.9 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 50, scale: 0.9 }}
-                        transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-                        style={{
-                            position: 'fixed',
-                            bottom: 88,
-                            left: 0,
-                            right: 0,
-                            margin: '0 auto',
-                            width: 380,
-                            maxWidth: 'calc(100vw - 20px)',
-                            height: 540,
-                            maxHeight: 'calc(100vh - 140px)',
-                            background: 'var(--bg-primary)',
-                            border: '1px solid var(--border-glass)',
-                            borderRadius: 24,
-                            boxShadow: '0 24px 64px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255,255,255,0.05)',
-                            zIndex: 95,
-                            display: 'flex',
-                            flexDirection: 'column',
-                            overflow: 'hidden',
-                        }}
-                    >
-                        {/* ── Premium Header with Gradient ── */}
-                        <div style={{
-                            position: 'relative',
-                            padding: '16px 16px 14px',
-                            background: 'linear-gradient(135deg, rgba(var(--accent-500-rgb), 0.08) 0%, rgba(var(--accent-500-rgb), 0.04) 100%)',
-                            borderBottom: '1px solid rgba(var(--accent-500-rgb), 0.1)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 10,
-                        }}>
-                            {/* Back button when in chat */}
-                            {hasMessages && (
-                                <motion.button
-                                    initial={{ opacity: 0, x: -8 }}
-                                    animate={{ opacity: 1, x: 0 }}
-                                    onClick={clearChat}
-                                    whileTap={{ scale: 0.9 }}
-                                    title="Back to home"
-                                    style={{
-                                        width: 30,
-                                        height: 30,
-                                        borderRadius: 10,
-                                        background: 'rgba(var(--accent-500-rgb), 0.1)',
-                                        border: '1px solid rgba(var(--accent-500-rgb), 0.15)',
-                                        color: 'var(--accent-500)',
-                                        cursor: 'pointer',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        flexShrink: 0,
-                                    }}
-                                >
-                                    <ArrowLeft size={15} />
-                                </motion.button>
-                            )}
-
-                            {/* AI Icon */}
-                            <div style={{
-                                width: 36,
-                                height: 36,
-                                borderRadius: 12,
-                                background: 'linear-gradient(135deg, var(--accent-500), var(--accent-600))',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                color: '#fff',
-                                flexShrink: 0,
-                                boxShadow: '0 2px 8px rgba(var(--accent-500-rgb), 0.3)',
-                            }}>
-                                <Sparkles size={18} />
+                        {isSheet && (
+                            <div className={styles.handleZone} onPointerDown={startDrag}>
+                                <span className={styles.handle} />
                             </div>
+                        )}
 
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                                <h3 style={{
-                                    fontSize: 15,
-                                    fontFamily: 'var(--font-display)',
-                                    fontWeight: 800,
-                                    color: 'var(--fg-primary)',
-                                    letterSpacing: '-0.02em',
-                                }}>
-                                    SplitX AI
-                                </h3>
-                                <p style={{
-                                    fontSize: 11,
-                                    color: 'var(--accent-500)',
-                                    fontWeight: 500,
-                                    marginTop: 1,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 4,
-                                }}>
-                                    <span style={{
-                                        width: 6,
-                                        height: 6,
-                                        borderRadius: '50%',
-                                        background: 'var(--accent-500)',
-                                        display: 'inline-block',
-                                        boxShadow: '0 0 6px rgba(var(--accent-500-rgb), 0.5)',
-                                    }} />
-                                    {hasMessages ? 'Analyzing your data' : 'Online — ready to help'}
+                        <header className={styles.header} onPointerDown={startDrag}>
+                            <span className={styles.botMark}><Sparkles size={18} /></span>
+                            <div className={styles.headerText}>
+                                <h2 className={styles.title}>SplitX AI</h2>
+                                <p className={styles.status}>
+                                    <span className={styles.statusDot} />
+                                    {loading ? 'Thinking…' : 'Knows your groups & balances'}
                                 </p>
                             </div>
-
-                            <button
-                                onClick={() => setOpen(false)}
-                                style={{
-                                    width: 30,
-                                    height: 30,
-                                    borderRadius: 10,
-                                    background: 'rgba(var(--fg-primary-rgb, 0,0,0), 0.05)',
-                                    border: 'none',
-                                    color: 'var(--fg-tertiary)',
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                }}
-                            >
-                                <X size={16} />
+                            {hasMessages && (
+                                <button type="button" className={styles.headerBtn} onClick={() => setMessages([])} aria-label="Start a new chat">
+                                    <RotateCcw size={15} />
+                                </button>
+                            )}
+                            <button type="button" className={styles.headerBtn} onClick={close} aria-label="Close assistant">
+                                <X size={17} />
                             </button>
-                        </div>
+                        </header>
 
-                        {/* ── Chat Body ── */}
-                        <div style={{
-                            flex: 1,
-                            overflowY: 'auto',
-                            padding: '10px 12px 6px',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: 10,
-                        }}>
-                            {/* ── Empty State: Welcome + Action Grid ── */}
-                            {!hasMessages && (
-                                <div style={{
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    flex: 1,
-                                    gap: 12,
-                                    justifyContent: 'center',
-                                }}>
-                                    {/* Welcome text */}
-                                    <div style={{
-                                        textAlign: 'center',
-                                        padding: '0 12px',
-                                    }}>
-                                        <div style={{
-                                            fontSize: 24,
-                                            marginBottom: 4,
-                                        }}>✨</div>
-                                        <h2 style={{
-                                            fontSize: 15,
-                                            fontFamily: 'var(--font-display)',
-                                            fontWeight: 800,
-                                            color: 'var(--fg-primary)',
-                                            marginBottom: 3,
-                                            letterSpacing: '-0.02em',
-                                        }}>
-                                            How can I help?
-                                        </h2>
-                                        <p style={{
-                                            fontSize: 11,
-                                            color: 'var(--fg-tertiary)',
-                                            lineHeight: 1.4,
-                                            maxWidth: 240,
-                                            margin: '0 auto',
-                                        }}>
-                                            I know your balances, spending, debts, and groups in real-time.
-                                        </p>
-                                    </div>
-
-                                    <div style={{
-                                        display: 'grid',
-                                        gridTemplateColumns: '1fr 1fr',
-                                        gap: 6,
-                                        padding: '0 4px',
-                                    }}>
-                                        {QUICK_ACTIONS.map((action) => (
+                        <div className={styles.body}>
+                            {!hasMessages ? (
+                                <div className={styles.welcome}>
+                                    <motion.div
+                                        className={styles.welcomeOrb}
+                                        initial={{ scale: 0.7, opacity: 0 }}
+                                        animate={{ scale: 1, opacity: 1 }}
+                                        transition={{ type: 'spring', stiffness: 380, damping: 20, delay: 0.05 }}
+                                    >
+                                        <Sparkles size={26} />
+                                    </motion.div>
+                                    <h3 className={styles.welcomeTitle}>How can I help?</h3>
+                                    <p className={styles.welcomeText}>
+                                        Ask about balances, spending or settling up — answers come from your live SplitX data.
+                                    </p>
+                                    <div className={styles.suggestions}>
+                                        {SUGGESTIONS.map((suggestion, index) => (
                                             <motion.button
-                                                key={action.label}
-                                                onClick={() => sendMessage(action.query)}
-                                                whileTap={{ scale: 0.96 }}
-                                                whileHover={{ scale: 1.02 }}
-                                                style={{
-                                                    padding: '10px 8px 8px',
-                                                    borderRadius: 12,
-                                                    background: 'var(--bg-secondary)',
-                                                    border: '1px solid var(--border-subtle)',
-                                                    cursor: 'pointer',
-                                                    display: 'flex',
-                                                    flexDirection: 'column',
-                                                    alignItems: 'center',
-                                                    gap: 5,
-                                                    textAlign: 'center',
-                                                    transition: 'all 0.2s ease',
-                                                }}
+                                                key={suggestion.label}
+                                                type="button"
+                                                className={styles.suggestion}
+                                                onClick={() => sendMessage(suggestion.query)}
+                                                initial={{ opacity: 0, y: 8 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                transition={{ delay: 0.08 + index * 0.035 }}
+                                                whileTap={{ scale: 0.97 }}
                                             >
-                                                <div style={{
-                                                    width: 30,
-                                                    height: 30,
-                                                    borderRadius: 10,
-                                                    background: action.gradient,
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                    color: '#fff',
-                                                }}>
-                                                    {action.icon}
-                                                </div>
-                                                <span style={{
-                                                    fontSize: 11,
-                                                    fontWeight: 600,
-                                                    color: 'var(--fg-secondary)',
-                                                    lineHeight: 1.2,
-                                                }}>
-                                                    {action.label}
-                                                </span>
+                                                <span className={styles.suggestionIcon}>{suggestion.icon}</span>
+                                                <span>{suggestion.label}</span>
                                             </motion.button>
                                         ))}
                                     </div>
                                 </div>
-                            )}
-
-                            {/* ── Messages ── */}
-                            {messages.map((msg) => (
-                                <motion.div
-                                    key={msg.id}
-                                    initial={{ opacity: 0, y: 10 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    transition={{ duration: 0.2 }}
-                                    style={{
-                                        display: 'flex',
-                                        gap: 8,
-                                        alignItems: 'flex-start',
-                                        flexDirection: msg.role === 'user' ? 'row-reverse' : 'row',
-                                    }}
-                                >
-                                    {/* Avatar */}
-                                    <div style={{
-                                        width: 28,
-                                        height: 28,
-                                        borderRadius: msg.role === 'user' ? 10 : 10,
-                                        background: msg.role === 'user'
-                                            ? 'linear-gradient(135deg, rgba(var(--accent-500-rgb), 0.15), rgba(var(--accent-500-rgb), 0.08))'
-                                            : 'linear-gradient(135deg, var(--accent-500), var(--accent-600))',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        flexShrink: 0,
-                                        color: msg.role === 'user' ? 'var(--accent-400)' : '#fff',
-                                        marginTop: 2,
-                                    }}>
-                                        {msg.role === 'user' ? <User size={13} /> : <Bot size={13} />}
-                                    </div>
-
-                                    {/* Bubble */}
-                                    <div style={{
-                                        maxWidth: '82%',
-                                        padding: msg.role === 'assistant' ? '10px 13px' : '9px 14px',
-                                        borderRadius: msg.role === 'user'
-                                            ? '16px 4px 16px 16px'
-                                            : '4px 16px 16px 16px',
-                                        background: msg.role === 'user'
-                                            ? 'linear-gradient(135deg, var(--accent-500), var(--accent-600, var(--accent-500)))'
-                                            : 'var(--bg-secondary)',
-                                        border: msg.role === 'user'
-                                            ? 'none'
-                                            : '1px solid var(--border-subtle)',
-                                        fontSize: 12.5,
-                                        color: msg.role === 'user' ? '#fff' : 'var(--fg-secondary)',
-                                        lineHeight: 1.55,
-                                        boxShadow: msg.role === 'user'
-                                            ? '0 2px 8px rgba(var(--accent-500-rgb), 0.2)'
-                                            : 'none',
-                                    }}>
-                                        {msg.role === 'assistant'
-                                            ? <FormattedMessage content={msg.content} />
-                                            : msg.content
-                                        }
-                                    </div>
-                                </motion.div>
-                            ))}
-
-                            {/* Loading indicator */}
-                            {loading && (
-                                <motion.div
-                                    initial={{ opacity: 0 }}
-                                    animate={{ opacity: 1 }}
-                                    style={{
-                                        display: 'flex',
-                                        gap: 8,
-                                        alignItems: 'flex-start',
-                                    }}
-                                >
-                                    <div style={{
-                                        width: 28,
-                                        height: 28,
-                                        borderRadius: 10,
-                                        background: 'linear-gradient(135deg, var(--accent-500), var(--accent-600))',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        color: '#fff',
-                                        flexShrink: 0,
-                                    }}>
-                                        <Bot size={13} />
-                                    </div>
-                                    <div style={{
-                                        padding: '10px 14px',
-                                        borderRadius: '4px 16px 16px 16px',
-                                        background: 'var(--bg-secondary)',
-                                        border: '1px solid var(--border-subtle)',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: 8,
-                                    }}>
-                                        {/* Animated dots */}
-                                        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                                            {[0, 1, 2].map(i => (
-                                                <motion.div
-                                                    key={i}
-                                                    animate={{ opacity: [0.3, 1, 0.3], scale: [0.8, 1, 0.8] }}
-                                                    transition={{
-                                                        duration: 1.2,
-                                                        repeat: Infinity,
-                                                        delay: i * 0.2,
-                                                    }}
-                                                    style={{
-                                                        width: 6,
-                                                        height: 6,
-                                                        borderRadius: '50%',
-                                                        background: 'var(--accent-500)',
-                                                    }}
-                                                />
-                                            ))}
+                            ) : (
+                                <div className={styles.thread}>
+                                    {messages.map((message) => (
+                                        <motion.div
+                                            key={message.id}
+                                            className={cn(styles.message, message.role === 'user' ? styles.messageUser : styles.messageBot)}
+                                            initial={{ opacity: 0, y: 8 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            transition={{ duration: 0.2 }}
+                                        >
+                                            {message.role === 'assistant' && (
+                                                <span className={styles.msgAvatar}><Bot size={14} /></span>
+                                            )}
+                                            <div className={styles.bubble}>
+                                                {message.role === 'assistant'
+                                                    ? <FormattedMessage content={message.content} />
+                                                    : message.content}
+                                            </div>
+                                        </motion.div>
+                                    ))}
+                                    {loading && (
+                                        <div className={cn(styles.message, styles.messageBot)}>
+                                            <span className={styles.msgAvatar}><Bot size={14} /></span>
+                                            <div className={styles.bubble}>
+                                                <span className={styles.typing} aria-label="Assistant is typing">
+                                                    {[0, 1, 2].map((dot) => (
+                                                        <motion.span
+                                                            key={dot}
+                                                            className={styles.typingDot}
+                                                            animate={{ opacity: [0.3, 1, 0.3], y: [0, -3, 0] }}
+                                                            transition={{ duration: 1.1, repeat: Infinity, delay: dot * 0.16 }}
+                                                        />
+                                                    ))}
+                                                </span>
+                                            </div>
                                         </div>
-                                        <span style={{
-                                            fontSize: 11,
-                                            color: 'var(--fg-muted)',
-                                            fontWeight: 500,
-                                        }}>
-                                            Thinking...
-                                        </span>
-                                    </div>
-                                </motion.div>
+                                    )}
+                                </div>
                             )}
-
-                            <div ref={chatEndRef} />
+                            <div ref={endRef} />
                         </div>
 
-                        {/* ── Follow-up Chips (during chat) ── */}
                         {hasMessages && !loading && (
-                            <motion.div
-                                initial={{ opacity: 0, y: 4 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                style={{
-                                    padding: '4px 12px 2px',
-                                    display: 'flex',
-                                    gap: 6,
-                                    overflowX: 'auto',
-                                    flexShrink: 0,
-                                    msOverflowStyle: 'none',
-                                    scrollbarWidth: 'none',
-                                }}
-                            >
-                                {FOLLOW_UPS.map(q => (
-                                    <motion.button
-                                        key={q.label}
-                                        onClick={() => sendMessage(q.query)}
-                                        whileTap={{ scale: 0.95 }}
-                                        style={{
-                                            padding: '5px 10px',
-                                            borderRadius: 20,
-                                            background: 'rgba(var(--accent-500-rgb), 0.06)',
-                                            border: '1px solid rgba(var(--accent-500-rgb), 0.12)',
-                                            color: 'var(--accent-500)',
-                                            fontSize: 11,
-                                            fontWeight: 600,
-                                            cursor: 'pointer',
-                                            whiteSpace: 'nowrap',
-                                            flexShrink: 0,
-                                            transition: 'all 0.15s',
-                                        }}
+                            <div className={styles.followUps}>
+                                {FOLLOW_UPS.map((followUp) => (
+                                    <button
+                                        key={followUp.label}
+                                        type="button"
+                                        className={styles.followUp}
+                                        onClick={() => sendMessage(followUp.query)}
                                     >
-                                        {q.label}
-                                    </motion.button>
+                                        {followUp.label}
+                                    </button>
                                 ))}
-                            </motion.div>
+                            </div>
                         )}
 
-                        {/* ── Input Area ── */}
-                        <div style={{
-                            padding: '8px 12px 12px',
-                            borderTop: '1px solid var(--border-subtle)',
-                            display: 'flex',
-                            gap: 8,
-                            alignItems: 'center',
-                            background: 'var(--bg-primary)',
-                        }}>
+                        <form
+                            className={styles.composer}
+                            onSubmit={(event) => {
+                                event.preventDefault();
+                                sendMessage(input);
+                            }}
+                        >
                             <input
                                 ref={inputRef}
-                                type="text"
+                                className={styles.input}
                                 value={input}
-                                onChange={(e) => setInput(e.target.value)}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter' && !e.shiftKey) {
-                                        e.preventDefault();
-                                        sendMessage(input);
-                                    }
-                                }}
-                                placeholder="Ask anything about your finances..."
-                                style={{
-                                    flex: 1,
-                                    padding: '10px 16px',
-                                    borderRadius: 14,
-                                    background: 'var(--bg-secondary)',
-                                    border: '1.5px solid var(--border-subtle)',
-                                    color: 'var(--fg-primary)',
-                                    fontSize: 13,
-                                    fontWeight: 500,
-                                    outline: 'none',
-                                    transition: 'border-color 0.2s, box-shadow 0.2s',
-                                }}
-                                onFocus={(e) => {
-                                    e.currentTarget.style.borderColor = 'var(--accent-500)';
-                                    e.currentTarget.style.boxShadow = '0 0 0 3px rgba(var(--accent-500-rgb), 0.1)';
-                                }}
-                                onBlur={(e) => {
-                                    e.currentTarget.style.borderColor = 'var(--border-subtle)';
-                                    e.currentTarget.style.boxShadow = 'none';
-                                }}
+                                onChange={(event) => setInput(event.target.value)}
+                                placeholder="Ask anything about your money…"
+                                enterKeyHint="send"
+                                aria-label="Message SplitX AI"
                             />
-                            <motion.button
-                                onClick={() => sendMessage(input)}
-                                disabled={!input.trim() || loading}
-                                whileTap={{ scale: 0.9 }}
-                                style={{
-                                    width: 40,
-                                    height: 40,
-                                    borderRadius: 12,
-                                    background: input.trim()
-                                        ? 'linear-gradient(135deg, var(--accent-500), var(--accent-600))'
-                                        : 'var(--bg-secondary)',
-                                    border: input.trim()
-                                        ? 'none'
-                                        : '1px solid var(--border-subtle)',
-                                    color: input.trim() ? '#fff' : 'var(--fg-muted)',
-                                    cursor: input.trim() ? 'pointer' : 'default',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    flexShrink: 0,
-                                    transition: 'all 0.2s',
-                                    boxShadow: input.trim()
-                                        ? '0 2px 8px rgba(var(--accent-500-rgb), 0.3)'
-                                        : 'none',
-                                }}
-                            >
-                                <Send size={17} />
-                            </motion.button>
-                        </div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
-        </>
+                            <button type="submit" className={styles.send} disabled={!input.trim() || loading} aria-label="Send message">
+                                <ArrowUp size={19} strokeWidth={2.6} />
+                            </button>
+                        </form>
+                    </motion.section>
+                </motion.div>
+            )}
+        </AnimatePresence>,
+        document.body
     );
 }
