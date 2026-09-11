@@ -1,115 +1,109 @@
 /* ═══════════════════════════════════════════════════════════════
-   Dark Mode Theme — Ultra-Premium Glassmorphism Edition
-   Neutral deep-space blacks tinted by the active accent palette.
-   All color tinting uses var(--accent-500-rgb) so switching palettes
-   properly recolors the entire UI.
-   Applied when: <html data-theme="dark">
+   Dark theme — deep ink canvas, layered graphite surfaces,
+   accent-tinted just enough to feel bespoke.
+   Applied when <html data-theme="dark">
    ═══════════════════════════════════════════════════════════════ */
 
 [data-theme="dark"] {
     color-scheme: dark;
 
-    /* ── Backgrounds — neutral deep-space, accent-tinted via overlays ── */
-    --bg-primary: #101416;
-    --bg-secondary: #171c1f;
-    --bg-tertiary: #22292c;
-    --bg-elevated: #252e31;
-    --bg-sunken: #0b0f10;
-    --surface-hero: #d4f7a8;
-    --hero-text: #142519;
-    --hero-muted: #3c563d;
-    --hero-accent: #193c24;
-    --nav-surface: rgba(23, 28, 31, 0.95);
-    --bg-overlay: rgba(0, 0, 0, 0.8);
-    --voice-overlay: rgba(8, 8, 12, 0.92);
+    /* ── Canvas & surfaces ── */
+    --bg-primary: color-mix(in oklab, var(--accent-500) 3%, #09090d);
+    --bg-secondary: #111217;
+    --bg-tertiary: color-mix(in oklab, var(--accent-500) 5%, #1a1b22);
+    --bg-elevated: #1a1b22;
+    --bg-sunken: #060609;
+    --bg-muted: #16171d;
+    --bg-overlay: rgba(0, 0, 0, 0.66);
+    --scrim: rgba(0, 0, 0, 0.56);
+    --voice-overlay: rgba(9, 9, 13, 0.94);
 
-    /* ── Glass — accent-tinted frosted glass ── */
-    --bg-glass: rgba(28, 35, 38, 0.94);
-    --bg-glass-strong: rgba(30, 38, 41, 0.98);
-    --bg-glass-subtle: rgba(28, 35, 38, 0.7);
-    --bg-glass-iridescent: linear-gradient(135deg,
-            rgba(var(--accent-500-rgb), 0.06) 0%,
-            rgba(var(--accent-500-rgb), 0.03) 30%,
-            rgba(14, 14, 20, 0.55) 60%,
-            rgba(var(--accent-500-rgb), 0.02) 100%);
+    --surface-card: color-mix(in oklab, var(--accent-500) 3%, #121318);
+    --surface-card-hover: #181920;
+    --surface-panel: #121318;
+    --surface-popover: #1a1b23;
+    --surface-input: #17181f;
+    --surface-input-hover: #1d1e26;
+    --surface-sunken: var(--bg-sunken);
+    --surface-primary: var(--surface-card);
+    --surface-secondary: #1c1d25;
+    --surface-elevated: #1a1b23;
+    --bg-surface: var(--surface-card);
 
-    /* ── Mesh gradient background for pages ── */
-    --bg-mesh: radial-gradient(ellipse 80% 50% at 50% -20%,
-            rgba(var(--accent-500-rgb), 0.12) 0%,
-            transparent 70%);
+    --bg-glass: var(--surface-card);
+    --bg-glass-strong: #1a1b22;
+    --bg-glass-subtle: rgba(18, 19, 24, 0.72);
 
-    /* ── Foregrounds (text) — high-contrast with slight warmth ── */
-    --fg-primary: #f1f4ee;
-    --fg-secondary: #bbc5bf;
-    --fg-tertiary: #a0ada5;
-    --fg-muted: #8d9c94;
-    --fg-inverse: #06060f;
-    --fg-on-accent: #ffffff;
+    /* Chrome */
+    --header-surface: color-mix(in srgb, var(--bg-primary) 76%, transparent);
+    --dock-surface: rgba(24, 25, 32, 0.84);
+    --drawer-surface: #101116;
+    --nav-surface: var(--dock-surface);
 
-    /* ── Borders — luminous glass edges ── */
-    --border-default: rgba(255, 255, 255, 0.07);
-    --border-subtle: rgba(255, 255, 255, 0.04);
+    /* ── Text ── */
+    --fg-primary: #f3f4f7;
+    --fg-secondary: #c3c6d1;
+    --fg-tertiary: #9599a8;
+    --fg-muted: #6f7384;
+    --fg-inverse: #0b0b0f;
+    --fg-primary-rgb: 243, 244, 247;
+
+    /* ── Borders ── */
+    --border-default: rgba(255, 255, 255, 0.08);
+    --border-subtle: rgba(255, 255, 255, 0.05);
     --border-strong: rgba(255, 255, 255, 0.14);
+    --border-glass: rgba(255, 255, 255, 0.07);
+    --border-primary: var(--border-default);
+    --border-secondary: var(--border-default);
+    --border-tertiary: var(--border-subtle);
     --border-focus: var(--accent-400);
-    --border-glass: rgba(255, 255, 255, 0.10);
-    --border-glass-shimmer: linear-gradient(135deg,
-            rgba(255, 255, 255, 0.12) 0%,
-            rgba(255, 255, 255, 0.03) 40%,
-            rgba(var(--accent-500-rgb), 0.15) 60%,
-            rgba(255, 255, 255, 0.06) 100%);
 
-    /* ── Surfaces (cards, panels) — neutral glass layering ── */
-    --surface-card: #1c2326;
-    --surface-card-hover: #242e31;
-    --surface-panel: #1c2326;
-    --surface-popover: #20282c;
-    --surface-input: #171d20;
-    --surface-input-hover: #242e31;
+    /* ── Accent semantics ── */
+    --accent: var(--accent-500);
+    --accent-strong: var(--accent-400);
+    --accent-soft: rgba(var(--accent-500-rgb), 0.16);
+    --accent-softer: rgba(var(--accent-500-rgb), 0.09);
+    --accent-ring: rgba(var(--accent-500-rgb), 0.4);
 
-    /* ── Semantic Colors — vibrant neon-ish tints ── */
+    /* ── Status ── */
     --color-success: #34d399;
-    --color-success-bg: rgba(16, 185, 129, 0.14);
-    --color-success-border: rgba(16, 185, 129, 0.28);
+    --color-success-solid: #10b981;
+    --color-success-bg: rgba(16, 185, 129, 0.12);
+    --color-success-border: rgba(16, 185, 129, 0.26);
+    --success-rgb: 16, 185, 129;
+    --color-error: #fb7185;
+    --color-error-solid: #f43f5e;
+    --color-error-bg: rgba(244, 63, 94, 0.12);
+    --color-error-border: rgba(244, 63, 94, 0.28);
+    --danger-rgb: 244, 63, 94;
     --color-warning: #fbbf24;
-    --color-warning-bg: rgba(245, 158, 11, 0.14);
+    --color-warning-solid: #f59e0b;
+    --color-warning-bg: rgba(245, 158, 11, 0.12);
     --color-warning-border: rgba(245, 158, 11, 0.28);
-    --color-error: #f87171;
-    --color-error-bg: rgba(239, 68, 68, 0.14);
-    --color-error-border: rgba(239, 68, 68, 0.28);
     --color-info: #60a5fa;
-    --color-info-bg: rgba(59, 130, 246, 0.14);
+    --color-info-bg: rgba(59, 130, 246, 0.12);
     --color-info-border: rgba(59, 130, 246, 0.28);
+    --money-in: var(--color-success);
+    --money-out: var(--color-error);
 
-    /* ── Scrollbar ── */
+    /* ── Scrollbar / skeleton ── */
     --scrollbar-bg: transparent;
-    --scrollbar-thumb: rgba(255, 255, 255, 0.08);
-    --scrollbar-thumb-hover: rgba(255, 255, 255, 0.18);
+    --scrollbar-thumb: rgba(255, 255, 255, 0.12);
+    --scrollbar-thumb-hover: rgba(255, 255, 255, 0.22);
+    --skeleton-base: #16171d;
+    --skeleton-shine: #20212a;
 
-    /* ── Shadows — layered depth with colored ambient glow ── */
-    --shadow-xs: 0 1px 3px rgba(0, 0, 0, 0.5);
-    --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.45),
-        0 0 1px rgba(0, 0, 0, 0.3);
-    --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.5),
-        0 0 1px rgba(0, 0, 0, 0.3);
-    --shadow-lg: 0 8px 28px rgba(0, 0, 0, 0.55),
-        0 0 1px rgba(0, 0, 0, 0.3);
-    --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.6),
-        0 0 1px rgba(0, 0, 0, 0.3);
-
-    /* ── Glow shadows — premium accent halos ── */
-    --shadow-glow: 0 0 28px rgba(var(--accent-500-rgb), 0.22),
-        0 0 8px rgba(var(--accent-500-rgb), 0.12);
-    --shadow-glow-lg: 0 0 60px rgba(var(--accent-500-rgb), 0.30),
-        0 0 20px rgba(var(--accent-500-rgb), 0.16);
-    --shadow-glow-sm: 0 0 12px rgba(var(--accent-500-rgb), 0.15),
-        0 0 4px rgba(var(--accent-500-rgb), 0.08);
-
-    /* ── Card shadows — layered glass depth + accent glow ── */
-    --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.4),
-        0 0 0 1px rgba(255, 255, 255, 0.05),
-        inset 0 1px 0 rgba(255, 255, 255, 0.04);
-    --shadow-card-hover: 0 8px 36px rgba(0, 0, 0, 0.5),
-        0 0 0 1px rgba(var(--accent-500-rgb), 0.18),
-        0 0 30px rgba(var(--accent-500-rgb), 0.08),
-        inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    /* ── Elevation ── */
+    --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.5);
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.4), 0 10px 26px rgba(0, 0, 0, 0.45);
+    --shadow-lg: 0 4px 8px rgba(0, 0, 0, 0.4), 0 18px 44px rgba(0, 0, 0, 0.55);
+    --shadow-xl: 0 8px 16px rgba(0, 0, 0, 0.45), 0 28px 70px rgba(0, 0, 0, 0.6);
+    --shadow-2xl: 0 32px 90px rgba(0, 0, 0, 0.7);
+    --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.035) inset, 0 10px 28px -14px rgba(0, 0, 0, 0.7);
+    --shadow-card-hover: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 20px 44px -16px rgba(0, 0, 0, 0.8);
+    --shadow-glow: 0 8px 26px -6px rgba(var(--accent-500-rgb), 0.55);
+    --shadow-glow-lg: 0 16px 44px -8px rgba(var(--accent-500-rgb), 0.6);
+    --shadow-glow-sm: 0 4px 16px -4px rgba(var(--accent-500-rgb), 0.5);
+    --shadow-dock: 0 1px 0 rgba(255, 255, 255, 0.06) inset, 0 16px 40px -10px rgba(0, 0, 0, 0.8), 0 2px 8px rgba(0, 0, 0, 0.4);
 }

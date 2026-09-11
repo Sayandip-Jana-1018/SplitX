@@ -1,81 +1,45 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import Image from 'next/image';
+import { useSyncExternalStore } from 'react';
 import Link from 'next/link';
-import { motion } from 'framer-motion';
-import { LogIn, UserPlus } from 'lucide-react';
+import { usePathname } from 'next/navigation';
 import ThemeSelector from '@/components/features/ThemeSelector';
-import Button from '@/components/ui/Button';
+import BrandMark from '@/components/ui/BrandMark';
+import { cn } from '@/lib/utils';
 import styles from './Navbar.module.css';
 
-const glassBtn: React.CSSProperties = {
-    width: 36,
-    height: 36,
-    borderRadius: 'var(--radius-lg, 12px)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    background: 'rgba(var(--accent-500-rgb), 0.08)',
-    backdropFilter: 'blur(12px)',
-    WebkitBackdropFilter: 'blur(12px)',
-    border: '1px solid rgba(var(--accent-500-rgb), 0.12)',
-    color: 'var(--accent-500)',
-    cursor: 'pointer',
-    transition: 'all 0.2s ease',
-    textDecoration: 'none',
-};
+function subscribeToScroll(callback: () => void) {
+    window.addEventListener('scroll', callback, { passive: true });
+    return () => window.removeEventListener('scroll', callback);
+}
 
+const isScrolled = () => window.scrollY > 8;
+
+/** Public-page navbar. Calls to action adapt to where you are. */
 export default function Navbar() {
-    const [isMobile, setIsMobile] = useState(false);
+    const pathname = usePathname();
+    const scrolled = useSyncExternalStore(subscribeToScroll, isScrolled, () => false);
 
-    useEffect(() => {
-        const check = () => setIsMobile(window.innerWidth <= 640);
-        check();
-        window.addEventListener('resize', check);
-        return () => window.removeEventListener('resize', check);
-    }, []);
+    const isLanding = pathname === '/';
+    const onLogin = pathname === '/login';
+    const onPasswordFlow = pathname === '/register' || pathname === '/forgot-password' || pathname === '/reset-password';
 
     return (
-        <nav className={styles.nav}>
-            <div className={styles.navInner}>
-                <Link href="/" className={styles.logo}>
-                    <div className={styles.logoIcon}>
-                        <Image
-                            src="/icons/icon-192.png"
-                            alt="SplitX"
-                            width={22}
-                            height={22}
-                            style={{ width: 22, height: 22, borderRadius: 6 }}
-                        />
-                    </div>
-                    {!isMobile && <span className={styles.logoText}>SplitX</span>}
+        <nav className={cn(styles.nav, scrolled && styles.scrolled)} aria-label="Main">
+            <div className={styles.inner}>
+                <Link href="/" className={styles.logo} aria-label="SplitX home">
+                    <BrandMark size={32} />
                 </Link>
-                <div className={styles.navActions}>
+                <div className={styles.actions}>
                     <ThemeSelector />
-                    {isMobile ? (
+                    {isLanding && (
                         <>
-                            <Link href="/login" aria-label="Log in" style={{ textDecoration: 'none' }}>
-                                <motion.div whileTap={{ scale: 0.9 }} whileHover={{ scale: 1.05 }} style={glassBtn}>
-                                    <LogIn size={18} />
-                                </motion.div>
-                            </Link>
-                            <Link href="/register" aria-label="Sign up" style={{ textDecoration: 'none' }}>
-                                <motion.div whileTap={{ scale: 0.9 }} whileHover={{ scale: 1.05 }} style={glassBtn}>
-                                    <UserPlus size={18} />
-                                </motion.div>
-                            </Link>
-                        </>
-                    ) : (
-                        <>
-                            <Link href="/login">
-                                <Button variant="ghost" size="sm">Log in</Button>
-                            </Link>
-                            <Link href="/register">
-                                <Button variant="primary" size="sm">Get Started</Button>
-                            </Link>
+                            <Link href="/login" className={cn(styles.cta, styles.ghost, styles.hideTiny)}>Log in</Link>
+                            <Link href="/register" className={styles.cta}>Get started</Link>
                         </>
                     )}
+                    {onLogin && <Link href="/register" className={styles.cta}>Sign up</Link>}
+                    {onPasswordFlow && <Link href="/login" className={cn(styles.cta, styles.ghost)}>Log in</Link>}
                 </div>
             </div>
         </nav>

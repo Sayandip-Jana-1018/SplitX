@@ -1,0 +1,61 @@
+/* ═══════════════════════════════════════════════════════════════
+   Charts — recharts skinned with theme tokens
+   ═══════════════════════════════════════════════════════════════ */
+
+.chart {
+    position: relative;
+    width: 100%;
+}
+
+.chart :global(.recharts-cartesian-axis-tick-value) {
+    fill: var(--fg-tertiary);
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.chart :global(.recharts-label) {
+    fill: var(--fg-secondary);
+    font-size: 10.5px;
+    font-weight: 700;
+}
+
+.chart :global(.recharts-surface),
+.donut :global(.recharts-surface) {
+    overflow: visible;
+}
+
+.chart :global(:focus:not(:focus-visible)),
+.donut :global(:focus:not(:focus-visible)) {
+    outline: none;
+}
+
+.donut {
+    position: relative;
+    flex-shrink: 0;
+}
+
+.donutCenter {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    text-align: center;
+    pointer-events: none;
+}
+
+.donutValue {
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: -0.035em;
+    color: var(--fg-primary);
+    font-variant-numeric: tabular-nums;
+}
+
+.donutCaption {
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--fg-tertiary);
+}

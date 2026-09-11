@@ -1,99 +1,146 @@
+/* ═══════════════════════════════════════════════════════════════
+   Modal / Sheet
+   ═══════════════════════════════════════════════════════════════ */
+
 .overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.45);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    z-index: var(--z-modal-backdrop);
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 9990;
-    padding: var(--space-4);
+    padding: 24px;
     overflow-y: auto;
+    background: var(--scrim);
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+}
+
+.overlaySheet {
+    align-items: flex-end;
+    padding: 0;
+    overflow: hidden;
+}
+
+.overlayLight {
+    background: rgba(8, 10, 16, 0.18);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
 }
 
 .modal {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-height: min(86dvh, 820px);
+    overflow: hidden;
+    outline: none;
     background: var(--surface-popover);
     border: 1px solid var(--border-default);
-    border-radius: var(--radius-2xl);
-    width: 100%;
-    max-height: 85vh;
-    overflow-y: auto;
+    border-radius: var(--radius-3xl);
     box-shadow: var(--shadow-2xl);
-    z-index: 9991;
+    text-align: left;
 }
 
-.small {
-    max-width: 400px;
+.small { max-width: 420px; }
+.medium { max-width: 520px; }
+.large { max-width: 680px; }
+.full { max-width: min(92vw, 960px); }
+
+.sheet {
+    max-width: none;
+    max-height: 92dvh;
+    border-bottom: none;
+    border-radius: 28px 28px 0 0;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
-.medium {
-    max-width: 520px;
+.handleZone {
+    display: flex;
+    flex-shrink: 0;
+    justify-content: center;
+    padding: 10px 0 2px;
+    cursor: grab;
+    touch-action: none;
 }
 
-.large {
-    max-width: 680px;
-}
-
-.full {
-    max-width: 90vw;
+.handle {
+    width: 38px;
+    height: 5px;
+    border-radius: 3px;
+    background: var(--border-strong);
 }
 
 .header {
-    display: flex;
+    display: grid;
+    flex-shrink: 0;
+    grid-template-columns: 40px minmax(0, 1fr) 40px;
     align-items: center;
-    justify-content: space-between;
-    padding: var(--space-5) var(--space-5) 0;
+    gap: 8px;
+    padding: 14px 16px 6px;
+}
+
+.sheet .header {
+    padding-top: 4px;
+    touch-action: none;
+}
+
+.headerSpacer {
+    width: 40px;
 }
 
 .title {
-    font-size: var(--text-lg);
-    font-weight: var(--weight-semibold);
+    overflow: hidden;
+    text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
     color: var(--fg-primary);
 }
 
 .closeBtn {
-    width: 44px;
-    height: 44px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: var(--radius-md);
-    color: var(--fg-tertiary);
-    cursor: pointer;
-    border: none;
-    background: none;
-    transition: all var(--duration-fast) var(--ease-out);
+    display: grid;
+    place-items: center;
+    justify-self: end;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--bg-tertiary);
+    color: var(--fg-secondary);
+    transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
 }
 
-.closeBtn:hover {
-    background: var(--bg-tertiary);
-    color: var(--fg-primary);
+@media (hover: hover) and (pointer: fine) {
+    .closeBtn:hover {
+        color: var(--fg-primary);
+        background: var(--border-default);
+    }
+}
+
+.description {
+    padding: 0 28px;
+    margin-top: -2px;
+    text-align: center;
+    font-size: 13.5px;
+    line-height: 1.5;
+    color: var(--fg-tertiary);
 }
 
 .body {
-    padding: var(--space-5);
+    flex: 1;
+    min-height: 0;
+    padding: 14px 20px 22px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
 }
 
 .footer {
-    padding: 0 var(--space-5) var(--space-5);
     display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: var(--space-3);
-}
-
-/* Mobile centering fix */
-@media (max-width: 480px) {
-    .overlay {
-        padding: 16px 0 0;
-        align-items: flex-end;
-    }
-
-    .modal {
-        max-height: 90dvh;
-        margin: auto 0 0;
-        border-radius: 28px 28px 0 0;
-        padding-bottom: env(safe-area-inset-bottom, 0px);
-    }
+    flex-shrink: 0;
+    gap: 10px;
+    padding: 12px 20px calc(16px + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid var(--border-subtle);
 }

@@ -1,0 +1,308 @@
+/* ═══════════════════════════════════════════════════════════════
+   Groups
+   ═══════════════════════════════════════════════════════════════ */
+
+.page {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    padding-top: 8px;
+}
+
+.actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* ── Group card ── */
+.card {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-radius: 24px;
+    background: var(--surface-card);
+    border: 1px solid var(--border-default);
+    box-shadow: var(--shadow-card);
+    color: inherit;
+    text-decoration: none;
+    transition: transform var(--duration-normal) var(--ease-out), box-shadow var(--duration-normal) var(--ease-out), border-color var(--duration-normal) var(--ease-out);
+}
+
+.card:active {
+    transform: scale(0.985);
+}
+
+.cardBody {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 16px;
+}
+
+.cardTop {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.emoji {
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    width: 52px;
+    height: 52px;
+    border-radius: 18px;
+    background: var(--accent-soft);
+    font-size: 26px;
+}
+
+.cardText {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+.name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--fg-primary);
+}
+
+.meta {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12.5px;
+    color: var(--fg-tertiary);
+}
+
+.chevron {
+    flex-shrink: 0;
+    color: var(--fg-muted);
+}
+
+.cardBottom {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.total {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+}
+
+.totalLabel {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--fg-muted);
+}
+
+.totalValue {
+    font-size: 18px;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    color: var(--fg-primary);
+    font-variant-numeric: tabular-nums;
+}
+
+.strip {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 11px 16px;
+    border-top: 1px solid var(--border-subtle);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--fg-secondary);
+    background: var(--bg-secondary);
+}
+
+:global([data-theme="dark"]) .strip {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.stripSuccess {
+    color: var(--color-success);
+    background: var(--color-success-bg) !important;
+}
+
+.stripDanger {
+    color: var(--color-error);
+    background: var(--color-error-bg) !important;
+}
+
+.stripLabel {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.stripAmount {
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+}
+
+/* ── Create / join sheets ── */
+.sheet {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.emojiPreview {
+    display: grid;
+    place-items: center;
+    align-self: center;
+    width: 84px;
+    height: 84px;
+    border-radius: 28px;
+    background: var(--accent-soft);
+    box-shadow: 0 0 0 8px rgba(var(--accent-500-rgb), 0.06);
+    font-size: 42px;
+}
+
+.fieldLabel {
+    display: block;
+    margin-bottom: 10px;
+    padding-left: 2px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--fg-secondary);
+}
+
+.emojiGrid {
+    display: grid;
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+    gap: 6px;
+}
+
+.emojiOption {
+    display: grid;
+    place-items: center;
+    aspect-ratio: 1;
+    border-radius: 14px;
+    border: 1px solid var(--border-default);
+    background: var(--surface-input);
+    font-size: 20px;
+    transition: border-color var(--duration-fast) var(--ease-out), background-color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
+}
+
+.emojiOptionActive {
+    border-color: var(--accent-500);
+    background: var(--accent-soft);
+    box-shadow: 0 0 0 3px rgba(var(--accent-500-rgb), 0.16);
+}
+
+.success {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    text-align: center;
+}
+
+.successBadge {
+    display: grid;
+    place-items: center;
+    width: 64px;
+    height: 64px;
+    border-radius: 22px;
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: #fff;
+    box-shadow: 0 12px 26px -10px rgba(5, 150, 105, 0.6);
+}
+
+.successTitle {
+    margin-top: 6px;
+    font-size: 19px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+}
+
+.successText {
+    max-width: 290px;
+    font-size: 13.5px;
+    line-height: 1.5;
+    color: var(--fg-tertiary);
+}
+
+.qr {
+    align-self: center;
+    padding: 12px;
+    border-radius: 20px;
+    background: #fff;
+    box-shadow: var(--shadow-md);
+}
+
+.linkBox {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 8px 8px 14px;
+    border-radius: 16px;
+    background: var(--surface-input);
+    border: 1px solid var(--border-default);
+}
+
+.linkText {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--fg-secondary);
+}
+
+.twoUp {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.hint {
+    text-align: center;
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: var(--fg-tertiary);
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .card:hover {
+        transform: translateY(-2px);
+        border-color: var(--border-strong);
+        box-shadow: var(--shadow-card-hover);
+    }
+
+    .emojiOption:hover {
+        border-color: var(--border-strong);
+    }
+}
+
+@media (min-width: 768px) {
+    .list {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+    }
+}

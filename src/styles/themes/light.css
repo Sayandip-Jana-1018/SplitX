@@ -1,95 +1,109 @@
 /* ═══════════════════════════════════════════════════════════════
-   Light Mode Theme — Premium & Clean
-   Rich layered surfaces with depth, shadows, and subtle accent tints
-   Applied when: <html data-theme="light">
+   Light theme — calm, cool neutrals with a whisper of the accent hue.
+   Applied when <html data-theme="light">
    ═══════════════════════════════════════════════════════════════ */
 
 [data-theme="light"] {
     color-scheme: light;
 
-    /* ── Backgrounds — layered with subtle warmth ── */
-    --bg-primary: #f5f4f0;
-    --bg-secondary: #faf9f6;
-    --bg-tertiary: #eeede8;
+    /* ── Canvas & surfaces ── */
+    --bg-primary: color-mix(in oklab, var(--accent-500) 3%, #f3f4f7);
+    --bg-secondary: #fafafc;
+    --bg-tertiary: color-mix(in oklab, var(--accent-500) 4%, #eceef2);
     --bg-elevated: #ffffff;
-    --bg-sunken: #e7e6df;
-    --surface-hero: #172620;
-    --hero-text: #f5fff6;
-    --hero-muted: #c1d3c7;
-    --hero-accent: #d4f7a8;
-    --nav-surface: rgba(250, 249, 246, 0.94);
-    --bg-overlay: rgba(15, 23, 42, 0.85);
-    --voice-overlay: rgba(240, 242, 247, 0.92);
+    --bg-sunken: color-mix(in oklab, var(--accent-500) 3%, #e9ebf0);
+    --bg-muted: #eef0f4;
+    --bg-overlay: rgba(10, 12, 18, 0.5);
+    --scrim: rgba(12, 14, 22, 0.34);
+    --voice-overlay: rgba(243, 244, 247, 0.94);
 
-    /* ── Glass — visible frosted glass with accent tint ── */
-    --bg-glass: rgba(255, 255, 255, 0.88);
-    --bg-glass-strong: rgba(255, 255, 255, 0.95);
-    --bg-glass-subtle: rgba(255, 255, 255, 0.7);
-
-    /* ── Foregrounds (text) ── */
-    --fg-primary: #202b27;
-    --fg-secondary: #52605a;
-    --fg-tertiary: #63716a;
-    --fg-muted: #718078;
-    --fg-inverse: #ffffff;
-    --fg-on-accent: #ffffff;
-
-    /* ── Borders — more visible for card edges ── */
-    --border-default: rgba(0, 0, 0, 0.08);
-    --border-subtle: rgba(0, 0, 0, 0.04);
-    --border-strong: rgba(0, 0, 0, 0.14);
-    --border-focus: var(--accent-500);
-    --border-glass: rgba(0, 0, 0, 0.08);
-
-    /* ── Surfaces (cards, panels) ── */
     --surface-card: #ffffff;
-    --surface-card-hover: rgba(255, 255, 255, 0.95);
+    --surface-card-hover: #fcfcfd;
     --surface-panel: #ffffff;
     --surface-popover: #ffffff;
-    --surface-input: #ffffff;
-    --surface-input-hover: #f8fafc;
+    --surface-input: color-mix(in oklab, var(--accent-500) 2%, #f5f6f9);
+    --surface-input-hover: #eff1f5;
+    --surface-sunken: var(--bg-sunken);
+    --surface-primary: var(--surface-card);
+    --surface-secondary: #f2f3f7;
+    --surface-elevated: #ffffff;
+    --bg-surface: var(--surface-card);
 
-    /* ── Semantic Colors ── */
+    /* Legacy "glass" tokens — solid for crisp, fast rendering */
+    --bg-glass: #ffffff;
+    --bg-glass-strong: #ffffff;
+    --bg-glass-subtle: rgba(255, 255, 255, 0.72);
+
+    /* Chrome */
+    --header-surface: color-mix(in srgb, var(--bg-primary) 80%, transparent);
+    --dock-surface: rgba(255, 255, 255, 0.84);
+    --drawer-surface: #ffffff;
+    --nav-surface: var(--dock-surface);
+
+    /* ── Text ── */
+    --fg-primary: #0d0f14;
+    --fg-secondary: #3d4250;
+    --fg-tertiary: #5d6272;
+    --fg-muted: #8b909e;
+    --fg-inverse: #ffffff;
+    --fg-primary-rgb: 13, 15, 20;
+
+    /* ── Borders ── */
+    --border-default: rgba(13, 15, 20, 0.08);
+    --border-subtle: rgba(13, 15, 20, 0.05);
+    --border-strong: rgba(13, 15, 20, 0.14);
+    --border-glass: rgba(13, 15, 20, 0.07);
+    --border-primary: var(--border-default);
+    --border-secondary: var(--border-default);
+    --border-tertiary: var(--border-subtle);
+    --border-focus: var(--accent-500);
+
+    /* ── Accent semantics ── */
+    --accent: var(--accent-500);
+    --accent-strong: var(--accent-600);
+    --accent-soft: rgba(var(--accent-500-rgb), 0.1);
+    --accent-softer: rgba(var(--accent-500-rgb), 0.06);
+    --accent-ring: rgba(var(--accent-500-rgb), 0.28);
+
+    /* ── Status ── */
     --color-success: #059669;
+    --color-success-solid: #10b981;
     --color-success-bg: #ecfdf5;
     --color-success-border: #a7f3d0;
-    --color-warning: #d97706;
+    --success-rgb: 16, 185, 129;
+    --color-error: #e11d48;
+    --color-error-solid: #f43f5e;
+    --color-error-bg: #fff1f2;
+    --color-error-border: #fecdd3;
+    --danger-rgb: 244, 63, 94;
+    --color-warning: #b45309;
+    --color-warning-solid: #f59e0b;
     --color-warning-bg: #fffbeb;
     --color-warning-border: #fde68a;
-    --color-error: #dc2626;
-    --color-error-bg: #fef2f2;
-    --color-error-border: #fecaca;
     --color-info: #2563eb;
     --color-info-bg: #eff6ff;
     --color-info-border: #bfdbfe;
+    --money-in: var(--color-success);
+    --money-out: var(--color-error);
 
-    /* ── Scrollbar ── */
+    /* ── Scrollbar / skeleton ── */
     --scrollbar-bg: transparent;
-    --scrollbar-thumb: #c1c5ce;
-    --scrollbar-thumb-hover: #9ca3af;
+    --scrollbar-thumb: rgba(13, 15, 20, 0.16);
+    --scrollbar-thumb-hover: rgba(13, 15, 20, 0.28);
+    --skeleton-base: #eceef2;
+    --skeleton-shine: #f8f9fb;
 
-    /* ── Shadows — deeper & more visible for depth ── */
-    --shadow-xs: 0 1px 3px rgba(0, 0, 0, 0.06);
-    --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.07),
-        0 1px 2px rgba(0, 0, 0, 0.04);
-    --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.08),
-        0 2px 6px rgba(0, 0, 0, 0.04);
-    --shadow-lg: 0 10px 32px rgba(0, 0, 0, 0.10),
-        0 4px 10px rgba(0, 0, 0, 0.05);
-    --shadow-xl: 0 20px 56px rgba(0, 0, 0, 0.12),
-        0 8px 18px rgba(0, 0, 0, 0.06);
-
-    /* ── Glow shadows — accent halos (stronger in light mode) ── */
-    --shadow-glow: 0 0 24px rgba(var(--accent-500-rgb), 0.15);
-    --shadow-glow-lg: 0 0 48px rgba(var(--accent-500-rgb), 0.18);
-    --shadow-glow-sm: 0 0 12px rgba(var(--accent-500-rgb), 0.12);
-
-    /* ── Card shadows — layered for floating effect ── */
-    --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.05),
-        0 4px 20px rgba(0, 0, 0, 0.04),
-        0 0 0 1px rgba(0, 0, 0, 0.04);
-    --shadow-card-hover: 0 8px 32px rgba(0, 0, 0, 0.10),
-        0 2px 8px rgba(0, 0, 0, 0.05),
-        0 0 0 1px rgba(var(--accent-500-rgb), 0.15),
-        0 0 24px rgba(var(--accent-500-rgb), 0.06);
+    /* ── Elevation ── */
+    --shadow-xs: 0 1px 2px rgba(16, 18, 27, 0.05);
+    --shadow-sm: 0 1px 2px rgba(16, 18, 27, 0.04), 0 2px 8px rgba(16, 18, 27, 0.05);
+    --shadow-md: 0 2px 4px rgba(16, 18, 27, 0.04), 0 8px 24px rgba(16, 18, 27, 0.07);
+    --shadow-lg: 0 4px 8px rgba(16, 18, 27, 0.04), 0 16px 40px rgba(16, 18, 27, 0.1);
+    --shadow-xl: 0 8px 16px rgba(16, 18, 27, 0.06), 0 24px 64px rgba(16, 18, 27, 0.14);
+    --shadow-2xl: 0 32px 80px rgba(16, 18, 27, 0.22);
+    --shadow-card: 0 1px 2px rgba(16, 18, 27, 0.04), 0 8px 22px -10px rgba(16, 18, 27, 0.1);
+    --shadow-card-hover: 0 2px 4px rgba(16, 18, 27, 0.05), 0 18px 38px -14px rgba(16, 18, 27, 0.18);
+    --shadow-glow: 0 8px 24px -6px rgba(var(--accent-500-rgb), 0.45);
+    --shadow-glow-lg: 0 16px 40px -8px rgba(var(--accent-500-rgb), 0.5);
+    --shadow-glow-sm: 0 4px 14px -4px rgba(var(--accent-500-rgb), 0.4);
+    --shadow-dock: 0 1px 0 rgba(255, 255, 255, 0.9) inset, 0 10px 30px -8px rgba(16, 18, 27, 0.18), 0 2px 6px rgba(16, 18, 27, 0.05);
 }

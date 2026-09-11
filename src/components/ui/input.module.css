@@ -1,19 +1,20 @@
 /* ═══════════════════════════════════════════════════════════════
-   Input — Premium Focus Effects
+   Input — soft-filled field with a clear focus ring
    ═══════════════════════════════════════════════════════════════ */
 
 .wrapper {
     display: flex;
     flex-direction: column;
-    gap: var(--space-1, 4px);
+    gap: 7px;
+    min-width: 0;
+    text-align: left;
 }
 
 .label {
-    font-size: var(--text-sm, 14px);
-    font-weight: var(--weight-medium, 500);
+    padding-left: 2px;
+    font-size: 13px;
+    font-weight: 600;
     color: var(--fg-secondary);
-    margin-bottom: 2px;
-    text-align: left;
 }
 
 .inputContainer {
@@ -24,110 +25,109 @@
 
 .input {
     width: 100%;
-    padding: 14px 16px;
-    min-height: 52px;
+    min-width: 0;
+    height: 52px;
+    padding: 0 16px;
     font-size: 16px;
+    font-weight: 500;
     color: var(--fg-primary);
-    background: var(--surface-input, var(--bg-secondary));
-    border: 1.5px solid var(--border-default);
-    border-radius: var(--radius-lg, 12px);
+    background: var(--surface-input);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-lg);
     outline: none;
     text-align: left;
     transition:
-        border-color 0.25s ease,
-        box-shadow 0.25s ease,
-        background-color 0.2s ease;
+        border-color var(--duration-fast) var(--ease-out),
+        box-shadow var(--duration-normal) var(--ease-out),
+        background-color var(--duration-fast) var(--ease-out);
 }
 
 .input::placeholder {
     color: var(--fg-muted);
-    text-align: left;
+    font-weight: 400;
 }
 
-/* ── Premium Focus Glow ── */
-.input:focus {
-    border-color: var(--accent-500);
-    box-shadow:
-        0 0 0 3px rgba(var(--accent-500-rgb), 0.12),
-        0 0 20px rgba(var(--accent-500-rgb), 0.06);
-    background: var(--surface-card);
-}
-
-/* Hover when not focused */
 .input:hover:not(:focus) {
-    border-color: rgba(var(--accent-500-rgb), 0.3);
+    border-color: var(--border-strong);
 }
 
-/* ── Size variants ── */
+.input:focus {
+    background: var(--surface-card);
+    border-color: var(--accent-500);
+    box-shadow: 0 0 0 4px rgba(var(--accent-500-rgb), 0.14);
+}
+
 .inputLarge {
-    padding: 14px 18px;
-    font-size: var(--text-base, 16px);
+    height: 58px;
+    font-size: 17px;
 }
 
-/* ── With left icon — needs enough padding to clear the icon ── */
 .hasLeftIcon {
-    padding-left: 40px;
+    padding-left: 46px;
 }
 
-/* ── With right icon ── */
 .hasRightIcon {
-    padding-right: 40px;
+    padding-right: 48px;
 }
 
-.leftIcon {
-    position: absolute;
-    left: 12px;
-    top: 50%;
-    transform: translateY(-50%);
-    color: var(--fg-muted);
-    display: flex;
-    align-items: center;
-    pointer-events: none;
-    transition: color 0.25s ease;
-    z-index: 1;
-}
-
+.leftIcon,
 .rightIcon {
     position: absolute;
-    right: 12px;
     top: 50%;
-    transform: translateY(-50%);
-    color: var(--fg-muted);
+    z-index: 1;
     display: flex;
     align-items: center;
+    color: var(--fg-muted);
     pointer-events: none;
-    transition: color 0.25s ease;
-    z-index: 1;
+    transform: translateY(-50%);
+    transition: color var(--duration-fast) var(--ease-out);
 }
 
-/* Icon color on focus */
+.leftIcon { left: 16px; }
+.rightIcon { right: 16px; }
+
+.rightSlot {
+    position: absolute;
+    top: 50%;
+    right: 6px;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    transform: translateY(-50%);
+}
+
 .inputContainer:focus-within .leftIcon,
 .inputContainer:focus-within .rightIcon {
-    color: var(--accent-500);
+    color: var(--accent-strong);
 }
 
-/* ── Error state ── */
 .error .input {
     border-color: var(--color-error) !important;
-    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1) !important;
+    box-shadow: 0 0 0 4px rgba(var(--danger-rgb), 0.12) !important;
 }
 
 .errorText {
-    font-size: var(--text-xs, 12px);
+    padding-left: 2px;
+    font-size: 12px;
+    font-weight: 500;
     color: var(--color-error);
-    margin-top: 2px;
 }
 
-/* ── Textarea ── */
+.hintText {
+    padding-left: 2px;
+    font-size: 12px;
+    color: var(--fg-tertiary);
+}
+
 .textarea {
-    min-height: 100px;
+    height: auto;
+    min-height: 104px;
+    padding: 14px 16px;
+    line-height: 1.5;
     resize: vertical;
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   Floating Label — Material Design Style
-   ═══════════════════════════════════════════════════════════════ */
-
+/* ── Floating label ── */
 .floatingContainer {
     position: relative;
 }
@@ -135,43 +135,40 @@
 .floatingInput {
     padding-top: 20px;
     padding-bottom: 6px;
-    text-align: left;
 }
 
 .floatingInput::placeholder {
     color: transparent;
-    text-align: left;
 }
 
 .floatingLabel {
     position: absolute;
-    left: 14px;
     top: 50%;
-    transform: translateY(-50%);
-    font-size: var(--text-sm, 14px);
-    font-weight: var(--weight-medium, 500);
+    left: 16px;
+    z-index: 2;
+    font-size: 14px;
+    font-weight: 500;
     color: var(--fg-muted);
     pointer-events: none;
-    transition:
-        transform 0.25s cubic-bezier(0.16, 1, 0.3, 1),
-        font-size 0.25s cubic-bezier(0.16, 1, 0.3, 1),
-        color 0.25s ease,
-        top 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    transform: translateY(-50%);
     transform-origin: left center;
-    z-index: 2;
-    background: transparent;
+    transition:
+        top var(--duration-normal) var(--ease-out),
+        font-size var(--duration-normal) var(--ease-out),
+        color var(--duration-fast) var(--ease-out),
+        transform var(--duration-normal) var(--ease-out);
 }
 
 .floatingLabelActive {
     top: 10px;
     transform: translateY(0);
-    font-size: var(--text-xs, 11px);
-    color: var(--accent-500);
-    font-weight: var(--weight-semibold, 600);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--accent-strong);
 }
 
 .floatingLabelWithIcon {
-    left: 40px;
+    left: 46px;
 }
 
 .floatingInputActive {

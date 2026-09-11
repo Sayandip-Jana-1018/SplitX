@@ -1,649 +1,473 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { User, Palette, Moon, Sun, Bell, Shield, LogOut, ChevronRight, Smartphone, Check, Loader2, Save, Camera } from 'lucide-react';
+import { signOut } from 'next-auth/react';
+import {
+    AlertTriangle,
+    AtSign,
+    Camera,
+    Compass,
+    Download,
+    Info,
+    LogOut,
+    MonitorSmartphone,
+    PencilLine,
+    Smartphone,
+    Sparkles,
+    Trash2,
+    User,
+    Wallet,
+} from 'lucide-react';
 import Avatar from '@/components/ui/Avatar';
 import Button from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { useThemeContext, COLOR_PALETTES } from '@/components/providers/ThemeProvider';
-import { useCurrentUser } from '@/hooks/useCurrentUser';
-import { useViewportTier } from '@/hooks/useViewportTier';
+import Modal from '@/components/ui/Modal';
+import { IconTile, ListGroup, ListRow, Section, Spinner, Stagger, StaggerItem, Tag } from '@/components/ui/kit';
 import { useToast } from '@/components/ui/Toast';
-import { signOut } from 'next-auth/react';
-
-/* ── Glassmorphic styles ── */
-const glass: React.CSSProperties = {
-    background: 'var(--bg-glass)',
-    backdropFilter: 'blur(24px) saturate(1.5)',
-    WebkitBackdropFilter: 'blur(24px) saturate(1.5)',
-    border: '1px solid var(--border-glass)',
-    borderRadius: 'var(--radius-xl)',
-    boxShadow: 'var(--shadow-card)',
-    position: 'relative',
-    overflow: 'hidden',
-};
+import { PalettePicker, ThemeModeSwitch } from '@/components/features/ThemeSelector';
+import { useThemeContext } from '@/components/providers/ThemeProvider';
+import { useCurrentUser } from '@/hooks/useCurrentUser';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { openAssistant, startTour } from '@/lib/uiEvents';
+import styles from './settings.module.css';
 
 interface BeforeInstallPromptEvent extends Event {
     prompt: () => Promise<void>;
     userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
 }
 
+const APP_VERSION = '1.0.0';
+const UPI_PATTERN = /^[a-zA-Z0-9._-]{2,256}@[a-zA-Z][a-zA-Z0-9.-]{1,64}$/;
+const AVATAR_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+const JSON_HEADERS = { 'Content-Type': 'application/json' };
+
+function errorMessage(data: unknown, fallback: string) {
+    const error = (data as { error?: unknown } | null)?.error;
+    return typeof error === 'string' && error ? error : fallback;
+}
+
 export default function SettingsPage() {
-    const { theme, palette, setTheme, setPalette } = useThemeContext();
-    const { user, loading: userLoading, refresh: refreshUser } = useCurrentUser();
-    const { isDesktop } = useViewportTier();
+    const router = useRouter();
+    const { palette, setPalette } = useThemeContext();
+    const { user, loading, refresh } = useCurrentUser();
     const { toast } = useToast();
+    const standalone = useMediaQuery('(display-mode: standalone)', false);
+    const fileRef = useRef<HTMLInputElement>(null);
 
-    const [editingProfile, setEditingProfile] = useState(false);
-    const [editName, setEditName] = useState('');
-    const [editPhone, setEditPhone] = useState('');
-    const [editUpiId, setEditUpiId] = useState('');
-    const [savingProfile, setSavingProfile] = useState(false);
-    const [uploadingAvatar, setUploadingAvatar] = useState(false);
-    const [mounted, setMounted] = useState(false);
-    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-    const [deletingAccount, setDeletingAccount] = useState(false);
-    const [exportingData, setExportingData] = useState(false);
+    const [sheet, setSheet] = useState<'profile' | 'delete' | null>(null);
+    const [form, setForm] = useState({ name: '', phone: '', upiId: '' });
+    const [saving, setSaving] = useState(false);
+    const [uploading, setUploading] = useState(false);
+    const [exporting, setExporting] = useState(false);
+    const [deleting, setDeleting] = useState(false);
+    const [confirmText, setConfirmText] = useState('');
     const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
-    const [isInstalled, setIsInstalled] = useState(false);
-
-    useEffect(() => { setMounted(true); }, []);
+    const [installedNow, setInstalledNow] = useState(false);
+    const isInstalled = standalone || installedNow;
 
     useEffect(() => {
-        const handleBeforeInstallPrompt = (event: Event) => {
+        const handlePrompt = (event: Event) => {
             event.preventDefault();
             setInstallPrompt(event as BeforeInstallPromptEvent);
         };
-
-        const handleAppInstalled = () => {
+        const handleInstalled = () => {
             setInstallPrompt(null);
-            setIsInstalled(true);
-            toast('SplitX installed successfully!', 'success');
+            setInstalledNow(true);
+            toast('SplitX is installed on this device', 'success');
         };
-
-        setIsInstalled(window.matchMedia('(display-mode: standalone)').matches);
-        window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-        window.addEventListener('appinstalled', handleAppInstalled);
-
+        window.addEventListener('beforeinstallprompt', handlePrompt);
+        window.addEventListener('appinstalled', handleInstalled);
         return () => {
-            window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-            window.removeEventListener('appinstalled', handleAppInstalled);
+            window.removeEventListener('beforeinstallprompt', handlePrompt);
+            window.removeEventListener('appinstalled', handleInstalled);
         };
     }, [toast]);
 
-    useEffect(() => {
-        if (user) {
-            setEditName(user.name || '');
-            setEditPhone(user.phone || '');
-            setEditUpiId(user.upiId || '');
-        }
-    }, [user]);
+    const upiValue = form.upiId.trim();
+    const upiInvalid = upiValue.length > 0 && !UPI_PATTERN.test(upiValue);
+    const memberSince = user?.createdAt
+        ? new Date(user.createdAt).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })
+        : null;
 
-    const handleSaveProfile = async () => {
-        setSavingProfile(true);
+    const openProfile = () => {
+        setForm({ name: user?.name || '', phone: user?.phone || '', upiId: user?.upiId || '' });
+        setSheet('profile');
+    };
+
+    const saveProfile = async () => {
+        setSaving(true);
         try {
             const res = await fetch('/api/me', {
                 method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    name: editName.trim(),
-                    phone: editPhone.trim(),
-                    upiId: editUpiId.trim(),
-                }),
+                headers: JSON_HEADERS,
+                body: JSON.stringify({ name: form.name.trim(), phone: form.phone.trim(), upiId: upiValue }),
             });
             if (res.ok) {
                 toast('Profile updated', 'success');
-                setEditingProfile(false);
-                // Refresh cached user so data persists across navigations
-                await refreshUser();
+                setSheet(null);
+                await refresh();
             } else {
-                const err = await res.json().catch(() => ({}));
-                toast(err.error || 'Failed to update', 'error');
+                toast(errorMessage(await res.json().catch(() => null), 'Could not update your profile'), 'error');
             }
         } catch {
-            toast('Network error', 'error');
+            toast('Network error — try again', 'error');
         } finally {
-            setSavingProfile(false);
+            setSaving(false);
         }
     };
 
-    const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
+    const uploadAvatar = async (event: ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        event.target.value = '';
         if (!file) return;
-
-        const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-        if (!validTypes.includes(file.type)) {
-            toast('Please use JPEG, PNG, WebP, or GIF', 'error');
+        if (!AVATAR_TYPES.includes(file.type)) {
+            toast('Use a JPEG, PNG, WebP or GIF image', 'error');
             return;
         }
         if (file.size > 2 * 1024 * 1024) {
-            toast('Image must be under 2MB', 'error');
+            toast('Images must be under 2 MB', 'error');
             return;
         }
 
-        setUploadingAvatar(true);
+        setUploading(true);
         try {
-            const formData = new FormData();
-            formData.append('file', file);
-            const res = await fetch('/api/me/avatar', { method: 'POST', body: formData });
+            const body = new FormData();
+            body.append('file', file);
+            const res = await fetch('/api/me/avatar', { method: 'POST', body });
             if (res.ok) {
-                toast('Avatar updated!', 'success');
-                await refreshUser();
+                toast('Photo updated', 'success');
+                await refresh();
             } else {
-                const data = await res.json();
-                toast(data.error || 'Upload failed', 'error');
+                toast(errorMessage(await res.json().catch(() => null), 'Upload failed'), 'error');
             }
         } catch {
-            toast('Network error', 'error');
+            toast('Network error — try again', 'error');
         } finally {
-            setUploadingAvatar(false);
+            setUploading(false);
+        }
+    };
+
+    const exportData = async () => {
+        setExporting(true);
+        try {
+            const res = await fetch('/api/me/export');
+            if (!res.ok) {
+                toast('Could not export your data', 'error');
+                return;
+            }
+            const data = await res.json();
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `splitx-export-${new Date().toISOString().split('T')[0]}.json`;
+            link.click();
+            URL.revokeObjectURL(url);
+            toast('Your data is downloading', 'success');
+        } catch {
+            toast('Network error — try again', 'error');
+        } finally {
+            setExporting(false);
+        }
+    };
+
+    const installApp = async () => {
+        if (!installPrompt) {
+            toast('Open your browser menu and choose “Add to Home screen”.', 'info');
+            return;
+        }
+        try {
+            await installPrompt.prompt();
+            const choice = await installPrompt.userChoice;
+            if (choice.outcome === 'accepted') toast('Installing SplitX…', 'success');
+        } catch {
+            toast('The install prompt isn’t available right now', 'error');
+        } finally {
+            setInstallPrompt(null);
+        }
+    };
+
+    const deleteAccount = async () => {
+        setDeleting(true);
+        try {
+            const res = await fetch('/api/me', { method: 'DELETE' });
+            if (res.ok) {
+                toast('Your account was deleted', 'success');
+                await signOut({ callbackUrl: '/login' });
+            } else {
+                toast(errorMessage(await res.json().catch(() => null), 'Could not delete your account'), 'error');
+                setDeleting(false);
+            }
+        } catch {
+            toast('Network error — try again', 'error');
+            setDeleting(false);
         }
     };
 
     const handleSignOut = async () => {
-        try { await signOut({ callbackUrl: '/login' }); }
-        catch { window.location.href = '/login'; }
-    };
-
-    const handleExportData = async () => {
-        setExportingData(true);
         try {
-            const res = await fetch('/api/me/export');
-            if (res.ok) {
-                const data = await res.json();
-                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `splitx-data-${new Date().toISOString().split('T')[0]}.json`;
-                a.click();
-                URL.revokeObjectURL(url);
-                toast('Data exported successfully!', 'success');
-            } else {
-                toast('Failed to export data', 'error');
-            }
+            await signOut({ callbackUrl: '/login' });
         } catch {
-            toast('Network error', 'error');
-        } finally {
-            setExportingData(false);
+            window.location.href = '/login';
         }
     };
 
-    const handleInstallApp = async () => {
-        if (!installPrompt) {
-            if (isInstalled) {
-                toast('SplitX is already installed on this device.', 'info');
-            } else {
-                toast('Use your browser menu to install SplitX on this device.', 'info');
-            }
-            return;
-        }
-
-        try {
-            await installPrompt.prompt();
-            const choice = await installPrompt.userChoice;
-            if (choice.outcome === 'accepted') {
-                toast('Install prompt accepted.', 'success');
-            } else {
-                toast('Install prompt dismissed.', 'info');
-            }
-        } catch {
-            toast('Unable to show the install prompt right now.', 'error');
-        } finally {
-            setInstallPrompt(null);
-        }
+    const replayTour = () => {
+        startTour();
+        router.push('/dashboard');
     };
-
-    const handleDeleteAccount = async () => {
-        setDeletingAccount(true);
-        try {
-            const res = await fetch('/api/me', { method: 'DELETE' });
-            if (res.ok) {
-                toast('Account deleted. Goodbye!', 'success');
-                await signOut({ callbackUrl: '/login' });
-            } else {
-                const err = await res.json().catch(() => ({}));
-                toast(err.error || 'Failed to delete account', 'error');
-            }
-        } catch {
-            toast('Network error', 'error');
-        } finally {
-            setDeletingAccount(false);
-            setShowDeleteConfirm(false);
-        }
-    };
-
-    const memberSince = mounted && user?.createdAt
-        ? new Date(user.createdAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
-        : '...';
 
     return (
-        <div
-            style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 'var(--space-5)',
-                maxWidth: isDesktop ? 980 : 500,
-                width: '100%',
-                margin: '0 auto',
-            }}
-            suppressHydrationWarning
-        >
-            <div className="page-hero" style={{ paddingTop: 'var(--space-2)' }}>
-                <div className="page-kicker">Personalize SplitX</div>
-                <h2 className="page-hero-title">Your space, your way.</h2>
-                <p className="page-hero-subtitle">
-                    The essentials about you. Your profile, your look, and your data, all in your hands.
-                </p>
-            </div>
-
-            {/* ═══ PROFILE CARD — Glassmorphic with glow ring ═══ */}
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.5, delay: 0.05 }}>
-                <div className="product-panel profile-overview" style={{
-                    ...glass, borderRadius: 'var(--radius-2xl)', padding: 'var(--space-5)',
-                    background: 'linear-gradient(135deg, rgba(var(--accent-500-rgb), 0.08), var(--bg-glass), rgba(var(--accent-500-rgb), 0.04))',
-                    boxShadow: 'var(--shadow-card), 0 0 30px rgba(var(--accent-500-rgb), 0.06)',
-                }}>
-                    {/* Top light */}
-                    <div style={{
-                        position: 'absolute', top: 0, left: '15%', right: '15%', height: 1,
-                        background: 'linear-gradient(90deg, transparent, rgba(var(--accent-500-rgb), 0.15), transparent)',
-                        pointerEvents: 'none',
-                    }} />
-                    <div style={{ position: 'relative', zIndex: 1 }}>
-                        {userLoading ? (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
-                                <div style={{
-                                    width: 56, height: 56, borderRadius: '50%',
-                                    background: 'rgba(var(--accent-500-rgb), 0.06)',
-                                    animation: 'pulse 2s ease infinite',
-                                }} />
-                                <div style={{ flex: 1 }}>
-                                    <div style={{ width: '50%', height: 14, borderRadius: 8, background: 'rgba(var(--accent-500-rgb), 0.08)', marginBottom: 8 }} />
-                                    <div style={{ width: '70%', height: 10, borderRadius: 6, background: 'rgba(var(--accent-500-rgb), 0.05)' }} />
-                                </div>
-                            </div>
-                        ) : editingProfile ? (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-                                <Input label="Name" value={editName} onChange={(e) => setEditName(e.target.value)} leftIcon={<User size={16} />} />
-                                <Input label="Phone" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} placeholder="+91 9876543210" leftIcon={<Smartphone size={16} />} />
-                                <Input label="UPI ID" value={editUpiId} onChange={(e) => setEditUpiId(e.target.value)} placeholder="name@upi" />
-                                <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-                                    <Button fullWidth
-                                        leftIcon={savingProfile ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Save size={14} />}
-                                        onClick={handleSaveProfile}
-                                        disabled={savingProfile || !editName.trim()}
-                                        style={{
-                                            background: 'linear-gradient(135deg, var(--accent-500), var(--accent-600))',
-                                            boxShadow: '0 4px 16px rgba(var(--accent-500-rgb), 0.25)',
-                                        }}
-                                    >
-                                        Save
-                                    </Button>
-                                    <Button variant="outline" onClick={() => setEditingProfile(false)}>Cancel</Button>
-                                </div>
+        <>
+            <Stagger className={styles.page}>
+                {/* ── Profile ── */}
+                <StaggerItem>
+                    <section className={styles.profile}>
+                        {loading && !user ? (
+                            <div className={styles.profileSkeleton} aria-hidden="true">
+                                <span className={styles.skeletonCircle} />
+                                <span className={styles.skeletonLine} style={{ width: 150, height: 20 }} />
+                                <span className={styles.skeletonLine} style={{ width: 200 }} />
                             </div>
                         ) : (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
-                                {/* Avatar with vibrant rotating ring */}
-                                <div style={{
-                                    position: 'relative',
-                                    width: 64, height: 64, // Explicit size ensuring perfect circle
-                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                    flexShrink: 0,
-                                }}>
-                                    {/* Rotating Light Effect */}
-                                    <motion.div
-                                        animate={{ rotate: 360 }}
-                                        transition={{ repeat: Infinity, duration: 2, ease: "linear" }}
-                                        style={{
-                                            position: 'absolute',
-                                            inset: 0,
-                                            borderRadius: '50%',
-                                            background: 'conic-gradient(from 0deg, transparent 0%, var(--accent-500) 30%, transparent 60%)',
-                                            filter: 'drop-shadow(0 0 6px var(--accent-500))', // Stronger glow
-                                        }}
-                                    />
-
-                                    {/* Inner Mask (Gap) */}
-                                    <div style={{
-                                        position: 'relative',
-                                        width: 54, height: 54, // ~5px ring thickness
-                                        borderRadius: '50%',
-                                        background: 'var(--bg-glass)',
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        zIndex: 1,
-                                        backdropFilter: 'blur(4px)',
-                                        boxShadow: 'inset 0 0 4px rgba(0,0,0,0.1)',
-                                    }}>
-                                        {/* Avatar Container */}
-                                        <div style={{
-                                            borderRadius: '50%',
-                                            overflow: 'hidden',
-                                            width: 48, height: 48,
-                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                            background: 'var(--bg-primary)',
-                                        }}>
-                                            <Avatar name={user?.name || 'User'} image={user?.image} size="lg" />
-                                        </div>
-                                    </div>
-
-                                    {/* Camera overlay for upload */}
-                                    <label style={{
-                                        position: 'absolute', bottom: 0, right: 0,
-                                        width: 24, height: 24, borderRadius: '50%',
-                                        background: 'var(--accent-500)',
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        cursor: uploadingAvatar ? 'wait' : 'pointer',
-                                        boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-                                        border: '2px solid var(--bg-glass)',
-                                        zIndex: 2,
-                                    }}>
-                                        {uploadingAvatar ? (
-                                            <Loader2 size={11} style={{ color: 'white', animation: 'spin 1s linear infinite' }} />
-                                        ) : (
-                                            <Camera size={11} style={{ color: 'white' }} />
-                                        )}
-                                        <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={handleAvatarUpload} style={{ display: 'none' }} disabled={uploadingAvatar} />
-                                    </label>
-                                </div>
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                    <div className="font-display" style={{
-                                        fontSize: 'var(--text-base)', fontWeight: 700, color: 'var(--fg-primary)',
-                                    }}>
-                                        {user?.name || 'User'}
-                                    </div>
-                                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--fg-tertiary)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                        {user?.email || ''}
-                                    </div>
-                                    <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--fg-muted)', marginTop: 2 }} suppressHydrationWarning>
-                                        Member since {memberSince}
-                                    </div>
-                                </div>
-                                <button
-                                    onClick={() => setEditingProfile(true)}
-                                    style={{
-                                        padding: '6px 14px', borderRadius: 'var(--radius-full)',
-                                        background: 'rgba(var(--accent-500-rgb), 0.08)',
-                                        border: '1px solid rgba(var(--accent-500-rgb), 0.12)',
-                                        color: 'var(--accent-400)', fontSize: 'var(--text-xs)', fontWeight: 600,
-                                        cursor: 'pointer', transition: 'all 0.2s', flexShrink: 0,
-                                    }}
-                                >
-                                    Edit
-                                </button>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </motion.div>
-
-            {/* ═══ APPEARANCE — Glassmorphic Section ═══ */}
-            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-                <GlassSection title="Appearance" icon={<Palette size={16} />}>
-                    {/* Theme Toggle */}
-                    <div style={{
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        padding: 'var(--space-3) 0', gap: 'var(--space-3)',
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                            {theme === 'dark' ? <Moon size={16} /> : <Sun size={16} />}
-                            <span style={{ fontSize: 'var(--text-sm)', fontWeight: 600 }}>Dark Mode</span>
-                        </div>
-                        <ToggleSwitch
-                            checked={theme === 'dark'}
-                            onChange={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                        />
-                    </div>
-
-                    {/* Color Palette Picker */}
-                    <div style={{ padding: 'var(--space-3) 0' }}>
-                        <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, marginBottom: 'var(--space-3)', textAlign: 'center' }}>
-                            Color Theme
-                        </div>
-                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'center' }}>
-                            {COLOR_PALETTES.map((p) => {
-                                const isActive = palette === p.id;
-                                return (
-                                    <motion.button
-                                        key={p.id}
-                                        whileTap={{ scale: 0.9 }}
-                                        whileHover={{ scale: 1.05 }}
-                                        onClick={() => setPalette(p.id)}
-                                        title={p.name}
-                                        style={{
-                                            display: 'flex', alignItems: 'center', gap: 6,
-                                            padding: '6px 12px', borderRadius: 'var(--radius-full)',
-                                            border: isActive ? `2px solid ${p.accent500}` : '1px solid var(--border-glass)',
-                                            background: isActive ? `rgba(${p.accent500rgb}, 0.12)` : 'var(--bg-glass)',
-                                            backdropFilter: 'blur(8px)',
-                                            WebkitBackdropFilter: 'blur(8px)',
-                                            cursor: 'pointer',
-                                            fontSize: 'var(--text-xs)', fontWeight: 600,
-                                            color: isActive ? p.accent500 : 'var(--fg-secondary)',
-                                            whiteSpace: 'nowrap',
-                                            transition: 'all 0.2s',
-                                            boxShadow: isActive ? `0 0 12px rgba(${p.accent500rgb}, 0.2)` : 'none',
-                                        }}
-                                    >
-                                        <span style={{ display: 'flex', gap: 2 }}>
-                                            {p.swatches.map((c, i) => (
-                                                <span key={i} style={{
-                                                    width: 8, height: 8, borderRadius: '50%', background: c,
-                                                }} />
-                                            ))}
+                            <>
+                                <div className={styles.avatarWrap}>
+                                    <span className={styles.avatarRing}>
+                                        <span className={styles.avatarInner}>
+                                            <Avatar name={user?.name || 'You'} image={user?.image} size="xl" />
                                         </span>
-                                        {p.name}
-                                        {isActive && <Check size={11} />}
-                                    </motion.button>
-                                );
-                            })}
+                                    </span>
+                                    <button
+                                        type="button"
+                                        className={styles.cameraButton}
+                                        onClick={() => fileRef.current?.click()}
+                                        disabled={uploading}
+                                        aria-label="Change profile photo"
+                                    >
+                                        {uploading ? <Spinner size={13} /> : <Camera size={14} />}
+                                    </button>
+                                    <input
+                                        ref={fileRef}
+                                        type="file"
+                                        accept={AVATAR_TYPES.join(',')}
+                                        hidden
+                                        onChange={uploadAvatar}
+                                    />
+                                </div>
+                                <h1 className={styles.name}>{user?.name || 'Your profile'}</h1>
+                                {user?.email && <p className={styles.email}>{user.email}</p>}
+                                <div className={styles.profileMeta}>
+                                    {memberSince && <Tag>Since {memberSince}</Tag>}
+                                    {user?.upiId
+                                        ? <Tag tone="success" icon={<Wallet size={11} />}>UPI ready</Tag>
+                                        : <Tag tone="warning" icon={<Wallet size={11} />}>No UPI ID</Tag>}
+                                </div>
+                                <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    className={styles.editButton}
+                                    leftIcon={<PencilLine size={15} />}
+                                    onClick={openProfile}
+                                >
+                                    Edit profile
+                                </Button>
+                            </>
+                        )}
+                    </section>
+                </StaggerItem>
+
+                {/* ── Getting paid ── */}
+                <StaggerItem>
+                    <Section title="Getting paid" subtitle="Friends use these to pay you back">
+                        <ListGroup>
+                            <ListRow
+                                onClick={openProfile}
+                                leading={<IconTile tone={user?.upiId ? 'success' : 'warning'}><Wallet size={18} /></IconTile>}
+                                title="UPI ID"
+                                subtitle={user?.upiId || 'Add yours to get paid in one tap'}
+                                trailing={user?.upiId ? undefined : <Tag tone="warning">Add</Tag>}
+                                chevron
+                            />
+                            <ListRow
+                                onClick={openProfile}
+                                leading={<IconTile tone="neutral"><Smartphone size={18} /></IconTile>}
+                                title="Phone"
+                                subtitle={user?.phone || 'Not added'}
+                                chevron
+                            />
+                        </ListGroup>
+                    </Section>
+                </StaggerItem>
+
+                {/* ── Appearance ── */}
+                <StaggerItem>
+                    <Section title="Appearance">
+                        <div className={styles.panel}>
+                            <div className={styles.panelBlock}>
+                                <span className={styles.panelLabel}>Mode</span>
+                                <ThemeModeSwitch />
+                            </div>
+                            <div className={styles.panelDivider} />
+                            <div className={styles.panelBlock}>
+                                <span className={styles.panelLabel}>Accent colour</span>
+                                <PalettePicker value={palette} onChange={setPalette} />
+                            </div>
                         </div>
-                    </div>
-                </GlassSection>
-            </motion.div>
+                    </Section>
+                </StaggerItem>
 
-            {/* ═══ NOTIFICATIONS ═══ */}
-            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
-                <GlassSection title="Notifications" icon={<Bell size={16} />}>
-                    <GlassRow label="Expense updates" subtitle="Delivered in your in-app notification feed" disabled />
-                    <GlassRow label="Payment reminders" subtitle="Manage reminders directly from settlements" disabled />
-                </GlassSection>
-            </motion.div>
+                {/* ── Help ── */}
+                <StaggerItem>
+                    <Section title="Help">
+                        <ListGroup>
+                            <ListRow
+                                onClick={openAssistant}
+                                leading={<IconTile><Sparkles size={18} /></IconTile>}
+                                title="Ask SplitX AI"
+                                subtitle="Balances, groups, spending — just ask"
+                                chevron
+                            />
+                            <ListRow
+                                onClick={replayTour}
+                                leading={<IconTile tone="neutral"><Compass size={18} /></IconTile>}
+                                title="Replay the tour"
+                                subtitle="A quick walkthrough of the app"
+                                chevron
+                            />
+                        </ListGroup>
+                    </Section>
+                </StaggerItem>
 
-            {/* ═══ PRIVACY ═══ */}
-            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-                <GlassSection title="Privacy & Security" icon={<Shield size={16} />}>
-                    <GlassRow label="Data Processing" subtitle="All data processed on-device" disabled />
-                    <div onClick={handleExportData} style={{ cursor: exportingData ? 'wait' : 'pointer' }}>
-                        <GlassRow label={exportingData ? 'Exporting...' : 'Export My Data'} action />
-                    </div>
-                    <div onClick={() => setShowDeleteConfirm(true)} style={{ cursor: 'pointer' }}>
-                        <GlassRow label="Delete Account" danger action />
-                    </div>
-                </GlassSection>
-            </motion.div>
-
-            {/* ═══ APP INFO ═══ */}
-            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
-                <GlassSection title="App" icon={<Smartphone size={16} />}>
-                    <GlassRow label="Version" subtitle="1.0.0 (MVP)" disabled />
-                    <div onClick={handleInstallApp} style={{ cursor: 'pointer' }}>
-                        <GlassRow
-                            label={isInstalled ? 'Installed as App' : 'Install as App (PWA)'}
-                            subtitle={
-                                isInstalled
-                                    ? 'SplitX is already installed on this device'
-                                    : installPrompt
-                                        ? 'Ready to install with one tap'
-                                        : 'If no prompt appears, use your browser install option'
-                            }
-                            action={!isInstalled}
-                            disabled={false}
-                        />
-                    </div>
-                </GlassSection>
-            </motion.div>
-
-            {/* ═══ SIGN OUT ═══ */}
-            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-                <button
-                    onClick={handleSignOut}
-                    style={{
-                        width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                        padding: '14px', borderRadius: 'var(--radius-xl)',
-                        background: 'rgba(239, 68, 68, 0.08)',
-                        border: '1px solid rgba(239, 68, 68, 0.15)',
-                        backdropFilter: 'blur(16px)',
-                        WebkitBackdropFilter: 'blur(16px)',
-                        color: 'var(--color-error)',
-                        fontSize: 'var(--text-sm)', fontWeight: 700,
-                        cursor: 'pointer', transition: 'all 0.2s',
-                    }}
-                    onMouseEnter={(e) => {
-                        e.currentTarget.style.background = 'rgba(239, 68, 68, 0.14)';
-                        e.currentTarget.style.boxShadow = '0 0 20px rgba(239, 68, 68, 0.1)';
-                    }}
-                    onMouseLeave={(e) => {
-                        e.currentTarget.style.background = 'rgba(239, 68, 68, 0.08)';
-                        e.currentTarget.style.boxShadow = 'none';
-                    }}
-                >
-                    <LogOut size={16} /> Sign Out
-                </button>
-            </motion.div>
-
-            {/* ═══ DELETE ACCOUNT CONFIRMATION MODAL ═══ */}
-            {showDeleteConfirm && (
-                <div style={{
-                    position: 'fixed', inset: 0, zIndex: 9999,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)',
-                }}>
-                    <motion.div
-                        initial={{ opacity: 0, scale: 0.9 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        style={{
-                            ...glass, maxWidth: 380, width: '90%', padding: 'var(--space-5)',
-                            textAlign: 'center',
-                        }}
-                    >
-                        <div style={{ fontSize: 40, marginBottom: 'var(--space-3)' }}>⚠️</div>
-                        <div style={{ fontSize: 'var(--text-base)', fontWeight: 700, color: 'var(--fg-primary)', marginBottom: 'var(--space-2)' }}>
-                            Delete Your Account?
-                        </div>
-                        <div style={{ fontSize: 'var(--text-sm)', color: 'var(--fg-tertiary)', marginBottom: 'var(--space-4)', lineHeight: 1.5 }}>
-                            This will permanently delete your account, all groups you own, and all your data. This action cannot be undone.
-                        </div>
-                        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-                            <Button fullWidth variant="outline" onClick={() => setShowDeleteConfirm(false)} disabled={deletingAccount}>
-                                Cancel
-                            </Button>
-                            <Button
-                                fullWidth
-                                onClick={handleDeleteAccount}
-                                disabled={deletingAccount}
-                                style={{
-                                    background: 'linear-gradient(135deg, #ef4444, #dc2626)',
-                                    color: 'white',
+                {/* ── Data ── */}
+                <StaggerItem>
+                    <Section title="Your data">
+                        <ListGroup>
+                            <ListRow
+                                onClick={exporting ? undefined : exportData}
+                                leading={<IconTile tone="neutral"><Download size={18} /></IconTile>}
+                                title="Export my data"
+                                subtitle="Download everything as a JSON file"
+                                trailing={exporting ? <Spinner size={16} /> : undefined}
+                                chevron={!exporting}
+                            />
+                            <ListRow
+                                onClick={() => {
+                                    setConfirmText('');
+                                    setSheet('delete');
                                 }}
-                            >
-                                {deletingAccount ? 'Deleting...' : 'Delete Forever'}
-                            </Button>
-                        </div>
-                    </motion.div>
+                                leading={<IconTile tone="danger"><Trash2 size={18} /></IconTile>}
+                                title="Delete account"
+                                subtitle="Permanently remove your account and data"
+                                tone="danger"
+                                chevron
+                            />
+                        </ListGroup>
+                    </Section>
+                </StaggerItem>
+
+                {/* ── App ── */}
+                <StaggerItem>
+                    <Section title="App">
+                        <ListGroup>
+                            <ListRow
+                                onClick={isInstalled ? undefined : installApp}
+                                leading={<IconTile tone="neutral"><MonitorSmartphone size={18} /></IconTile>}
+                                title={isInstalled ? 'Installed' : 'Install SplitX'}
+                                subtitle={isInstalled
+                                    ? 'Running as an app on this device'
+                                    : installPrompt ? 'Add it to your home screen in one tap' : 'Works offline, opens instantly'}
+                                trailing={isInstalled ? <Tag tone="success">Installed</Tag> : undefined}
+                                chevron={!isInstalled}
+                            />
+                            <ListRow
+                                leading={<IconTile tone="neutral"><Info size={18} /></IconTile>}
+                                title="Version"
+                                trailing={<span className={styles.version}>{APP_VERSION}</span>}
+                            />
+                        </ListGroup>
+                    </Section>
+                </StaggerItem>
+
+                <StaggerItem>
+                    <motion.button type="button" whileTap={{ scale: 0.98 }} className={styles.signOut} onClick={handleSignOut}>
+                        <LogOut size={17} />
+                        Sign out
+                    </motion.button>
+                </StaggerItem>
+                <StaggerItem>
+                    <p className={styles.footer}>SplitX {APP_VERSION} · Split fairly, settle instantly</p>
+                </StaggerItem>
+            </Stagger>
+
+            {/* ── Edit profile ── */}
+            <Modal isOpen={sheet === 'profile'} onClose={() => !saving && setSheet(null)} title="Edit profile" size="small">
+                <div className={styles.sheet}>
+                    <Input
+                        label="Name"
+                        value={form.name}
+                        onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
+                        leftIcon={<User size={16} />}
+                        autoComplete="name"
+                    />
+                    <Input
+                        label="Phone"
+                        value={form.phone}
+                        onChange={(event) => setForm((prev) => ({ ...prev, phone: event.target.value }))}
+                        leftIcon={<Smartphone size={16} />}
+                        placeholder="+91 98765 43210"
+                        inputMode="tel"
+                        autoComplete="tel"
+                    />
+                    <Input
+                        label="UPI ID"
+                        value={form.upiId}
+                        onChange={(event) => setForm((prev) => ({ ...prev, upiId: event.target.value }))}
+                        leftIcon={<AtSign size={16} />}
+                        placeholder="name@okaxis"
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                        spellCheck={false}
+                        error={upiInvalid ? 'That doesn’t look like a UPI ID (e.g. name@okaxis)' : undefined}
+                        hint="Shown to friends when they settle up with you"
+                    />
+                    <Button fullWidth size="lg" loading={saving} disabled={!form.name.trim() || upiInvalid} onClick={saveProfile}>
+                        Save changes
+                    </Button>
                 </div>
-            )}
-        </div>
-    );
-}
+            </Modal>
 
-/* ═══ Sub-components ═══ */
-
-function GlassSection({ title, icon, children }: {
-    title: string; icon: React.ReactNode; children: React.ReactNode;
-}) {
-    return (
-        <div style={{
-            background: 'var(--bg-glass)',
-            backdropFilter: 'blur(24px) saturate(1.5)',
-            WebkitBackdropFilter: 'blur(24px) saturate(1.5)',
-            border: '1px solid var(--border-glass)',
-            borderRadius: 'var(--radius-xl)',
-            boxShadow: 'var(--shadow-card)',
-            padding: 'var(--space-4)',
-            position: 'relative',
-            overflow: 'hidden',
-        }} suppressHydrationWarning>
-            <div style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--space-2)',
-                marginBottom: 'var(--space-3)', paddingBottom: 'var(--space-2)',
-                borderBottom: '1px solid var(--border-subtle)',
-            }} suppressHydrationWarning>
-                <span style={{ color: 'var(--accent-400)' }}>{icon}</span>
-                <span className="section-heading" style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--fg-primary)' }}>{title}</span>
-            </div>
-            {children}
-        </div>
-    );
-}
-
-function GlassRow({ label, subtitle, danger, action, disabled }: {
-    label: string; subtitle?: string; danger?: boolean; action?: boolean; disabled?: boolean;
-}) {
-    return (
-        <div style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            padding: 'var(--space-3) 0', opacity: disabled ? 0.5 : 1,
-            cursor: disabled ? 'default' : action ? 'pointer' : 'default',
-            borderBottom: '1px solid rgba(var(--accent-500-rgb), 0.04)',
-            gap: 6,
-        }} suppressHydrationWarning>
-            <div style={{ textAlign: 'center' }}>
-                <div style={{
-                    fontSize: 'var(--text-sm)', fontWeight: 600,
-                    color: danger ? 'var(--color-error)' : 'var(--fg-primary)',
-                }}>
-                    {label}
-                </div>
-                {subtitle && (
-                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--fg-tertiary)', marginTop: 2 }}>
-                        {subtitle}
+            {/* ── Delete account ── */}
+            <Modal isOpen={sheet === 'delete'} onClose={() => !deleting && setSheet(null)} title="Delete account" size="small">
+                <div className={styles.confirm}>
+                    <span className={styles.confirmIcon}><AlertTriangle size={26} /></span>
+                    <p className={styles.confirmTitle}>This can&apos;t be undone</p>
+                    <p className={styles.confirmText}>
+                        Your account, every group you own and all of your expenses will be permanently deleted.
+                    </p>
+                    <Input
+                        label="Type DELETE to confirm"
+                        value={confirmText}
+                        onChange={(event) => setConfirmText(event.target.value)}
+                        autoCapitalize="characters"
+                        autoComplete="off"
+                        wrapperClassName={styles.confirmInput}
+                    />
+                    <div className={styles.twoUp}>
+                        <Button variant="secondary" onClick={() => setSheet(null)} disabled={deleting}>Cancel</Button>
+                        <Button
+                            variant="danger"
+                            leftIcon={<Trash2 size={16} />}
+                            loading={deleting}
+                            disabled={confirmText.trim().toUpperCase() !== 'DELETE'}
+                            onClick={deleteAccount}
+                        >
+                            Delete
+                        </Button>
                     </div>
-                )}
-            </div>
-            {action && <ChevronRight size={15} style={{ color: 'var(--fg-muted)' }} />}
-        </div>
-    );
-}
-
-function ToggleSwitch({ checked, onChange }: { checked: boolean; onChange: () => void }) {
-    return (
-        <motion.button
-            onClick={onChange}
-            style={{
-                width: 46, height: 26, borderRadius: 'var(--radius-full)',
-                border: 'none', padding: 3, cursor: 'pointer',
-                background: checked
-                    ? 'linear-gradient(135deg, var(--accent-500), var(--accent-600))'
-                    : 'var(--bg-tertiary)',
-                display: 'flex', alignItems: 'center',
-                justifyContent: checked ? 'flex-end' : 'flex-start',
-                transition: 'background 0.3s',
-                boxShadow: checked ? '0 0 12px rgba(var(--accent-500-rgb), 0.2)' : 'none',
-            }}
-            suppressHydrationWarning
-        >
-            <motion.div
-                layout
-                style={{
-                    width: 20, height: 20, borderRadius: '50%',
-                    background: 'white',
-                    boxShadow: '0 1px 4px rgba(0,0,0,0.2)',
-                }}
-                transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-            />
-        </motion.button>
+                </div>
+            </Modal>
+        </>
     );
 }

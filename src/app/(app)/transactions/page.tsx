@@ -1,30 +1,42 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { createPortal } from 'react-dom';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Search, ArrowUpDown, ScanLine, Inbox, Trash2, Pencil, Check, X, Clock, List, Users } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useMemo, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import useSWR from 'swr';
+import { motion } from 'framer-motion';
+import {
+    AlertTriangle,
+    ArrowDownWideNarrow,
+    CalendarClock,
+    Check,
+    Pencil,
+    Plus,
+    ReceiptText,
+    ScanLine,
+    Search,
+    Trash2,
+    X,
+} from 'lucide-react';
 import Button from '@/components/ui/Button';
+import Avatar from '@/components/ui/Avatar';
+import Modal from '@/components/ui/Modal';
+import EmptyState from '@/components/ui/EmptyState';
 import ErrorState from '@/components/ui/ErrorState';
-import { CategoryIcon, PaymentIcon, CATEGORY_ICONS, PAYMENT_ICONS } from '@/components/ui/Icons';
-import { formatCurrency, timeAgo } from '@/lib/utils';
+import { Input } from '@/components/ui/Input';
+import { TransactionSkeleton } from '@/components/ui/Skeleton';
+import { CategoryTile, PaymentTag, getCategoryConfig } from '@/components/ui/Icons';
+import { Amount, Chip, ChipRow, ListGroup, ListRow, Notice, Stagger, StaggerItem, Tag } from '@/components/ui/kit';
 import { useToast } from '@/components/ui/Toast';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
-import { useViewportTier } from '@/hooks/useViewportTier';
-import { getNetworkErrorCopy, NetworkErrorVariant, toNetworkTaggedError } from '@/lib/networkErrors';
+import { fetcher, refreshMoneyData } from '@/lib/swr';
+import { getNetworkErrorCopy, NetworkTaggedError } from '@/lib/networkErrors';
+import { cn, formatCurrency, formatDate } from '@/lib/utils';
+import styles from './transactions.module.css';
 
-/* ── Glassmorphic styles ── */
-const glass: React.CSSProperties = {
-    background: 'var(--bg-glass)',
-    backdropFilter: 'blur(24px) saturate(1.5)',
-    WebkitBackdropFilter: 'blur(24px) saturate(1.5)',
-    border: '1px solid var(--border-glass)',
-    borderRadius: 'var(--radius-xl)',
-    boxShadow: 'var(--shadow-card)',
-    position: 'relative',
-    overflow: 'hidden',
-};
+interface GroupMemberRef {
+    userId: string;
+    user: { id: string; name: string | null; image: string | null };
+}
 
 interface TransactionData {
     id: string;
@@ -36,925 +48,565 @@ interface TransactionData {
     payer: { id: string; name: string | null };
     splits: { userId: string; amount: number; user: { id: string; name: string | null } }[];
     splitType?: string;
-    trip?: { group: { ownerId?: string; members: { userId: string; user: { id: string; name: string | null; image: string | null } }[] } };
+    trip?: { group: { id?: string; name?: string; emoji?: string; ownerId?: string; members: GroupMemberRef[] } };
 }
 
 type SortKey = 'time' | 'amount';
 
+const firstName = (name?: string | null) => (name || 'Someone').split(' ')[0];
+
+function dayKey(iso: string) {
+    return new Date(iso).toDateString();
+}
+
+function dayLabel(iso: string) {
+    const date = new Date(iso);
+    const today = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(today.getDate() - 1);
+    if (date.toDateString() === today.toDateString()) return 'Today';
+    if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
+    return date.toLocaleDateString('en-IN', {
+        weekday: 'short',
+        day: 'numeric',
+        month: 'short',
+        year: date.getFullYear() === today.getFullYear() ? undefined : 'numeric',
+    });
+}
+
+function timeLabel(iso: string) {
+    return new Date(iso).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
+}
+
+/** What this expense means for the current user. */
+function positionFor(txn: TransactionData, userId: string | undefined) {
+    if (!userId) return { kind: 'neutral' as const, amount: 0 };
+    const share = txn.splits.find((split) => split.userId === userId)?.amount ?? 0;
+    if (txn.payer.id === userId) {
+        const lent = txn.amount - share;
+        return lent > 0 ? { kind: 'lend' as const, amount: lent } : { kind: 'self' as const, amount: 0 };
+    }
+    return share > 0 ? { kind: 'owe' as const, amount: share } : { kind: 'neutral' as const, amount: 0 };
+}
+
 export default function TransactionsPage() {
-    const router = useRouter();
-    const { user: currentUser } = useCurrentUser();
-    const [transactions, setTransactions] = useState<TransactionData[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [loadError, setLoadError] = useState<NetworkErrorVariant | null>(null);
-    const [search, setSearch] = useState('');
-    const [sortBy, setSortBy] = useState<SortKey>('time');
-    const [filterCategory, setFilterCategory] = useState<string | null>(null);
-    const { toast } = useToast();
-    const [deletingId, setDeletingId] = useState<string | null>(null);
-    const [editingId, setEditingId] = useState<string | null>(null);
-    const [editTitle, setEditTitle] = useState('');
-    const [editAmount, setEditAmount] = useState('');
-    const [editSplitAmong, setEditSplitAmong] = useState<Set<string>>(new Set());
-    const [savingEdit, setSavingEdit] = useState(false);
-    const [viewMode, setViewMode] = useState<'list' | 'timeline'>('list');
-    const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-    const [focusId, setFocusId] = useState<string | null>(null);
-    const { isDesktop } = useViewportTier();
-
-    const startEdit = (txn: TransactionData) => {
-        setEditingId(txn.id);
-        setEditTitle(txn.title);
-        setEditAmount(String(txn.amount / 100));
-        setEditSplitAmong(new Set(txn.splits.map(s => s.userId)));
-    };
-
-    const canSaveTransaction = useCallback((txn: TransactionData) => {
-        return Boolean(
-            currentUser && (
-                currentUser.id === txn.payer.id ||
-                currentUser.id === txn.trip?.group?.ownerId
-            )
-        );
-    }, [currentUser]);
-
-    const saveEdit = async (txnId: string) => {
-        if (!editTitle.trim() || !parseFloat(editAmount)) return;
-        // Block editing custom split transactions (amounts can't be recalculated)
-        const editingTxn = transactions.find(t => t.id === txnId);
-        if (!editingTxn || !canSaveTransaction(editingTxn)) {
-            toast('Only the payer or group owner can edit this expense.', 'error');
-            return;
-        }
-        if (editingTxn?.splitType === 'custom') {
-            toast('Cannot edit custom split transactions. Delete and add a new one with updated amounts.', 'error');
-            return;
-        }
-        setSavingEdit(true);
-        try {
-            const res = await fetch(`/api/transactions/${txnId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    title: editTitle.trim(),
-                    amount: Math.round(parseFloat(editAmount) * 100),
-                    splitAmong: Array.from(editSplitAmong),
-                }),
-            });
-            if (res.ok) {
-                toast('Transaction updated!', 'success');
-                setEditingId(null);
-                fetchTransactions();
-            } else toast('Failed to update', 'error');
-        } catch { toast('Network error', 'error'); }
-        finally { setSavingEdit(false); }
-    };
-
-    const handleDelete = async (id: string) => {
-        setDeleteConfirmId(null);
-        setDeletingId(id);
-        try {
-            const res = await fetch(`/api/transactions/${id}`, { method: 'DELETE' });
-            if (res.ok) {
-                setTransactions(prev => prev.filter(t => t.id !== id));
-                toast('Expense deleted', 'success');
-            } else {
-                toast('Failed to delete expense', 'error');
-            }
-        } catch {
-            toast('Network error', 'error');
-        } finally {
-            setDeletingId(null);
-        }
-    };
-
-    const fetchTransactions = useCallback(async () => {
-        try {
-            const res = await fetch('/api/transactions?limit=50');
-            if (res.ok) {
-                const data = await res.json();
-                setTransactions(Array.isArray(data) ? data : []);
-                setLoadError(null);
-            } else {
-                throw toNetworkTaggedError({ response: res });
-            }
-        } catch (err) {
-            console.error('Failed to fetch transactions:', err);
-            setLoadError(toNetworkTaggedError({ error: err }).variant);
-        } finally {
-            setLoading(false);
-        }
-    }, []);
-
-    useEffect(() => { fetchTransactions(); }, [fetchTransactions]);
-
-    useEffect(() => {
-        if (typeof window === 'undefined') return;
-        const params = new URLSearchParams(window.location.search);
-        setFocusId(params.get('focus'));
-    }, []);
-
-    useEffect(() => {
-        if (!focusId || transactions.length === 0 || editingId === focusId) return;
-
-        const focusedTransaction = transactions.find((transaction) => transaction.id === focusId);
-        if (focusedTransaction) {
-            startEdit(focusedTransaction);
-        }
-    }, [editingId, focusId, transactions]);
-
-    let filtered = transactions;
-    if (search) {
-        filtered = filtered.filter((t) =>
-            t.title.toLowerCase().includes(search.toLowerCase()) ||
-            (t.payer.name || '').toLowerCase().includes(search.toLowerCase())
-        );
-    }
-    if (filterCategory) {
-        filtered = filtered.filter((t) => t.category === filterCategory);
-    }
-    if (sortBy === 'amount') {
-        filtered = [...filtered].sort((a, b) => b.amount - a.amount);
-    }
-
-    const totalSpent = filtered.reduce((sum, t) => sum + t.amount, 0);
-
-    if (loading) {
-        return (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', padding: 'var(--space-4) 0' }}>
-                {[1, 2, 3, 4].map(i => (
-                    <div key={i} style={{
-                        ...glass, padding: 'var(--space-4)',
-                        animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-                        animationDelay: `${i * 150}ms`,
-                    }}>
-                        <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>
-                            <div style={{ width: 44, height: 44, borderRadius: 'var(--radius-xl)', background: 'rgba(var(--accent-500-rgb), 0.06)' }} />
-                            <div style={{ flex: 1 }}>
-                                <div style={{ width: '55%', height: 12, borderRadius: 8, background: 'rgba(var(--accent-500-rgb), 0.08)', marginBottom: 6 }} />
-                                <div style={{ width: '35%', height: 10, borderRadius: 6, background: 'rgba(var(--accent-500-rgb), 0.05)' }} />
-                            </div>
-                        </div>
-                    </div>
-                ))}
-            </div>
-        );
-    }
-
-    if (loadError) {
-        const copy = getNetworkErrorCopy(loadError);
-        return (
-            <ErrorState
-                variant={loadError}
-                title={copy.title}
-                message={copy.message}
-                onRetry={fetchTransactions}
-            />
-        );
-    }
-
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-            <div className="page-hero" style={{ paddingTop: 'var(--space-2)' }}>
-                <div className="page-kicker">Activity Ledger</div>
-                <h2 className="page-hero-title">The little things add up.</h2>
-                <p className="page-hero-subtitle">
-                    Every coffee, cab, and shared adventure. Find a bill or add the next one.
-                </p>
-            </div>
-
-            {/* ═══ SUMMARY HERO — Glassmorphic Stats Card ═══ */}
-            <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.5, delay: 0.05 }}
-            >
-                <div className="product-panel expense-summary" style={{
-                    ...glass, borderRadius: 'var(--radius-2xl)', padding: 'var(--space-5)',
-                    background: 'linear-gradient(135deg, rgba(var(--accent-500-rgb), 0.08), var(--bg-glass), rgba(var(--accent-500-rgb), 0.04))',
-                    boxShadow: 'var(--shadow-card), 0 0 30px rgba(var(--accent-500-rgb), 0.06)',
-                }}>
-                    {/* Top light edge */}
-                    <div style={{
-                        position: 'absolute', top: 0, left: '15%', right: '15%', height: 1,
-                        background: 'linear-gradient(90deg, transparent, rgba(var(--accent-500-rgb), 0.15), transparent)',
-                        pointerEvents: 'none',
-                    }} />
-                    <div style={{ position: 'relative', zIndex: 1, textAlign: 'center' }}>
-                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--fg-tertiary)', fontWeight: 600, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                            Total Spent
-                        </div>
-                        <div className="font-display" style={{
-                            fontSize: 'var(--text-2xl)', fontWeight: 800,
-                            background: 'linear-gradient(135deg, var(--accent-400), var(--accent-600))',
-                            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
-                        }}>
-                            {formatCurrency(totalSpent)}
-                        </div>
-                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--fg-muted)', marginTop: 4 }}>
-                            {filtered.length} transaction{filtered.length !== 1 ? 's' : ''}
-                        </div>
-                    </div>
-
-                    {/* Quick Action Row */}
-                    <div style={{
-                        display: 'flex', gap: 'var(--space-2)', justifyContent: 'center',
-                        marginTop: 'var(--space-4)', paddingTop: 'var(--space-3)',
-                        borderTop: '1px solid rgba(var(--accent-500-rgb), 0.06)',
-                    }}>
-                        <button
-                            onClick={() => router.push('/transactions/scan')}
-                            style={{
-                                display: 'flex', alignItems: 'center', gap: 6,
-                                padding: '8px 16px', borderRadius: 'var(--radius-full)',
-                                background: 'rgba(var(--accent-500-rgb), 0.06)',
-                                border: '1px solid rgba(var(--accent-500-rgb), 0.1)',
-                                color: 'var(--fg-secondary)', fontSize: 'var(--text-xs)', fontWeight: 600,
-                                cursor: 'pointer', transition: 'all 0.2s',
-                            }}
-                        >
-                            <ScanLine size={13} /> Scan
-                        </button>
-                        <button
-                            onClick={() => router.push('/transactions/new')}
-                            style={{
-                                display: 'flex', alignItems: 'center', gap: 6,
-                                padding: '8px 16px', borderRadius: 'var(--radius-full)',
-                                background: 'linear-gradient(135deg, var(--accent-500), var(--accent-600))',
-                                border: 'none', color: 'white', fontSize: 'var(--text-xs)', fontWeight: 700,
-                                cursor: 'pointer', boxShadow: '0 4px 16px rgba(var(--accent-500-rgb), 0.3)',
-                                transition: 'all 0.2s',
-                            }}
-                        >
-                            <Plus size={13} /> Add Expense
-                        </button>
-                    </div>
-                </div>
-            </motion.div>
-
-            {/* ═══ SEARCH + CONTROLS ═══ */}
-            <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4, delay: 0.08 }}
-            >
-                <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
-                    <div style={{
-                        flex: 1, display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
-                        ...glass, borderRadius: 'var(--radius-xl)', padding: '0 var(--space-3)',
-                        height: 42,
-                    }}>
-                        <Search size={15} style={{ color: 'var(--fg-tertiary)', flexShrink: 0 }} />
-                        <input
-                            placeholder="Search expenses..."
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            style={{
-                                flex: 1, background: 'none', border: 'none', outline: 'none',
-                                fontSize: 'var(--text-sm)', color: 'var(--fg-primary)', fontFamily: 'var(--font-display)',
-                            }}
-                        />
-                    </div>
-                    <button
-                        onClick={() => setSortBy(sortBy === 'time' ? 'amount' : 'time')}
-                        title={`Sort by ${sortBy === 'time' ? 'amount' : 'time'}`}
-                        style={{
-                            width: 42, height: 42, borderRadius: 'var(--radius-xl)',
-                            ...glass, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            cursor: 'pointer', color: sortBy === 'amount' ? 'var(--accent-400)' : 'var(--fg-tertiary)',
-                            transition: 'all 0.2s',
-                        }}
-                    >
-                        <ArrowUpDown size={15} />
-                    </button>
-                    <button
-                        onClick={() => setViewMode(viewMode === 'list' ? 'timeline' : 'list')}
-                        title={`Switch to ${viewMode === 'list' ? 'timeline' : 'list'} view`}
-                        style={{
-                            width: 42, height: 42, borderRadius: 'var(--radius-xl)',
-                            ...glass, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            cursor: 'pointer', color: viewMode === 'timeline' ? 'var(--accent-400)' : 'var(--fg-tertiary)',
-                            transition: 'all 0.2s',
-                        }}
-                    >
-                        {viewMode === 'list' ? <Clock size={15} /> : <List size={15} />}
-                    </button>
-                </div>
-            </motion.div>
-
-            {/* ═══ CATEGORY FILTER PILLS ═══ */}
-            <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.4, delay: 0.12 }}
-            >
-                <div style={{
-                    display: 'flex', gap: 6, overflowX: 'auto',
-                    scrollbarWidth: 'none', paddingBottom: 2,
-                }}>
-                    <FilterPill
-                        active={!filterCategory}
-                        onClick={() => setFilterCategory(null)}
-                    >
-                        All
-                    </FilterPill>
-                    {Object.entries(CATEGORY_ICONS).slice(0, 6).map(([key, val]) => (
-                        <FilterPill
-                            key={key}
-                            active={filterCategory === key}
-                            onClick={() => setFilterCategory(filterCategory === key ? null : key)}
-                        >
-                            <CategoryIcon category={key} size={13} /> {val.label}
-                        </FilterPill>
-                    ))}
-                </div>
-            </motion.div>
-
-            {/* ═══ TRANSACTION LIST — Premium Cards ═══ */}
-            {viewMode === 'list' ? (
-                <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: isDesktop ? 'repeat(2, minmax(0, 1fr))' : '1fr',
-                    gap: 'var(--space-2)',
-                    alignItems: 'start',
-                }}>
-                    <AnimatePresence mode="popLayout">
-                        {filtered.map((txn, i) => {
-                            const catConfig = CATEGORY_ICONS[txn.category] || CATEGORY_ICONS.general;
-                            const metConfig = PAYMENT_ICONS[txn.method] || PAYMENT_ICONS.cash;
-                            const payerName = txn.payer.name || 'Unknown';
-                            return (
-                                <motion.div
-                                    key={txn.id}
-                                    layout
-                                    initial={{ opacity: 0, y: 12 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    exit={{ opacity: 0, scale: 0.95 }}
-                                    transition={{ duration: 0.3, delay: Math.min(i * 0.03, 0.3) }}
-                                    style={{ minWidth: 0, maxWidth: '100%' }}
-                                >
-                                    <div style={{
-                                        ...glass,
-                                        borderRadius: 'var(--radius-xl)',
-                                        padding: 'var(--space-3) var(--space-4)',
-                                        cursor: editingId === txn.id ? 'default' : 'pointer',
-                                        transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
-                                        minWidth: 0,
-                                        maxWidth: '100%',
-                                    }}
-                                        onMouseEnter={(e) => {
-                                            if (editingId !== txn.id) {
-                                                e.currentTarget.style.transform = 'translateY(-1px)';
-                                                e.currentTarget.style.boxShadow = 'var(--shadow-card-hover), 0 0 20px rgba(var(--accent-500-rgb), 0.04)';
-                                            }
-                                        }}
-                                        onMouseLeave={(e) => {
-                                            e.currentTarget.style.transform = 'translateY(0)';
-                                            e.currentTarget.style.boxShadow = '';
-                                        }}
-                                    >
-                                        {editingId === txn.id ? (
-                                            /* Inline edit/view mode */
-                                            (() => {
-                                                const isReadOnlyView = !canSaveTransaction(txn);
-                                                const amountReadOnly = isReadOnlyView || txn.splitType === 'custom';
-
-                                                return <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 2 }}>
-                                                    <span style={{ fontSize: 12, color: 'var(--fg-tertiary)', fontWeight: 600 }}>
-                                                        {isReadOnlyView ? 'Viewing split details' : 'Edit transaction'}
-                                                    </span>
-                                                    {isReadOnlyView && (
-                                                        <span style={{
-                                                            padding: '3px 8px',
-                                                            borderRadius: 999,
-                                                            fontSize: 10,
-                                                            fontWeight: 700,
-                                                            letterSpacing: '0.03em',
-                                                            textTransform: 'uppercase',
-                                                            background: 'rgba(var(--accent-500-rgb), 0.1)',
-                                                            color: 'var(--accent-400)',
-                                                        }}>
-                                                            Read only
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                <input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} readOnly={isReadOnlyView}
-                                                    style={{ background: isReadOnlyView ? 'var(--surface-sunken)' : 'var(--surface-input)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-lg)', padding: '10px 14px', color: isReadOnlyView ? 'var(--fg-tertiary)' : 'var(--fg-primary)', fontSize: 'var(--text-sm)', outline: 'none', width: '100%', cursor: isReadOnlyView ? 'default' : 'text', opacity: isReadOnlyView ? 0.8 : 1 }}
-                                                    placeholder="Title" />
-                                                <input value={editAmount} onChange={(e) => setEditAmount(e.target.value)} type="number" step="0.01"
-                                                    readOnly={amountReadOnly}
-                                                    style={{
-                                                        background: amountReadOnly ? 'var(--surface-sunken)' : 'var(--surface-input)',
-                                                        border: '1px solid var(--border-default)', borderRadius: 'var(--radius-lg)',
-                                                        padding: '10px 14px', color: amountReadOnly ? 'var(--fg-tertiary)' : 'var(--fg-primary)',
-                                                        fontSize: 'var(--text-sm)', outline: 'none', width: '100%',
-                                                        cursor: amountReadOnly ? 'not-allowed' : 'text',
-                                                        opacity: amountReadOnly ? 0.7 : 1,
-                                                    }}
-                                                    placeholder="Amount (₹)" />
-                                                {isReadOnlyView && (
-                                                    <p style={{ fontSize: 11, color: 'var(--fg-tertiary)', fontWeight: 500, textAlign: 'center', marginTop: 4 }}>
-                                                        Read only: only the payer or group owner can edit this expense.
-                                                    </p>
-                                                )}
-                                                {txn.splitType === 'custom' && (
-                                                    <p style={{ fontSize: 11, color: isReadOnlyView ? 'var(--fg-tertiary)' : '#eab308', fontWeight: 500, textAlign: 'center', marginTop: 4 }}>
-                                                        ⚠ Custom split edit amount can&apos;t be edited.
-                                                    </p>
-                                                )}
-
-                                                {/* Member Split Display with Amounts */}
-                                                {txn.trip?.group.members && (
-                                                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'center', marginTop: 8, marginBottom: 8 }}>
-                                                        <div style={{ width: '100%', textAlign: 'center', fontSize: '11px', color: 'var(--fg-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                                                            <span>Split between</span>
-                                                            <span style={{
-                                                                padding: '2px 8px', borderRadius: 8,
-                                                                background: txn.splitType === 'custom' ? 'rgba(234, 179, 8, 0.12)' : 'rgba(var(--accent-500-rgb), 0.1)',
-                                                                color: txn.splitType === 'custom' ? '#eab308' : 'var(--accent-400)',
-                                                                fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.03em',
-                                                            }}>
-                                                                {txn.splitType === 'custom' ? 'Custom' : 'Equal'}
-                                                            </span>
-                                                        </div>
-                                                        {(() => {
-                                                            const isCustom = txn.splitType === 'custom';
-                                                            const editAmountPaise = Math.round(parseFloat(editAmount || '0') * 100);
-                                                            const selectedCount = editSplitAmong.size;
-                                                            const perPersonEqual = selectedCount > 0 ? Math.floor(editAmountPaise / selectedCount) : 0;
-                                                            const remainderEqual = selectedCount > 0 ? editAmountPaise - perPersonEqual * selectedCount : 0;
-                                                            const selectedArr = Array.from(editSplitAmong);
-
-                                                            return txn.trip!.group.members.map(m => {
-                                                                const isSelected = editSplitAmong.has(m.userId);
-                                                                const splitEntry = txn.splits.find(s => s.userId === m.userId);
-
-                                                                // Determine the display amount
-                                                                let displayAmount: number | null = null;
-                                                                if (isCustom && splitEntry) {
-                                                                    displayAmount = splitEntry.amount;
-                                                                } else if (!isCustom && isSelected) {
-                                                                    const idx = selectedArr.indexOf(m.userId);
-                                                                    displayAmount = perPersonEqual + (idx === 0 ? remainderEqual : 0);
-                                                                }
-
-                                                                return (
-                                                                    <button
-                                                                        key={m.userId}
-                                                                        onClick={() => {
-                                                                            if (isCustom || isReadOnlyView) return; // Don't allow toggling custom splits or read-only views
-                                                                            const next = new Set(editSplitAmong);
-                                                                            if (next.has(m.userId)) next.delete(m.userId);
-                                                                            else next.add(m.userId);
-                                                                            setEditSplitAmong(next);
-                                                                        }}
-                                                                        style={{
-                                                                            padding: '6px 12px', borderRadius: 16,
-                                                                            border: `1px solid ${isSelected ? 'var(--accent-500)' : 'var(--border-default)'}`,
-                                                                            background: isSelected ? 'var(--accent-500)' : 'var(--bg-primary)',
-                                                                            color: isSelected ? 'white' : 'var(--fg-secondary)',
-                                                                            fontSize: '12px', fontWeight: 500,
-                                                                            cursor: (isCustom || isReadOnlyView) ? 'default' : 'pointer',
-                                                                            opacity: (!isCustom && !isSelected) ? 0.5 : 1,
-                                                                            transition: 'all 0.2s',
-                                                                            display: 'flex', alignItems: 'center', gap: 4,
-                                                                        }}
-                                                                    >
-                                                                        {m.user.name?.split(' ')[0] || 'Unknown'}
-                                                                        {displayAmount !== null && (
-                                                                            <span style={{
-                                                                                fontSize: '10px',
-                                                                                fontWeight: 700,
-                                                                                opacity: 0.85,
-                                                                                borderLeft: `1px solid ${isSelected ? 'rgba(255,255,255,0.3)' : 'var(--border-default)'}`,
-                                                                                paddingLeft: 5,
-                                                                                marginLeft: 2,
-                                                                            }}>
-                                                                                ₹{(displayAmount / 100).toLocaleString('en-IN')}
-                                                                            </span>
-                                                                        )}
-                                                                    </button>
-                                                                );
-                                                            });
-                                                        })()}
-                                                    </div>
-                                                )}
-
-                                                <div style={{ display: 'flex', gap: 'var(--space-2)', justifyContent: 'flex-end' }}>
-                                                    <button onClick={() => setEditingId(null)} style={{ padding: '7px 14px', borderRadius: 'var(--radius-full)', background: 'var(--bg-glass)', border: '1px solid var(--border-glass)', color: 'var(--fg-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: '12px', fontWeight: 600 }}>
-                                                        <X size={13} /> {isReadOnlyView ? 'Close' : 'Cancel'}
-                                                    </button>
-                                                    {canSaveTransaction(txn) && (
-                                                        <button onClick={() => saveEdit(txn.id)} disabled={savingEdit} style={{ padding: '7px 14px', borderRadius: 'var(--radius-full)', background: 'linear-gradient(135deg, var(--accent-500), var(--accent-600))', border: 'none', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: '12px', fontWeight: 600, opacity: savingEdit ? 0.6 : 1 }}>
-                                                            <Check size={13} /> Save
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            </div>;
-                                            })()
-                                        ) : (
-                                            <div style={{
-                                                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                                                gap: 12, padding: 4, minWidth: 0, maxWidth: '100%'
-                                            }}>
-                                                {/* Left Section: Icon and Details */}
-                                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, flex: 1, minWidth: 0 }}>
-                                                    {/* Category Icon */}
-                                                    <div style={{
-                                                        width: 44, height: 44, borderRadius: 14,
-                                                        background: `linear-gradient(135deg, ${catConfig.color}15, ${catConfig.color}05)`,
-                                                        border: `1px solid ${catConfig.color}1A`,
-                                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                        flexShrink: 0, color: catConfig.color, marginTop: 2,
-                                                    }}>
-                                                        <CategoryIcon category={txn.category} size={22} />
-                                                    </div>
-
-                                                    {/* Text Content */}
-                                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, flex: 1, minWidth: 0, maxWidth: '100%' }}>
-                                                        <div className="font-display" style={{
-                                                            fontSize: 16, fontWeight: 700,
-                                                            color: 'var(--fg-primary)', letterSpacing: '-0.3px',
-                                                            width: '100%', minWidth: 0, maxWidth: '100%', textAlign: 'center',
-                                                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                                                        }}>
-                                                            {txn.title}
-                                                        </div>
-                                                        <div className="font-display" style={{
-                                                            fontSize: 13, color: 'var(--fg-tertiary)', fontWeight: 500,
-                                                            display: 'flex', gap: 6, alignItems: 'center', justifyContent: 'center',
-                                                            width: '100%', minWidth: 0, maxWidth: '100%',
-                                                            flexWrap: 'nowrap', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
-                                                        }}>
-                                                            <span>Paid by {payerName.split(' ')[0]}</span>
-                                                            <span style={{ width: 3, height: 3, borderRadius: '50%', background: 'var(--border-strong)' }} />
-                                                            <span>{timeAgo(txn.createdAt)}</span>
-                                                        </div>
-                                                        {txn.method && (
-                                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, marginTop: 4, maxWidth: '100%', flexWrap: 'wrap' }}>
-                                                                <div style={{
-                                                                    display: 'inline-flex', alignItems: 'center', gap: 4,
-                                                                    background: 'var(--surface-sunken)', padding: '3px 8px',
-                                                                    borderRadius: 6, fontSize: 11, fontWeight: 600,
-                                                                    color: 'var(--fg-secondary)', border: '1px solid var(--border-subtle)',
-                                                                }}>
-                                                                    <PaymentIcon method={txn.method} size={12} />
-                                                                    <span className="font-display">{metConfig.label}</span>
-                                                                </div>
-                                                                {txn.splits?.length > 1 && (
-                                                                    <div style={{
-                                                                        display: 'inline-flex', alignItems: 'center', gap: 4,
-                                                                        background: 'var(--surface-sunken)', padding: '3px 8px',
-                                                                        borderRadius: 6, fontSize: 11, fontWeight: 600,
-                                                                        color: 'var(--fg-secondary)', border: '1px solid var(--border-subtle)',
-                                                                    }}>
-                                                                        <Users size={12} opacity={0.7} />
-                                                                        <span className="font-display">Split with {txn.splits.length}</span>
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </div>
-
-                                                {/* Right Section: Amount and Actions */}
-                                                {(() => {
-                                                    const canViewSplitDetails = Boolean(currentUser);
-                                                    const canEdit = canSaveTransaction(txn);
-                                                    return (
-                                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10, flexShrink: 0 }}>
-                                                            <div className="font-display" style={{
-                                                                fontWeight: 800, fontSize: 18,
-                                                                color: 'var(--fg-primary)', letterSpacing: '-0.5px',
-                                                            }}>
-                                                                {formatCurrency(txn.amount)}
-                                                            </div>
-
-                                                            {canViewSplitDetails ? (
-                                                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                                                    <button
-                                                                        onClick={(e) => { e.stopPropagation(); startEdit(txn); }}
-                                                                        style={{
-                                                                            cursor: 'pointer',
-                                                                            background: 'var(--surface-card)',
-                                                                            color: 'var(--fg-secondary)',
-                                                                            padding: '6px', borderRadius: 8,
-                                                                            boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-                                                                            border: '1px solid var(--border-subtle)',
-                                                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                                            transition: 'all 0.2s ease',
-                                                                        }}
-                                                                        onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--accent-500)'; e.currentTarget.style.borderColor = 'var(--accent-300)'; }}
-                                                                        onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--fg-secondary)'; e.currentTarget.style.borderColor = 'var(--border-subtle)'; }}
-                                                                        title={canEdit ? 'Edit transaction' : 'View split details'}
-                                                                    >
-                                                                        <Pencil size={14} />
-                                                                    </button>
-                                                                    {canEdit && (
-                                                                        <button
-                                                                            onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(txn.id); }}
-                                                                            disabled={deletingId === txn.id}
-                                                                            style={{
-                                                                                cursor: 'pointer',
-                                                                                background: 'var(--surface-card)',
-                                                                                color: 'var(--fg-secondary)',
-                                                                                padding: '6px', borderRadius: 8,
-                                                                                boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-                                                                                border: '1px solid var(--border-subtle)',
-                                                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                                                transition: 'all 0.2s ease',
-                                                                                opacity: deletingId === txn.id ? 0.3 : 1,
-                                                                            }}
-                                                                            onMouseEnter={(e) => { e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.borderColor = '#fca5a5'; }}
-                                                                            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--fg-secondary)'; e.currentTarget.style.borderColor = 'var(--border-subtle)'; }}
-                                                                            title="Delete"
-                                                                        >
-                                                                            <Trash2 size={14} />
-                                                                        </button>
-                                                                    )}
-                                                                </div>
-                                                            ) : null}
-                                                        </div>
-                                                    );
-                                                })()}
-                                            </div>
-                                        )}
-                                    </div>
-                                </motion.div>
-                            );
-                        })}
-                    </AnimatePresence>
-                </div>
-            ) : (
-                /* ═══ TIMELINE VIEW — Vertical timeline with day headers ═══ */
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-                    {(() => {
-                        // Group by day
-                        const grouped: Record<string, TransactionData[]> = {};
-                        filtered.forEach(txn => {
-                            const day = new Date(txn.createdAt).toLocaleDateString('en-IN', {
-                                weekday: 'short', day: 'numeric', month: 'short'
-                            });
-                            if (!grouped[day]) grouped[day] = [];
-                            grouped[day].push(txn);
-                        });
-
-                        let itemIdx = 0;
-                        return Object.entries(grouped).map(([day, txns]) => (
-                            <div key={day}>
-                                {/* Date header */}
-                                <motion.div
-                                    initial={{ opacity: 0, x: -10 }}
-                                    animate={{ opacity: 1, x: 0 }}
-                                    style={{
-                                        fontSize: 'var(--text-xs)', fontWeight: 700,
-                                        color: 'var(--accent-400)',
-                                        padding: 'var(--space-3) 0 var(--space-1) var(--space-6)',
-                                        textTransform: 'uppercase', letterSpacing: '0.05em',
-                                    }}
-                                >
-                                    {day}
-                                </motion.div>
-                                {txns.map(txn => {
-                                    const catConfig = CATEGORY_ICONS[txn.category] || CATEGORY_ICONS.general;
-                                    const idx = itemIdx++;
-                                    return (
-                                        <motion.div
-                                            key={txn.id}
-                                            initial={{ opacity: 0, y: 12 }}
-                                            animate={{ opacity: 1, y: 0 }}
-                                            transition={{ delay: Math.min(idx * 0.04, 0.5), duration: 0.35 }}
-                                            style={{
-                                                display: 'flex', gap: 'var(--space-3)',
-                                                padding: 'var(--space-1) 0',
-                                            }}
-                                        >
-                                            {/* Timeline bar */}
-                                            <div style={{
-                                                display: 'flex', flexDirection: 'column',
-                                                alignItems: 'center', width: 20, flexShrink: 0,
-                                            }}>
-                                                <div style={{
-                                                    width: 10, height: 10, borderRadius: '50%',
-                                                    background: `linear-gradient(135deg, var(--accent-400), var(--accent-600))`,
-                                                    border: '2px solid var(--bg-primary)',
-                                                    boxShadow: '0 0 8px rgba(var(--accent-500-rgb), 0.3)',
-                                                    flexShrink: 0,
-                                                }} />
-                                                <div style={{
-                                                    width: 2, flex: 1, minHeight: 24,
-                                                    background: 'linear-gradient(to bottom, rgba(var(--accent-500-rgb), 0.2), rgba(var(--accent-500-rgb), 0.05))',
-                                                }} />
-                                            </div>
-                                            {/* Card */}
-                                            <div style={{
-                                                ...glass, flex: 1,
-                                                padding: 'var(--space-3)',
-                                                marginBottom: 'var(--space-2)',
-                                            }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                                                    <div style={{
-                                                        width: 32, height: 32, borderRadius: 'var(--radius-lg)',
-                                                        background: `${catConfig.color}11`,
-                                                        border: `1px solid ${catConfig.color}10`,
-                                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                        flexShrink: 0,
-                                                    }}>
-                                                        <CategoryIcon category={txn.category} size={14} />
-                                                    </div>
-                                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                                        <div style={{
-                                                            fontWeight: 700, fontSize: 'var(--text-sm)',
-                                                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                                                        }}>
-                                                            {txn.title}
-                                                        </div>
-                                                        <div style={{ fontSize: '10px', color: 'var(--fg-tertiary)', marginTop: 1 }}>
-                                                            {(txn.payer.name || 'Unknown').split(' ')[0]} · {new Date(txn.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
-                                                        </div>
-                                                    </div>
-                                                    <span style={{
-                                                        fontWeight: 800, fontSize: 'var(--text-sm)',
-                                                        background: 'linear-gradient(135deg, var(--accent-400), var(--accent-500))',
-                                                        WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
-                                                        fontFeatureSettings: "'tnum'",
-                                                    }}>
-                                                        {formatCurrency(txn.amount)}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        </motion.div>
-                                    );
-                                })}
-                            </div>
-                        ));
-                    })()}
-                </div>
-            )}
-
-            {/* ═══ EMPTY STATE — Glassmorphic ═══ */}
-            {filtered.length === 0 && (
-                <motion.div
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                >
-                    <div style={{
-                        ...glass, borderRadius: 'var(--radius-2xl)',
-                        padding: 'var(--space-10) var(--space-4)',
-                        textAlign: 'center',
-                        background: 'linear-gradient(135deg, rgba(var(--accent-500-rgb), 0.04), var(--bg-glass))',
-                    }}>
-                        <div style={{ position: 'relative', zIndex: 1 }}>
-                            <div style={{
-                                width: 60, height: 60, borderRadius: 'var(--radius-2xl)',
-                                background: 'rgba(var(--accent-500-rgb), 0.08)',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                margin: '0 auto var(--space-3)', color: 'var(--accent-400)',
-                            }}>
-                                <Inbox size={28} />
-                            </div>
-                            <div style={{ fontWeight: 700, color: 'var(--fg-primary)', marginBottom: 4, fontSize: 'var(--text-base)' }}>
-                                No transactions found
-                            </div>
-                            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--fg-tertiary)', maxWidth: 240, margin: '0 auto' }}>
-                                {search || filterCategory ? 'Try adjusting your search or filters' : 'Add your first expense to get started'}
-                            </div>
-                            {!search && !filterCategory && (
-                                <Button
-                                    size="sm"
-                                    leftIcon={<Plus size={14} />}
-                                    onClick={() => router.push('/transactions/new')}
-                                    style={{
-                                        marginTop: 'var(--space-4)',
-                                        background: 'linear-gradient(135deg, var(--accent-500), var(--accent-600))',
-                                        boxShadow: '0 4px 20px rgba(var(--accent-500-rgb), 0.3)',
-                                    }}
-                                >
-                                    Add Expense
-                                </Button>
-                            )}
-                        </div>
-                    </div>
-                </motion.div>
-            )}
-
-            {/* ── Delete Confirmation Modal (Portal to body for correct viewport centering) ── */}
-            {typeof document !== 'undefined' && createPortal(
-                <AnimatePresence>
-                    {deleteConfirmId && (
-                        <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            transition={{ duration: 0.2 }}
-                            onClick={() => setDeleteConfirmId(null)}
-                            style={{
-                                position: 'fixed', inset: 0, zIndex: 9999,
-                                background: 'transparent',
-                                backdropFilter: 'blur(8px)',
-                                WebkitBackdropFilter: 'blur(8px)',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                padding: 20,
-                            }}
-                        >
-                            <motion.div
-                                initial={{ opacity: 0, scale: 0.85, y: 30 }}
-                                animate={{ opacity: 1, scale: 1, y: 0 }}
-                                exit={{ opacity: 0, scale: 0.85, y: 30 }}
-                                transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-                                onClick={(e) => e.stopPropagation()}
-                                style={{
-                                    width: '100%', maxWidth: 340,
-                                    background: 'var(--bg-elevated)',
-                                    border: '1px solid var(--border-glass)',
-                                    borderRadius: 24, padding: 28,
-                                    boxShadow: '0 24px 64px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.05)',
-                                    textAlign: 'center',
-                                }}
-                            >
-                                {/* Icon */}
-                                <div style={{
-                                    width: 56, height: 56, borderRadius: 16, margin: '0 auto 16px',
-                                    background: 'linear-gradient(135deg, #ef4444, #dc2626)',
-                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                    boxShadow: '0 8px 24px rgba(239, 68, 68, 0.3)',
-                                }}>
-                                    <Trash2 size={24} color="#fff" />
-                                </div>
-
-                                <h3 style={{
-                                    fontSize: 18, fontWeight: 700, color: 'var(--fg-primary)', marginBottom: 8,
-                                }}>
-                                    Delete Expense?
-                                </h3>
-                                <p style={{
-                                    fontSize: 13.5, color: 'var(--fg-secondary)', lineHeight: 1.6, marginBottom: 24,
-                                }}>
-                                    This will permanently remove the expense and all its splits. This action cannot be undone.
-                                </p>
-
-                                {/* Buttons */}
-                                <div style={{ display: 'flex', gap: 10 }}>
-                                    <button
-                                        onClick={() => setDeleteConfirmId(null)}
-                                        style={{
-                                            flex: 1, padding: '12px 0', borderRadius: 14,
-                                            border: '1px solid var(--border-glass)',
-                                            background: 'var(--surface-card)', color: 'var(--fg-primary)',
-                                            fontSize: 14, fontWeight: 600, cursor: 'pointer',
-                                            transition: 'all 0.2s',
-                                        }}
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        onClick={() => handleDelete(deleteConfirmId)}
-                                        style={{
-                                            flex: 1, padding: '12px 0', borderRadius: 14,
-                                            border: 'none',
-                                            background: 'linear-gradient(135deg, #ef4444, #dc2626)',
-                                            color: '#fff',
-                                            fontSize: 14, fontWeight: 600, cursor: 'pointer',
-                                            boxShadow: '0 4px 16px rgba(239, 68, 68, 0.3)',
-                                            transition: 'all 0.2s',
-                                        }}
-                                    >
-                                        Delete
-                                    </button>
-                                </div>
-                            </motion.div>
-                        </motion.div>
-                    )}
-                </AnimatePresence>,
-                document.body
-            )}
-        </div>
+        <Suspense fallback={<TransactionSkeleton />}>
+            <TransactionsContent />
+        </Suspense>
     );
 }
 
-/* ── Filter Pill Sub-component ── */
-function FilterPill({ active, onClick, children }: {
-    active: boolean; onClick: () => void; children: React.ReactNode;
-}) {
+function TransactionsContent() {
+    const router = useRouter();
+    const searchParams = useSearchParams();
+    const { user: currentUser } = useCurrentUser();
+    const [search, setSearch] = useState('');
+    const [sortBy, setSortBy] = useState<SortKey>('time');
+    const [filterCategory, setFilterCategory] = useState<string | null>(null);
+    const [sheetTxnId, setSheetTxnId] = useState<string | null>(() => searchParams.get('focus'));
+    const [sheetOpen, setSheetOpen] = useState(() => Boolean(searchParams.get('focus')));
+
+    const { data, error, isLoading, mutate } = useSWR<TransactionData[]>('/api/transactions?limit=100', fetcher, {
+        keepPreviousData: true,
+        revalidateOnFocus: true,
+        dedupingInterval: 4000,
+    });
+    const transactions = useMemo(() => (Array.isArray(data) ? data : []), [data]);
+
+    const categoriesInUse = useMemo(() => {
+        const seen = new Map<string, number>();
+        for (const txn of transactions) {
+            const key = getCategoryConfig(txn.category).key === 'general' && txn.category && txn.category !== 'general'
+                ? txn.category
+                : getCategoryConfig(txn.category).key;
+            seen.set(key, (seen.get(key) || 0) + 1);
+        }
+        return Array.from(seen.entries()).sort((a, b) => b[1] - a[1]).map(([key]) => key);
+    }, [transactions]);
+
+    const filtered = useMemo(() => {
+        const query = search.trim().toLowerCase();
+        let list = transactions;
+        if (query) {
+            list = list.filter((txn) =>
+                txn.title.toLowerCase().includes(query)
+                || (txn.payer.name || '').toLowerCase().includes(query)
+                || (txn.trip?.group.name || '').toLowerCase().includes(query)
+            );
+        }
+        if (filterCategory) {
+            list = list.filter((txn) => {
+                const config = getCategoryConfig(txn.category);
+                return config.key === filterCategory || txn.category === filterCategory;
+            });
+        }
+        if (sortBy === 'amount') list = [...list].sort((a, b) => b.amount - a.amount);
+        return list;
+    }, [filterCategory, search, sortBy, transactions]);
+
+    const dayGroups = useMemo(() => {
+        const groups: { key: string; label: string; total: number; items: TransactionData[] }[] = [];
+        for (const txn of filtered) {
+            const key = dayKey(txn.createdAt);
+            let group = groups.find((entry) => entry.key === key);
+            if (!group) {
+                group = { key, label: dayLabel(txn.createdAt), total: 0, items: [] };
+                groups.push(group);
+            }
+            group.total += txn.amount;
+            group.items.push(txn);
+        }
+        return groups;
+    }, [filtered]);
+
+    const totalSpent = filtered.reduce((sum, txn) => sum + txn.amount, 0);
+    const myShareTotal = currentUser
+        ? filtered.reduce((sum, txn) => sum + (txn.splits.find((split) => split.userId === currentUser.id)?.amount ?? 0), 0)
+        : 0;
+
+    const sheetTxn = sheetTxnId ? transactions.find((txn) => txn.id === sheetTxnId) ?? null : null;
+
+    const openSheet = (id: string) => {
+        setSheetTxnId(id);
+        setSheetOpen(true);
+    };
+
+    const closeSheet = () => {
+        setSheetOpen(false);
+        if (searchParams.get('focus')) router.replace('/transactions');
+    };
+
+    const handleChanged = async (removedId?: string) => {
+        if (removedId) {
+            await mutate((current) => (current || []).filter((txn) => txn.id !== removedId), { revalidate: false });
+        }
+        await Promise.all([mutate(), refreshMoneyData()]);
+    };
+
+    if (isLoading && !data) return <TransactionSkeleton />;
+
+    if (error instanceof NetworkTaggedError && !data) {
+        const copy = getNetworkErrorCopy(error.variant);
+        return <ErrorState variant={error.variant} title={copy.title} message={copy.message} onRetry={() => mutate()} />;
+    }
+
+    const isFiltering = Boolean(search.trim() || filterCategory);
+
     return (
-        <button
-            onClick={onClick}
-            style={{
-                display: 'flex', alignItems: 'center', gap: 4,
-                padding: '6px 13px', borderRadius: 'var(--radius-full)',
-                border: `1.5px solid ${active ? 'var(--accent-500)' : 'var(--border-glass)'}`,
-                background: active ? 'rgba(var(--accent-500-rgb), 0.12)' : 'var(--bg-glass)',
-                backdropFilter: 'blur(12px)',
-                WebkitBackdropFilter: 'blur(12px)',
-                color: active ? 'var(--accent-400)' : 'var(--fg-secondary)',
-                fontSize: 'var(--text-xs)', fontWeight: 600,
-                cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
-                transition: 'all 0.2s',
-                boxShadow: active ? '0 0 12px rgba(var(--accent-500-rgb), 0.12)' : 'none',
-            }}
-        >
-            {children}
-        </button>
+        <>
+            <Stagger className={styles.page}>
+                <StaggerItem>
+                    <section className={styles.summary}>
+                        <span className={styles.summaryLabel}>{isFiltering ? 'Matching expenses' : 'Total spent'}</span>
+                        <span className={styles.summaryValue}>{formatCurrency(totalSpent)}</span>
+                        <span className={styles.summaryMeta}>
+                            {filtered.length} expense{filtered.length === 1 ? '' : 's'}
+                            {currentUser && myShareTotal > 0 && <> · your share <strong>{formatCurrency(myShareTotal)}</strong></>}
+                        </span>
+                        <div className={styles.summaryActions}>
+                            <Button variant="secondary" leftIcon={<ScanLine size={17} />} onClick={() => router.push('/transactions/scan')}>
+                                Scan
+                            </Button>
+                            <Button leftIcon={<Plus size={17} />} onClick={() => router.push('/transactions/new')}>
+                                Add expense
+                            </Button>
+                        </div>
+                    </section>
+                </StaggerItem>
+
+                {transactions.length > 0 && (
+                    <StaggerItem>
+                        <div className={styles.toolbar}>
+                            <label className={styles.search}>
+                                <Search size={17} className={styles.searchIcon} />
+                                <input
+                                    className={styles.searchInput}
+                                    placeholder="Search expenses, people, groups"
+                                    value={search}
+                                    onChange={(event) => setSearch(event.target.value)}
+                                    aria-label="Search expenses"
+                                    enterKeyHint="search"
+                                />
+                                {search && (
+                                    <button type="button" className={styles.searchClear} onClick={() => setSearch('')} aria-label="Clear search">
+                                        <X size={14} />
+                                    </button>
+                                )}
+                            </label>
+                            <button
+                                type="button"
+                                className={cn(styles.sortButton, sortBy === 'amount' && styles.sortButtonActive)}
+                                onClick={() => setSortBy(sortBy === 'time' ? 'amount' : 'time')}
+                                aria-label={sortBy === 'time' ? 'Sort by highest amount' : 'Sort by most recent'}
+                            >
+                                {sortBy === 'time' ? <CalendarClock size={16} /> : <ArrowDownWideNarrow size={16} />}
+                                {sortBy === 'time' ? 'Recent' : 'Highest'}
+                            </button>
+                        </div>
+                    </StaggerItem>
+                )}
+
+                {categoriesInUse.length > 1 && (
+                    <StaggerItem>
+                        <ChipRow>
+                            <Chip active={!filterCategory} onClick={() => setFilterCategory(null)}>All</Chip>
+                            {categoriesInUse.map((key) => {
+                                const config = getCategoryConfig(key);
+                                const Icon = config.Icon;
+                                return (
+                                    <Chip
+                                        key={key}
+                                        active={filterCategory === key}
+                                        onClick={() => setFilterCategory(filterCategory === key ? null : key)}
+                                        icon={<Icon size={14} style={{ color: filterCategory === key ? undefined : config.color }} />}
+                                    >
+                                        {config.label}
+                                    </Chip>
+                                );
+                            })}
+                        </ChipRow>
+                    </StaggerItem>
+                )}
+
+                <StaggerItem>
+                    {filtered.length === 0 ? (
+                        isFiltering ? (
+                            <EmptyState
+                                compact
+                                icon={<Search size={22} />}
+                                title="No matches"
+                                description="Try a different search or clear the filter."
+                                actionLabel="Clear filters"
+                                actionIcon={<X size={16} />}
+                                onAction={() => {
+                                    setSearch('');
+                                    setFilterCategory(null);
+                                }}
+                            />
+                        ) : (
+                            <EmptyState
+                                icon={<ReceiptText size={26} />}
+                                title="No expenses yet"
+                                description="Every coffee, cab and shared adventure lands here. Add your first one in seconds."
+                                actionLabel="Add expense"
+                                actionHref="/transactions/new"
+                            />
+                        )
+                    ) : sortBy === 'amount' ? (
+                        <ListGroup>
+                            {filtered.map((txn) => (
+                                <TransactionRow key={txn.id} txn={txn} userId={currentUser?.id} onOpen={openSheet} showDate />
+                            ))}
+                        </ListGroup>
+                    ) : (
+                        <div className={styles.days}>
+                            {dayGroups.map((group) => (
+                                <section key={group.key} className={styles.day} aria-label={group.label}>
+                                    <div className={styles.dayHead}>
+                                        <span className={styles.dayLabel}>{group.label}</span>
+                                        <span className={styles.dayTotal}>{formatCurrency(group.total)}</span>
+                                    </div>
+                                    <ListGroup>
+                                        {group.items.map((txn) => (
+                                            <TransactionRow key={txn.id} txn={txn} userId={currentUser?.id} onOpen={openSheet} />
+                                        ))}
+                                    </ListGroup>
+                                </section>
+                            ))}
+                        </div>
+                    )}
+                    {filtered.length > 0 && transactions.length >= 100 && !isFiltering && (
+                        <p className={styles.resultsNote}>Showing your 100 most recent expenses</p>
+                    )}
+                </StaggerItem>
+            </Stagger>
+
+            <Modal isOpen={sheetOpen && Boolean(sheetTxn)} onClose={closeSheet} title="Expense" size="small">
+                {sheetTxn && (
+                    <ExpenseSheetBody
+                        key={sheetTxn.id}
+                        txn={sheetTxn}
+                        currentUserId={currentUser?.id}
+                        onClose={closeSheet}
+                        onChanged={handleChanged}
+                    />
+                )}
+            </Modal>
+        </>
+    );
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Row
+   ═══════════════════════════════════════════════════════════════ */
+
+function TransactionRow({
+    txn,
+    userId,
+    onOpen,
+    showDate,
+}: {
+    txn: TransactionData;
+    userId?: string;
+    onOpen: (id: string) => void;
+    showDate?: boolean;
+}) {
+    const position = positionFor(txn, userId);
+    const payer = txn.payer.id === userId ? 'You' : firstName(txn.payer.name);
+    const when = showDate ? formatDate(txn.createdAt) : timeLabel(txn.createdAt);
+    const groupLabel = txn.trip?.group.name ? ` · ${txn.trip.group.emoji ?? ''} ${txn.trip.group.name}` : '';
+
+    return (
+        <motion.div layout="position" initial={false}>
+            <ListRow
+                onClick={() => onOpen(txn.id)}
+                leading={<CategoryTile category={txn.category} />}
+                title={txn.title}
+                subtitle={`${payer} paid · ${when}${groupLabel}`}
+                trailing={<Amount value={txn.amount} />}
+                trailingSub={
+                    position.kind === 'lend' ? <span className={styles.lend}>you lent {formatCurrency(position.amount)}</span>
+                        : position.kind === 'owe' ? <span className={styles.owe}>you owe {formatCurrency(position.amount)}</span>
+                            : position.kind === 'self' ? <span className={styles.neutral}>just you</span>
+                                : <span className={styles.neutral}>not involved</span>
+                }
+            />
+        </motion.div>
+    );
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Detail / edit sheet
+   ═══════════════════════════════════════════════════════════════ */
+
+function ExpenseSheetBody({
+    txn,
+    currentUserId,
+    onClose,
+    onChanged,
+}: {
+    txn: TransactionData;
+    currentUserId?: string;
+    onClose: () => void;
+    onChanged: (removedId?: string) => Promise<void>;
+}) {
+    const { toast } = useToast();
+    const [mode, setMode] = useState<'view' | 'edit' | 'delete'>('view');
+    const [title, setTitle] = useState(txn.title);
+    const [amount, setAmount] = useState(String(txn.amount / 100));
+    const [splitAmong, setSplitAmong] = useState<Set<string>>(() => new Set(txn.splits.map((split) => split.userId)));
+    const [busy, setBusy] = useState(false);
+
+    const members = useMemo(() => txn.trip?.group.members ?? [], [txn.trip]);
+    const isCustom = txn.splitType === 'custom';
+    const canEdit = Boolean(currentUserId && (currentUserId === txn.payer.id || currentUserId === txn.trip?.group.ownerId));
+    const category = getCategoryConfig(txn.category);
+    const amountPaise = Math.round((parseFloat(amount) || 0) * 100);
+
+    const people = useMemo(() => {
+        if (members.length > 0) {
+            return members.map((member) => ({
+                id: member.userId,
+                name: member.user.name || 'Member',
+                image: member.user.image,
+            }));
+        }
+        return txn.splits.map((split) => ({ id: split.userId, name: split.user.name || 'Member', image: null }));
+    }, [members, txn.splits]);
+
+    const shares = useMemo(() => {
+        const map = new Map<string, number>();
+        if (mode !== 'edit' || isCustom) {
+            for (const split of txn.splits) map.set(split.userId, split.amount);
+            return map;
+        }
+        const selected = people.filter((person) => splitAmong.has(person.id)).map((person) => person.id);
+        const each = selected.length ? Math.floor(amountPaise / selected.length) : 0;
+        const remainder = amountPaise - each * selected.length;
+        selected.forEach((id, index) => map.set(id, each + (index === 0 ? remainder : 0)));
+        return map;
+    }, [amountPaise, isCustom, mode, people, splitAmong, txn.splits]);
+
+    const payerPerson = people.find((person) => person.id === txn.payer.id);
+
+    const save = async () => {
+        if (!title.trim() || amountPaise <= 0 || splitAmong.size === 0) {
+            toast('Add a title, an amount and at least one person', 'error');
+            return;
+        }
+        setBusy(true);
+        try {
+            const res = await fetch(`/api/transactions/${txn.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    title: title.trim(),
+                    amount: amountPaise,
+                    splitAmong: Array.from(splitAmong),
+                }),
+            });
+            if (res.ok) {
+                toast('Expense updated', 'success');
+                await onChanged();
+                setMode('view');
+            } else {
+                const err = await res.json().catch(() => ({}));
+                toast(err.error || 'Could not update this expense', 'error');
+            }
+        } catch {
+            toast('Network error — please try again', 'error');
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const remove = async () => {
+        setBusy(true);
+        try {
+            const res = await fetch(`/api/transactions/${txn.id}`, { method: 'DELETE' });
+            if (res.ok) {
+                toast('Expense deleted', 'success');
+                onClose();
+                await onChanged(txn.id);
+            } else {
+                const err = await res.json().catch(() => ({}));
+                toast(err.error || 'Could not delete this expense', 'error');
+            }
+        } catch {
+            toast('Network error — please try again', 'error');
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    if (mode === 'delete') {
+        return (
+            <div className={styles.sheet}>
+                <div className={styles.confirm}>
+                    <span className={styles.confirmIcon}><Trash2 size={26} /></span>
+                    <p className={styles.confirmTitle}>Delete “{txn.title}”?</p>
+                    <p className={styles.confirmText}>
+                        This removes the {formatCurrency(txn.amount)} expense and its splits for everyone in the group. Balances update instantly.
+                    </p>
+                </div>
+                <div className={styles.sheetActions}>
+                    <Button variant="secondary" onClick={() => setMode('view')} disabled={busy}>Keep it</Button>
+                    <Button variant="danger" onClick={remove} loading={busy} leftIcon={<Trash2 size={16} />}>Delete</Button>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className={styles.sheet}>
+            <div className={styles.sheetHero}>
+                <CategoryTile category={txn.category} size={60} />
+                {mode === 'edit' ? null : (
+                    <>
+                        <p className={styles.sheetTitle}>{txn.title}</p>
+                        <span className={styles.sheetAmount}>{formatCurrency(txn.amount)}</span>
+                    </>
+                )}
+                <span className={styles.sheetMeta}>
+                    Paid by {txn.payer.id === currentUserId ? 'you' : txn.payer.name || 'someone'} · {formatDate(txn.createdAt)}, {timeLabel(txn.createdAt)}
+                </span>
+                <div className={styles.sheetTags}>
+                    <Tag tone="accent">{category.label}</Tag>
+                    <PaymentTag method={txn.method} />
+                    <Tag>{isCustom ? 'Custom split' : 'Split equally'}</Tag>
+                    {txn.trip?.group.name && <Tag>{txn.trip.group.emoji} {txn.trip.group.name}</Tag>}
+                </div>
+            </div>
+
+            {mode === 'edit' && (
+                <div className={styles.editFields}>
+                    <Input label="Title" value={title} onChange={(event) => setTitle(event.target.value)} maxLength={60} />
+                    <Input
+                        label="Amount (₹)"
+                        value={amount}
+                        onChange={(event) => setAmount(event.target.value.replace(/[^\d.]/g, ''))}
+                        inputMode="decimal"
+                        disabled={isCustom}
+                    />
+                </div>
+            )}
+
+            {isCustom && mode === 'edit' && (
+                <Notice tone="warning" icon={<AlertTriangle size={16} />}>
+                    Custom split amounts can’t be changed here. Update the title, or delete and re-add the expense.
+                </Notice>
+            )}
+
+            <div>
+                <div className={styles.sheetSectionLabel}>{mode === 'edit' && !isCustom ? 'Split between' : 'Who owes what'}</div>
+                {mode === 'edit' && !isCustom ? (
+                    <div>
+                        {people.map((person) => {
+                            const on = splitAmong.has(person.id);
+                            return (
+                                <button
+                                    key={person.id}
+                                    type="button"
+                                    className={cn(styles.memberToggle, on && styles.memberToggleOn)}
+                                    onClick={() => {
+                                        const next = new Set(splitAmong);
+                                        if (next.has(person.id)) {
+                                            if (next.size <= 1) return;
+                                            next.delete(person.id);
+                                        } else {
+                                            next.add(person.id);
+                                        }
+                                        setSplitAmong(next);
+                                    }}
+                                    aria-pressed={on}
+                                >
+                                    <Avatar name={person.name} image={person.image} size="sm" />
+                                    <span className={styles.memberName}>{person.id === currentUserId ? 'You' : person.name}</span>
+                                    <span className={styles.memberShare}>{on ? formatCurrency(shares.get(person.id) ?? 0) : '—'}</span>
+                                    <span className={cn(styles.check, on && styles.checkOn)}><Check size={14} strokeWidth={3} /></span>
+                                </button>
+                            );
+                        })}
+                    </div>
+                ) : (
+                    <ListGroup>
+                        {people
+                            .filter((person) => shares.has(person.id) || person.id === txn.payer.id)
+                            .map((person) => {
+                                const share = shares.get(person.id) ?? 0;
+                                const isPayer = person.id === txn.payer.id;
+                                const net = (isPayer ? txn.amount : 0) - share;
+                                return (
+                                    <ListRow
+                                        key={person.id}
+                                        leading={<Avatar name={person.name} image={person.image ?? payerPerson?.image} size="md" />}
+                                        title={person.id === currentUserId ? 'You' : person.name}
+                                        subtitle={isPayer ? `Paid ${formatCurrency(txn.amount)}` : `Share ${formatCurrency(share)}`}
+                                        trailing={<Amount value={net} tone="auto" signed />}
+                                        trailingSub={net > 0 ? 'gets back' : net < 0 ? 'owes' : 'even'}
+                                    />
+                                );
+                            })}
+                    </ListGroup>
+                )}
+            </div>
+
+            {mode === 'edit' ? (
+                <div className={styles.sheetActions}>
+                    <Button variant="secondary" onClick={() => setMode('view')} disabled={busy}>Cancel</Button>
+                    <Button onClick={save} loading={busy} leftIcon={<Check size={16} />}>Save changes</Button>
+                </div>
+            ) : canEdit ? (
+                <div className={styles.sheetActions}>
+                    <Button variant="secondary" leftIcon={<Pencil size={16} />} onClick={() => setMode('edit')}>Edit</Button>
+                    <Button variant="ghost" leftIcon={<Trash2 size={16} />} onClick={() => setMode('delete')} style={{ color: 'var(--color-error)' }}>
+                        Delete
+                    </Button>
+                </div>
+            ) : (
+                <Notice tone="info">Only the person who paid or the group owner can edit this expense.</Notice>
+            )}
+        </div>
     );
 }

@@ -6,21 +6,27 @@ import { cn } from '@/lib/utils';
 
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
     label?: string;
+    hint?: string;
     error?: string;
     leftIcon?: React.ReactNode;
     rightIcon?: React.ReactNode;
+    /** Interactive element rendered inside the field on the right (e.g. show-password toggle). */
+    rightSlot?: React.ReactNode;
     large?: boolean;
     wrapperClassName?: string;
     floating?: boolean;
 }
 
 const Input = forwardRef<HTMLInputElement, InputProps>(
-    ({ label, error, leftIcon, rightIcon, large, className, wrapperClassName, floating = false, ...props }, ref) => {
+    ({ label, hint, error, leftIcon, rightIcon, rightSlot, large, className, wrapperClassName, floating = false, ...props }, ref) => {
         const [focused, setFocused] = useState(false);
         const generatedId = useId();
         const inputId = props.id || generatedId;
         const hasValue = !!props.value || !!props.defaultValue;
         const isFloating = floating && label;
+        const describedBy = [props['aria-describedby'], error ? `${inputId}-error` : '', hint && !error ? `${inputId}-hint` : '']
+            .filter(Boolean)
+            .join(' ') || undefined;
 
         return (
             <div className={cn(styles.wrapper, error && styles.error, wrapperClassName)}>
@@ -33,7 +39,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
                             styles.input,
                             large && styles.inputLarge,
                             leftIcon ? styles.hasLeftIcon : undefined,
-                            rightIcon ? styles.hasRightIcon : undefined,
+                            rightIcon || rightSlot ? styles.hasRightIcon : undefined,
                             isFloating ? styles.floatingInput : undefined,
                             isFloating && (focused || hasValue) ? styles.floatingInputActive : undefined,
                             className
@@ -44,7 +50,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
                         {...props}
                         id={inputId}
                         aria-invalid={error ? true : props['aria-invalid']}
-                        aria-describedby={[props['aria-describedby'], error ? `${inputId}-error` : ''].filter(Boolean).join(' ') || undefined}
+                        aria-describedby={describedBy}
                     />
                     {isFloating && (
                         <label
@@ -58,9 +64,14 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
                             {label}
                         </label>
                     )}
-                    {rightIcon && <span className={styles.rightIcon}>{rightIcon}</span>}
+                    {rightIcon && !rightSlot && <span className={styles.rightIcon}>{rightIcon}</span>}
+                    {rightSlot && <span className={styles.rightSlot}>{rightSlot}</span>}
                 </div>
-                {error && <span id={`${inputId}-error`} role="alert" className={styles.errorText}>{error}</span>}
+                {error ? (
+                    <span id={`${inputId}-error`} role="alert" className={styles.errorText}>{error}</span>
+                ) : hint ? (
+                    <span id={`${inputId}-hint`} className={styles.hintText}>{hint}</span>
+                ) : null}
             </div>
         );
     }
@@ -68,7 +79,6 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
 
 Input.displayName = 'Input';
 
-// Textarea variant
 interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
     label?: string;
     error?: string;

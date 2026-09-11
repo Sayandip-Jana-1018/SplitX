@@ -1,96 +1,133 @@
 /* ═══════════════════════════════════════════════════════════════
-   Skeleton Shimmer — Premium Loading States
+   Skeletons — calm shimmer placeholders that mirror real layouts
    ═══════════════════════════════════════════════════════════════ */
 
 .shimmer {
-    background: linear-gradient(
-        90deg,
-        var(--surface-card, rgba(255, 255, 255, 0.04)) 25%,
-        rgba(var(--accent-500-rgb, 99, 102, 241), 0.06) 50%,
-        var(--surface-card, rgba(255, 255, 255, 0.04)) 75%
-    );
-    background-size: 400% 100%;
-    animation: shimmer 2s ease-in-out infinite;
+    background: linear-gradient(90deg, var(--skeleton-base) 25%, var(--skeleton-shine) 50%, var(--skeleton-base) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.6s ease-in-out infinite;
     border-radius: var(--radius-md);
 }
 
-@keyframes shimmer {
-    0% { background-position: 200% 0; }
-    100% { background-position: -200% 0; }
-}
-
-.skeleton {
+.stack {
     display: flex;
     flex-direction: column;
+    gap: var(--section-gap);
+}
+
+.centerStack {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
     gap: 8px;
 }
 
-/* ── Stat variant ── */
-.stat {
+.twoUp {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.panel {
     background: var(--surface-card);
     border: 1px solid var(--border-default);
-    border-radius: var(--radius-xl);
-    padding: var(--space-4);
+    border-radius: var(--radius-2xl);
+    box-shadow: var(--shadow-card);
+}
+
+.hero {
+    height: 208px;
+    border-radius: var(--radius-3xl);
+}
+
+.quick {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+}
+
+.quickTile {
+    width: 56px;
+    height: 56px;
+    border-radius: 20px;
+}
+
+.stat {
     display: flex;
     flex-direction: column;
-    gap: var(--space-3);
+    gap: 10px;
+    padding: 14px 16px;
 }
 
-.statIcon {
-    width: 36px;
-    height: 36px;
-    border-radius: var(--radius-lg);
+.statIcon { width: 28px; height: 28px; border-radius: 9px; }
+.statLabel { width: 70px; height: 10px; }
+.statValue { width: 96px; height: 20px; }
+
+.row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
 }
 
-.statLabel {
-    width: 80px;
-    height: 10px;
-    margin-bottom: 6px;
+.list {
+    overflow: hidden;
 }
 
-.statValue {
-    width: 100px;
-    height: 22px;
+.listRow {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 64px;
+    padding: 12px 16px;
 }
 
-/* ── Card variant ── */
-.card {
-    background: var(--surface-card);
-    border: 1px solid var(--border-default);
-    border-radius: var(--radius-xl);
-    padding: var(--space-3) var(--space-4);
+.listRow + .listRow {
+    border-top: 1px solid var(--border-subtle);
 }
 
-.cardIcon {
-    width: 38px;
-    height: 38px;
-    border-radius: var(--radius-lg);
+.rowIcon {
     flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    border-radius: 14px;
 }
 
-.cardTitle {
-    width: 140px;
-    height: 14px;
-    margin-bottom: 6px;
+.rowTitle {
+    width: 55%;
+    height: 12px;
+    margin-bottom: 8px;
 }
 
-.cardSubtitle {
-    width: 100px;
+.rowSubtitle {
+    width: 35%;
     height: 10px;
 }
 
-.cardAmount {
-    width: 60px;
-    height: 16px;
-    border-radius: var(--radius-md);
+.rowAmount {
+    flex-shrink: 0;
+    width: 58px;
+    height: 14px;
 }
 
-/* ── Circle variant ── */
+.groupCard {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 16px;
+}
+
+.groupEmoji {
+    flex-shrink: 0;
+    width: 48px;
+    height: 48px;
+    border-radius: 16px;
+}
+
 .circle {
     border-radius: 50%;
 }
 
-/* ── Text group ── */
 .textGroup {
     display: flex;
     flex-direction: column;

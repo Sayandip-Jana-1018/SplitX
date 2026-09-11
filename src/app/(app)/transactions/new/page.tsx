@@ -2,15 +2,36 @@
 
 import { useState, useCallback, useEffect, useRef, Suspense, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Delete, Check, ChevronDown, Loader2, Mic, Plus, Minus, Equal, AlertTriangle, History, TrendingUp } from 'lucide-react';
+import {
+    AlertTriangle,
+    Check,
+    ChevronDown,
+    ClipboardCheck,
+    Delete,
+    Equal,
+    History,
+    Mic,
+    Minus,
+    PencilLine,
+    Plus,
+    ScanLine,
+    TrendingUp,
+    Users,
+} from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Button from '@/components/ui/Button';
 import Modal from '@/components/ui/Modal';
 import Avatar from '@/components/ui/Avatar';
+import EmptyState from '@/components/ui/EmptyState';
+import Skeleton from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
-import { PaymentIcon } from '@/components/ui/Icons';
+import { CategoryTile, PaymentIcon, getCategoryConfig } from '@/components/ui/Icons';
+import { Notice, Progress, Segmented } from '@/components/ui/kit';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
-import { CATEGORIES, PAYMENT_METHODS, formatCurrency, toPaise, cn, getCategoryData } from '@/lib/utils';
+import { useHaptics } from '@/hooks/useHaptics';
+import { inferCategory } from '@/lib/categoryInference';
+import { refreshMoneyData } from '@/lib/swr';
+import { CATEGORIES, PAYMENT_METHODS, formatCurrency, toPaise, cn } from '@/lib/utils';
 
 import styles from './quickadd.module.css';
 import VoiceInput from '@/components/features/VoiceInput';
@@ -31,65 +52,80 @@ interface RecentTransaction {
     payer: { id: string; name: string | null };
 }
 
+interface MemberItem {
+    id: string;
+    name: string;
+    image?: string | null;
+}
+
+type SplitMode = 'equal' | 'custom';
+
 const EXPENSE_DRAFT_KEY = 'splitx:add-expense-draft:v1';
 const RECENT_GROUPS_KEY = 'splitx:recent-groups:v1';
 const RECENT_PAYERS_KEY = 'splitx:recent-payers:v1';
+
+const NUMPAD_KEYS = ['1', '2', '3', '+', '4', '5', '6', '-', '7', '8', '9', 'del', '.', '0', '00', '='];
+
+const SOURCE_COPY: Record<string, string> = {
+    clipboard: 'Filled in from a payment you copied — check the details before saving.',
+    scan: 'Filled in from your receipt scan — check the details before saving.',
+    notification: 'Filled in from a payment notification — check the details before saving.',
+};
 
 function QuickAddContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const { toast } = useToast();
+    const haptics = useHaptics();
     const { user: currentUser, loading: userLoading } = useCurrentUser();
 
-    // Data state
+    // ── Data ──
     const [groups, setGroups] = useState<GroupItem[]>([]);
     const [selectedGroupId, setSelectedGroupId] = useState<string>('');
     const [activeTripId, setActiveTripId] = useState<string>('');
-    const [members, setMembers] = useState<{ id: string; name: string; image?: string | null }[]>([]);
+    const [members, setMembers] = useState<MemberItem[]>([]);
     const [loadingGroups, setLoadingGroups] = useState(true);
     const [recentTransactions, setRecentTransactions] = useState<RecentTransaction[]>([]);
     const [recentGroupIds, setRecentGroupIds] = useState<string[]>([]);
     const [recentPayersByGroup, setRecentPayersByGroup] = useState<Record<string, string[]>>({});
     const [duplicateAcknowledged, setDuplicateAcknowledged] = useState(false);
 
-    // Form state
+    // ── Form ──
     const [amount, setAmount] = useState('');
     const [title, setTitle] = useState('');
     const [category, setCategory] = useState('general');
+    const [categoryTouched, setCategoryTouched] = useState(false);
     const [method, setMethod] = useState('cash');
     const [payerId, setPayerId] = useState('');
-    const [showCategories, setShowCategories] = useState(false);
-    const [showPayers, setShowPayers] = useState(false);
-    const [showMethods, setShowMethods] = useState(false);
-    const [showGroups, setShowGroups] = useState(false);
+    const [sheet, setSheet] = useState<'group' | 'category' | 'payer' | 'method' | null>(null);
     const [saving, setSaving] = useState(false);
     const [selectedMembers, setSelectedMembers] = useState<Set<string>>(new Set());
-
-    // Custom Category State
     const [isCustomCategory, setIsCustomCategory] = useState(false);
     const [customCatValue, setCustomCatValue] = useState('');
-
-    // Custom split state
-    const [splitType, setSplitType] = useState<'equal' | 'custom'>('equal');
+    const [splitType, setSplitType] = useState<SplitMode>('equal');
     const [customSplits, setCustomSplits] = useState<{ userId: string; amount: number }[]>([]);
+    const [expression, setExpression] = useState('');
 
-    // Flag to prevent useEffect from resetting members after voice input
     const voiceAppliedRef = useRef(false);
     const restoredDraftRef = useRef(false);
+    const lastLoadedGroupRef = useRef<string | null>(null);
+    const latestRef = useRef({ splitType, customSplits, payerId, selectedMembers });
 
-    // Calculator expression state
-    const [expression, setExpression] = useState('');
-    const amountInputRef = useRef<HTMLInputElement>(null);
+    useEffect(() => {
+        latestRef.current = { splitType, customSplits, payerId, selectedMembers };
+    });
 
-    /** Evaluate a simple expression with + and - only, left-to-right */
+    const source = searchParams.get('source') || (searchParams.get('receiptUrl') ? 'scan' : null);
+
+    /** Evaluate a simple left-to-right expression with + and - */
     const evaluateExpression = useCallback((expr: string): number => {
-        const sanitized = expr.replace(/[^\d.+\-]/g, '').replace(/^[+\-]/, '');
+        const sanitized = expr.replace(/[^\d.+-]/g, '').replace(/^[+-]/, '');
         if (!sanitized) return 0;
-        const tokens = sanitized.split(/(?=[+\-])|(?<=[+\-])/).filter(t => t.trim());
+        const tokens = sanitized.split(/(?=[+-])|(?<=[+-])/).filter((token) => token.trim());
         let total = 0;
         let op = '+';
-        for (const tok of tokens) {
-            const trimmed = tok.trim();
+        for (const token of tokens) {
+            const trimmed = token.trim();
             if (trimmed === '+' || trimmed === '-') { op = trimmed; continue; }
             const num = parseFloat(trimmed);
             if (isNaN(num)) continue;
@@ -100,15 +136,23 @@ function QuickAddContent() {
 
     const hasOperator = expression.includes('+') || expression.includes('-');
 
-    // Pre-fill from URL params (from scan page)
+    // ── Prefill from URL (receipt scan, clipboard, notification deep-links) ──
     useEffect(() => {
         const paramAmount = searchParams.get('amount');
         const paramTitle = searchParams.get('title');
         const paramMethod = searchParams.get('method');
+        const paramCategory = searchParams.get('category');
         const paramSplitData = searchParams.get('splitData');
         if (paramAmount) setAmount(paramAmount);
         if (paramTitle) setTitle(paramTitle);
-        if (paramMethod) setMethod(paramMethod);
+        if (paramMethod && PAYMENT_METHODS[paramMethod]) setMethod(paramMethod);
+        if (paramCategory) {
+            setCategory(paramCategory);
+            setCategoryTouched(true);
+        } else if (paramTitle) {
+            const inferred = inferCategory(paramTitle);
+            if (inferred) setCategory(inferred);
+        }
 
         if (paramSplitData) {
             try {
@@ -116,61 +160,52 @@ function QuickAddContent() {
                 if (Array.isArray(splits) && splits.length > 0) {
                     setCustomSplits(splits);
                     setSplitType('custom');
-                    // Sync selected members with the custom split
-                    const memberIds = new Set(splits.map((s: { userId: string }) => s.userId));
-                    setSelectedMembers(memberIds);
+                    setSelectedMembers(new Set(splits.map((split: { userId: string }) => split.userId)));
                 }
-            } catch (e) {
-                console.error("Failed to parse split data", e);
+            } catch (error) {
+                console.error('Failed to parse split data', error);
             }
         }
     }, [searchParams]);
 
-    // Fetch groups on mount
+    // ── Groups ──
     useEffect(() => {
         async function loadGroups() {
             try {
                 const res = await fetch('/api/groups');
                 if (res.ok) {
-                    const data = await res.json();
+                    const data: GroupItem[] = await res.json();
                     setGroups(data);
-                    if (data.length > 0) {
-                        setSelectedGroupId(data[0].id);
-                    }
+                    const requested = searchParams.get('groupId');
+                    const initial = data.find((group) => group.id === requested) ?? data[0];
+                    if (initial) setSelectedGroupId(initial.id);
                 }
             } catch {
-                // handle silently
+                // handled by empty state
             } finally {
                 setLoadingGroups(false);
             }
         }
         loadGroups();
-    }, []);
+    }, [searchParams]);
 
     useEffect(() => {
         try {
             const storedGroups = window.localStorage.getItem(RECENT_GROUPS_KEY);
             const storedPayers = window.localStorage.getItem(RECENT_PAYERS_KEY);
-            if (storedGroups) {
-                setRecentGroupIds(JSON.parse(storedGroups));
-            }
-            if (storedPayers) {
-                setRecentPayersByGroup(JSON.parse(storedPayers));
-            }
+            if (storedGroups) setRecentGroupIds(JSON.parse(storedGroups));
+            if (storedPayers) setRecentPayersByGroup(JSON.parse(storedPayers));
         } catch {
             // Ignore malformed local data
         }
     }, []);
 
+    // ── Draft restore (only when nothing was pre-filled) ──
     useEffect(() => {
         if (loadingGroups || restoredDraftRef.current || groups.length === 0) return;
 
-        const hasUrlPrefill =
-            searchParams.has('amount') ||
-            searchParams.has('title') ||
-            searchParams.has('method') ||
-            searchParams.has('splitData') ||
-            searchParams.has('receiptUrl');
+        const hasUrlPrefill = ['amount', 'title', 'method', 'category', 'splitData', 'receiptUrl', 'groupId']
+            .some((key) => searchParams.has(key));
 
         restoredDraftRef.current = true;
         if (hasUrlPrefill) return;
@@ -186,7 +221,7 @@ function QuickAddContent() {
                 category?: string;
                 method?: string;
                 payerId?: string;
-                splitType?: 'equal' | 'custom';
+                splitType?: SplitMode;
                 selectedMemberIds?: string[];
                 customSplits?: { userId: string; amount: number }[];
             };
@@ -196,269 +231,313 @@ function QuickAddContent() {
             }
             if (draft.amount) setAmount(draft.amount);
             if (draft.title) setTitle(draft.title);
-            if (draft.category) setCategory(draft.category);
+            if (draft.category) {
+                setCategory(draft.category);
+                setCategoryTouched(true);
+            }
             if (draft.method) setMethod(draft.method);
             if (draft.payerId) setPayerId(draft.payerId);
             if (draft.splitType) setSplitType(draft.splitType);
-            if (draft.selectedMemberIds?.length) {
-                setSelectedMembers(new Set(draft.selectedMemberIds));
-            }
-            if (draft.customSplits?.length) {
-                setCustomSplits(draft.customSplits);
-            }
+            if (draft.selectedMemberIds?.length) setSelectedMembers(new Set(draft.selectedMemberIds));
+            if (draft.customSplits?.length) setCustomSplits(draft.customSplits);
         } catch {
             // Ignore malformed drafts
         }
     }, [groups, loadingGroups, searchParams]);
 
+    // ── Draft autosave ──
     useEffect(() => {
         if (loadingGroups || !selectedGroupId) return;
-
-        const draft = {
-            selectedGroupId,
-            amount,
-            title,
-            category,
-            method,
-            payerId,
-            splitType,
-            selectedMemberIds: Array.from(selectedMembers),
-            customSplits,
-            savedAt: new Date().toISOString(),
-        };
-
         try {
-            window.localStorage.setItem(EXPENSE_DRAFT_KEY, JSON.stringify(draft));
+            window.localStorage.setItem(EXPENSE_DRAFT_KEY, JSON.stringify({
+                selectedGroupId,
+                amount,
+                title,
+                category: categoryTouched ? category : undefined,
+                method,
+                payerId,
+                splitType,
+                selectedMemberIds: Array.from(selectedMembers),
+                customSplits,
+                savedAt: new Date().toISOString(),
+            }));
         } catch {
             // Ignore storage errors
         }
-    }, [
-        amount,
-        category,
-        customSplits,
-        loadingGroups,
-        method,
-        payerId,
-        selectedGroupId,
-        selectedMembers,
-        splitType,
-        title,
-    ]);
+    }, [amount, category, categoryTouched, customSplits, loadingGroups, method, payerId, selectedGroupId, selectedMembers, splitType, title]);
 
+    // ── Group detail: members, active trip, sensible defaults ──
     useEffect(() => {
         if (!selectedGroupId) return;
+        let cancelled = false;
+
         async function loadGroupDetail() {
             try {
                 const res = await fetch(`/api/groups/${selectedGroupId}`);
-                if (res.ok) {
-                    const data = await res.json();
-                    // Get active trip — if none, auto-create one
-                    if (data.activeTrip) {
-                        setActiveTripId(data.activeTrip.id);
-                    } else {
-                        // Auto-create a default trip for this group
-                        try {
-                            const tripRes = await fetch('/api/trips', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                    groupId: selectedGroupId,
-                                    title: 'General',
-                                }),
-                            });
-                            if (tripRes.ok) {
-                                const trip = await tripRes.json();
-                                setActiveTripId(trip.id);
-                            }
-                        } catch { /* silently fail */ }
-                    }
-                    // Set members from group
-                    const memberList = (data.members || []).map((m: { user: { id: string; name: string | null; image?: string | null } }) => ({
-                        id: m.user.id,
-                        name: m.user.name || 'Unknown',
-                        image: m.user.image || null,
-                    }));
-                    setMembers(memberList);
+                if (!res.ok || cancelled) return;
+                const data = await res.json();
 
-                    // Skip default selections if voice input was just applied
-                    if (voiceAppliedRef.current) {
-                        voiceAppliedRef.current = false;
-                    } else {
-                        // Default member selection
-                        if (splitType !== 'custom') {
-                            setSelectedMembers(new Set(memberList.map((m: { id: string }) => m.id)));
-                        } else if (customSplits.length > 0) {
-                            setSelectedMembers(new Set(customSplits.map(s => s.userId)));
+                if (data.activeTrip) {
+                    setActiveTripId(data.activeTrip.id);
+                } else {
+                    try {
+                        const tripRes = await fetch('/api/trips', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ groupId: selectedGroupId, title: 'General' }),
+                        });
+                        if (tripRes.ok && !cancelled) {
+                            const trip = await tripRes.json();
+                            setActiveTripId(trip.id);
                         }
+                    } catch { /* surfaced on save */ }
+                }
 
-                        // Default payer to current user
-                        if (currentUser && memberList.some((m: { id: string }) => m.id === currentUser.id)) {
-                            setPayerId(currentUser.id);
-                        } else if (memberList.length > 0) {
-                            setPayerId(memberList[0].id);
-                        }
+                if (cancelled) return;
+                const memberList: MemberItem[] = (data.members || []).map((m: { user: { id: string; name: string | null; image?: string | null } }) => ({
+                    id: m.user.id,
+                    name: m.user.name || 'Unknown',
+                    image: m.user.image || null,
+                }));
+                setMembers(memberList);
+
+                const memberIds = new Set(memberList.map((member) => member.id));
+                const switchedGroup = lastLoadedGroupRef.current !== null && lastLoadedGroupRef.current !== selectedGroupId;
+                lastLoadedGroupRef.current = selectedGroupId;
+
+                if (voiceAppliedRef.current) {
+                    voiceAppliedRef.current = false;
+                    return;
+                }
+
+                const latest = latestRef.current;
+                const selectionValid = latest.selectedMembers.size > 0
+                    && Array.from(latest.selectedMembers).every((id) => memberIds.has(id));
+
+                if (latest.splitType === 'custom' && latest.customSplits.length > 0 && !switchedGroup) {
+                    setSelectedMembers(new Set(latest.customSplits.map((split) => split.userId).filter((id) => memberIds.has(id))));
+                } else if (switchedGroup || !selectionValid) {
+                    setSelectedMembers(new Set(memberIds));
+                    if (switchedGroup) {
+                        setSplitType('equal');
+                        setCustomSplits([]);
                     }
                 }
+
+                if (!latest.payerId || !memberIds.has(latest.payerId)) {
+                    const fallback = currentUser && memberIds.has(currentUser.id) ? currentUser.id : memberList[0]?.id;
+                    if (fallback) setPayerId(fallback);
+                }
             } catch {
-                // handle silently
+                // silent — the form stays usable
             }
         }
-        loadGroupDetail();
-    }, [selectedGroupId, currentUser, splitType, customSplits]);
 
+        loadGroupDetail();
+        return () => { cancelled = true; };
+    }, [selectedGroupId, currentUser]);
+
+    // ── Recents ──
     useEffect(() => {
         if (!selectedGroupId) return;
-
         setRecentGroupIds((prev) => {
             const next = [selectedGroupId, ...prev.filter((groupId) => groupId !== selectedGroupId)].slice(0, 3);
-            try {
-                window.localStorage.setItem(RECENT_GROUPS_KEY, JSON.stringify(next));
-            } catch {
-                // Ignore storage errors
-            }
+            try { window.localStorage.setItem(RECENT_GROUPS_KEY, JSON.stringify(next)); } catch { /* ignore */ }
             return next;
         });
     }, [selectedGroupId]);
 
     useEffect(() => {
         if (!selectedGroupId || !payerId) return;
-
         setRecentPayersByGroup((prev) => {
             const existing = prev[selectedGroupId] || [];
-            const nextForGroup = [payerId, ...existing.filter((id) => id !== payerId)].slice(0, 3);
-            const next = { ...prev, [selectedGroupId]: nextForGroup };
-            try {
-                window.localStorage.setItem(RECENT_PAYERS_KEY, JSON.stringify(next));
-            } catch {
-                // Ignore storage errors
-            }
+            const next = { ...prev, [selectedGroupId]: [payerId, ...existing.filter((id) => id !== payerId)].slice(0, 3) };
+            try { window.localStorage.setItem(RECENT_PAYERS_KEY, JSON.stringify(next)); } catch { /* ignore */ }
             return next;
         });
     }, [payerId, selectedGroupId]);
 
     useEffect(() => {
-        if (!activeTripId) {
-            setRecentTransactions([]);
-            return;
-        }
-
+        if (!activeTripId) return;
         let cancelled = false;
-        async function loadRecentTransactions() {
+        (async () => {
             try {
                 const res = await fetch(`/api/transactions?tripId=${activeTripId}&limit=20`);
                 if (!res.ok) return;
                 const data = await res.json();
-                if (!cancelled) {
-                    setRecentTransactions(Array.isArray(data) ? data : []);
-                }
+                if (!cancelled) setRecentTransactions(Array.isArray(data) ? data : []);
             } catch {
-                if (!cancelled) {
-                    setRecentTransactions([]);
-                }
+                if (!cancelled) setRecentTransactions([]);
             }
-        }
-
-        loadRecentTransactions();
-        return () => {
-            cancelled = true;
-        };
+        })();
+        return () => { cancelled = true; };
     }, [activeTripId]);
 
+    // ── Derived values ──
     const numericAmount = parseFloat(amount) || 0;
-    const selectedCount = selectedMembers.size;
-    const splitPerPerson = selectedCount > 0
-        ? formatCurrency(toPaise(numericAmount / selectedCount))
-        : '₹0';
+    const totalPaise = toPaise(numericAmount);
+    const selectedMemberIds = useMemo(
+        () => members.filter((member) => selectedMembers.has(member.id)).map((member) => member.id),
+        [members, selectedMembers]
+    );
+    const selectedCount = selectedMemberIds.length;
 
-    // Calculate custom amount for a member if custom split is active
-    const getMemberAmount = (memberId: string) => {
-        if (splitType !== 'custom') return null;
-        const split = customSplits.find(s => s.userId === memberId);
-        return split ? formatCurrency(split.amount) : '₹0';
-    };
+    /** Custom plan: everyone except the last person is typed in; the last absorbs the remainder. */
+    const customPlan = useMemo(() => {
+        if (splitType !== 'custom' || selectedMemberIds.length === 0) return null;
+        const lastId = selectedMemberIds[selectedMemberIds.length - 1];
+        const others = selectedMemberIds.slice(0, -1).map((id) => ({
+            userId: id,
+            amount: customSplits.find((split) => split.userId === id)?.amount ?? 0,
+        }));
+        const othersTotal = others.reduce((sum, split) => sum + split.amount, 0);
+        const lastAmount = totalPaise - othersTotal;
+        return {
+            splits: [...others, { userId: lastId, amount: lastAmount }],
+            lastId,
+            lastAmount,
+            othersTotal,
+            overAllocated: lastAmount < 0,
+        };
+    }, [customSplits, selectedMemberIds, splitType, totalPaise]);
+
+    const equalShares = useMemo(() => {
+        const map = new Map<string, number>();
+        if (selectedCount === 0) return map;
+        const each = Math.floor(totalPaise / selectedCount);
+        const remainder = totalPaise - each * selectedCount;
+        selectedMemberIds.forEach((id, index) => map.set(id, each + (index === 0 ? remainder : 0)));
+        return map;
+    }, [selectedCount, selectedMemberIds, totalPaise]);
+
+    const shareFor = useCallback((memberId: string) => {
+        if (splitType === 'custom') return customPlan?.splits.find((split) => split.userId === memberId)?.amount ?? 0;
+        return equalShares.get(memberId) ?? 0;
+    }, [customPlan, equalShares, splitType]);
+
+    const categoryConfig = getCategoryConfig(category);
+    const categoryLabel = CATEGORIES[category]?.label || categoryConfig.label;
+    const effectiveTitle = title.trim() || categoryLabel;
+
+    const impactPreview = useMemo(() => {
+        if (!numericAmount || selectedMemberIds.length === 0) return [];
+        const involved = new Set([...selectedMemberIds, payerId]);
+        return members
+            .filter((member) => involved.has(member.id))
+            .map((member) => {
+                const share = selectedMembers.has(member.id) ? shareFor(member.id) : 0;
+                const delta = (member.id === payerId ? totalPaise : 0) - share;
+                return {
+                    memberId: member.id,
+                    name: member.id === currentUser?.id ? 'You' : member.name.split(' ')[0],
+                    image: member.image,
+                    fullName: member.name,
+                    delta,
+                };
+            })
+            .filter((entry) => entry.delta !== 0);
+    }, [currentUser?.id, members, numericAmount, payerId, selectedMemberIds, selectedMembers, shareFor, totalPaise]);
+
+    const duplicateCandidates = useMemo(() => {
+        if (!effectiveTitle || !numericAmount) return [];
+        const normalizedTitle = effectiveTitle.toLowerCase().trim();
+        const windowStart = Date.parse(new Date().toISOString()) - 3 * 24 * 60 * 60 * 1000;
+        return recentTransactions.filter((transaction) =>
+            transaction.title.toLowerCase().trim() === normalizedTitle
+            && transaction.amount === totalPaise
+            && new Date(transaction.createdAt).getTime() >= windowStart
+        ).slice(0, 2);
+    }, [effectiveTitle, numericAmount, recentTransactions, totalPaise]);
+
+    useEffect(() => {
+        setDuplicateAcknowledged(false);
+    }, [effectiveTitle, payerId, selectedGroupId, splitType, totalPaise, selectedMemberIds]);
+
+    // ── Handlers ──
+    const resetCustomEvenly = useCallback((ids: string[], total: number) => {
+        if (ids.length === 0) {
+            setCustomSplits([]);
+            return;
+        }
+        const each = Math.floor(total / ids.length);
+        const remainder = total - each * ids.length;
+        setCustomSplits(ids.map((id, index) => ({ userId: id, amount: each + (index === ids.length - 1 ? remainder : 0) })));
+    }, []);
 
     const toggleMember = useCallback((memberId: string) => {
-        // Compute new member set from current value (not inside updater to avoid nested setState)
         const next = new Set(selectedMembers);
         if (next.has(memberId)) {
-            if (next.size <= 1) return;
+            if (next.size <= 1) {
+                toast('At least one person has to share the expense', 'info');
+                return;
+            }
             next.delete(memberId);
         } else {
             next.add(memberId);
         }
-
-        // Set both states at the same level so React batches them together
+        haptics.light();
         setSelectedMembers(next);
-
         if (splitType === 'custom') {
-            const totalPaise = toPaise(numericAmount);
-            const memberArr = Array.from(next);
-            const perPerson = Math.floor(totalPaise / memberArr.length);
-            const remainder = totalPaise - perPerson * memberArr.length;
-            setCustomSplits(memberArr.map((id, i) => ({
-                userId: id,
-                amount: perPerson + (i === memberArr.length - 1 ? remainder : 0),
-            })));
+            resetCustomEvenly(members.filter((member) => next.has(member.id)).map((member) => member.id), totalPaise);
         }
-    }, [selectedMembers, splitType, numericAmount]);
+    }, [haptics, members, resetCustomEvenly, selectedMembers, splitType, toast, totalPaise]);
+
+    const changeSplitMode = (mode: SplitMode) => {
+        if (mode === splitType) return;
+        haptics.light();
+        setSplitType(mode);
+        if (mode === 'equal') setCustomSplits([]);
+        else resetCustomEvenly(selectedMemberIds, totalPaise);
+    };
 
     const handleNumPad = useCallback((key: string) => {
         if (key === 'del') {
-            setExpression(prev => prev.slice(0, -1));
-            setAmount(prev => {
-                const newExpr = (expression || prev).slice(0, -1);
-                // If expression still has operators, don't update amount yet
-                if (newExpr.includes('+') || newExpr.includes('-')) return prev;
-                return newExpr;
-            });
+            if (expression) {
+                const next = expression.slice(0, -1);
+                if (next.includes('+') || next.includes('-')) setExpression(next);
+                else {
+                    setExpression('');
+                    setAmount(next);
+                }
+            } else {
+                setAmount((prev) => prev.slice(0, -1));
+            }
         } else if (key === '+' || key === '-') {
-            // Don't allow operators at the start or consecutive operators
-            if (!expression && !amount) return;
             const base = expression || amount;
+            if (!base) return;
             const last = base.charAt(base.length - 1);
             if (last === '+' || last === '-' || last === '.') return;
             setExpression(base + key);
         } else if (key === '=') {
-            // Evaluate the expression
             const expr = expression || amount;
             if (!expr) return;
             const result = evaluateExpression(expr);
-            const resultStr = result % 1 === 0 ? result.toString() : result.toFixed(2);
-            setAmount(resultStr);
+            setAmount(result % 1 === 0 ? result.toString() : result.toFixed(2));
             setExpression('');
         } else if (key === '.') {
             const base = expression || amount;
-            // Find the last number segment (after last operator)
             const lastOpIdx = Math.max(base.lastIndexOf('+'), base.lastIndexOf('-'));
             const lastSegment = lastOpIdx >= 0 ? base.substring(lastOpIdx + 1) : base;
             if (lastSegment.includes('.')) return;
-            const newVal = (base || '0') + '.';
-            if (expression) setExpression(newVal);
-            else setAmount(newVal);
+            const next = (lastSegment ? base : `${base}0`) + '.';
+            if (expression) setExpression(next);
+            else setAmount(next);
         } else {
-            // Digit
             const base = expression || amount;
             const lastOpIdx = Math.max(base.lastIndexOf('+'), base.lastIndexOf('-'));
             const lastSegment = lastOpIdx >= 0 ? base.substring(lastOpIdx + 1) : base;
-            const parts = lastSegment.split('.');
-            if (parts[1] && parts[1].length >= 2) return;
-            if (!parts[1] && parts[0] && parts[0].length >= 7) return;
-            const newVal = (() => {
-                if (!base && key === '0') return '0';
-                if (base === '0' && key !== '.') return key;
-                return base + key;
-            })();
-            if (expression) setExpression(newVal);
-            else setAmount(newVal);
+            const [whole, fraction] = lastSegment.split('.');
+            if (fraction !== undefined && fraction.length >= 2) return;
+            if (fraction === undefined && whole && whole.length >= 7) return;
+            const next = !base && key === '0' ? '0' : base === '0' ? key : base + key;
+            if (expression) setExpression(next);
+            else setAmount(next);
         }
-        if (navigator.vibrate) navigator.vibrate(10);
-    }, [amount, expression, evaluateExpression]);
+        haptics.light();
+    }, [amount, evaluateExpression, expression, haptics]);
 
-    /** Handle keyboard input in the amount field */
-    const handleAmountInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-        const raw = e.target.value;
-        // Allow digits, decimal, +, -
-        const cleaned = raw.replace(/[^\d.+\-]/g, '');
+    const handleAmountInputChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+        const cleaned = event.target.value.replace(/[^\d.+-]/g, '');
         if (cleaned.includes('+') || cleaned.includes('-')) {
             setExpression(cleaned);
         } else {
@@ -467,160 +546,75 @@ function QuickAddContent() {
         }
     }, []);
 
-    const catData = getCategoryData(category);
-    const effectiveTitle = title.trim() || catData.label;
-    const selectedMemberIds = useMemo(
-        () => members.filter((member) => selectedMembers.has(member.id)).map((member) => member.id),
-        [members, selectedMembers]
-    );
-    const totalPaise = toPaise(numericAmount);
+    const handleTitleChange = (value: string) => {
+        setTitle(value);
+        if (!categoryTouched) {
+            const inferred = inferCategory(value);
+            setCategory(inferred ?? 'general');
+        }
+    };
 
-    const impactPreview = useMemo(() => {
-        if (!numericAmount || selectedMemberIds.length === 0) return [];
-
-        const equalPerPerson = selectedMemberIds.length > 0 ? Math.floor(totalPaise / selectedMemberIds.length) : 0;
-        const equalRemainder = totalPaise - equalPerPerson * selectedMemberIds.length;
-
-        return selectedMemberIds
-            .map((memberId, index) => {
-                const member = members.find((item) => item.id === memberId);
-                if (!member) return null;
-
-                const share = splitType === 'custom'
-                    ? customSplits.find((split) => split.userId === memberId)?.amount || 0
-                    : equalPerPerson + (index === 0 ? equalRemainder : 0);
-
-                const delta = (memberId === payerId ? totalPaise : 0) - share;
-                return {
-                    memberId,
-                    name: memberId === currentUser?.id ? 'You' : member.name.split(' ')[0],
-                    delta,
-                };
-            })
-            .filter((entry): entry is { memberId: string; name: string; delta: number } => Boolean(entry));
-    }, [currentUser?.id, customSplits, members, numericAmount, payerId, selectedMemberIds, splitType, totalPaise]);
-
-    const duplicateCandidates = useMemo(() => {
-        if (!effectiveTitle || !numericAmount) return [];
-
-        const normalizedTitle = effectiveTitle.toLowerCase().trim();
-        const now = Date.now();
-
-        return recentTransactions.filter((transaction) => {
-            const titleMatches = transaction.title.toLowerCase().trim() === normalizedTitle;
-            const amountMatches = transaction.amount === totalPaise;
-            const withinWindow = now - new Date(transaction.createdAt).getTime() <= 3 * 24 * 60 * 60 * 1000;
-            return titleMatches && amountMatches && withinWindow;
-        }).slice(0, 2);
-    }, [effectiveTitle, numericAmount, recentTransactions, totalPaise]);
-
-    useEffect(() => {
-        setDuplicateAcknowledged(false);
-    }, [effectiveTitle, payerId, selectedGroupId, splitType, totalPaise, selectedMemberIds]);
-
-    /** Handle voice parsing result — auto-fill the form */
     const handleVoiceResult = useCallback((result: VoiceParseResult) => {
-        // Set amount
         if (result.amount > 0) {
-            const amtStr = result.amount % 1 === 0
-                ? result.amount.toString()
-                : result.amount.toFixed(2);
-            setAmount(amtStr);
+            setAmount(result.amount % 1 === 0 ? result.amount.toString() : result.amount.toFixed(2));
             setExpression('');
         }
-
-        // Set title
-        if (result.title && result.title !== 'Expense') {
-            setTitle(result.title);
-        }
-
-        // Set category from voice
+        if (result.title && result.title !== 'Expense') setTitle(result.title);
         if (result.category) {
             setCategory(result.category);
+            setCategoryTouched(true);
         }
+        for (const warning of result.warnings ?? []) toast(warning, 'error');
 
-        // Show warnings (e.g. unrecognized members)
-        if (result.warnings && result.warnings.length > 0) {
-            for (const w of result.warnings) {
-                toast(w, 'error');
-            }
-        }
-
-        // Match member names to IDs
         if (result.members && result.members.length > 0) {
             const matchedIds = new Set<string>();
             const matchedSplits: { userId: string; amount: number }[] = [];
 
-            for (const vm of result.members) {
-                const nameLower = vm.name.toLowerCase();
-                const matched = members.find(m => {
-                    const mLower = m.name.toLowerCase();
-                    return mLower === nameLower
-                        || mLower.startsWith(nameLower)
-                        || nameLower.startsWith(mLower.split(' ')[0])
-                        || mLower.split(' ')[0] === nameLower;
+            for (const voiceMember of result.members) {
+                const nameLower = voiceMember.name.toLowerCase();
+                const matched = members.find((member) => {
+                    const memberLower = member.name.toLowerCase();
+                    return memberLower === nameLower
+                        || memberLower.startsWith(nameLower)
+                        || nameLower.startsWith(memberLower.split(' ')[0])
+                        || memberLower.split(' ')[0] === nameLower;
                 });
-
                 if (matched) {
                     matchedIds.add(matched.id);
-                    if (vm.amount && vm.amount > 0) {
-                        matchedSplits.push({
-                            userId: matched.id,
-                            amount: toPaise(vm.amount),
-                        });
+                    if (voiceMember.amount && voiceMember.amount > 0) {
+                        matchedSplits.push({ userId: matched.id, amount: toPaise(voiceMember.amount) });
                     }
                 }
             }
 
-            // Only update if we found matches
             if (matchedIds.size > 0) {
-                // Set voice flag BEFORE changing splitType/customSplits to prevent useEffect reset
                 voiceAppliedRef.current = true;
-
                 setSelectedMembers(matchedIds);
 
-                // Set payer: try to match result.payer, otherwise use first mentioned member
                 let assignedPayerId = Array.from(matchedIds)[0];
                 if (result.payer) {
                     const payerLower = result.payer.toLowerCase();
-                    const payerMatch = members.find(m => {
-                        const mLower = m.name.toLowerCase();
-                        return mLower === payerLower || mLower.startsWith(payerLower) || payerLower.startsWith(mLower.split(' ')[0]);
+                    const payerMatch = members.find((member) => {
+                        const memberLower = member.name.toLowerCase();
+                        return memberLower === payerLower || memberLower.startsWith(payerLower) || payerLower.startsWith(memberLower.split(' ')[0]);
                     });
-                    if (payerMatch) {
-                        assignedPayerId = payerMatch.id;
-                        // Special case: if payer wasn't in the split list, we might want to still add them as payer
-                        // But since they paid, they are involved in the transaction.
-                    }
+                    if (payerMatch) assignedPayerId = payerMatch.id;
                 }
-                
-                if (assignedPayerId) {
-                    setPayerId(assignedPayerId);
-                }
+                if (assignedPayerId) setPayerId(assignedPayerId);
 
-                // Set split type
                 if (result.splitType === 'custom' && matchedSplits.length > 0) {
-                    setSplitType('custom');
-                    // Auto-calculate remainder for last member if needed
-                    const totalPaise = toPaise(result.amount);
-                    const allocatedPaise = matchedSplits.reduce((s, sp) => s + sp.amount, 0);
-                    const memberArr = Array.from(matchedIds);
-                    const unassigned = memberArr.filter(
-                        id => !matchedSplits.find(s => s.userId === id)
-                    );
-
-                    if (unassigned.length > 0 && allocatedPaise < totalPaise) {
-                        const remainder = totalPaise - allocatedPaise;
-                        const per = Math.floor(remainder / unassigned.length);
-                        const leftover = remainder - per * unassigned.length;
-                        unassigned.forEach((id, i) => {
-                            matchedSplits.push({
-                                userId: id,
-                                amount: per + (i === unassigned.length - 1 ? leftover : 0),
-                            });
+                    const voiceTotal = toPaise(result.amount);
+                    const allocated = matchedSplits.reduce((sum, split) => sum + split.amount, 0);
+                    const unassigned = Array.from(matchedIds).filter((id) => !matchedSplits.some((split) => split.userId === id));
+                    if (unassigned.length > 0 && allocated < voiceTotal) {
+                        const remainder = voiceTotal - allocated;
+                        const each = Math.floor(remainder / unassigned.length);
+                        const leftover = remainder - each * unassigned.length;
+                        unassigned.forEach((id, index) => {
+                            matchedSplits.push({ userId: id, amount: each + (index === unassigned.length - 1 ? leftover : 0) });
                         });
                     }
-
+                    setSplitType('custom');
                     setCustomSplits(matchedSplits);
                 } else {
                     setSplitType('equal');
@@ -629,36 +623,31 @@ function QuickAddContent() {
             }
         }
 
-        toast('Voice input applied! Review and submit.', 'success');
+        toast('Voice input applied — review and save', 'success');
     }, [members, toast]);
 
     const handleSave = async () => {
         if (!numericAmount || numericAmount <= 0) {
-            toast('Amount must be greater than zero', 'error');
+            toast('Enter an amount greater than zero', 'error');
             return;
         }
         if (!selectedGroupId) {
-            toast('Please select a group', 'error');
+            toast('Pick a group first', 'error');
             return;
         }
         if (duplicateCandidates.length > 0 && !duplicateAcknowledged) {
             setDuplicateAcknowledged(true);
-            toast('Possible duplicate found. Review the warning and tap Add Expense again if this is intentional.', 'error');
+            haptics.heavy();
+            toast('This looks like a duplicate. Tap Add again if it’s a real second charge.', 'warning');
             return;
         }
-        // Validate custom splits sum to total
         if (splitType === 'custom') {
-            const selArr = Array.from(selectedMembers);
-            const allocated = customSplits
-                .filter(s => selArr.includes(s.userId))
-                .reduce((sum, s) => sum + s.amount, 0);
-            if (allocated !== totalPaise) {
-                toast(`Split amounts (${formatCurrency(allocated)}) don't match total (${formatCurrency(totalPaise)})`, 'error');
+            if (!customPlan || customPlan.overAllocated) {
+                toast(`Split amounts are over the total of ${formatCurrency(totalPaise)}`, 'error');
                 return;
             }
         }
 
-        // If no trip exists yet, auto-create one
         let tripId = activeTripId;
         if (!tripId) {
             try {
@@ -667,14 +656,13 @@ function QuickAddContent() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ groupId: selectedGroupId, title: 'General' }),
                 });
-                if (tripRes.ok) {
-                    const trip = await tripRes.json();
-                    tripId = trip.id;
-                    setActiveTripId(trip.id);
-                } else {
-                    toast('Failed to create trip for this group', 'error');
+                if (!tripRes.ok) {
+                    toast('Could not prepare this group for expenses', 'error');
                     return;
                 }
+                const trip = await tripRes.json();
+                tripId = trip.id;
+                setActiveTripId(trip.id);
             } catch {
                 toast('Network error — please try again', 'error');
                 return;
@@ -686,22 +674,18 @@ function QuickAddContent() {
             const payload: Record<string, unknown> = {
                 tripId,
                 title: effectiveTitle,
-                amount: toPaise(numericAmount),
+                amount: totalPaise,
                 category,
                 method,
                 splitType,
-                payerId, // send who actually paid
+                payerId,
             };
-
-            const paramReceiptUrl = searchParams.get('receiptUrl');
-            if (paramReceiptUrl) {
-                payload.receiptUrl = paramReceiptUrl;
-            }
-
-            if (splitType === 'custom') {
-                payload.splits = customSplits;
+            const receiptUrl = searchParams.get('receiptUrl');
+            if (receiptUrl) payload.receiptUrl = receiptUrl;
+            if (splitType === 'custom' && customPlan) {
+                payload.splits = customPlan.splits.filter((split) => split.amount > 0);
             } else {
-                payload.splitAmong = Array.from(selectedMembers);
+                payload.splitAmong = selectedMemberIds;
             }
 
             const res = await fetch('/api/transactions', {
@@ -711,16 +695,29 @@ function QuickAddContent() {
             });
 
             if (res.ok) {
-                try {
-                    window.localStorage.removeItem(EXPENSE_DRAFT_KEY);
-                } catch {
-                    // Ignore storage errors
-                }
-                toast(`Expense added! ${formatCurrency(toPaise(numericAmount))} for "${effectiveTitle}"`, 'success');
+                const created = await res.json().catch(() => null);
+                try { window.localStorage.removeItem(EXPENSE_DRAFT_KEY); } catch { /* ignore */ }
+                haptics.success();
+                void refreshMoneyData();
+                toast(`Added ${formatCurrency(totalPaise)} · ${effectiveTitle}`, 'success', created?.id ? {
+                    duration: 6000,
+                    action: {
+                        label: 'Undo',
+                        onClick: async () => {
+                            try {
+                                const undo = await fetch(`/api/transactions/${created.id}`, { method: 'DELETE' });
+                                if (undo.ok) {
+                                    toast('Expense removed', 'info');
+                                    void refreshMoneyData();
+                                }
+                            } catch { /* ignore */ }
+                        },
+                    },
+                } : undefined);
                 router.push('/transactions');
             } else {
                 const err = await res.json().catch(() => ({}));
-                toast(err.error || 'Failed to add expense', 'error');
+                toast(err.error || 'Could not add this expense', 'error');
             }
         } catch {
             toast('Network error — please check your connection', 'error');
@@ -729,98 +726,82 @@ function QuickAddContent() {
         }
     };
 
-    const selectedGroup = groups.find(g => g.id === selectedGroupId);
-    const payerMember = members.find(m => m.id === payerId);
-    const payerDisplay = payerMember
-        ? (payerMember.id === currentUser?.id ? `${payerMember.name} (You)` : payerMember.name)
-        : 'Select';
-    const methodData = PAYMENT_METHODS[method];
+    // ── Render ──
+    const selectedGroup = groups.find((group) => group.id === selectedGroupId);
+    const payerMember = members.find((member) => member.id === payerId);
+    const payerName = payerMember ? (payerMember.id === currentUser?.id ? 'You' : payerMember.name.split(' ')[0]) : 'Select';
+    const methodData = PAYMENT_METHODS[method] || PAYMENT_METHODS.cash;
     const recentGroups = recentGroupIds
         .map((groupId) => groups.find((group) => group.id === groupId))
         .filter((group): group is GroupItem => Boolean(group))
         .filter((group) => group.id !== selectedGroupId);
     const recentPayers = (recentPayersByGroup[selectedGroupId] || [])
         .map((memberId) => members.find((member) => member.id === memberId))
-        .filter((member): member is { id: string; name: string; image?: string | null } => Boolean(member))
+        .filter((member): member is MemberItem => Boolean(member))
         .filter((member) => member.id !== payerId);
+    const allocatedCustom = customPlan ? customPlan.othersTotal + Math.max(0, customPlan.lastAmount) : 0;
 
     if (loadingGroups || userLoading) {
         return (
-            <div className={styles.quickAdd} style={{ alignItems: 'center', justifyContent: 'center' }}>
-                <Loader2 size={32} style={{ animation: 'spin 1s linear infinite', color: 'var(--accent-500)' }} />
+            <div className={styles.composer}>
+                <div style={{ display: 'flex', justifyContent: 'center' }}>
+                    <Skeleton variant="rectangular" width={170} height={42} radius="var(--radius-full)" />
+                </div>
+                <Skeleton variant="rectangular" height={150} radius={28} />
+                <Skeleton variant="rectangular" height={56} radius={20} />
+                <Skeleton variant="rectangular" height={78} radius={18} />
+                <Skeleton variant="rectangular" height={240} radius={20} />
             </div>
         );
     }
 
     if (groups.length === 0) {
         return (
-            <div className={styles.quickAdd} style={{ alignItems: 'center', justifyContent: 'center', textAlign: 'center', gap: 'var(--space-4)' }}>
-                <div style={{ fontSize: '48px' }}>📋</div>
-                <h3 style={{ color: 'var(--fg-primary)', fontSize: 'var(--text-lg)', fontWeight: 'var(--weight-semibold)' }}>
-                    No groups yet
-                </h3>
-                <p style={{ color: 'var(--fg-tertiary)', fontSize: 'var(--text-sm)' }}>
-                    Create a group first to start adding expenses
-                </p>
-                <Button onClick={() => router.push('/groups')}>Go to Groups</Button>
+            <div className={styles.composer} style={{ paddingTop: 24 }}>
+                <EmptyState
+                    icon={<Users size={26} />}
+                    title="Create a group first"
+                    description="Expenses live inside groups. Set one up for a trip, your flat or friends — it takes five seconds."
+                    actionLabel="Create a group"
+                    actionHref="/groups?create=1"
+                />
             </div>
         );
     }
 
     return (
-        <div className={styles.quickAdd}>
-            {/* ── Group Selector Chip ── */}
-            <div className={styles.metaRow} style={{ justifyContent: 'center' }}>
-                <button className={cn(styles.chip, styles.chipActive)} onClick={() => setShowGroups(true)}>
-                    <span>{selectedGroup?.emoji || '📋'}</span>
-                    {selectedGroup?.name || 'Select Group'}
-                    <ChevronDown size={14} />
+        <div className={styles.composer}>
+            {/* ── Group ── */}
+            <div className={styles.groupRow}>
+                <button type="button" className={styles.groupChip} onClick={() => setSheet('group')} aria-label="Change group">
+                    <span className={styles.groupEmoji}>{selectedGroup?.emoji || '👥'}</span>
+                    <span className={styles.groupChipName}>{selectedGroup?.name || 'Select group'}</span>
+                    <ChevronDown size={15} />
                 </button>
+                {recentGroups.length > 0 && (
+                    <div className={styles.recentRow}>
+                        {recentGroups.map((group) => (
+                            <button key={group.id} type="button" className={styles.recentChip} onClick={() => setSelectedGroupId(group.id)}>
+                                <History size={12} />
+                                {group.emoji} {group.name}
+                            </button>
+                        ))}
+                    </div>
+                )}
             </div>
 
-            {(recentGroups.length > 0 || selectedGroupId) && (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-                    {recentGroups.length > 0 && (
-                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
-                            {recentGroups.map((group) => (
-                                <button
-                                    key={group.id}
-                                    onClick={() => setSelectedGroupId(group.id)}
-                                    style={{
-                                        border: '1px solid var(--border-default)',
-                                        background: 'var(--bg-glass)',
-                                        color: 'var(--fg-secondary)',
-                                        borderRadius: 'var(--radius-full)',
-                                        padding: '6px 10px',
-                                        fontSize: 'var(--text-xs)',
-                                        fontWeight: 700,
-                                        cursor: 'pointer',
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: 6,
-                                    }}
-                                >
-                                    <History size={12} />
-                                    <span>{group.emoji}</span>
-                                    {group.name}
-                                </button>
-                            ))}
-                        </div>
-                    )}
-                    <div style={{ fontSize: '10px', color: 'var(--fg-tertiary)', fontWeight: 600 }}>
-                        Draft saves automatically on this device
-                    </div>
-                </div>
+            {source && SOURCE_COPY[source] && (
+                <Notice tone="info" icon={source === 'scan' ? <ScanLine size={16} /> : <ClipboardCheck size={16} />}>
+                    {SOURCE_COPY[source]}
+                </Notice>
             )}
 
-            {/* ── Amount Card (Glassmorphic) ── */}
-            <div className={styles.amountCard}>
-                <div className={styles.amountCardGlow} />
-
-                <div className={styles.amountDisplay}>
-                    <span className={styles.currencySign}>₹</span>
+            {/* ── Amount ── */}
+            <section className={styles.amountCard} aria-label="Amount">
+                <span className={styles.amountLabel}>Amount</span>
+                <div className={styles.amountRow}>
+                    <span className={styles.currency}>₹</span>
                     <input
-                        ref={amountInputRef}
                         className={styles.amountInput}
                         type="text"
                         inputMode="decimal"
@@ -828,524 +809,261 @@ function QuickAddContent() {
                         value={expression || amount}
                         onChange={handleAmountInputChange}
                         onBlur={() => {
-                            // Auto-evaluate expression on blur
                             if (hasOperator && expression) {
                                 const result = evaluateExpression(expression);
-                                const resultStr = result % 1 === 0 ? result.toString() : result.toFixed(2);
-                                setAmount(resultStr);
+                                setAmount(result % 1 === 0 ? result.toString() : result.toFixed(2));
                                 setExpression('');
                             }
                         }}
-                        aria-label="Amount"
+                        aria-label="Amount in rupees"
                     />
-                    <motion.button
-                        className={styles.voiceBtn}
-                        whileTap={{ scale: 0.9 }}
-                        onClick={() => {
-                            // Voice input — handled by VoiceInput component below
-                            const event = new CustomEvent('openVoiceInput');
-                            window.dispatchEvent(event);
-                        }}
-                        aria-label="Voice input"
-                    >
-                        <Mic size={20} />
-                    </motion.button>
                 </div>
-
-                {/* Expression preview */}
-                <AnimatePresence>
-                    {hasOperator && expression && (
+                <AnimatePresence initial={false}>
+                    {hasOperator && expression ? (
                         <motion.div
-                            className={styles.expressionPreview}
+                            key="expr"
+                            className={styles.expression}
                             initial={{ opacity: 0, y: -4 }}
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: -4 }}
                         >
-                            = ₹{evaluateExpression(expression).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                            = {formatCurrency(toPaise(evaluateExpression(expression)))}
+                        </motion.div>
+                    ) : (
+                        <motion.div key="hint" className={styles.expression} style={{ color: 'var(--fg-muted)', fontWeight: 600 }} initial={false}>
+                            {selectedCount > 0 && totalPaise > 0 && splitType === 'equal'
+                                ? `${formatCurrency(equalShares.get(selectedMemberIds[0]) ?? 0)} each · ${selectedCount} ${selectedCount === 1 ? 'person' : 'people'}`
+                                : 'Tip: type 450+120 to add bills'}
                         </motion.div>
                     )}
                 </AnimatePresence>
-            </div>
+                <motion.button
+                    type="button"
+                    className={styles.voiceBtn}
+                    whileTap={{ scale: 0.9 }}
+                    onClick={() => window.dispatchEvent(new CustomEvent('openVoiceInput'))}
+                    aria-label="Add by voice"
+                >
+                    <Mic size={18} />
+                </motion.button>
+            </section>
 
-            {/* ── Category name pill (compact centered) ── */}
-            <div style={{ display: 'flex', justifyContent: 'center' }}>
-                <div style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 5,
-                    padding: '6px 14px 6px 10px',
-                    borderRadius: 100,
-                    border: '1.5px solid var(--border-subtle)',
-                    background: 'var(--surface-card, rgba(255,255,255,0.03))',
-                    transition: 'border-color 0.2s',
-                }}>
-                    <span style={{ fontSize: 16, flexShrink: 0 }}>{catData.emoji}</span>
-                    <input
-                        placeholder="Lunch, Uber..."
-                        value={title}
-                        onChange={(e) => {
-                            setTitle(e.target.value);
-                            const lower = e.target.value.toLowerCase().trim();
-                            const matched = Object.entries(CATEGORIES).find(([, v]) =>
-                                v.label.toLowerCase() === lower ||
-                                v.label.toLowerCase().startsWith(lower)
-                            );
-                            if (matched && lower.length >= 3) {
-                                setCategory(matched[0]);
-                            } else if (lower && !CATEGORIES[lower]) {
-                                setCategory(e.target.value.trim());
-                            }
-                        }}
-                        maxLength={40}
-                        style={{
-                            border: 'none', outline: 'none', background: 'transparent',
-                            fontSize: 13, fontWeight: 500, color: 'var(--fg-primary)',
-                            textAlign: 'center', width: 110, minWidth: 70,
-                            caretColor: 'var(--accent-500)',
-                        }}
-                    />
-                </div>
-            </div>
+            {/* ── Title ── */}
+            <label className={styles.titleField}>
+                <CategoryTile category={category} size={40} />
+                <input
+                    className={styles.titleInput}
+                    placeholder="What was it for?"
+                    value={title}
+                    onChange={(event) => handleTitleChange(event.target.value)}
+                    maxLength={60}
+                    aria-label="Expense title"
+                    enterKeyHint="done"
+                />
+            </label>
 
-            {/* ── Meta Row: Category / Payer / Method chips ── */}
-            <div className={styles.metaRow}>
-                <button className={cn(styles.chip)} onClick={() => setShowCategories(true)}>
-                    <span>{catData.emoji}</span>
-                    {catData.label}
-                    <ChevronDown size={14} />
+            {/* ── Pickers ── */}
+            <div className={styles.pickers}>
+                <button type="button" className={styles.picker} onClick={() => setSheet('category')}>
+                    <span className={styles.pickerLabel}>Category <ChevronDown size={12} /></span>
+                    <span className={styles.pickerValue}>
+                        <categoryConfig.Icon size={16} style={{ color: categoryConfig.color, flexShrink: 0 }} />
+                        <span className={styles.pickerText}>{categoryLabel}</span>
+                    </span>
                 </button>
-
-                <button className={cn(styles.chip)} onClick={() => setShowPayers(true)}>
-                    👤 {payerDisplay.split(' ')[0]}
-                    <ChevronDown size={14} />
+                <button type="button" className={styles.picker} onClick={() => setSheet('payer')}>
+                    <span className={styles.pickerLabel}>Paid by <ChevronDown size={12} /></span>
+                    <span className={styles.pickerValue}>
+                        {payerMember && <Avatar name={payerMember.name} image={payerMember.image} size="xs" />}
+                        <span className={styles.pickerText}>{payerName}</span>
+                    </span>
                 </button>
-
-                <button className={cn(styles.chip)} onClick={() => setShowMethods(true)}>
-                    {methodData.emoji} {methodData.label}
-                    <ChevronDown size={14} />
+                <button type="button" className={styles.picker} onClick={() => setSheet('method')}>
+                    <span className={styles.pickerLabel}>Method <ChevronDown size={12} /></span>
+                    <span className={styles.pickerValue}>
+                        <PaymentIcon method={method} size={15} />
+                        <span className={styles.pickerText}>{methodData.label}</span>
+                    </span>
                 </button>
             </div>
 
             {recentPayers.length > 0 && (
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+                <div className={styles.recentRow}>
                     {recentPayers.map((member) => (
-                        <button
-                            key={member.id}
-                            onClick={() => setPayerId(member.id)}
-                            style={{
-                                border: '1px solid var(--border-default)',
-                                background: 'var(--bg-glass)',
-                                color: 'var(--fg-secondary)',
-                                borderRadius: 'var(--radius-full)',
-                                padding: '6px 10px',
-                                fontSize: 'var(--text-xs)',
-                                fontWeight: 700,
-                                cursor: 'pointer',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: 6,
-                            }}
-                        >
+                        <button key={member.id} type="button" className={styles.recentChip} onClick={() => setPayerId(member.id)}>
                             <History size={12} />
-                            {member.id === currentUser?.id ? 'You' : member.name.split(' ')[0]}
+                            Paid by {member.id === currentUser?.id ? 'you' : member.name.split(' ')[0]}
                         </button>
                     ))}
                 </div>
             )}
 
-            {/* ── Split Among Toggle ── */}
+            {/* ── Split ── */}
             {members.length > 1 && (
-                <div style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: 8,
-                    marginTop: 0,
-                    marginBottom: 0,
-                }}>
-                    <span style={{
-                        fontSize: 10,
-                        color: 'var(--fg-tertiary)',
-                        fontWeight: 700,
-                        textTransform: 'uppercase' as const,
-                        letterSpacing: '0.1em',
-                        textAlign: 'center' as const,
-                        opacity: 0.7
-                    }}>
-                        {splitType === 'custom' ? 'Split by Items (Custom)' : 'Split among'}
-                    </span>
-                    <div style={{
-                        display: 'flex',
-                        flexWrap: 'wrap' as const,
-                        justifyContent: 'center',
-                        gap: 8,
-                    }}>
-                        {members.map((member) => {
-                            const isSelected = selectedMembers.has(member.id);
-                            const isPayer = member.id === payerId;
-                            const customAmount = getMemberAmount(member.id);
+                <section className={styles.card} aria-label="Split">
+                    <div className={styles.cardHead}>
+                        <span className={styles.cardTitle}>Split between</span>
+                        <div className={styles.segWrap}>
+                            <Segmented<SplitMode>
+                                size="sm"
+                                ariaLabel="Split mode"
+                                value={splitType}
+                                onChange={changeSplitMode}
+                                options={[
+                                    { value: 'equal', label: 'Equally' },
+                                    { value: 'custom', label: 'Custom' },
+                                ]}
+                            />
+                        </div>
+                    </div>
 
+                    <div className={styles.members}>
+                        {members.map((member) => {
+                            const on = selectedMembers.has(member.id);
+                            const isPayer = member.id === payerId;
                             return (
                                 <motion.button
                                     key={member.id}
+                                    type="button"
                                     whileTap={{ scale: 0.95 }}
                                     onClick={() => toggleMember(member.id)}
-                                    style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: 8, // Increased internal gap
-                                        padding: '6px 12px 6px 6px', // More breathing room inside pill
-                                        borderRadius: 'var(--radius-full)',
-                                        border: isSelected
-                                            ? '1.5px solid var(--accent-500)'
-                                            : '1.5px solid var(--border-default)',
-                                        background: isSelected
-                                            ? 'rgba(var(--accent-500-rgb), 0.08)' // Slightly more visible background
-                                            : 'var(--bg-surface)', // Explicit surface color
-                                        cursor: 'pointer',
-                                        opacity: isSelected ? 1 : 0.6,
-                                        transition: 'all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1)',
-                                        boxShadow: isSelected ? '0 2px 8px rgba(var(--accent-500-rgb), 0.15)' : 'none', // Subtle lift for selected
-                                    }}
+                                    className={cn(styles.member, on ? styles.memberOn : styles.memberOff)}
+                                    aria-pressed={on}
                                 >
-                                    <Avatar name={member.name} image={member.image} size="sm" /> {/* Bumped up to size="sm" for better visibility */}
-                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1.1 }}>
-                                        <span style={{
-                                            fontSize: 'var(--text-sm)', // Slightly larger text
-                                            fontWeight: isSelected ? 600 : 500,
-                                            textDecoration: isSelected ? 'none' : 'line-through',
-                                            color: isSelected ? 'var(--fg-primary)' : 'var(--fg-tertiary)',
-                                        }}>
-                                            {member.id === currentUser?.id ? 'You' : member.name.split(' ')[0]}
-                                        </span>
-                                        {/* Show quantity or small numeric value if custom split */}
-                                        {splitType === 'custom' && isSelected && (
-                                            <span style={{
-                                                fontSize: 10,
-                                                fontWeight: 600,
-                                                color: 'var(--accent-600)',
-                                                marginTop: 2
-                                            }}>
-                                                {customAmount}
-                                            </span>
-                                        )}
-                                    </div>
-
-                                    {isPayer && (
-                                        <span style={{
-                                            fontSize: 9,
-                                            background: isSelected ? 'var(--accent-500)' : 'var(--color-error, #ef4444)',
-                                            color: '#fff',
-                                            padding: '2px 6px',
-                                            borderRadius: 'var(--radius-full)',
-                                            fontWeight: 700,
-                                            letterSpacing: '0.02em',
-                                            marginLeft: 2,
-                                        }}>{isSelected ? 'PAID' : 'PAID ONLY'}</span>
-                                    )}
+                                    <span className={styles.memberAvatar}>
+                                        <Avatar name={member.name} image={member.image} size="sm" />
+                                        {on && <span className={styles.memberCheck}><Check size={9} strokeWidth={3.5} /></span>}
+                                    </span>
+                                    <span className={styles.memberText}>
+                                        <span className={styles.memberName}>{member.id === currentUser?.id ? 'You' : member.name.split(' ')[0]}</span>
+                                        {on && totalPaise > 0 && <span className={styles.memberShare}>{formatCurrency(shareFor(member.id))}</span>}
+                                    </span>
+                                    {isPayer && <span className={styles.payerBadge}>PAID</span>}
                                 </motion.button>
                             );
                         })}
                     </div>
-                </div>
-            )}
-
-            {/* ── Split Mode Toggle + Split Info ── */}
-            {numericAmount > 0 && selectedCount > 0 && (
-                <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    style={{ marginTop: 0, display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center' }}
-                >
-                    {/* Equal / Custom toggle */}
-                    <div style={{
-                        display: 'flex',
-                        borderRadius: 'var(--radius-full)',
-                        border: '1px solid var(--border-default)',
-                        overflow: 'hidden',
-                    }}>
-                        {(['equal', 'custom'] as const).map(mode => (
-                            <button key={mode} onClick={() => {
-                                if (mode === 'equal') { setSplitType('equal'); setCustomSplits([]); }
-                                else {
-                                    setSplitType('custom');
-                                    // Initialize custom splits with equal amounts for selected members
-                                    const selArr = Array.from(selectedMembers);
-                                    const totalPaise = toPaise(numericAmount);
-                                    const perPerson = Math.floor(totalPaise / selArr.length);
-                                    const remainder = totalPaise - perPerson * selArr.length;
-                                    setCustomSplits(selArr.map((id, i) => ({
-                                        userId: id,
-                                        amount: perPerson + (i === selArr.length - 1 ? remainder : 0),
-                                    })));
-                                }
-                            }}
-                                style={{
-                                    padding: '6px 16px', fontSize: 'var(--text-xs)', fontWeight: 600,
-                                    border: 'none', cursor: 'pointer',
-                                    background: splitType === mode ? 'var(--accent-500)' : 'transparent',
-                                    color: splitType === mode ? '#fff' : 'var(--fg-secondary)',
-                                    transition: 'all 0.2s',
-                                }}
-                            >
-                                {mode === 'equal' ? '÷ Equal' : '✏️ Custom'}
-                            </button>
-                        ))}
-                    </div>
 
                     {splitType === 'equal' ? (
-                        <div className={styles.splitInfo}>
-                            Split equally: <span className={styles.splitAmount}>{splitPerPerson}</span> / person
-                            ({selectedCount} of {members.length} people)
-                        </div>
+                        totalPaise > 0 && (
+                            <div className={styles.splitSummary}>
+                                <span>{selectedCount} of {members.length} people</span>
+                                <span><strong>{formatCurrency(equalShares.get(selectedMemberIds[0]) ?? 0)}</strong> each</span>
+                            </div>
+                        )
                     ) : (
-                        <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 10, padding: '0 4px' }}>
-                            {/* Per-person amount inputs */}
-                            {(() => {
-                                const selArr = Array.from(selectedMembers);
-                                const totalPaise = toPaise(numericAmount);
-
-                                return selArr.map((memberId, idx) => {
-                                    const member = members.find(m => m.id === memberId);
+                        <>
+                            <div className={styles.customRows}>
+                                {selectedMemberIds.map((memberId) => {
+                                    const member = members.find((item) => item.id === memberId);
                                     if (!member) return null;
-                                    const isLast = idx === selArr.length - 1;
-                                    const split = customSplits.find(s => s.userId === memberId);
-                                    const currentAmount = split?.amount || 0;
-
-                                    // For last person: auto-calculate remaining
-                                    const othersTotal = customSplits
-                                        .filter(s => s.userId !== memberId && selArr.includes(s.userId))
-                                        .reduce((sum, s) => sum + s.amount, 0);
-                                    const autoFillAmount = isLast ? Math.max(0, totalPaise - othersTotal) : currentAmount;
-
-                                    // If last person, auto-update their split
-                                    if (isLast && split && split.amount !== autoFillAmount) {
-                                        setTimeout(() => {
-                                            setCustomSplits(prev => prev.map(s =>
-                                                s.userId === memberId ? { ...s, amount: autoFillAmount } : s
-                                            ));
-                                        }, 0);
-                                    }
-
+                                    const isRemainder = customPlan?.lastId === memberId;
+                                    const value = isRemainder
+                                        ? customPlan?.lastAmount ?? 0
+                                        : customSplits.find((split) => split.userId === memberId)?.amount ?? 0;
                                     return (
-                                        <div key={memberId} style={{
-                                            display: 'flex', alignItems: 'center', gap: 12,
-                                            padding: '12px 16px',
-                                            background: isLast
-                                                ? 'linear-gradient(135deg, rgba(var(--accent-500-rgb), 0.06), rgba(var(--accent-500-rgb), 0.02))'
-                                                : 'var(--bg-surface)',
-                                            borderRadius: 16,
-                                            border: isLast
-                                                ? '1.5px solid rgba(var(--accent-500-rgb), 0.2)'
-                                                : '1px solid var(--border-subtle)',
-                                            transition: 'all 0.2s ease',
-                                        }}>
+                                        <div key={memberId} className={styles.customRow}>
                                             <Avatar name={member.name} image={member.image} size="sm" />
-                                            <span style={{
-                                                flex: 1, fontSize: 'var(--text-sm)', fontWeight: 600,
-                                                color: 'var(--fg-primary)',
-                                            }}>
+                                            <span className={styles.customName}>
                                                 {member.id === currentUser?.id ? 'You' : member.name.split(' ')[0]}
-                                                {isLast && (
-                                                    <span style={{
-                                                        fontSize: 10, color: 'var(--accent-500)',
-                                                        fontWeight: 500, marginLeft: 6,
-                                                        opacity: 0.8,
-                                                    }}>(remainder)</span>
-                                                )}
+                                                {isRemainder && <span className={styles.customHint}>Gets the remainder</span>}
                                             </span>
-                                            <div style={{
-                                                display: 'flex', alignItems: 'center', gap: 2,
-                                                background: isLast ? 'rgba(var(--accent-500-rgb), 0.1)' : 'var(--bg-elevated)',
-                                                borderRadius: 12,
-                                                padding: '6px 4px 6px 10px',
-                                                border: `1px solid ${isLast ? 'var(--accent-500)' : 'var(--border-default)'}`,
-                                            }}>
-                                                <span style={{
-                                                    fontSize: 'var(--text-sm)',
-                                                    color: isLast ? 'var(--accent-500)' : 'var(--fg-tertiary)',
-                                                    fontWeight: 600,
-                                                }}>₹</span>
+                                            <label className={cn(styles.customInputWrap, isRemainder && styles.customInputLocked)}>
+                                                ₹
                                                 <input
+                                                    className={styles.customInput}
                                                     type="number"
                                                     inputMode="decimal"
-                                                    value={isLast ? (autoFillAmount / 100).toFixed(2) : (currentAmount / 100) || ''}
-                                                    readOnly={isLast}
-                                                    onChange={e => {
-                                                        if (isLast) return;
-                                                        const val = Math.round(parseFloat(e.target.value || '0') * 100);
-                                                        setCustomSplits(prev => {
-                                                            const existing = prev.find(s => s.userId === memberId);
-                                                            if (existing) return prev.map(s => s.userId === memberId ? { ...s, amount: val } : s);
-                                                            return [...prev, { userId: memberId, amount: val }];
+                                                    value={isRemainder ? (value / 100).toFixed(2) : value ? value / 100 : ''}
+                                                    readOnly={isRemainder}
+                                                    placeholder="0"
+                                                    onChange={(event) => {
+                                                        const paise = Math.max(0, Math.round(parseFloat(event.target.value || '0') * 100));
+                                                        setCustomSplits((prev) => {
+                                                            const exists = prev.some((split) => split.userId === memberId);
+                                                            return exists
+                                                                ? prev.map((split) => split.userId === memberId ? { ...split, amount: paise } : split)
+                                                                : [...prev, { userId: memberId, amount: paise }];
                                                         });
                                                     }}
-                                                    style={{
-                                                        width: 72, padding: '4px 6px',
-                                                        fontSize: 'var(--text-base)', fontWeight: 700,
-                                                        background: 'transparent',
-                                                        border: 'none',
-                                                        color: isLast ? 'var(--accent-500)' : 'var(--fg-primary)',
-                                                        outline: 'none',
-                                                        textAlign: 'right',
-                                                    }}
-                                                    placeholder="0"
+                                                    aria-label={`Amount for ${member.name}`}
                                                 />
-                                            </div>
+                                            </label>
                                         </div>
                                     );
-                                });
-                            })()}
-
-                            {/* Running total bar */}
-                            {(() => {
-                                const totalPaise = toPaise(numericAmount);
-                                const allocated = customSplits
-                                    .filter(s => Array.from(selectedMembers).includes(s.userId))
-                                    .reduce((sum, s) => sum + s.amount, 0);
-                                const pct = totalPaise > 0 ? Math.min((allocated / totalPaise) * 100, 100) : 0;
-                                const isExact = allocated === totalPaise;
-                                const isOver = allocated > totalPaise;
-
-                                return (
-                                    <div style={{ width: '100%', marginTop: 4 }}>
-                                        <div style={{
-                                            height: 6, borderRadius: 3,
-                                            background: 'var(--border-subtle)',
-                                            overflow: 'hidden',
-                                        }}>
-                                            <div style={{
-                                                height: '100%',
-                                                width: `${pct}%`,
-                                                borderRadius: 3,
-                                                background: isExact
-                                                    ? 'linear-gradient(90deg, #22c55e, #16a34a)'
-                                                    : isOver
-                                                        ? 'linear-gradient(90deg, #ef4444, #dc2626)'
-                                                        : 'linear-gradient(90deg, var(--accent-400), var(--accent-600))',
-                                                transition: 'width 0.3s, background 0.3s',
-                                            }} />
-                                        </div>
-                                        <div style={{
-                                            fontSize: 'var(--text-xs)', textAlign: 'center',
-                                            marginTop: 6,
-                                            color: isExact ? '#22c55e' : isOver ? '#ef4444' : 'var(--fg-tertiary)',
-                                            fontWeight: 700,
-                                            letterSpacing: '0.02em',
-                                        }}>
-                                            {formatCurrency(allocated)} of {formatCurrency(totalPaise)} allocated
-                                            {isExact && ' ✓'}
-                                            {isOver && ' ⚠ over!'}
-                                        </div>
-                                    </div>
-                                );
-                            })()}
-                        </div>
+                                })}
+                            </div>
+                            <div className={styles.allocation}>
+                                <Progress
+                                    value={totalPaise > 0 ? (allocatedCustom / totalPaise) * 100 : 0}
+                                    tone={customPlan?.overAllocated ? 'danger' : allocatedCustom === totalPaise ? 'success' : 'accent'}
+                                />
+                                <span
+                                    className={styles.allocationText}
+                                    style={{ color: customPlan?.overAllocated ? 'var(--color-error)' : 'var(--color-success)' }}
+                                >
+                                    {customPlan?.overAllocated
+                                        ? `Over by ${formatCurrency(Math.abs(customPlan.lastAmount))} — lower someone’s share`
+                                        : `${formatCurrency(totalPaise)} fully allocated`}
+                                </span>
+                            </div>
+                        </>
                     )}
-                </motion.div>
+                </section>
             )}
 
-            {/* ── Numpad (4-column with calculator) ── */}
+            {/* ── Impact preview ── */}
             {impactPreview.length > 0 && (
-                <div style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 10,
-                    padding: '14px',
-                    borderRadius: 'var(--radius-xl)',
-                    background: 'rgba(var(--accent-500-rgb), 0.05)',
-                    border: '1px solid rgba(var(--accent-500-rgb), 0.1)',
-                }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <TrendingUp size={14} style={{ color: 'var(--accent-500)' }} />
-                        <span style={{ fontSize: 'var(--text-xs)', color: 'var(--fg-tertiary)', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-                            Impact Preview
-                        </span>
+                <section className={styles.card} aria-label="Balance impact">
+                    <div className={styles.cardHead}>
+                        <span className={styles.cardTitle}>How balances change</span>
+                        <TrendingUp size={16} style={{ color: 'var(--accent-strong)' }} />
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div>
                         {impactPreview.map((entry) => (
-                            <div
-                                key={entry.memberId}
-                                style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'space-between',
-                                    gap: 12,
-                                    padding: '10px 12px',
-                                    borderRadius: 'var(--radius-lg)',
-                                    background: 'var(--bg-glass)',
-                                    border: '1px solid var(--border-glass)',
-                                }}
-                            >
-                                <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--fg-primary)' }}>
+                            <div key={entry.memberId} className={styles.impactRow}>
+                                <span className={styles.impactName}>
+                                    <Avatar name={entry.fullName} image={entry.image} size="xs" />
                                     {entry.name}
-                                </div>
-                                <div style={{
-                                    fontSize: 'var(--text-xs)',
-                                    fontWeight: 700,
-                                    color: entry.delta >= 0 ? 'var(--color-success)' : 'var(--color-error)',
-                                }}>
-                                    {entry.delta >= 0 ? 'Will be owed more ' : 'Will owe more '}
-                                    {entry.delta >= 0 ? '+' : '-'}{formatCurrency(Math.abs(entry.delta))}
-                                </div>
+                                </span>
+                                <span
+                                    className={styles.impactValue}
+                                    style={{ color: entry.delta > 0 ? 'var(--color-success)' : 'var(--color-error)' }}
+                                >
+                                    {entry.delta > 0 ? 'gets back ' : 'owes '}
+                                    {formatCurrency(Math.abs(entry.delta))}
+                                </span>
                             </div>
                         ))}
                     </div>
-                </div>
+                </section>
             )}
 
             {duplicateCandidates.length > 0 && (
-                <div style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 10,
-                    padding: '14px',
-                    borderRadius: 'var(--radius-xl)',
-                    background: 'rgba(245, 158, 11, 0.08)',
-                    border: '1px solid rgba(245, 158, 11, 0.18)',
-                }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#f59e0b' }}>
-                        <AlertTriangle size={16} />
-                        <span style={{ fontSize: 'var(--text-sm)', fontWeight: 700 }}>Possible duplicate expense</span>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <Notice tone="warning" icon={<AlertTriangle size={16} />} title="Possible duplicate">
+                    A matching expense was added recently. Tap Add again only if this is a real second charge.
+                    <div className={styles.duplicateList}>
                         {duplicateCandidates.map((transaction) => (
-                            <div
-                                key={transaction.id}
-                                style={{
-                                    padding: '10px 12px',
-                                    borderRadius: 'var(--radius-lg)',
-                                    background: 'rgba(255,255,255,0.4)',
-                                    border: '1px solid rgba(245, 158, 11, 0.12)',
-                                }}
-                            >
-                                <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--fg-primary)' }}>
-                                    {transaction.title} • {formatCurrency(transaction.amount)}
-                                </div>
-                                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--fg-secondary)', marginTop: 4 }}>
-                                    Paid by {transaction.payer.name || 'Unknown'} • {new Date(transaction.createdAt).toLocaleString('en-IN', {
-                                        day: 'numeric',
-                                        month: 'short',
-                                        hour: 'numeric',
-                                        minute: '2-digit',
-                                    })}
-                                </div>
+                            <div key={transaction.id} className={styles.duplicateItem}>
+                                <strong>{transaction.title} · {formatCurrency(transaction.amount)}</strong>
+                                {' — '}paid by {transaction.payer.name || 'someone'}, {new Date(transaction.createdAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}
                             </div>
                         ))}
                     </div>
-                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--fg-secondary)', lineHeight: 1.5 }}>
-                        Tap Add Expense once more only if this is a real second charge.
-                    </div>
-                </div>
+                </Notice>
             )}
 
-            <div className={styles.numpad}>
-                {['1', '2', '3', '+', '4', '5', '6', '-', '7', '8', '9', 'del', '.', '0', '00', '='].map((key) => (
+            {/* ── Numpad ── */}
+            <div className={styles.numpad} aria-label="Number pad">
+                {NUMPAD_KEYS.map((key) => (
                     <motion.button
                         key={key}
+                        type="button"
                         className={cn(
-                            styles.numKey,
-                            (key === '+' || key === '-') && styles.numKeyOperator,
-                            key === 'del' && styles.numKeyDelete,
-                            key === '=' && styles.numKeyEquals,
+                            styles.key,
+                            (key === '+' || key === '-') && styles.keyOp,
+                            key === 'del' && styles.keyDel,
+                            key === '=' && styles.keyEq,
                         )}
                         whileTap={{ scale: 0.92 }}
                         onClick={() => {
@@ -1356,191 +1074,154 @@ function QuickAddContent() {
                                 handleNumPad(key);
                             }
                         }}
-                        aria-label={key === 'del' ? 'Delete' : key === '=' ? 'Calculate' : key}
+                        aria-label={key === 'del' ? 'Delete' : key === '=' ? 'Calculate' : key === '+' ? 'Plus' : key === '-' ? 'Minus' : key}
                     >
-                        {key === 'del' ? <Delete size={20} /> :
-                         key === '+' ? <Plus size={20} /> :
-                         key === '-' ? <Minus size={20} /> :
-                         key === '=' ? <Equal size={20} /> :
-                         key}
+                        {key === 'del' ? <Delete size={21} />
+                            : key === '+' ? <Plus size={20} />
+                                : key === '-' ? <Minus size={20} />
+                                    : key === '=' ? <Equal size={20} />
+                                        : key}
                     </motion.button>
                 ))}
             </div>
 
             {/* ── Submit ── */}
-            <div className={styles.submitBtn}>
+            <div className={styles.submitBar}>
                 <Button
                     fullWidth
-                    size="lg"
-                    disabled={!numericAmount}
+                    size="xl"
+                    disabled={!numericAmount || Boolean(customPlan?.overAllocated)}
                     loading={saving}
-                    leftIcon={<Check size={18} />}
+                    leftIcon={<Check size={19} />}
                     onClick={handleSave}
                 >
-                    Add Expense · {numericAmount > 0 ? formatCurrency(toPaise(numericAmount)) : '₹0'}
+                    {numericAmount > 0 ? `Add ${formatCurrency(totalPaise)}` : 'Add expense'}
                 </Button>
             </div>
 
-            {/* ── Voice Input Overlay ── */}
             <VoiceInput
-                memberNames={members.map(m => m.name)}
-                members={members.map(m => ({ name: m.name, image: m.image }))}
+                memberNames={members.map((member) => member.name)}
+                members={members.map((member) => ({ name: member.name, image: member.image }))}
                 groupName={selectedGroup?.name || 'Group'}
                 onResult={handleVoiceResult}
             />
 
-            {/* ── Group Picker Modal ── */}
-            <Modal
-                isOpen={showGroups}
-                onClose={() => setShowGroups(false)}
-                title="Select Group"
-                size="small"
-                transparentOverlay
-            >
-                <div className={styles.payerGrid}>
-                    {groups.map((g) => (
-                        <motion.button
-                            key={g.id}
-                            className={cn(
-                                styles.payerItem,
-                                selectedGroupId === g.id && styles.payerItemActive,
-                            )}
-                            whileTap={{ scale: 0.97 }}
-                            onClick={() => { setSelectedGroupId(g.id); setShowGroups(false); }}
+            {/* ── Group picker ── */}
+            <Modal isOpen={sheet === 'group'} onClose={() => setSheet(null)} title="Choose a group" size="small">
+                <div className={styles.optionList}>
+                    {groups.map((group) => (
+                        <button
+                            key={group.id}
+                            type="button"
+                            className={cn(styles.option, selectedGroupId === group.id && styles.optionActive)}
+                            onClick={() => { setSelectedGroupId(group.id); setSheet(null); }}
                         >
-                            <span style={{ fontSize: 24 }}>{g.emoji}</span>
-                            <span className={styles.payerName}>{g.name}</span>
-                            {selectedGroupId === g.id && (
-                                <Check size={16} style={{ marginLeft: 'auto', color: 'var(--accent-500)' }} />
-                            )}
-                        </motion.button>
+                            <span className={styles.optionIcon}>{group.emoji}</span>
+                            <span className={styles.optionText}>{group.name}</span>
+                            {selectedGroupId === group.id && <Check size={18} className={styles.optionCheck} />}
+                        </button>
                     ))}
                 </div>
             </Modal>
 
-            {/* ── Category Picker Modal ── */}
+            {/* ── Category picker ── */}
             <Modal
-                isOpen={showCategories}
-                onClose={() => { setShowCategories(false); setIsCustomCategory(false); }}
-                title={isCustomCategory ? "Custom Category" : "Category"}
+                isOpen={sheet === 'category'}
+                onClose={() => { setSheet(null); setIsCustomCategory(false); }}
+                title={isCustomCategory ? 'Custom category' : 'Category'}
                 size="small"
-                transparentOverlay
             >
                 {isCustomCategory ? (
-                    <div style={{ padding: '16px 8px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-                        <div style={{ position: 'relative' }}>
-                            <span style={{ position: 'absolute', left: 14, top: 12, fontSize: 18 }}>📌</span>
+                    <div className={styles.sheetStack}>
+                        <label className={styles.titleField}>
+                            <span style={{ display: 'grid', placeItems: 'center', width: 40, height: 40, borderRadius: 13, background: 'var(--bg-tertiary)' }}>
+                                <PencilLine size={18} />
+                            </span>
                             <input
+                                className={styles.titleInput}
                                 autoFocus
-                                placeholder="e.g. Flight to Goa"
+                                placeholder="e.g. Scuba diving"
                                 value={customCatValue}
-                                onChange={(e) => setCustomCatValue(e.target.value)}
-                                style={{
-                                    width: '100%', padding: '14px 16px 14px 44px', borderRadius: '14px',
-                                    border: '1px solid var(--border-subtle)', background: 'var(--bg-glass)',
-                                    color: 'var(--fg-primary)', fontSize: '15px', fontWeight: 500,
-                                    outline: 'none', boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.02)'
-                                }}
+                                onChange={(event) => setCustomCatValue(event.target.value)}
+                                maxLength={30}
                             />
-                        </div>
+                        </label>
                         <Button
                             fullWidth
+                            size="lg"
                             disabled={!customCatValue.trim()}
                             onClick={() => {
                                 setCategory(customCatValue.trim());
-                                setShowCategories(false);
+                                setCategoryTouched(true);
+                                setSheet(null);
                                 setIsCustomCategory(false);
                             }}
                         >
-                            Save Category
+                            Use this category
                         </Button>
-                        <button
-                            onClick={() => { setIsCustomCategory(false); setCustomCatValue(''); }}
-                            style={{ marginTop: 2, background: 'none', border: 'none', color: 'var(--fg-tertiary)', fontSize: 13, cursor: 'pointer', padding: 8, fontWeight: 500 }}
-                        >
-                            Back to preset categories
-                        </button>
+                        <Button fullWidth variant="ghost" onClick={() => { setIsCustomCategory(false); setCustomCatValue(''); }}>
+                            Back to categories
+                        </Button>
                     </div>
                 ) : (
                     <div className={styles.categoryGrid}>
-                        {Object.entries(CATEGORIES).map(([key, val]) => (
+                        {Object.entries(CATEGORIES).filter(([key]) => key !== 'other').map(([key, value]) => (
                             <motion.button
                                 key={key}
-                                className={cn(
-                                    styles.categoryItem,
-                                    category === key && styles.categoryItemActive,
-                                    (!CATEGORIES[category] && key === 'other') && styles.categoryItemActive
-                                )}
-                                whileTap={{ scale: 0.93 }}
+                                type="button"
+                                className={cn(styles.categoryItem, category === key && styles.categoryItemActive)}
+                                whileTap={{ scale: 0.94 }}
                                 onClick={() => {
                                     setCategory(key);
-                                    setShowCategories(false);
+                                    setCategoryTouched(true);
+                                    setSheet(null);
                                 }}
                             >
-                                <span className={styles.categoryEmoji}>{val.emoji}</span>
-                                <span className={styles.categoryLabel}>{val.label}</span>
+                                <CategoryTile category={key} size={42} />
+                                <span className={styles.categoryLabel}>{value.label}</span>
                             </motion.button>
                         ))}
+                        <button type="button" className={styles.customCategory} onClick={() => setIsCustomCategory(true)}>
+                            <PencilLine size={16} /> Something else…
+                        </button>
                     </div>
                 )}
             </Modal>
 
-            {/* ── Payer Picker Modal ── */}
-            <Modal
-                isOpen={showPayers}
-                onClose={() => setShowPayers(false)}
-                title="Who paid?"
-                size="small"
-                transparentOverlay
-            >
-                <div className={styles.payerGrid}>
+            {/* ── Payer picker ── */}
+            <Modal isOpen={sheet === 'payer'} onClose={() => setSheet(null)} title="Who paid?" size="small">
+                <div className={styles.optionList}>
                     {members.map((member) => (
-                        <motion.button
+                        <button
                             key={member.id}
-                            className={cn(
-                                styles.payerItem,
-                                payerId === member.id && styles.payerItemActive,
-                            )}
-                            whileTap={{ scale: 0.97 }}
-                            onClick={() => { setPayerId(member.id); setShowPayers(false); }}
+                            type="button"
+                            className={cn(styles.option, payerId === member.id && styles.optionActive)}
+                            onClick={() => { setPayerId(member.id); setSheet(null); }}
                         >
-                            <Avatar name={member.name} image={member.image} size="sm" />
-                            <span className={styles.payerName}>
-                                {member.id === currentUser?.id ? `${member.name} (You)` : member.name}
+                            <Avatar name={member.name} image={member.image} size="md" />
+                            <span className={styles.optionText}>
+                                {member.id === currentUser?.id ? `${member.name} (you)` : member.name}
                             </span>
-                            {payerId === member.id && (
-                                <Check size={16} style={{ marginLeft: 'auto', color: 'var(--accent-500)' }} />
-                            )}
-                        </motion.button>
+                            {payerId === member.id && <Check size={18} className={styles.optionCheck} />}
+                        </button>
                     ))}
                 </div>
             </Modal>
 
-            {/* ── Method Picker Modal ── */}
-            <Modal
-                isOpen={showMethods}
-                onClose={() => setShowMethods(false)}
-                title="Payment Method"
-                size="small"
-                transparentOverlay
-            >
-                <div className={styles.payerGrid}>
-                    {Object.entries(PAYMENT_METHODS).map(([key, val]) => (
-                        <motion.button
+            {/* ── Method picker ── */}
+            <Modal isOpen={sheet === 'method'} onClose={() => setSheet(null)} title="Payment method" size="small">
+                <div className={styles.optionList}>
+                    {Object.entries(PAYMENT_METHODS).map(([key, value]) => (
+                        <button
                             key={key}
-                            className={cn(
-                                styles.payerItem,
-                                method === key && styles.payerItemActive,
-                            )}
-                            whileTap={{ scale: 0.97 }}
-                            onClick={() => { setMethod(key); setShowMethods(false); }}
+                            type="button"
+                            className={cn(styles.option, method === key && styles.optionActive)}
+                            onClick={() => { setMethod(key); setSheet(null); }}
                         >
-                            <PaymentIcon method={key} size={22} />
-                            <span className={styles.payerName}>{val.label}</span>
-                            {method === key && (
-                                <Check size={16} style={{ marginLeft: 'auto', color: 'var(--accent-500)' }} />
-                            )}
-                        </motion.button>
+                            <span className={styles.optionIcon}><PaymentIcon method={key} size={20} /></span>
+                            <span className={styles.optionText}>{value.label}</span>
+                            {method === key && <Check size={18} className={styles.optionCheck} />}
+                        </button>
                     ))}
                 </div>
             </Modal>
@@ -1551,8 +1232,8 @@ function QuickAddContent() {
 export default function QuickAddPage() {
     return (
         <Suspense fallback={
-            <div style={{ display: 'flex', height: '100dvh', alignItems: 'center', justifyContent: 'center' }}>
-                <Loader2 className="animate-spin" size={32} style={{ color: 'var(--fg-muted)' }} />
+            <div className={styles.composer}>
+                <Skeleton variant="rectangular" height={150} radius={28} />
             </div>
         }>
             <QuickAddContent />

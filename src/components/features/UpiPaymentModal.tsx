@@ -1,14 +1,20 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { X, Smartphone, QrCode, CheckCircle2, Copy, Check, Loader2, CreditCard } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { ArrowLeft, AtSign, Check, CheckCircle2, Copy, QrCode, Send, ShieldCheck, Smartphone } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
-import { formatCurrency } from '@/lib/utils';
+import Button from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import Modal from '@/components/ui/Modal';
+import { Notice } from '@/components/ui/kit';
+import { cn, formatCurrency } from '@/lib/utils';
+import styles from './upi.module.css';
 
 interface UpiPaymentModalProps {
     isOpen: boolean;
     onClose: () => void;
+    /** paise */
     amount: number;
     payeeName: string;
     settlementId?: string;
@@ -16,362 +22,270 @@ interface UpiPaymentModalProps {
     onPaymentComplete?: () => void;
 }
 
-type Step = 'choose' | 'paying' | 'utr' | 'done';
+type Step = 'choose' | 'paying' | 'confirm' | 'done';
 
-export default function UpiPaymentModal({
-    isOpen,
-    onClose,
-    amount,
-    payeeName,
-    settlementId,
-    payeeUpiId: directUpiId,
-    onPaymentComplete,
-}: UpiPaymentModalProps) {
+const UPI_PATTERN = /^[a-zA-Z0-9._-]{2,256}@[a-zA-Z][a-zA-Z0-9.-]{1,64}$/;
+
+const stepMotion = {
+    initial: { opacity: 0, y: 10 },
+    animate: { opacity: 1, y: 0 },
+    exit: { opacity: 0, y: -8 },
+    transition: { duration: 0.18 },
+};
+
+function isMobileDevice() {
+    return typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
+
+export default function UpiPaymentModal(props: UpiPaymentModalProps) {
+    return (
+        <Modal isOpen={props.isOpen} onClose={props.onClose} title="Pay via UPI" size="small">
+            {/* Remounts on every open, so each payment starts fresh. */}
+            <UpiFlow {...props} />
+        </Modal>
+    );
+}
+
+function UpiFlow({ amount, payeeName, settlementId, payeeUpiId: knownUpiId, onClose, onPaymentComplete }: UpiPaymentModalProps) {
+    const mobile = isMobileDevice();
     const [step, setStep] = useState<Step>('choose');
-    const [qrData, setQrData] = useState('');
-    const [payeeUpiId, setPayeeUpiId] = useState('');
+    const [manualMode, setManualMode] = useState(!settlementId && !knownUpiId);
     const [manualUpiId, setManualUpiId] = useState('');
+    const [upiUrl, setUpiUrl] = useState('');
+    const [resolvedUpiId, setResolvedUpiId] = useState('');
+    const [showQr, setShowQr] = useState(false);
+    const [utr, setUtr] = useState('');
     const [loading, setLoading] = useState(false);
-    const [utrNumber, setUtrNumber] = useState('');
-    const [confirmLoading, setConfirmLoading] = useState(false);
     const [error, setError] = useState('');
     const [copied, setCopied] = useState(false);
-    const [showQr, setShowQr] = useState(false);
-    const isMobile = typeof navigator !== 'undefined' && /Android|iPhone|iPad/i.test(navigator.userAgent);
 
+    // Hand control back to the caller shortly after the approval request goes out.
     useEffect(() => {
-        if (!isOpen) {
-            setStep('choose');
-            setQrData('');
-            setUtrNumber('');
-            setError('');
-            setShowQr(false);
-            setPayeeUpiId('');
-            setManualUpiId('');
-        }
-    }, [isOpen]);
+        if (step !== 'done') return;
+        const timer = window.setTimeout(() => onPaymentComplete?.(), 1800);
+        return () => window.clearTimeout(timer);
+    }, [step, onPaymentComplete]);
 
-    const generateLocalLink = (upiId: string) => {
-        const amountInRupees = (amount / 100).toFixed(2);
-        const params = new URLSearchParams({
-            pa: upiId, pn: payeeName || 'SplitX User',
-            am: amountInRupees, cu: 'INR', tn: 'SplitX settlement',
+    const manualValue = manualUpiId.trim();
+    const manualInvalid = manualMode && manualValue.length > 0 && !UPI_PATTERN.test(manualValue);
+
+    const localLink = (upiId: string) => {
+        const query = new URLSearchParams({
+            pa: upiId,
+            pn: payeeName || 'SplitX user',
+            am: (amount / 100).toFixed(2),
+            cu: 'INR',
+            tn: 'SplitX settlement',
         });
-        return `upi://pay?${params.toString()}`;
+        return `upi://pay?${query.toString()}`;
     };
 
-    const initiatePayment = async (overrideUpiId?: string) => {
-        setLoading(true);
+    const openPayment = (url: string, upiId: string) => {
+        setUpiUrl(url);
+        setResolvedUpiId(upiId);
+        setStep('paying');
+        if (mobile) window.location.href = url;
+        else setShowQr(true);
+    };
+
+    const startPayment = async () => {
         setError('');
-        try {
-            let generatedUpiUrl: string;
-            let generatedQrData: string;
-            let resolvedUpiId: string;
-            const upiIdToUse = overrideUpiId || directUpiId;
-
-            if (settlementId) {
-                const res = await fetch(`/api/settlements/${settlementId}/pay`, { method: 'POST' });
-                const data = await res.json();
-                if (!res.ok) { setError(data.message || data.error || 'Failed'); setLoading(false); return; }
-                generatedUpiUrl = data.upiUrl; generatedQrData = data.qrData; resolvedUpiId = data.payeeUpiId || '';
-            } else if (upiIdToUse) {
-                generatedUpiUrl = generateLocalLink(upiIdToUse);
-                generatedQrData = generatedUpiUrl;
-                resolvedUpiId = upiIdToUse;
-            } else {
-                setError('Enter UPI ID to continue'); setLoading(false); return;
+        if (manualMode) {
+            if (!UPI_PATTERN.test(manualValue)) {
+                setError('Enter a valid UPI ID, like name@okaxis.');
+                return;
             }
-            setQrData(generatedQrData); setPayeeUpiId(resolvedUpiId);
-            setStep('paying');
-            if (isMobile && generatedUpiUrl) { window.location.href = generatedUpiUrl; } else { setShowQr(true); }
-        } catch { setError('Network error'); } finally { setLoading(false); }
+            openPayment(localLink(manualValue), manualValue);
+            return;
+        }
+        if (!settlementId) {
+            if (knownUpiId) openPayment(localLink(knownUpiId), knownUpiId);
+            return;
+        }
+
+        setLoading(true);
+        try {
+            const res = await fetch(`/api/settlements/${settlementId}/pay`, { method: 'POST' });
+            const data = await res.json().catch(() => null);
+            if (!res.ok || !data?.upiUrl) {
+                // Most often the payee hasn't saved a UPI ID — let the payer type it in.
+                setError(data?.message || data?.error || `${payeeName} hasn’t added a UPI ID yet. Enter it to continue.`);
+                setManualMode(true);
+                return;
+            }
+            openPayment(data.upiUrl, data.payeeUpiId || '');
+        } catch {
+            setError('Network error — please try again.');
+        } finally {
+            setLoading(false);
+        }
     };
 
-    const confirmPayment = async () => {
-        setConfirmLoading(true); setError('');
+    const confirmPaid = async () => {
+        setError('');
+        if (!settlementId) {
+            setStep('done');
+            return;
+        }
+        setLoading(true);
         try {
-            if (settlementId) {
-                const res = await fetch(`/api/settlements/${settlementId}/confirm`, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'paid', utrNumber: utrNumber.trim() || undefined }),
-                });
-                const data = await res.json();
-                if (!res.ok) { setError(data.error || 'Failed'); setConfirmLoading(false); return; }
+            const res = await fetch(`/api/settlements/${settlementId}/confirm`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'paid', utrNumber: utr.trim() || undefined }),
+            });
+            const data = await res.json().catch(() => null);
+            if (!res.ok) {
+                setError(data?.error || 'We couldn’t send the approval request. Try again.');
+                return;
             }
             setStep('done');
-            setTimeout(() => { onPaymentComplete?.(); }, 2000);
-        } catch { setError('Network error'); } finally { setConfirmLoading(false); }
-    };
-
-    const copyUpiId = () => {
-        if (payeeUpiId) {
-            navigator.clipboard.writeText(payeeUpiId);
-            setCopied(true); setTimeout(() => setCopied(false), 2000);
+        } catch {
+            setError('Network error — please try again.');
+        } finally {
+            setLoading(false);
         }
     };
 
-    if (!isOpen) return null;
-    const hasUpiId = !!directUpiId;
-
-    /* ─── Shared inline styles ─── */
-    const frostedPill: React.CSSProperties = {
-        background: 'rgba(255,255,255,0.18)',
-        backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
-        border: '1px solid rgba(255,255,255,0.22)',
-        borderRadius: 14, padding: '12px 16px',
-        color: '#fff',
+    const copyUpiId = async () => {
+        if (!resolvedUpiId) return;
+        try {
+            await navigator.clipboard.writeText(resolvedUpiId);
+            setCopied(true);
+            window.setTimeout(() => setCopied(false), 1800);
+        } catch { /* clipboard unavailable */ }
     };
-
-    const inputStyle: React.CSSProperties = {
-        width: '100%', background: 'rgba(255,255,255,0.92)',
-        border: '1px solid rgba(255,255,255,0.5)', borderRadius: 10,
-        padding: '11px 14px', fontSize: 14, color: '#333',
-        outline: 'none', boxSizing: 'border-box', textAlign: 'center',
-    };
-
-    const primaryBtn = (disabled: boolean): React.CSSProperties => ({
-        width: '100%', padding: '14px', border: 'none', borderRadius: 14,
-        fontSize: 15, fontWeight: 700,
-        background: disabled ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.95)',
-        color: disabled ? 'rgba(255,255,255,0.6)' : 'var(--accent-600)',
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-        boxShadow: disabled ? 'none' : '0 4px 20px rgba(0,0,0,0.12)',
-        transition: 'all 0.2s ease',
-    });
 
     return (
-        <AnimatePresence>
-            {/* Backdrop */}
-            <motion.div
-                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                onClick={onClose}
-                style={{
-                    position: 'fixed', inset: 0,
-                    background: 'transparent',
-                    backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)',
-                    zIndex: 9999,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    padding: 16,
-                }}
-            >
-                {/* Modal — full gradient card */}
-                <motion.div
-                    initial={{ scale: 0.9, opacity: 0, y: 30 }}
-                    animate={{ scale: 1, opacity: 1, y: 0 }}
-                    exit={{ scale: 0.9, opacity: 0, y: 30 }}
-                    transition={{ type: 'spring', damping: 22, stiffness: 280 }}
-                    onClick={(e) => e.stopPropagation()}
-                    style={{
-                        position: 'relative',
-                        background: 'linear-gradient(160deg, var(--accent-400), var(--accent-500) 40%, var(--accent-600))',
-                        borderRadius: 24,
-                        width: '100%', maxWidth: 360,
-                        overflow: 'hidden',
-                        boxShadow: '0 24px 80px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.2)',
-                        textAlign: 'center',
-                    }}
-                >
-                    {/* Close button */}
-                    <button onClick={onClose} style={{
-                        position: 'absolute', top: 14, right: 14, zIndex: 2,
-                        background: 'rgba(255,255,255,0.2)',
-                        border: 'none', borderRadius: '50%',
-                        width: 30, height: 30,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        cursor: 'pointer', color: '#fff',
-                    }}><X size={15} /></button>
+        <div className={styles.flow}>
+            <div className={styles.hero}>
+                <span className={styles.heroLabel}>{step === 'done' ? 'Waiting for approval' : 'You’re paying'}</span>
+                <span className={styles.heroAmount}>{formatCurrency(amount)}</span>
+                <span className={styles.heroTo}>to <strong>{payeeName}</strong></span>
+            </div>
 
-                    {/* ── Header section ── */}
-                    <div style={{ padding: '28px 24px 0', position: 'relative' }}>
-                        <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.7)' }}>
-                            {step === 'done' ? 'Approval Requested' : 'Pay via UPI'}
+            <AnimatePresence mode="wait" initial={false}>
+                {step === 'choose' && (
+                    <motion.div key="choose" className={styles.step} {...stepMotion}>
+                        {error && <Notice tone={manualMode ? 'warning' : 'danger'}>{error}</Notice>}
+                        {manualMode && (
+                            <Input
+                                label={`${payeeName.split(' ')[0]}’s UPI ID`}
+                                placeholder="name@okaxis"
+                                value={manualUpiId}
+                                onChange={(event) => setManualUpiId(event.target.value)}
+                                leftIcon={<AtSign size={16} />}
+                                autoCapitalize="none"
+                                autoCorrect="off"
+                                spellCheck={false}
+                                error={manualInvalid ? 'That doesn’t look like a UPI ID' : undefined}
+                                hint={!manualInvalid ? 'Ask them — it’s shown in any UPI app' : undefined}
+                            />
+                        )}
+                        <Button
+                            fullWidth
+                            size="lg"
+                            loading={loading}
+                            disabled={manualMode && !manualValue}
+                            leftIcon={mobile ? <Smartphone size={18} /> : <QrCode size={18} />}
+                            onClick={startPayment}
+                        >
+                            {mobile ? 'Open UPI app' : 'Show QR code'}
+                        </Button>
+                        <p className={styles.hint}>
+                            <ShieldCheck size={13} />
+                            Works with GPay, PhonePe, Paytm and any UPI app
+                        </p>
+                    </motion.div>
+                )}
+
+                {step === 'paying' && (
+                    <motion.div key="paying" className={styles.step} {...stepMotion}>
+                        {showQr && upiUrl && (
+                            <div className={styles.qr}>
+                                <div className={styles.qrCard}>
+                                    <QRCodeSVG value={upiUrl} size={176} level="M" bgColor="#ffffff" fgColor="#0d0f14" />
+                                </div>
+                                <span className={styles.hint}><Smartphone size={12} />Scan with any UPI app</span>
+                            </div>
+                        )}
+                        {resolvedUpiId && (
+                            <div className={styles.upiRow}>
+                                <span className={styles.upiLabel}>UPI</span>
+                                <span className={styles.upiId}>{resolvedUpiId}</span>
+                                <button type="button" className={styles.copyButton} onClick={copyUpiId} aria-label="Copy UPI ID">
+                                    {copied ? <Check size={15} /> : <Copy size={15} />}
+                                </button>
+                            </div>
+                        )}
+                        <Input
+                            label="UPI transaction ID (optional)"
+                            placeholder="e.g. 412345678901"
+                            value={utr}
+                            onChange={(event) => setUtr(event.target.value)}
+                            maxLength={22}
+                            autoCapitalize="characters"
+                            autoCorrect="off"
+                            spellCheck={false}
+                            className={styles.monoInput}
+                            hint="Helps them match your payment faster"
+                        />
+                        <Button fullWidth size="lg" leftIcon={<CheckCircle2 size={18} />} onClick={() => setStep('confirm')}>
+                            I’ve paid
+                        </Button>
+                        {!showQr ? (
+                            <Button fullWidth variant="ghost" leftIcon={<QrCode size={16} />} onClick={() => setShowQr(true)}>
+                                Show QR code instead
+                            </Button>
+                        ) : mobile && upiUrl ? (
+                            <Button fullWidth variant="ghost" leftIcon={<Smartphone size={16} />} onClick={() => { window.location.href = upiUrl; }}>
+                                Open UPI app again
+                            </Button>
+                        ) : null}
+                    </motion.div>
+                )}
+
+                {step === 'confirm' && (
+                    <motion.div key="confirm" className={styles.step} {...stepMotion}>
+                        <div className={styles.center}>
+                            <span className={styles.stateIcon}><Send size={24} /></span>
+                            <p className={styles.stateTitle}>Confirm you’ve paid</p>
+                            <p className={styles.stateText}>
+                                {utr.trim()
+                                    ? `We’ll share UTR ${utr.trim()} so ${payeeName} can match it quickly.`
+                                    : `${payeeName} will get a request to approve once the money arrives.`}
+                            </p>
                         </div>
-                        <div style={{ fontSize: 36, fontWeight: 900, color: '#fff', marginTop: 6, letterSpacing: '-0.03em' }}>
-                            {formatCurrency(amount)}
+                        {error && <Notice tone="danger">{error}</Notice>}
+                        <Button fullWidth size="lg" loading={loading} leftIcon={<CheckCircle2 size={18} />} onClick={confirmPaid}>
+                            Send for approval
+                        </Button>
+                        <Button fullWidth variant="ghost" leftIcon={<ArrowLeft size={16} />} onClick={() => setStep('paying')} disabled={loading}>
+                            Back
+                        </Button>
+                    </motion.div>
+                )}
+
+                {step === 'done' && (
+                    <motion.div key="done" className={styles.step} {...stepMotion}>
+                        <div className={styles.center}>
+                            <motion.span
+                                className={cn(styles.stateIcon, styles.stateSuccess)}
+                                initial={{ scale: 0.4, rotate: -12 }}
+                                animate={{ scale: 1, rotate: 0 }}
+                                transition={{ type: 'spring', stiffness: 420, damping: 15 }}
+                            >
+                                <Check size={30} strokeWidth={3} />
+                            </motion.span>
+                            <p className={styles.stateTitle}>Sent for approval</p>
+                            <p className={styles.stateText}>
+                                {payeeName} has been notified. Your balance updates as soon as they approve.
+                            </p>
                         </div>
-                        <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.75)', marginTop: 4, marginBottom: 24 }}>
-                            to <strong style={{ color: '#fff' }}>{payeeName}</strong>
-                        </div>
-                    </div>
-
-                    {/* ── Content ── */}
-                    <div style={{ padding: '0 24px 28px' }}>
-                        <AnimatePresence mode="wait">
-                            {/* ═══ Step: Choose ═══ */}
-                            {step === 'choose' && (
-                                <motion.div key="choose" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }}
-                                    style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
-
-                                    {error && (
-                                        <div style={{
-                                            ...frostedPill,
-                                            background: 'rgba(239,68,68,0.2)', border: '1px solid rgba(239,68,68,0.3)',
-                                            fontSize: 13, padding: '8px 14px', width: '100%',
-                                        }}>{error}</div>
-                                    )}
-
-                                    {/* Manual UPI input when payee has no ID */}
-                                    {!hasUpiId && (
-                                        <div style={{ width: '100%' }}>
-                                            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.65)', marginBottom: 8 }}>
-                                                {payeeName} hasn&apos;t added their UPI ID yet
-                                            </div>
-                                            <input
-                                                type="text" value={manualUpiId}
-                                                onChange={(e) => setManualUpiId(e.target.value)}
-                                                placeholder="Enter their UPI ID"
-                                                style={inputStyle}
-                                            />
-                                        </div>
-                                    )}
-
-                                    <button
-                                        onClick={() => initiatePayment(manualUpiId.trim() || undefined)}
-                                        disabled={loading || (!hasUpiId && !manualUpiId.trim())}
-                                        style={primaryBtn(loading || (!hasUpiId && !manualUpiId.trim()))}
-                                    >
-                                        {loading
-                                            ? <><Loader2 size={17} className="spin" /> Generating...</>
-                                            : isMobile
-                                                ? <><Smartphone size={17} /> Open UPI App</>
-                                                : <><QrCode size={17} /> Show QR Code</>
-                                        }
-                                    </button>
-
-                                    <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>
-                                        {isMobile ? 'Opens GPay, PhonePe, or default UPI app' : 'Scan the QR code with any UPI app'}
-                                    </div>
-                                </motion.div>
-                            )}
-
-                            {/* ═══ Step: Paying ═══ */}
-                            {step === 'paying' && (
-                                <motion.div key="paying" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }}
-                                    style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
-
-                                    {/* QR Code */}
-                                    {showQr && qrData && (
-                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                                            <div style={{
-                                                background: '#fff', padding: 14, borderRadius: 16,
-                                                boxShadow: '0 8px 30px rgba(0,0,0,0.15)',
-                                            }}>
-                                                <QRCodeSVG value={qrData} size={170} level="M" />
-                                            </div>
-                                            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.55)', marginTop: 8, display: 'flex', alignItems: 'center', gap: 5 }}>
-                                                <Smartphone size={11} /> Scan with any UPI app
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* UPI ID pill */}
-                                    {payeeUpiId && (
-                                        <div style={{
-                                            ...frostedPill, width: '100%',
-                                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                                            fontSize: 13,
-                                        }}>
-                                            <span style={{ opacity: 0.7 }}>UPI:</span>
-                                            <strong style={{ fontFamily: 'monospace', letterSpacing: '0.02em' }}>{payeeUpiId}</strong>
-                                            <button onClick={copyUpiId} style={{
-                                                background: 'none', border: 'none', cursor: 'pointer',
-                                                color: 'rgba(255,255,255,0.7)', padding: 2, display: 'flex',
-                                            }}>
-                                                {copied ? <Check size={13} /> : <Copy size={13} />}
-                                            </button>
-                                        </div>
-                                    )}
-
-                                    {/* UTR input */}
-                                    <div style={{ ...frostedPill, width: '100%', padding: '10px 14px' }}>
-                                        <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', marginBottom: 6 }}>
-                                            Transaction ID (optional)
-                                        </div>
-                                        <input type="text" value={utrNumber}
-                                            onChange={(e) => setUtrNumber(e.target.value)}
-                                            placeholder="e.g. 412345678901" maxLength={20}
-                                            style={{ ...inputStyle, fontFamily: 'monospace' }}
-                                        />
-                                    </div>
-
-                                    {error && <div style={{ color: '#fecaca', fontSize: 12 }}>{error}</div>}
-
-                                    <button onClick={() => setStep('utr')} style={primaryBtn(false)}>
-                                        <CheckCircle2 size={17} /> I&apos;ve Paid
-                                    </button>
-
-                                    {!showQr && (
-                                        <button onClick={() => setShowQr(true)} style={{
-                                            width: '100%', padding: '10px', background: 'rgba(255,255,255,0.12)',
-                                            color: '#fff', border: '1px solid rgba(255,255,255,0.2)',
-                                            borderRadius: 10, fontSize: 13, cursor: 'pointer',
-                                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                                        }}>
-                                            <QrCode size={13} /> Show QR Code
-                                        </button>
-                                    )}
-                                </motion.div>
-                            )}
-
-                            {/* ═══ Step: UTR Confirm ═══ */}
-                            {step === 'utr' && (
-                                <motion.div key="utr" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }}
-                                    style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
-
-                                    <div style={{
-                                        width: 56, height: 56, borderRadius: '50%',
-                                        background: 'rgba(255,255,255,0.15)',
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                    }}>
-                                        <CreditCard size={24} style={{ color: '#fff' }} />
-                                    </div>
-                                    <div>
-                                        <div style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>Confirm Payment</div>
-                                        <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginTop: 4, maxWidth: 260 }}>
-                                            {utrNumber
-                                                ? `UTR: ${utrNumber} will be shared for verification`
-                                                : `${payeeName} will approve this after checking the payment`}
-                                        </div>
-                                    </div>
-
-                                    {error && <div style={{ color: '#fecaca', fontSize: 12 }}>{error}</div>}
-
-                                    <button onClick={confirmPayment} disabled={confirmLoading}
-                                        style={{ ...primaryBtn(confirmLoading), opacity: confirmLoading ? 0.7 : 1 }}>
-                                        {confirmLoading ? <><Loader2 size={17} className="spin" /> Confirming...</> : <><CheckCircle2 size={17} /> Confirm</>}
-                                    </button>
-
-                                    <button onClick={() => setStep('paying')} style={{
-                                        background: 'none', border: 'none', color: 'rgba(255,255,255,0.6)',
-                                        fontSize: 13, cursor: 'pointer', padding: '6px 0',
-                                    }}>← Go back</button>
-                                </motion.div>
-                            )}
-
-                            {/* ═══ Step: Done ═══ */}
-                            {step === 'done' && (
-                                <motion.div key="done" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
-                                    style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: '12px 0' }}>
-                                    <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}
-                                        transition={{ type: 'spring', damping: 15, stiffness: 200, delay: 0.1 }}
-                                        style={{
-                                            width: 64, height: 64, borderRadius: '50%',
-                                            background: 'rgba(255,255,255,0.2)',
-                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        }}>
-                                        <CheckCircle2 size={32} color="#fff" />
-                                    </motion.div>
-                                    <div style={{ fontSize: 20, fontWeight: 800, color: '#fff' }}>Approval Request Sent!</div>
-                                    <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.65)' }}>
-                                        {payeeName} has been notified and the settlement will finish once they approve receipt
-                                    </div>
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
-                    </div>
-                </motion.div>
-            </motion.div>
-        </AnimatePresence>
+                        <Button fullWidth variant="secondary" onClick={onPaymentComplete ?? onClose}>Done</Button>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </div>
     );
 }

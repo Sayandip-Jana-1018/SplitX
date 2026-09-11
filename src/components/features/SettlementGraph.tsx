@@ -335,8 +335,8 @@ export default function SettlementGraph({
         function measure(target: Element) {
             const width = (target as HTMLElement).offsetWidth || (target as HTMLElement).clientWidth;
             if (!width) return;
-            const compactHeight = clamp(width * 0.98, 392, 452);
-            const fullHeight = clamp(width * 1.02, 476, 580);
+            const compactHeight = clamp(width * 0.84, 330, 400);
+            const fullHeight = clamp(width * 0.9, 400, 520);
             setSize({ w: width, h: compact ? compactHeight : fullHeight });
         }
 

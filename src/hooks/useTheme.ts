@@ -1,230 +1,187 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback, useSyncExternalStore } from 'react';
 
-type Theme = 'light' | 'dark';
+export type ThemePreference = 'light' | 'dark' | 'system';
+export type ResolvedTheme = 'light' | 'dark';
 
 export type PaletteId =
-    | 'amethyst-haze' | 'cosmic-night' | 'quantum-rose'
-    | 'emerald-glow' | 'ocean-breeze' | 'solar-dusk'
-    | 'bold-tech' | 'amber-minimal' | 'perpetuity'
-    | 'tangerine' | 'pastel-dreams' | 'cyberpunk'
-    | 'midnight-indigo' | 'cherry-blossom' | 'lime-fusion'
-    | 'sky-blue' | 'warm-coral' | 'lavender-mist';
+    | 'amethyst-haze' | 'cosmic-night' | 'bold-tech' | 'sky-blue' | 'ocean-breeze'
+    | 'perpetuity' | 'emerald-glow' | 'lime-fusion' | 'amber-minimal' | 'solar-dusk'
+    | 'cherry-blossom' | 'quantum-rose' | 'cyberpunk';
 
 export interface ColorPalette {
     id: PaletteId;
     name: string;
-    // CSS variable overrides for accent
     accent400: string;
     accent500: string;
     accent600: string;
     accent500rgb: string;
-    // Preview swatch colors (for the pill UI)
     swatches: string[];
 }
 
-const THEME_KEY = 'SplitX-theme';
-const PALETTE_KEY = 'SplitX-palette';
+export const THEME_STORAGE_KEY = 'SplitX-theme';
+export const PALETTE_STORAGE_KEY = 'SplitX-palette';
+export const DEFAULT_PALETTE: PaletteId = 'amethyst-haze';
 
+/** Curated palette set. Full colour scales live in styles/themes/accents.css. */
 export const COLOR_PALETTES: ColorPalette[] = [
-    {
-        id: 'amethyst-haze',
-        name: 'Amethyst Haze',
-        accent400: '#a78bfa', accent500: '#8b5cf6', accent600: '#7c3aed',
-        accent500rgb: '139, 92, 246',
-        swatches: ['#ddd6fe', '#a78bfa', '#7c3aed'],
-    },
-    {
-        id: 'quantum-rose',
-        name: 'Quantum Rose',
-        accent400: '#f472b6', accent500: '#ec4899', accent600: '#db2777',
-        accent500rgb: '236, 72, 153',
-        swatches: ['#fbcfe8', '#f472b6', '#db2777'],
-    },
-    {
-        id: 'cosmic-night',
-        name: 'Cosmic Night',
-        accent400: '#818cf8', accent500: '#6366f1', accent600: '#4f46e5',
-        accent500rgb: '99, 102, 241',
-        swatches: ['#c7d2fe', '#818cf8', '#4f46e5'],
-    },
-    {
-        id: 'emerald-glow',
-        name: 'Emerald Glow',
-        accent400: '#34d399', accent500: '#10b981', accent600: '#059669',
-        accent500rgb: '16, 185, 129',
-        swatches: ['#a7f3d0', '#34d399', '#059669'],
-    },
-    {
-        id: 'ocean-breeze',
-        name: 'Ocean Breeze',
-        accent400: '#22d3ee', accent500: '#06b6d4', accent600: '#0891b2',
-        accent500rgb: '6, 182, 212',
-        swatches: ['#a5f3fc', '#22d3ee', '#0891b2'],
-    },
-    {
-        id: 'solar-dusk',
-        name: 'Solar Dusk',
-        accent400: '#fb923c', accent500: '#f97316', accent600: '#ea580c',
-        accent500rgb: '249, 115, 22',
-        swatches: ['#fed7aa', '#fb923c', '#ea580c'],
-    },
-    {
-        id: 'bold-tech',
-        name: 'Bold Tech',
-        accent400: '#60a5fa', accent500: '#3b82f6', accent600: '#2563eb',
-        accent500rgb: '59, 130, 246',
-        swatches: ['#bfdbfe', '#60a5fa', '#2563eb'],
-    },
-    {
-        id: 'amber-minimal',
-        name: 'Amber Minimal',
-        accent400: '#fbbf24', accent500: '#f59e0b', accent600: '#d97706',
-        accent500rgb: '245, 158, 11',
-        swatches: ['#fde68a', '#fbbf24', '#d97706'],
-    },
-    {
-        id: 'tangerine',
-        name: 'Tangerine',
-        accent400: '#f87171', accent500: '#ef4444', accent600: '#dc2626',
-        accent500rgb: '239, 68, 68',
-        swatches: ['#fecaca', '#f87171', '#dc2626'],
-    },
-    {
-        id: 'perpetuity',
-        name: 'Perpetuity',
-        accent400: '#2dd4bf', accent500: '#14b8a6', accent600: '#0d9488',
-        accent500rgb: '20, 184, 166',
-        swatches: ['#99f6e4', '#2dd4bf', '#0d9488'],
-    },
-    {
-        id: 'pastel-dreams',
-        name: 'Pastel Dreams',
-        accent400: '#c084fc', accent500: '#a855f7', accent600: '#9333ea',
-        accent500rgb: '168, 85, 247',
-        swatches: ['#e9d5ff', '#c084fc', '#9333ea'],
-    },
-    {
-        id: 'cyberpunk',
-        name: 'Cyberpunk',
-        accent400: '#e879f9', accent500: '#d946ef', accent600: '#c026d3',
-        accent500rgb: '217, 70, 239',
-        swatches: ['#f5d0fe', '#e879f9', '#c026d3'],
-    },
-    {
-        id: 'midnight-indigo',
-        name: 'Midnight Indigo',
-        accent400: '#a5b4fc', accent500: '#6366f1', accent600: '#4338ca',
-        accent500rgb: '99, 102, 241',
-        swatches: ['#c7d2fe', '#a5b4fc', '#4338ca'],
-    },
-    {
-        id: 'cherry-blossom',
-        name: 'Cherry Blossom',
-        accent400: '#fda4af', accent500: '#fb7185', accent600: '#e11d48',
-        accent500rgb: '251, 113, 133',
-        swatches: ['#ffe4e6', '#fda4af', '#e11d48'],
-    },
-    {
-        id: 'lime-fusion',
-        name: 'Lime Fusion',
-        accent400: '#a3e635', accent500: '#84cc16', accent600: '#65a30d',
-        accent500rgb: '132, 204, 22',
-        swatches: ['#d9f99d', '#a3e635', '#65a30d'],
-    },
-    {
-        id: 'sky-blue',
-        name: 'Sky Blue',
-        accent400: '#7dd3fc', accent500: '#38bdf8', accent600: '#0284c7',
-        accent500rgb: '56, 189, 248',
-        swatches: ['#bae6fd', '#7dd3fc', '#0284c7'],
-    },
-    {
-        id: 'warm-coral',
-        name: 'Warm Coral',
-        accent400: '#fca5a5', accent500: '#f87171', accent600: '#b91c1c',
-        accent500rgb: '248, 113, 113',
-        swatches: ['#fee2e2', '#fca5a5', '#b91c1c'],
-    },
-    {
-        id: 'lavender-mist',
-        name: 'Lavender Mist',
-        accent400: '#d8b4fe', accent500: '#c084fc', accent600: '#7e22ce',
-        accent500rgb: '192, 132, 252',
-        swatches: ['#f3e8ff', '#d8b4fe', '#7e22ce'],
-    },
+    { id: 'amethyst-haze', name: 'Amethyst', accent400: '#a78bfa', accent500: '#8b5cf6', accent600: '#7c3aed', accent500rgb: '139, 92, 246', swatches: ['#c4b5fd', '#8b5cf6', '#6d28d9'] },
+    { id: 'cosmic-night', name: 'Indigo', accent400: '#818cf8', accent500: '#6366f1', accent600: '#4f46e5', accent500rgb: '99, 102, 241', swatches: ['#a5b4fc', '#6366f1', '#4338ca'] },
+    { id: 'bold-tech', name: 'Cobalt', accent400: '#60a5fa', accent500: '#3b82f6', accent600: '#2563eb', accent500rgb: '59, 130, 246', swatches: ['#93c5fd', '#3b82f6', '#1d4ed8'] },
+    { id: 'sky-blue', name: 'Sky', accent400: '#38bdf8', accent500: '#0ea5e9', accent600: '#0284c7', accent500rgb: '14, 165, 233', swatches: ['#7dd3fc', '#0ea5e9', '#0369a1'] },
+    { id: 'ocean-breeze', name: 'Lagoon', accent400: '#22d3ee', accent500: '#06b6d4', accent600: '#0891b2', accent500rgb: '6, 182, 212', swatches: ['#67e8f9', '#06b6d4', '#0e7490'] },
+    { id: 'perpetuity', name: 'Teal', accent400: '#2dd4bf', accent500: '#14b8a6', accent600: '#0d9488', accent500rgb: '20, 184, 166', swatches: ['#5eead4', '#14b8a6', '#0f766e'] },
+    { id: 'emerald-glow', name: 'Emerald', accent400: '#34d399', accent500: '#10b981', accent600: '#059669', accent500rgb: '16, 185, 129', swatches: ['#6ee7b7', '#10b981', '#047857'] },
+    { id: 'lime-fusion', name: 'Lime', accent400: '#a3e635', accent500: '#84cc16', accent600: '#65a30d', accent500rgb: '132, 204, 22', swatches: ['#bef264', '#84cc16', '#4d7c0f'] },
+    { id: 'amber-minimal', name: 'Amber', accent400: '#fbbf24', accent500: '#f59e0b', accent600: '#d97706', accent500rgb: '245, 158, 11', swatches: ['#fcd34d', '#f59e0b', '#b45309'] },
+    { id: 'solar-dusk', name: 'Sunset', accent400: '#fb923c', accent500: '#f97316', accent600: '#ea580c', accent500rgb: '249, 115, 22', swatches: ['#fdba74', '#f97316', '#c2410c'] },
+    { id: 'cherry-blossom', name: 'Rose', accent400: '#fb7185', accent500: '#f43f5e', accent600: '#e11d48', accent500rgb: '244, 63, 94', swatches: ['#fda4af', '#f43f5e', '#be123c'] },
+    { id: 'quantum-rose', name: 'Blush', accent400: '#f472b6', accent500: '#ec4899', accent600: '#db2777', accent500rgb: '236, 72, 153', swatches: ['#f9a8d4', '#ec4899', '#be185d'] },
+    { id: 'cyberpunk', name: 'Orchid', accent400: '#e879f9', accent500: '#d946ef', accent600: '#c026d3', accent500rgb: '217, 70, 239', swatches: ['#f0abfc', '#d946ef', '#a21caf'] },
 ];
 
+const LEGACY_PALETTES: Record<string, PaletteId> = {
+    'pastel-dreams': 'amethyst-haze',
+    'lavender-mist': 'amethyst-haze',
+    'midnight-indigo': 'cosmic-night',
+    tangerine: 'solar-dusk',
+    'warm-coral': 'cherry-blossom',
+};
+
+const THEME_COLORS: Record<ResolvedTheme, string> = {
+    light: '#f4f5f8',
+    dark: '#0a0a0e',
+};
+
+function normalizePalette(value: string | null): PaletteId {
+    if (!value) return DEFAULT_PALETTE;
+    if (COLOR_PALETTES.some((palette) => palette.id === value)) return value as PaletteId;
+    return LEGACY_PALETTES[value] ?? DEFAULT_PALETTE;
+}
+
+function normalizePreference(value: string | null): ThemePreference {
+    return value === 'light' || value === 'dark' || value === 'system' ? value : 'system';
+}
+
+/* ─────────────────────────────────────────────────────────────
+   External store — keeps every consumer in sync, survives
+   re-mounts and reacts to OS theme + other tabs.
+   ───────────────────────────────────────────────────────────── */
+
+interface ThemeState {
+    preference: ThemePreference;
+    palette: PaletteId;
+    systemDark: boolean;
+}
+
+const SERVER_STATE: ThemeState = { preference: 'system', palette: DEFAULT_PALETTE, systemDark: true };
+const listeners = new Set<() => void>();
+let current: ThemeState | null = null;
+
+function readState(): ThemeState {
+    let preference: ThemePreference = 'system';
+    let palette: PaletteId = DEFAULT_PALETTE;
+    try {
+        preference = normalizePreference(localStorage.getItem(THEME_STORAGE_KEY));
+        palette = normalizePalette(localStorage.getItem(PALETTE_STORAGE_KEY));
+    } catch {
+        // storage unavailable (private mode) — fall back to defaults
+    }
+    const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    return { preference, palette, systemDark };
+}
+
+function resolveTheme(state: ThemeState): ResolvedTheme {
+    if (state.preference === 'system') return state.systemDark ? 'dark' : 'light';
+    return state.preference;
+}
+
+function applyToDocument(state: ThemeState) {
+    const root = document.documentElement;
+    const resolved = resolveTheme(state);
+    root.setAttribute('data-theme', resolved);
+    root.setAttribute('data-palette', state.palette);
+    root.style.colorScheme = resolved;
+
+    // Clean up inline overrides written by older builds
+    for (const prop of ['--accent-300', '--accent-400', '--accent-500', '--accent-600', '--accent-500-rgb']) {
+        root.style.removeProperty(prop);
+    }
+
+    document.querySelectorAll('meta[name="theme-color"]').forEach((meta) => {
+        meta.setAttribute('content', THEME_COLORS[resolved]);
+    });
+
+    document.cookie = `theme=${resolved};path=/;max-age=31536000;samesite=lax`;
+    document.cookie = `palette=${state.palette};path=/;max-age=31536000;samesite=lax`;
+}
+
+function getSnapshot(): ThemeState {
+    if (!current) current = readState();
+    return current;
+}
+
+function getServerSnapshot(): ThemeState {
+    return SERVER_STATE;
+}
+
+function emit() {
+    listeners.forEach((listener) => listener());
+}
+
+function update(partial: Partial<ThemeState>) {
+    current = { ...getSnapshot(), ...partial };
+    try {
+        localStorage.setItem(THEME_STORAGE_KEY, current.preference);
+        localStorage.setItem(PALETTE_STORAGE_KEY, current.palette);
+    } catch {
+        // ignore
+    }
+    applyToDocument(current);
+    emit();
+}
+
+function subscribe(listener: () => void) {
+    listeners.add(listener);
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const onSystemChange = () => {
+        current = { ...getSnapshot(), systemDark: media.matches };
+        applyToDocument(current);
+        emit();
+    };
+    const onStorage = (event: StorageEvent) => {
+        if (event.key !== THEME_STORAGE_KEY && event.key !== PALETTE_STORAGE_KEY) return;
+        current = readState();
+        applyToDocument(current);
+        emit();
+    };
+    media.addEventListener('change', onSystemChange);
+    window.addEventListener('storage', onStorage);
+    return () => {
+        listeners.delete(listener);
+        media.removeEventListener('change', onSystemChange);
+        window.removeEventListener('storage', onStorage);
+    };
+}
+
+const subscribeNoop = () => () => undefined;
+
 export function useTheme() {
-    const [theme, setThemeState] = useState<Theme>('dark');
-    const [palette, setPaletteState] = useState<PaletteId>('amethyst-haze');
-    const [mounted, setMounted] = useState(false);
+    const state = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+    const mounted = useSyncExternalStore(subscribeNoop, () => true, () => false);
+    const theme = resolveTheme(state);
 
-    // Read from localStorage on mount
-    useEffect(() => {
-        const savedTheme = localStorage.getItem(THEME_KEY) as Theme | null;
-        const savedPalette = localStorage.getItem(PALETTE_KEY) as PaletteId | null;
-
-        const t = setTimeout(() => {
-            if (savedTheme) {
-                setThemeState(savedTheme);
-            } else {
-                const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-                setThemeState(prefersDark ? 'dark' : 'light');
-            }
-
-            if (savedPalette) {
-                setPaletteState(savedPalette);
-            }
-
-            setMounted(true);
-        }, 0);
-
-        return () => clearTimeout(t);
-    }, []);
-
-    // Apply to document
-    useEffect(() => {
-        if (!mounted) return;
-
-        const doc = document.documentElement;
-        doc.setAttribute('data-theme', theme);
-        doc.setAttribute('data-palette', palette);
-
-        // Apply palette CSS variables directly
-        const pal = COLOR_PALETTES.find(p => p.id === palette);
-        if (pal) {
-            doc.style.setProperty('--accent-300', pal.swatches[0]);
-            doc.style.setProperty('--accent-400', pal.accent400);
-            doc.style.setProperty('--accent-500', pal.accent500);
-            doc.style.setProperty('--accent-600', pal.accent600);
-            doc.style.setProperty('--accent-500-rgb', pal.accent500rgb);
-        }
-
-        localStorage.setItem(THEME_KEY, theme);
-        localStorage.setItem(PALETTE_KEY, palette);
-
-        // Set cookies for SSR
-        document.cookie = `theme=${theme};path=/;max-age=31536000`;
-        document.cookie = `palette=${palette};path=/;max-age=31536000`;
-    }, [theme, palette, mounted]);
-
-    const setTheme = useCallback((t: Theme) => {
-        setThemeState(t);
-    }, []);
-
+    const setTheme = useCallback((preference: ThemePreference) => update({ preference }), []);
     const toggleTheme = useCallback(() => {
-        setThemeState((prev) => (prev === 'dark' ? 'light' : 'dark'));
+        update({ preference: resolveTheme(getSnapshot()) === 'dark' ? 'light' : 'dark' });
     }, []);
-
-    const setPalette = useCallback((p: PaletteId) => {
-        setPaletteState(p);
-    }, []);
+    const setPalette = useCallback((palette: PaletteId) => update({ palette }), []);
 
     return {
         theme,
-        palette,
+        preference: state.preference,
+        palette: state.palette,
         mounted,
         setTheme,
         toggleTheme,
@@ -232,9 +189,8 @@ export function useTheme() {
     };
 }
 
-// Keep backwards compat export
-export const ACCENT_COLORS = COLOR_PALETTES.map(p => ({
-    value: p.id,
-    label: p.name,
-    color: p.accent500,
+export const ACCENT_COLORS = COLOR_PALETTES.map((palette) => ({
+    value: palette.id,
+    label: palette.name,
+    color: palette.accent500,
 }));

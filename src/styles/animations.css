@@ -1,272 +1,116 @@
 /* ═══════════════════════════════════════════════════════════════
-   Reusable Animations
-   Used across the app for loading, transitions, micro-interactions
+   Motion primitives — keyframes + tiny utility classes.
+   Component-level motion lives in framer-motion; these cover CSS-only
+   loaders, reveals and ambient effects.
    ═══════════════════════════════════════════════════════════════ */
 
-/* ── Shimmer (skeleton loading) ── */
-@keyframes shimmer {
-    0% {
-        background-position: -200% 0;
-    }
-
-    100% {
-        background-position: 200% 0;
-    }
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
 }
+
+@keyframes slideUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideDown {
+    from { opacity: 0; transform: translateY(-12px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes scaleIn {
+    from { opacity: 0; transform: scale(0.96); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes pageIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+@keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-6px); }
+}
+
+@keyframes ping {
+    0% { transform: scale(1); opacity: 0.7; }
+    80%, 100% { transform: scale(2.2); opacity: 0; }
+}
+
+@keyframes gradientShift {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+
+/* Slow drift for hero light-blobs */
+@keyframes auroraDrift {
+    0% { transform: translate3d(0, 0, 0) scale(1); }
+    33% { transform: translate3d(6%, -4%, 0) scale(1.08); }
+    66% { transform: translate3d(-5%, 5%, 0) scale(0.96); }
+    100% { transform: translate3d(0, 0, 0) scale(1); }
+}
+
+/* Specular glint that sweeps across premium surfaces */
+@keyframes sheen {
+    0% { transform: translateX(-120%) skewX(-18deg); }
+    60%, 100% { transform: translateX(220%) skewX(-18deg); }
+}
+
+@keyframes indeterminate {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(260%); }
+}
+
+/* ── Utility classes ── */
+.fade-in { animation: fadeIn var(--duration-normal) var(--ease-out) both; }
+.slide-up { animation: slideUp var(--duration-slow) var(--ease-out) both; }
+.slide-down { animation: slideDown var(--duration-slow) var(--ease-out) both; }
+.scale-in { animation: scaleIn var(--duration-normal) var(--ease-out) both; }
+.spin,
+.animate-spin { animation: spin 0.9s linear infinite; }
+.pulse { animation: pulse 2s var(--ease-in-out) infinite; }
+.float { animation: float 3.2s var(--ease-in-out) infinite; }
 
 .shimmer {
-    background: linear-gradient(90deg,
-            var(--bg-tertiary) 25%,
-            var(--bg-elevated) 37%,
-            var(--bg-tertiary) 63%);
+    background: linear-gradient(90deg, var(--skeleton-base) 25%, var(--skeleton-shine) 50%, var(--skeleton-base) 75%);
     background-size: 200% 100%;
-    animation: shimmer 1.5s ease-in-out infinite;
+    animation: shimmer 1.6s ease-in-out infinite;
 }
 
-/* ── Pulse ── */
-@keyframes pulse {
+.stagger-1 { animation-delay: 40ms; }
+.stagger-2 { animation-delay: 80ms; }
+.stagger-3 { animation-delay: 120ms; }
+.stagger-4 { animation-delay: 160ms; }
+.stagger-5 { animation-delay: 200ms; }
+.stagger-6 { animation-delay: 240ms; }
 
-    0%,
-    100% {
-        opacity: 1;
-    }
-
-    50% {
-        opacity: 0.5;
-    }
-}
-
-.pulse {
-    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-
-/* ── Fade In ── */
-@keyframes fadeIn {
-    from {
-        opacity: 0;
-    }
-
-    to {
-        opacity: 1;
-    }
-}
-
-.fade-in {
-    animation: fadeIn var(--duration-normal) var(--ease-out) forwards;
-}
-
-/* ── Slide Up ── */
-@keyframes slideUp {
-    from {
-        opacity: 0;
-        transform: translateY(12px);
-    }
-
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-.slide-up {
-    animation: slideUp var(--duration-normal) var(--ease-out) forwards;
-}
-
-/* ── Slide Down ── */
-@keyframes slideDown {
-    from {
-        opacity: 0;
-        transform: translateY(-12px);
-    }
-
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-.slide-down {
-    animation: slideDown var(--duration-normal) var(--ease-out) forwards;
-}
-
-/* ── Scale In ── */
-@keyframes scaleIn {
-    from {
-        opacity: 0;
-        transform: scale(0.95);
-    }
-
-    to {
-        opacity: 1;
-        transform: scale(1);
-    }
-}
-
-.scale-in {
-    animation: scaleIn var(--duration-normal) var(--ease-spring) forwards;
-}
-
-/* ── Ripple ── */
-@keyframes ripple {
-    to {
-        transform: scale(4);
-        opacity: 0;
-    }
-}
-
-/* ── Spin ── */
-@keyframes spin {
-    to {
-        transform: rotate(360deg);
-    }
-}
-
-.spin {
-    animation: spin 1s linear infinite;
-}
-
-/* ── Float ── */
-@keyframes float {
-
-    0%,
-    100% {
-        transform: translateY(0);
-    }
-
-    50% {
-        transform: translateY(-10px);
-    }
-}
-
-.float {
-    animation: float 3s ease-in-out infinite;
-}
-
-/* ── Gradient shift (for hero backgrounds) ── */
-@keyframes gradientShift {
-    0% {
-        background-position: 0% 50%;
-    }
-
-    50% {
-        background-position: 100% 50%;
-    }
-
-    100% {
-        background-position: 0% 50%;
-    }
-}
-
-.gradient-shift {
-    background-size: 200% 200%;
-    animation: gradientShift 8s ease infinite;
-}
-
-/* ── Count up animation helper ── */
-@keyframes countUp {
-    from {
-        opacity: 0;
-        transform: translateY(8px);
-    }
-
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-/* ── Stagger delay utilities ── */
-.stagger-1 {
-    animation-delay: 50ms;
-}
-
-.stagger-2 {
-    animation-delay: 100ms;
-}
-
-.stagger-3 {
-    animation-delay: 150ms;
-}
-
-.stagger-4 {
-    animation-delay: 200ms;
-}
-
-.stagger-5 {
-    animation-delay: 250ms;
-}
-
-.stagger-6 {
-    animation-delay: 300ms;
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   🆕 Modernization Utilities
-   ═══════════════════════════════════════════════════════════════ */
-
-/* ── Mesh gradient breathing (Apple Card effect) ── */
-@keyframes meshBreathe {
-
-    0%,
-    100% {
-        background-position: 0% 50%;
-        filter: hue-rotate(0deg);
-    }
-
-    25% {
-        background-position: 50% 0%;
-    }
-
-    50% {
-        background-position: 100% 50%;
-        filter: hue-rotate(8deg);
-    }
-
-    75% {
-        background-position: 50% 100%;
-    }
-}
-
-.mesh-breathe {
-    background-size: 300% 300%;
-    animation: meshBreathe 12s ease-in-out infinite;
-}
-
-/* ── Noise texture overlay — use as ::after pseudo-element ── */
-.noise-overlay::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    opacity: 0.03;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
-    background-repeat: repeat;
-    background-size: 128px 128px;
-    pointer-events: none;
-    z-index: 1;
-    mix-blend-mode: overlay;
-}
-
-[data-theme="light"] .noise-overlay::after {
-    opacity: 0.04;
-}
-
-/* ── Gradient text — accent gradient on headings ── */
-.gradient-text {
-    background: linear-gradient(135deg, var(--accent-400), var(--accent-500), var(--accent-600));
+.gradient-text,
+.text-gradient {
+    background: linear-gradient(135deg, var(--accent-strong), var(--accent-500));
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
 }
 
-/* Animated gradient text — premium shimmer */
 .gradient-text-animated {
-    background: linear-gradient(135deg,
-            var(--accent-400) 0%,
-            var(--accent-500) 25%,
-            var(--accent-600) 50%,
-            var(--accent-400) 75%,
-            var(--accent-500) 100%);
+    background: linear-gradient(120deg, var(--accent-strong), var(--accent-400), var(--accent-strong));
     background-size: 200% 200%;
     -webkit-background-clip: text;
     background-clip: text;
@@ -274,137 +118,26 @@
     animation: gradientShift 6s ease infinite;
 }
 
-/* ── Card micro-interactions — hover lift + press scale ── */
 .card-interactive {
-    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1),
-        box-shadow 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-    will-change: transform;
+    transition: transform var(--duration-normal) var(--ease-out), box-shadow var(--duration-normal) var(--ease-out);
 }
 
-.card-interactive:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-card-hover);
-}
+.card-interactive:active { transform: scale(0.985); }
 
-.card-interactive:active {
-    transform: translateY(0) scale(0.985);
-    transition-duration: 0.1s;
-}
-
-/* ── Top-edge highlight for glass cards ── */
-.card-highlight {
-    position: relative;
-    overflow: hidden;
-}
-
-.card-highlight::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 10%;
-    right: 10%;
-    height: 1px;
-    background: linear-gradient(90deg,
-            transparent,
-            rgba(255, 255, 255, 0.15),
-            transparent);
-    pointer-events: none;
-    z-index: 2;
-}
-
-[data-theme="light"] .card-highlight::before {
-    background: linear-gradient(90deg,
-            transparent,
-            rgba(var(--accent-500-rgb), 0.12),
-            transparent);
-}
-
-/* ── Ripple effect on buttons ── */
-.ripple-btn {
-    position: relative;
-    overflow: hidden;
-}
-
-.ripple-btn::after {
-    content: '';
-    position: absolute;
-    width: 100%;
-    height: 100%;
-    top: 0;
-    left: 0;
-    pointer-events: none;
-    background-image: radial-gradient(circle, rgba(var(--accent-500-rgb), 0.25) 10%, transparent 10.01%);
-    background-repeat: no-repeat;
-    background-position: 50%;
-    transform: scale(10);
-    opacity: 0;
-    transition: transform 0.5s, opacity 0.8s;
-}
-
-.ripple-btn:active::after {
-    transform: scale(0);
-    opacity: 0.3;
-    transition: 0s;
-}
-
-/* ── Glow pulse — subtle ambient glow animation ── */
-@keyframes glowPulse {
-
-    0%,
-    100% {
-        box-shadow: 0 0 20px rgba(var(--accent-500-rgb), 0.1);
-    }
-
-    50% {
-        box-shadow: 0 0 40px rgba(var(--accent-500-rgb), 0.2);
+@media (hover: hover) and (pointer: fine) {
+    .card-interactive:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-card-hover);
     }
 }
 
-.glow-pulse {
-    animation: glowPulse 4s ease-in-out infinite;
-}
-
-/* ── Icon bounce on active ── */
-@keyframes iconBounce {
-    0% {
-        transform: scale(1);
-    }
-
-    30% {
-        transform: scale(1.2);
-    }
-
-    50% {
-        transform: scale(0.95);
-    }
-
-    70% {
-        transform: scale(1.05);
-    }
-
-    100% {
-        transform: scale(1);
-    }
-}
-
-.icon-bounce {
-    animation: iconBounce 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-/* ── Parallax scroll helper ── */
-.parallax-scroll {
-    transition: transform 0.1s linear, filter 0.3s ease, opacity 0.3s ease;
-    will-change: transform, filter, opacity;
-}
-
-/* ── Reduced motion preference ── */
 @media (prefers-reduced-motion: reduce) {
-
     *,
     *::before,
     *::after {
         animation-duration: 0.01ms !important;
-        transition-duration: 0.01ms !important;
         animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
     }
 }

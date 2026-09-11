@@ -1,10 +1,15 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bell, Check, CheckCheck, X, Receipt, Users, ArrowRightLeft, Clock, Send, Loader2 } from 'lucide-react';
-import { isFeatureEnabled } from '@/lib/featureFlags';
+import { Bell, BellRing, Check, CheckCheck, X, Receipt, Users, ArrowRightLeft, Clock, Send, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { isFeatureEnabled } from '@/lib/featureFlags';
+import { IconButton } from '@/components/ui/kit';
+import { useIsClient } from '@/hooks/useMediaQuery';
+import { cn, timeAgo } from '@/lib/utils';
+import styles from './notifications.module.css';
 
 interface Notification {
     id: string;
@@ -17,60 +22,38 @@ interface Notification {
     actor?: { name: string | null; image: string | null };
 }
 
-const TYPE_ICONS: Record<string, React.ReactNode> = {
-    new_expense: <Receipt size={15} />,
-    payment_reminder: <Clock size={15} />,
-    settlement_approval_request: <CheckCheck size={15} />,
-    settlement_completed: <ArrowRightLeft size={15} />,
-    settlement_rejected: <X size={15} />,
-    group_activity: <Users size={15} />,
-    group_invite: <Send size={15} />,
-    group_invite_accepted: <CheckCheck size={15} />,
-    member_joined: <Users size={15} />,
-};
+type Tone = 'accent' | 'warning' | 'success' | 'danger' | 'info';
 
-const TYPE_COLORS: Record<string, string> = {
-    new_expense: 'var(--accent-400)',
-    payment_reminder: '#f59e0b',
-    settlement_approval_request: '#06b6d4',
-    settlement_completed: '#10b981',
-    settlement_rejected: '#ef4444',
-    group_activity: '#3b82f6',
-    group_invite: '#8b5cf6',
-    group_invite_accepted: '#10b981',
-    member_joined: '#3b82f6',
+const TYPE_META: Record<string, { icon: React.ReactNode; tone: Tone }> = {
+    new_expense: { icon: <Receipt size={17} />, tone: 'accent' },
+    payment_reminder: { icon: <Clock size={17} />, tone: 'warning' },
+    settlement_approval_request: { icon: <CheckCheck size={17} />, tone: 'info' },
+    settlement_completed: { icon: <ArrowRightLeft size={17} />, tone: 'success' },
+    settlement_rejected: { icon: <X size={17} />, tone: 'danger' },
+    group_activity: { icon: <Users size={17} />, tone: 'info' },
+    group_invite: { icon: <Send size={17} />, tone: 'accent' },
+    group_invite_accepted: { icon: <CheckCheck size={17} />, tone: 'success' },
+    member_joined: { icon: <Users size={17} />, tone: 'info' },
 };
-
-const TYPE_GRADIENTS: Record<string, string> = {
-    new_expense: 'linear-gradient(135deg, rgba(var(--accent-500-rgb), 0.15), rgba(var(--accent-500-rgb), 0.05))',
-    payment_reminder: 'linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(245, 158, 11, 0.05))',
-    settlement_approval_request: 'linear-gradient(135deg, rgba(6, 182, 212, 0.15), rgba(6, 182, 212, 0.05))',
-    settlement_completed: 'linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(16, 185, 129, 0.05))',
-    settlement_rejected: 'linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(239, 68, 68, 0.05))',
-    group_activity: 'linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(59, 130, 246, 0.05))',
-    group_invite: 'linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(139, 92, 246, 0.05))',
-    group_invite_accepted: 'linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(16, 185, 129, 0.05))',
-    member_joined: 'linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(59, 130, 246, 0.05))',
-};
-
-function timeAgo(dateStr: string): string {
-    const now = Date.now();
-    const date = new Date(dateStr).getTime();
-    const diff = Math.floor((now - date) / 1000);
-    if (diff < 60) return 'just now';
-    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-    return `${Math.floor(diff / 86400)}d ago`;
-}
 
 export default function NotificationPanel() {
     const [open, setOpen] = useState(false);
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [unreadCount, setUnreadCount] = useState(0);
-    const [mounted, setMounted] = useState(false);
     const [actionLoading, setActionLoading] = useState<string | null>(null);
-    const panelRef = useRef<HTMLDivElement>(null);
+    const mounted = useIsClient();
     const router = useRouter();
+
+    const fetchNotifications = useCallback(async () => {
+        try {
+            const res = await fetch('/api/notifications');
+            if (res.ok) {
+                const data = await res.json();
+                setNotifications(data.data || []);
+                setUnreadCount(data.unreadCount || 0);
+            }
+        } catch { /* silent */ }
+    }, []);
 
     // ── Invitation accept/decline ──
     const handleInvitationAction = async (notif: Notification, status: 'accepted' | 'declined') => {
@@ -94,9 +77,7 @@ export default function NotificationPanel() {
                 body: JSON.stringify({ ids: [notif.id] }),
             });
 
-            setNotifications(prev =>
-                prev.map(n => n.id === notif.id ? { ...n, read: true } : n)
-            );
+            setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, read: true } : n));
             setUnreadCount(prev => Math.max(0, prev - 1));
 
             if (status === 'accepted' && data.groupId) {
@@ -112,19 +93,6 @@ export default function NotificationPanel() {
         }
     };
 
-    useEffect(() => { setMounted(true); }, []);
-
-    const fetchNotifications = useCallback(async () => {
-        try {
-            const res = await fetch('/api/notifications');
-            if (res.ok) {
-                const data = await res.json();
-                setNotifications(data.data || []);
-                setUnreadCount(data.unreadCount || 0);
-            }
-        } catch { /* silent */ }
-    }, []);
-
     useEffect(() => {
         if (!mounted) return;
         fetchNotifications();
@@ -134,13 +102,11 @@ export default function NotificationPanel() {
 
     useEffect(() => {
         if (!open) return;
-        const handler = (e: MouseEvent) => {
-            if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
-                setOpen(false);
-            }
+        const onKey = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') setOpen(false);
         };
-        document.addEventListener('mousedown', handler);
-        return () => document.removeEventListener('mousedown', handler);
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
     }, [open]);
 
     const markAllRead = async () => {
@@ -163,9 +129,7 @@ export default function NotificationPanel() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ ids: [notif.id] }),
                 });
-                setNotifications(prev =>
-                    prev.map(n => n.id === notif.id ? { ...n, read: true } : n)
-                );
+                setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, read: true } : n));
                 setUnreadCount(prev => Math.max(0, prev - 1));
             } catch { /* silent */ }
         }
@@ -180,367 +144,154 @@ export default function NotificationPanel() {
         }
     };
 
+    const openPanel = () => {
+        setOpen(true);
+        fetchNotifications();
+    };
+
     if (!isFeatureEnabled('notifications')) return null;
 
-    return (
-        <div ref={panelRef} style={{ position: 'relative' }} suppressHydrationWarning>
-            {mounted && (
-                <>
-                    {/* Bell icon button */}
-                    <button
-                        onClick={() => setOpen(!open)}
-                        style={{
-                            width: 34,
-                            height: 34,
-                            position: 'relative',
-                            borderRadius: 'var(--radius-lg)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            background: 'rgba(var(--accent-500-rgb), 0.08)',
-                            backdropFilter: 'blur(12px)',
-                            WebkitBackdropFilter: 'blur(12px)',
-                            border: '1px solid rgba(var(--accent-500-rgb), 0.12)',
-                            color: 'var(--accent-500)',
-                            cursor: 'pointer',
-                            transition: 'all 0.2s ease',
-                            padding: 0,
-                        }}
-                        onMouseEnter={(e) => {
-                            e.currentTarget.style.background = 'rgba(var(--accent-500-rgb), 0.15)';
-                        }}
-                        onMouseLeave={(e) => {
-                            e.currentTarget.style.background = 'rgba(var(--accent-500-rgb), 0.08)';
-                        }}
-                        aria-label="Notifications"
-                    >
-                        <Bell size={16} />
-                        {unreadCount > 0 && (
-                            <motion.span
-                                initial={{ scale: 0 }}
-                                animate={{ scale: 1 }}
-                                style={{
-                                    position: 'absolute',
-                                    top: -2, right: -2,
-                                    minWidth: 18, height: 18,
-                                    borderRadius: 9,
-                                    background: 'linear-gradient(135deg, #ef4444, #dc2626)',
-                                    color: '#fff',
-                                    fontSize: 10,
-                                    fontWeight: 700,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    border: '2px solid var(--bg-primary)',
-                                    padding: '0 4px',
-                                    lineHeight: 1,
-                                }}
-                            >
-                                {unreadCount > 9 ? '9+' : unreadCount}
-                            </motion.span>
-                        )}
-                    </button>
+    const unread = notifications.filter((n) => !n.read);
+    const earlier = notifications.filter((n) => n.read);
 
-                    {/* ── Dropdown Panel ── */}
-                    <AnimatePresence>
-                        {open && (
-                            <motion.div
-                                initial={{ opacity: 0, y: -10, scale: 0.96 }}
-                                animate={{ opacity: 1, y: 0, scale: 1 }}
-                                exit={{ opacity: 0, y: -10, scale: 0.96 }}
-                                transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-                                style={{
-                                    position: 'fixed',
-                                    top: 68,
-                                    right: 16,
-                                    width: 370,
-                                    maxWidth: 'calc(100vw - 32px)',
-                                    maxHeight: 480,
-                                    background: 'var(--surface-popover)',
-                                    backdropFilter: 'blur(28px) saturate(1.6)',
-                                    WebkitBackdropFilter: 'blur(28px) saturate(1.6)',
-                                    border: '1px solid var(--border-glass)',
-                                    borderRadius: 16,
-                                    boxShadow: '0 20px 60px rgba(0,0,0,0.15), 0 4px 20px rgba(0,0,0,0.08)',
-                                    overflow: 'hidden',
-                                    zIndex: 100,
-                                    display: 'flex',
-                                    flexDirection: 'column',
+    const renderItem = (notif: Notification, index: number) => {
+        const meta = TYPE_META[notif.type] || { icon: <Bell size={17} />, tone: 'accent' as Tone };
+        const isPendingInvite = notif.type === 'group_invite' && !notif.read;
+        const clickable = Boolean(notif.link) && !isPendingInvite;
+        return (
+            <motion.div
+                key={notif.id}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: Math.min(index * 0.03, 0.24), duration: 0.2 }}
+                className={cn(styles.item, !notif.read && styles.itemUnread, clickable && styles.itemClickable)}
+                onClick={() => {
+                    if (!isPendingInvite) handleNotificationClick(notif);
+                }}
+                role={clickable ? 'button' : undefined}
+                tabIndex={clickable ? 0 : undefined}
+                onKeyDown={(event) => {
+                    if (clickable && (event.key === 'Enter' || event.key === ' ')) {
+                        event.preventDefault();
+                        handleNotificationClick(notif);
+                    }
+                }}
+            >
+                <span className={cn(styles.itemIcon, !notif.actor?.image && styles[`tone_${meta.tone}`])}>
+                    {notif.actor?.image ? (
+                        /* eslint-disable-next-line @next/next/no-img-element */
+                        <img src={notif.actor.image} alt={notif.actor.name || 'User'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : meta.icon}
+                </span>
+                <div className={styles.itemBody}>
+                    <p className={styles.itemText}>{notif.body}</p>
+                    <span className={styles.itemTime}>{timeAgo(notif.createdAt)}</span>
+                    {isPendingInvite && (
+                        <div className={styles.inviteActions}>
+                            <button
+                                type="button"
+                                className={styles.accept}
+                                disabled={actionLoading?.startsWith(notif.id)}
+                                onClick={(event) => {
+                                    event.stopPropagation();
+                                    handleInvitationAction(notif, 'accepted');
                                 }}
                             >
-                                {/* ── Header ── */}
-                                <div style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'space-between',
-                                    padding: '16px 18px 12px',
-                                    borderBottom: '1px solid var(--border-subtle)',
-                                }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                        <span style={{
-                                            fontSize: 15,
-                                            fontWeight: 700,
-                                            color: 'var(--fg-primary)',
-                                            letterSpacing: '-0.01em',
-                                        }}>
-                                            Notifications
-                                        </span>
-                                        {unreadCount > 0 && (
-                                            <span style={{
-                                                fontSize: 11,
-                                                fontWeight: 700,
-                                                color: '#fff',
-                                                background: 'var(--accent-500)',
-                                                borderRadius: 10,
-                                                padding: '1px 7px',
-                                                lineHeight: '16px',
-                                            }}>
-                                                {unreadCount}
-                                            </span>
-                                        )}
+                                {actionLoading === `${notif.id}-accepted` ? <Loader2 size={14} className="spin" /> : <Check size={14} />}
+                                Accept
+                            </button>
+                            <button
+                                type="button"
+                                className={styles.decline}
+                                disabled={actionLoading?.startsWith(notif.id)}
+                                onClick={(event) => {
+                                    event.stopPropagation();
+                                    handleInvitationAction(notif, 'declined');
+                                }}
+                            >
+                                {actionLoading === `${notif.id}-declined` ? <Loader2 size={14} className="spin" /> : <X size={14} />}
+                                Decline
+                            </button>
+                        </div>
+                    )}
+                </div>
+                {!notif.read && !isPendingInvite && <span className={styles.unreadDot} aria-label="Unread" />}
+            </motion.div>
+        );
+    };
+
+    return (
+        <>
+            <IconButton
+                icon={unreadCount > 0 ? <BellRing size={18} /> : <Bell size={18} />}
+                label="Notifications"
+                badge={unreadCount > 0 ? unreadCount : undefined}
+                onClick={openPanel}
+            />
+
+            {mounted && createPortal(
+                <AnimatePresence>
+                    {open && (
+                        <motion.div
+                            key="notifications-overlay"
+                            className={styles.overlay}
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.18 }}
+                            onClick={() => setOpen(false)}
+                        >
+                            <motion.section
+                                role="dialog"
+                                aria-modal="true"
+                                aria-label="Notifications"
+                                className={styles.panel}
+                                initial={{ opacity: 0, y: -12, scale: 0.97 }}
+                                animate={{ opacity: 1, y: 0, scale: 1 }}
+                                exit={{ opacity: 0, y: -8, scale: 0.98 }}
+                                transition={{ type: 'spring', damping: 32, stiffness: 440 }}
+                                onClick={(event) => event.stopPropagation()}
+                            >
+                                <header className={styles.header}>
+                                    <div className={styles.headerTitle}>
+                                        <h2>Notifications</h2>
+                                        {unreadCount > 0 && <span className={styles.count}>{unreadCount}</span>}
                                     </div>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                    <div className={styles.headerActions}>
                                         {unreadCount > 0 && (
-                                            <button
-                                                onClick={markAllRead}
-                                                style={{
-                                                    background: 'none', border: 'none',
-                                                    color: 'var(--accent-500)',
-                                                    fontSize: 12, fontWeight: 600,
-                                                    cursor: 'pointer', padding: '4px 8px',
-                                                    borderRadius: 'var(--radius-md)',
-                                                    display: 'flex', alignItems: 'center', gap: 4,
-                                                    transition: 'background 0.15s',
-                                                }}
-                                                onMouseEnter={(e) => {
-                                                    e.currentTarget.style.background = 'rgba(var(--accent-500-rgb), 0.08)';
-                                                }}
-                                                onMouseLeave={(e) => {
-                                                    e.currentTarget.style.background = 'transparent';
-                                                }}
-                                            >
-                                                <CheckCheck size={13} />
+                                            <button type="button" className={styles.markAll} onClick={markAllRead}>
+                                                <CheckCheck size={14} />
                                                 Mark all read
                                             </button>
                                         )}
-                                        <button
-                                            onClick={() => setOpen(false)}
-                                            style={{
-                                                background: 'none', border: 'none',
-                                                color: 'var(--fg-tertiary)', cursor: 'pointer',
-                                                padding: 6, display: 'flex',
-                                                borderRadius: 'var(--radius-md)',
-                                                transition: 'all 0.15s',
-                                            }}
-                                            onMouseEnter={(e) => {
-                                                e.currentTarget.style.background = 'rgba(var(--accent-500-rgb), 0.06)';
-                                                e.currentTarget.style.color = 'var(--fg-primary)';
-                                            }}
-                                            onMouseLeave={(e) => {
-                                                e.currentTarget.style.background = 'transparent';
-                                                e.currentTarget.style.color = 'var(--fg-tertiary)';
-                                            }}
-                                        >
-                                            <X size={15} />
+                                        <button type="button" className={styles.close} onClick={() => setOpen(false)} aria-label="Close notifications">
+                                            <X size={16} />
                                         </button>
                                     </div>
-                                </div>
+                                </header>
 
-                                {/* ── Notification List ── */}
-                                <div style={{
-                                    overflowY: 'auto', flex: 1,
-                                    padding: '4px 0',
-                                }}>
+                                <div className={styles.list}>
                                     {notifications.length === 0 ? (
-                                        <div style={{
-                                            padding: '40px 24px',
-                                            textAlign: 'center',
-                                            color: 'var(--fg-muted)',
-                                        }}>
-                                            <div style={{
-                                                width: 48, height: 48,
-                                                borderRadius: '50%',
-                                                background: 'rgba(var(--accent-500-rgb), 0.06)',
-                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                margin: '0 auto 12px',
-                                            }}>
-                                                <Bell size={22} style={{ opacity: 0.4 }} />
-                                            </div>
-                                            <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg-secondary)' }}>
-                                                All caught up!
-                                            </p>
-                                            <p style={{ fontSize: 12, marginTop: 4, opacity: 0.7 }}>
-                                                No new notifications
-                                            </p>
+                                        <div className={styles.empty}>
+                                            <span className={styles.emptyIcon}><Bell size={24} /></span>
+                                            <p className={styles.emptyTitle}>You&apos;re all caught up</p>
+                                            <p className={styles.emptyText}>Reminders, approvals and invites will show up here.</p>
                                         </div>
                                     ) : (
-                                        notifications.map((notif, i) => {
-                                            const color = TYPE_COLORS[notif.type] || 'var(--accent-400)';
-                                            const gradient = TYPE_GRADIENTS[notif.type] || TYPE_GRADIENTS.new_expense;
-
-                                            return (
-                                                <motion.div
-                                                    key={notif.id}
-                                                    initial={{ opacity: 0, y: 8 }}
-                                                    animate={{ opacity: 1, y: 0 }}
-                                                    transition={{ delay: i * 0.04, duration: 0.2 }}
-                                                    onClick={() => {
-                                                        if (notif.type !== 'group_invite' || notif.read) {
-                                                            handleNotificationClick(notif);
-                                                        }
-                                                    }}
-                                                    style={{
-                                                        padding: '12px 18px',
-                                                        display: 'flex',
-                                                        alignItems: 'flex-start',
-                                                        gap: 12,
-                                                        cursor: (notif.link && (notif.type !== 'group_invite' || notif.read)) ? 'pointer' : 'default',
-                                                        margin: '2px 6px',
-                                                        borderRadius: 12,
-                                                        background: notif.read ? 'transparent' : 'rgba(var(--accent-500-rgb), 0.03)',
-                                                        transition: 'background 0.15s',
-                                                        position: 'relative',
-                                                    }}
-                                                    onMouseEnter={(e) => {
-                                                        e.currentTarget.style.background = 'rgba(var(--accent-500-rgb), 0.05)';
-                                                    }}
-                                                    onMouseLeave={(e) => {
-                                                        e.currentTarget.style.background = notif.read ? 'transparent' : 'rgba(var(--accent-500-rgb), 0.03)';
-                                                    }}
-                                                >
-                                                    {/* ── Type or Actor Icon ── */}
-                                                    <div style={{
-                                                        width: 36, height: 36,
-                                                        borderRadius: 10,
-                                                        background: notif.actor?.image ? 'transparent' : gradient,
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        color: color,
-                                                        flexShrink: 0,
-                                                        marginTop: 1,
-                                                        overflow: 'hidden',
-                                                    }}>
-                                                        {notif.actor?.image ? (
-                                                            /* eslint-disable-next-line @next/next/no-img-element */
-                                                            <img
-                                                                src={notif.actor.image}
-                                                                alt={notif.actor.name || 'User'}
-                                                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                                            />
-                                                        ) : (
-                                                            TYPE_ICONS[notif.type] || <Bell size={15} />
-                                                        )}
-                                                    </div>
-
-                                                    {/* ── Content ── */}
-                                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                                        <p style={{
-                                                            fontSize: 13,
-                                                            fontWeight: notif.read ? 500 : 600,
-                                                            color: 'var(--fg-primary)',
-                                                            lineHeight: 1.45,
-                                                            margin: 0,
-                                                            overflow: 'hidden',
-                                                            textOverflow: 'ellipsis',
-                                                            display: '-webkit-box',
-                                                            WebkitLineClamp: 2,
-                                                            WebkitBoxOrient: 'vertical',
-                                                        }}>
-                                                            {notif.body}
-                                                        </p>
-                                                        <span style={{
-                                                            fontSize: 11,
-                                                            color: 'var(--fg-muted)',
-                                                            marginTop: 3,
-                                                            display: 'block',
-                                                            fontWeight: 500,
-                                                        }}>
-                                                            {timeAgo(notif.createdAt)}
-                                                        </span>
-
-                                                        {/* ── Accept / Decline for group invites ── */}
-                                                        {notif.type === 'group_invite' && !notif.read && (
-                                                            <div style={{
-                                                                display: 'flex', gap: 8, marginTop: 10,
-                                                            }}>
-                                                                <button
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        handleInvitationAction(notif, 'accepted');
-                                                                    }}
-                                                                    disabled={actionLoading?.startsWith(notif.id)}
-                                                                    style={{
-                                                                        flex: 1, padding: '7px 14px',
-                                                                        borderRadius: 8,
-                                                                        background: 'linear-gradient(135deg, #10b981, #059669)',
-                                                                        border: 'none', color: '#fff',
-                                                                        fontSize: 12, fontWeight: 600,
-                                                                        cursor: 'pointer',
-                                                                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-                                                                        opacity: actionLoading === `${notif.id}-accepted` ? 0.7 : 1,
-                                                                        transition: 'all 0.15s',
-                                                                        boxShadow: '0 2px 8px rgba(16, 185, 129, 0.25)',
-                                                                    }}
-                                                                >
-                                                                    {actionLoading === `${notif.id}-accepted` ? (
-                                                                        <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} />
-                                                                    ) : (
-                                                                        <Check size={13} />
-                                                                    )}
-                                                                    Accept
-                                                                </button>
-                                                                <button
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        handleInvitationAction(notif, 'declined');
-                                                                    }}
-                                                                    disabled={actionLoading?.startsWith(notif.id)}
-                                                                    style={{
-                                                                        flex: 1, padding: '7px 14px',
-                                                                        borderRadius: 8,
-                                                                        background: 'rgba(239, 68, 68, 0.06)',
-                                                                        border: '1px solid rgba(239, 68, 68, 0.12)',
-                                                                        color: '#ef4444',
-                                                                        fontSize: 12, fontWeight: 600,
-                                                                        cursor: 'pointer',
-                                                                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-                                                                        opacity: actionLoading === `${notif.id}-declined` ? 0.7 : 1,
-                                                                        transition: 'all 0.15s',
-                                                                    }}
-                                                                >
-                                                                    {actionLoading === `${notif.id}-declined` ? (
-                                                                        <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} />
-                                                                    ) : (
-                                                                        <X size={13} />
-                                                                    )}
-                                                                    Decline
-                                                                </button>
-                                                            </div>
-                                                        )}
-                                                    </div>
-
-                                                    {/* ── Unread indicator ── */}
-                                                    {!notif.read && notif.type !== 'group_invite' && (
-                                                        <div style={{
-                                                            width: 7, height: 7,
-                                                            borderRadius: '50%',
-                                                            background: 'var(--accent-500)',
-                                                            flexShrink: 0,
-                                                            alignSelf: 'center',
-                                                            boxShadow: '0 0 8px rgba(var(--accent-500-rgb), 0.4)',
-                                                        }} />
-                                                    )}
-                                                </motion.div>
-                                            );
-                                        })
+                                        <>
+                                            {unread.length > 0 && <div className={styles.groupLabel}>New</div>}
+                                            {unread.map((notif, index) => renderItem(notif, index))}
+                                            {earlier.length > 0 && <div className={styles.groupLabel}>Earlier</div>}
+                                            {earlier.map((notif, index) => renderItem(notif, unread.length + index))}
+                                        </>
                                     )}
                                 </div>
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
-                </>
+                            </motion.section>
+                        </motion.div>
+                    )}
+                </AnimatePresence>,
+                document.body
             )}
-        </div>
+        </>
     );
 }

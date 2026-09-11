@@ -1,544 +1,114 @@
 'use client';
 
-import {
-    PieChart,
-    Pie,
-    Cell,
-    BarChart,
-    Bar,
-    XAxis,
-    YAxis,
-    CartesianGrid,
-    Tooltip,
-    ResponsiveContainer,
-} from 'recharts';
+import { useId } from 'react';
+import { Bar, BarChart, Cell, LabelList, Pie, PieChart, ResponsiveContainer, XAxis } from 'recharts';
+import styles from './charts.module.css';
 
-import { formatCurrency } from '@/lib/utils';
+export interface TrendPoint {
+    label: string;
+    /** paise */
+    amount: number;
+    current?: boolean;
+}
 
-/* ── Glassmorphic card wrapper ── */
-const glassCard: React.CSSProperties = {
-    background: 'var(--bg-glass)',
-    backdropFilter: 'blur(20px) saturate(1.4)',
-    WebkitBackdropFilter: 'blur(20px) saturate(1.4)',
-    border: '1px solid var(--border-default, rgba(0,0,0,0.06))',
-    borderRadius: 'var(--radius-xl)',
-    boxShadow: 'var(--shadow-card)',
-    padding: 'var(--space-4)',
-    position: 'relative' as const,
-    overflow: 'hidden' as const,
-};
-
-/* ── Vibrant category color palette ── */
-const VIBRANT_COLORS = [
-    '#f43f5e', // rose
-    '#8b5cf6', // violet
-    '#06b6d4', // cyan
-    '#f59e0b', // amber
-    '#10b981', // emerald
-    '#3b82f6', // blue
-    '#ec4899', // pink
-    '#14b8a6', // teal
-    '#f97316', // orange
-    '#a855f7', // purple
-    '#22c55e', // green
-    '#e11d48', // crimson
-    '#6366f1', // indigo
-    '#eab308', // yellow
-    '#0ea5e9', // sky
-    '#d946ef', // fuchsia
-];
-
-// Gradient definitions for bars
-const GRADIENT_PAIRS = [
-    ['#f43f5e', '#fb7185'],   // rose
-    ['#8b5cf6', '#a78bfa'],   // violet
-    ['#06b6d4', '#22d3ee'],   // cyan
-    ['#f59e0b', '#fbbf24'],   // amber
-    ['#10b981', '#34d399'],   // emerald
-    ['#3b82f6', '#60a5fa'],   // blue
-];
-
-// ── Category Spending Pie Chart ──
-
-interface CategoryData {
-    name: string;
-    value: number; // paise
+export interface DonutSlice {
+    key: string;
+    label: string;
+    /** paise */
+    value: number;
     color: string;
 }
 
-const MOCK_CATEGORY_DATA: CategoryData[] = [
-    { name: 'Food', value: 580000, color: '#f43f5e' },
-    { name: 'Transport', value: 320000, color: '#8b5cf6' },
-    { name: 'Stay', value: 850000, color: '#06b6d4' },
-    { name: 'Shopping', value: 190000, color: '#f59e0b' },
-    { name: 'Tickets', value: 120000, color: '#10b981' },
-    { name: 'Entertainment', value: 95000, color: '#3b82f6' },
-];
-
-export function SpendingPieChart({ data = MOCK_CATEGORY_DATA }: { data?: CategoryData[] }) {
-    const total = data.reduce((sum, d) => sum + d.value, 0);
-    // Assign vibrant colors if not already colorful
-    const coloredData = data.map((d, i) => ({
-        ...d,
-        color: VIBRANT_COLORS[i % VIBRANT_COLORS.length],
-    }));
-
-    return (
-        <div style={glassCard}>
-            {/* Subtle accent glow */}
-            <div style={{
-                position: 'absolute', top: -40, right: -40, width: 120, height: 120,
-                borderRadius: '50%', background: 'rgba(var(--accent-500-rgb), 0.06)',
-                filter: 'blur(40px)', pointerEvents: 'none',
-            }} />
-            <h4 style={{
-                fontSize: 'var(--text-sm)', fontWeight: 700, marginBottom: 'var(--space-3)',
-                color: 'var(--fg-primary)', position: 'relative', zIndex: 1,
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-            }}>
-                <span style={{ fontSize: 16 }}>📊</span>
-                Spending by Category
-            </h4>
-            <div style={{ width: '100%', height: 230, position: 'relative', zIndex: 1 }}>
-                <ResponsiveContainer minWidth={0}>
-                    <PieChart>
-                        <defs>
-                            {coloredData.map((entry, i) => (
-                                <linearGradient key={`grad-${i}`} id={`pieGrad-${i}`} x1="0" y1="0" x2="1" y2="1">
-                                    <stop offset="0%" stopColor={entry.color} stopOpacity={1} />
-                                    <stop offset="100%" stopColor={entry.color} stopOpacity={0.7} />
-                                </linearGradient>
-                            ))}
-                        </defs>
-                        <Pie
-                            data={coloredData}
-                            cx="50%"
-                            cy="50%"
-                            innerRadius={58}
-                            outerRadius={90}
-                            paddingAngle={3}
-                            dataKey="value"
-                            animationBegin={0}
-                            animationDuration={900}
-                            cornerRadius={4}
-                        >
-                            {coloredData.map((_, i) => (
-                                <Cell key={i} fill={`url(#pieGrad-${i})`} stroke="rgba(255,255,255,0.15)" strokeWidth={1} />
-                            ))}
-                        </Pie>
-                        <Tooltip
-                            wrapperStyle={{ outline: 'none', border: 'none', background: 'transparent', boxShadow: 'none' }}
-                            cursor={false}
-                            content={({ payload }) => {
-                                if (!payload?.length) return null;
-                                const d = payload[0].payload as CategoryData;
-                                return (
-                                    <div style={{
-                                        background: 'var(--surface-card, rgba(255,255,255,0.95))', backdropFilter: 'blur(16px)',
-                                        border: '1px solid var(--border-default, rgba(0,0,0,0.08))',
-                                        borderRadius: '12px',
-                                        padding: '10px 14px', fontSize: 'var(--text-xs)',
-                                        boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
-                                        color: 'var(--fg-primary)',
-                                    }}>
-                                        <span style={{ fontWeight: 700, color: d.color }}>{d.name}</span>
-                                        <span style={{ color: 'var(--fg-secondary)', marginLeft: 6 }}>{formatCurrency(d.value)}</span>
-                                        <span style={{ color: 'var(--fg-tertiary)', marginLeft: 6 }}>
-                                            ({Math.round((d.value / total) * 100)}%)
-                                        </span>
-                                    </div>
-                                );
-                            }}
-                        />
-                    </PieChart>
-                </ResponsiveContainer>
-            </div>
-            {/* ── Colorful Legend Grid ── */}
-            <div style={{
-                display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '6px 12px',
-                marginTop: 'var(--space-2)', position: 'relative', zIndex: 1,
-            }}>
-                {coloredData.map((d) => (
-                    <div key={d.name} style={{
-                        display: 'flex', alignItems: 'center', gap: 6,
-                        fontSize: 11, padding: '4px 8px', borderRadius: 'var(--radius-md)',
-                        background: `${d.color}08`, border: `1px solid ${d.color}15`,
-                    }}>
-                        <span style={{
-                            width: 10, height: 10, borderRadius: 3, flexShrink: 0,
-                            background: `linear-gradient(135deg, ${d.color}, ${d.color}aa)`,
-                            boxShadow: `0 0 6px ${d.color}40`,
-                        }} />
-                        <span style={{ color: 'var(--fg-secondary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
-                            {d.name}
-                        </span>
-                        <span style={{ fontWeight: 700, color: d.color, flexShrink: 0 }}>
-                            {Math.round((d.value / total) * 100)}%
-                        </span>
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
+function trimDecimal(value: number) {
+    return value >= 100 ? Math.round(value).toString() : value.toFixed(1).replace(/\.0$/, '');
 }
 
-// ── Daily Spending Bar Chart ──
-
-interface DailyData {
-    day: string;
-    amount: number; // paise
+/** Compact rupees from paise — ₹840, ₹12.4k, ₹1.2L, ₹3Cr. */
+export function formatCompactRupees(paise: number) {
+    const rupees = Math.abs(paise) / 100;
+    const sign = paise < 0 ? '−' : '';
+    if (rupees >= 1_00_00_000) return `${sign}₹${trimDecimal(rupees / 1_00_00_000)}Cr`;
+    if (rupees >= 1_00_000) return `${sign}₹${trimDecimal(rupees / 1_00_000)}L`;
+    if (rupees >= 1_000) return `${sign}₹${trimDecimal(rupees / 1_000)}k`;
+    return `${sign}₹${Math.round(rupees)}`;
 }
 
-const MOCK_DAILY_DATA: DailyData[] = [
-    { day: 'Mon', amount: 250000 },
-    { day: 'Tue', amount: 180000 },
-    { day: 'Wed', amount: 420000 },
-    { day: 'Thu', amount: 310000 },
-    { day: 'Fri', amount: 150000 },
-    { day: 'Sat', amount: 580000 },
-    { day: 'Sun', amount: 350000 },
-];
-
-export function DailySpendingChart({
-    data = MOCK_DAILY_DATA,
-    title = 'Daily Spending',
-    emoji = '📈',
-}: {
-    data?: DailyData[];
-    title?: string;
-    emoji?: string;
-}) {
-    const maxAmount = Math.max(...data.map(d => d.amount));
+/** Month-over-month bars; the current month glows in the accent gradient. */
+export function MonthlyTrendChart({ data, height = 210 }: { data: TrendPoint[]; height?: number }) {
+    const uid = useId().replace(/[^a-zA-Z0-9_-]/g, '');
+    const currentId = `trend-current-${uid}`;
+    const pastId = `trend-past-${uid}`;
 
     return (
-        <div style={glassCard}>
-            <div style={{
-                position: 'absolute', bottom: -30, left: -30, width: 100, height: 100,
-                borderRadius: '50%', background: 'rgba(var(--accent-500-rgb), 0.05)',
-                filter: 'blur(30px)', pointerEvents: 'none',
-            }} />
-            <h4 style={{
-                fontSize: 'var(--text-sm)', fontWeight: 700, marginBottom: 'var(--space-3)',
-                color: 'var(--fg-primary)', position: 'relative', zIndex: 1,
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-            }}>
-                <span style={{ fontSize: 16 }}>{emoji}</span>
-                {title}
-            </h4>
-            <div style={{ width: '100%', height: 210, position: 'relative', zIndex: 1 }}>
-                <ResponsiveContainer minWidth={0}>
-                    <BarChart data={data} barSize={22}>
-                        <defs>
-                            {GRADIENT_PAIRS.map(([start, end], i) => (
-                                <linearGradient key={`barGrad-${i}`} id={`barGrad-${i}`} x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="0%" stopColor={start} stopOpacity={0.95} />
-                                    <stop offset="100%" stopColor={end} stopOpacity={0.6} />
-                                </linearGradient>
-                            ))}
-                        </defs>
-                        <CartesianGrid
-                            strokeDasharray="3 3"
-                            stroke="var(--border-subtle)"
-                            vertical={false}
-                            strokeOpacity={0.5}
-                        />
-                        <XAxis
-                            dataKey="day"
-                            tick={{ fill: 'var(--fg-tertiary)', fontSize: 11, fontWeight: 500 }}
-                            axisLine={false}
-                            tickLine={false}
-                        />
-                        <YAxis
-                            tick={{ fill: 'var(--fg-tertiary)', fontSize: 10 }}
-                            axisLine={false}
-                            tickLine={false}
-                            tickFormatter={(v: number) => `₹${(v / 100).toLocaleString('en-IN')}`}
-                            width={55}
-                        />
-                        <Tooltip
-                            wrapperStyle={{ outline: 'none', border: 'none', background: 'transparent', boxShadow: 'none' }}
-                            cursor={{ fill: 'rgba(var(--accent-500-rgb), 0.06)' }}
-                            content={({ payload, label }) => {
-                                if (!payload?.length) return null;
-                                return (
-                                    <div style={{
-                                        background: 'var(--surface-card, rgba(255,255,255,0.95))', backdropFilter: 'blur(16px)',
-                                        border: '1px solid var(--border-default, rgba(0,0,0,0.08))',
-                                        borderRadius: 'var(--radius-lg, 12px)',
-                                        padding: '10px 14px', fontSize: 'var(--text-xs)',
-                                        boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
-                                        color: 'var(--fg-primary)',
-                                    }}>
-                                        <span style={{ fontWeight: 700 }}>{label}</span>
-                                        <span style={{ marginLeft: 6, color: 'var(--fg-secondary)' }}>
-                                            {formatCurrency(payload[0].value as number)}
-                                        </span>
-                                    </div>
-                                );
-                            }}
-                        />
-                        <Bar
+        <div className={styles.chart} style={{ height }}>
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                <BarChart data={data} margin={{ top: 26, right: 0, bottom: 0, left: 0 }} barCategoryGap="24%">
+                    <defs>
+                        <linearGradient id={currentId} x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" style={{ stopColor: 'var(--accent-400)' }} />
+                            <stop offset="100%" style={{ stopColor: 'var(--accent-600)' }} />
+                        </linearGradient>
+                        <linearGradient id={pastId} x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" style={{ stopColor: 'var(--accent-500)', stopOpacity: 0.34 }} />
+                            <stop offset="100%" style={{ stopColor: 'var(--accent-500)', stopOpacity: 0.12 }} />
+                        </linearGradient>
+                    </defs>
+                    <XAxis dataKey="label" axisLine={false} tickLine={false} interval={0} tickMargin={8} />
+                    <Bar dataKey="amount" radius={[10, 10, 4, 4]} maxBarSize={42} animationDuration={750}>
+                        {data.map((point, index) => (
+                            <Cell key={`${point.label}-${index}`} fill={`url(#${point.current ? currentId : pastId})`} />
+                        ))}
+                        <LabelList
                             dataKey="amount"
-                            radius={[6, 6, 0, 0]}
-                            animationBegin={0}
-                            animationDuration={700}
-                        >
-                            {data.map((entry, i) => (
-                                <Cell
-                                    key={i}
-                                    fill={entry.amount === maxAmount ? 'url(#barGrad-0)' : `url(#barGrad-${(i % 5) + 1})`}
-                                />
-                            ))}
-                        </Bar>
-                    </BarChart>
-                </ResponsiveContainer>
-            </div>
+                            position="top"
+                            offset={8}
+                            formatter={(value: unknown) => (Number(value) > 0 ? formatCompactRupees(Number(value)) : '')}
+                        />
+                    </Bar>
+                </BarChart>
+            </ResponsiveContainer>
         </div>
     );
 }
 
-// ── Member Spending Comparison ──
-
-interface MemberSpend {
-    name: string;
-    paid: number;   // paise
-    spent: number;  // paise (fair share / consumption)
-}
-
-interface GroupMemberSpend {
-    name: string;
-    amount: number;
-    image?: string | null;
-}
-
-const MOCK_MEMBER_DATA: MemberSpend[] = [
-    { name: 'Sayan', paid: 780000, spent: 520000 },
-    { name: 'Aman', paid: 450000, spent: 520000 },
-    { name: 'Priya', paid: 650000, spent: 520000 },
-    { name: 'Rahul', paid: 200000, spent: 520000 },
-];
-
-const MEMBER_PAID_COLORS = ['#f43f5e', '#8b5cf6', '#06b6d4', '#f59e0b', '#10b981', '#3b82f6'];
-const MEMBER_OWES_COLORS = ['#fda4af', '#c4b5fd', '#67e8f9', '#fcd34d', '#6ee7b7', '#93c5fd'];
-
-export function MemberSpendChart({ data = MOCK_MEMBER_DATA }: { data?: MemberSpend[] }) {
-    return (
-        <div style={glassCard}>
-            <div style={{
-                position: 'absolute', top: -20, left: '50%', width: 160, height: 80,
-                transform: 'translateX(-50%)', borderRadius: '50%',
-                background: 'rgba(var(--accent-500-rgb), 0.04)',
-                filter: 'blur(30px)', pointerEvents: 'none',
-            }} />
-            <h4 style={{
-                fontSize: 'var(--text-sm)', fontWeight: 700, marginBottom: 'var(--space-3)',
-                color: 'var(--fg-primary)', position: 'relative', zIndex: 1,
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-            }}>
-                <span style={{ fontSize: 16 }}>👥</span>
-                Who Paid vs Who Spent
-            </h4>
-            <div style={{ width: '100%', height: Math.max(180, data.length * 50), position: 'relative', zIndex: 1 }}>
-                <ResponsiveContainer minWidth={0}>
-                    <BarChart data={data} layout="vertical" barSize={12}>
-                        <defs>
-                            {data.map((_, i) => (
-                                <linearGradient key={`mpGrad-${i}`} id={`memberPaidGrad-${i}`} x1="0" y1="0" x2="1" y2="0">
-                                    <stop offset="0%" stopColor={MEMBER_PAID_COLORS[i % MEMBER_PAID_COLORS.length]} stopOpacity={0.9} />
-                                    <stop offset="100%" stopColor={MEMBER_PAID_COLORS[i % MEMBER_PAID_COLORS.length]} stopOpacity={0.6} />
-                                </linearGradient>
-                            ))}
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" horizontal={false} strokeOpacity={0.5} />
-                        <XAxis
-                            type="number"
-                            tick={{ fill: 'var(--fg-tertiary)', fontSize: 10 }}
-                            axisLine={false}
-                            tickLine={false}
-                            tickFormatter={(v: number) => `₹${(v / 100).toLocaleString('en-IN')}`}
-                        />
-                        <YAxis
-                            type="category"
-                            dataKey="name"
-                            tick={{ fill: 'var(--fg-secondary)', fontSize: 11, fontWeight: 500 }}
-                            axisLine={false}
-                            tickLine={false}
-                            width={75}
-                        />
-                        <Tooltip
-                            wrapperStyle={{ outline: 'none', border: 'none', background: 'transparent', boxShadow: 'none' }}
-                            cursor={false}
-                            content={({ payload, label }) => {
-                                if (!payload?.length) return null;
-                                return (
-                                    <div style={{
-                                        background: 'var(--surface-card, rgba(255,255,255,0.95))', backdropFilter: 'blur(16px)',
-                                        border: '1px solid var(--border-default, rgba(0,0,0,0.08))',
-                                        borderRadius: '12px',
-                                        padding: '10px 14px', fontSize: 'var(--text-xs)',
-                                        boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
-                                        color: 'var(--fg-primary)',
-                                    }}>
-                                        <div style={{ fontWeight: 700, marginBottom: 4, color: 'var(--fg-primary)' }}>{label}</div>
-                                        {payload.map((p: { name: string; value: number; color: string }) => (
-                                            <div key={p.name} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                                                <span style={{ width: 6, height: 6, borderRadius: 2, background: p.color }} />
-                                                <span>{p.name === 'paid' ? 'Paid' : 'Spent'}:</span>
-                                                <span style={{ fontWeight: 600 }}>{formatCurrency(p.value)}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                );
-                            }}
-                        />
-                        <Bar dataKey="paid" radius={[0, 6, 6, 0]} name="paid" animationDuration={700}>
-                            {data.map((_, i) => (
-                                <Cell key={i} fill={`url(#memberPaidGrad-${i})`} />
-                            ))}
-                        </Bar>
-                        <Bar dataKey="spent" radius={[0, 6, 6, 0]} name="spent" animationDuration={700}>
-                            {data.map((_, i) => (
-                                <Cell key={i} fill={MEMBER_OWES_COLORS[i % MEMBER_OWES_COLORS.length]} opacity={0.45} />
-                            ))}
-                        </Bar>
-                    </BarChart>
-                </ResponsiveContainer>
-            </div>
-            {/* ── Colorful legend ── */}
-            <div style={{
-                display: 'flex', gap: 16, marginTop: 'var(--space-2)',
-                fontSize: 'var(--text-xs)', justifyContent: 'center', position: 'relative', zIndex: 1,
-            }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                    <span style={{
-                        width: 12, height: 8, borderRadius: 3,
-                        background: 'linear-gradient(90deg, #f43f5e, #8b5cf6)',
-                    }} />
-                    <span style={{ fontWeight: 600, color: 'var(--fg-secondary)' }}>Paid</span>
-                </span>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                    <span style={{
-                        width: 12, height: 8, borderRadius: 3,
-                        background: 'linear-gradient(90deg, #fda4af, #c4b5fd)', opacity: 0.5,
-                    }} />
-                    <span style={{ fontWeight: 600, color: 'var(--fg-secondary)' }}>Spent</span>
-                </span>
-            </div>
-        </div>
-    );
-}
-
-export function GroupSpendBarChart({
+/** Donut with the total in the middle. */
+export function CategoryDonut({
     data,
-    title = 'Spent by Member',
-    subtitle = 'How much each person paid in this group this month',
+    total,
+    caption,
+    size = 196,
 }: {
-    data: GroupMemberSpend[];
-    title?: string;
-    subtitle?: string;
+    data: DonutSlice[];
+    total: number;
+    caption?: string;
+    size?: number;
 }) {
-    const maxAmount = Math.max(...data.map((entry) => entry.amount), 0);
-
     return (
-        <div style={glassCard}>
-            <div style={{
-                position: 'absolute', inset: 0,
-                background: 'radial-gradient(circle at top left, rgba(var(--accent-500-rgb), 0.08), transparent 45%)',
-                pointerEvents: 'none',
-            }} />
-            <div style={{ position: 'relative', zIndex: 1 }}>
-                <div style={{
-                    textAlign: 'center',
-                    marginBottom: 'var(--space-4)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 4,
-                }}>
-                    <h4 style={{
-                        fontSize: 'var(--text-sm)', fontWeight: 700,
-                        color: 'var(--fg-primary)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                    }}>
-                        <span style={{ fontSize: 16 }}>💸</span>
-                        {title}
-                    </h4>
-                    <p style={{
-                        margin: 0,
-                        fontSize: 'var(--text-xs)',
-                        color: 'var(--fg-tertiary)',
-                    }}>
-                        {subtitle}
-                    </p>
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-                    {data.map((entry, index) => {
-                        const amount = entry.amount;
-                        const width = maxAmount > 0 ? `${Math.max((amount / maxAmount) * 100, 10)}%` : '10%';
-                        const [start, end] = GRADIENT_PAIRS[index % GRADIENT_PAIRS.length];
-                        return (
-                            <div key={entry.name} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                                <div style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'space-between',
-                                    gap: 12,
-                                }}>
-                                    <div style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: 10,
-                                        minWidth: 0,
-                                        flex: 1,
-                                    }}>
-                                        <div style={{
-                                            width: 10,
-                                            height: 10,
-                                            borderRadius: '50%',
-                                            flexShrink: 0,
-                                            background: `linear-gradient(135deg, ${start}, ${end})`,
-                                            boxShadow: `0 0 10px ${start}55`,
-                                        }} />
-                                        <span style={{
-                                            fontSize: 'var(--text-sm)',
-                                            fontWeight: 700,
-                                            color: 'var(--fg-primary)',
-                                            overflow: 'hidden',
-                                            textOverflow: 'ellipsis',
-                                            whiteSpace: 'nowrap',
-                                        }}>
-                                            {entry.name}
-                                        </span>
-                                    </div>
-                                    <span style={{
-                                        fontSize: 'var(--text-sm)',
-                                        fontWeight: 700,
-                                        color: 'var(--fg-primary)',
-                                        flexShrink: 0,
-                                    }}>
-                                        {formatCurrency(amount)}
-                                    </span>
-                                </div>
-
-                                <div style={{
-                                    height: 14,
-                                    borderRadius: 999,
-                                    overflow: 'hidden',
-                                    background: 'rgba(var(--accent-500-rgb), 0.08)',
-                                    border: '1px solid rgba(var(--accent-500-rgb), 0.08)',
-                                }}>
-                                    <div style={{
-                                        height: '100%',
-                                        width,
-                                        borderRadius: 999,
-                                        background: `linear-gradient(90deg, ${start}, ${end})`,
-                                        boxShadow: `0 0 18px ${start}33 inset`,
-                                    }} />
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
+        <div className={styles.donut} style={{ width: size, height: size }}>
+            <PieChart width={size} height={size}>
+                <Pie
+                    data={data}
+                    dataKey="value"
+                    nameKey="label"
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={Math.round(size * 0.36)}
+                    outerRadius={Math.round(size / 2) - 2}
+                    paddingAngle={data.length > 1 ? 2.5 : 0}
+                    cornerRadius={8}
+                    startAngle={90}
+                    endAngle={-270}
+                    stroke="none"
+                    animationDuration={800}
+                >
+                    {data.map((slice) => (
+                        <Cell key={slice.key} fill={slice.color} />
+                    ))}
+                </Pie>
+            </PieChart>
+            <div className={styles.donutCenter}>
+                <span className={styles.donutValue}>{formatCompactRupees(total)}</span>
+                {caption && <span className={styles.donutCaption}>{caption}</span>}
             </div>
         </div>
     );

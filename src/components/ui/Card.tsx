@@ -5,7 +5,7 @@ import { motion, HTMLMotionProps } from 'framer-motion';
 import styles from './card.module.css';
 import { cn } from '@/lib/utils';
 
-type CardPadding = 'compact' | 'normal' | 'spacious';
+type CardPadding = 'none' | 'compact' | 'normal' | 'spacious';
 
 interface CardProps extends Omit<HTMLAttributes<HTMLDivElement>, 'onAnimationStart' | 'onDrag' | 'onDragEnd' | 'onDragStart'> {
     padding?: CardPadding;
@@ -19,7 +19,7 @@ const Card = forwardRef<HTMLDivElement, CardProps>(
     ({ children, padding = 'normal', interactive, glass, elevated, glow, className, ...props }, ref) => {
         const classes = cn(
             styles.card,
-            styles[padding],
+            padding !== 'none' && styles[padding],
             interactive && styles.interactive,
             glass && styles.glass,
             elevated && styles.elevated,
@@ -32,10 +32,9 @@ const Card = forwardRef<HTMLDivElement, CardProps>(
                 <motion.div
                     ref={ref}
                     className={classes}
-                    whileHover={{ y: -2, scale: 1.005 }}
-                    whileTap={{ scale: 0.995 }}
-                    transition={{ type: 'spring' as const, stiffness: 300, damping: 20 }}
-                    {...(props as HTMLMotionProps<"div">)}
+                    whileTap={{ scale: 0.985 }}
+                    transition={{ type: 'spring' as const, stiffness: 420, damping: 30 }}
+                    {...(props as HTMLMotionProps<'div'>)}
                 >
                     {children}
                 </motion.div>
