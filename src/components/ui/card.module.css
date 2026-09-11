@@ -7,7 +7,8 @@
 .card {
     background: var(--surface-card);
     border: 1px solid var(--border-glass, var(--border-default));
-    border-radius: var(--radius-xl);
+    border-radius: var(--surface-radius);
+    min-width: 0;
     overflow: hidden;
     position: relative;
     box-shadow: var(--shadow-card, var(--shadow-sm));

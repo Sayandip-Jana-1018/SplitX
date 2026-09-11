@@ -287,6 +287,7 @@ export default function DashboardPage() {
                 />
             ) : (
                 <motion.div
+                    className="dashboard-stage"
                     style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', ...desktopStageStyle }}
                     initial="initial"
                     animate="animate"
@@ -304,6 +305,7 @@ export default function DashboardPage() {
 
                     {/* ═══ HERO SECTION — Animated Mesh Gradient Balance Card ═══ */}
                     <motion.div
+                        className="balance-overview"
                         style={{ scale: heroScale, opacity: heroOpacity, y: heroY }}
                         transition={{ type: 'spring', stiffness: 300, damping: 30 }}
                     >
@@ -317,9 +319,9 @@ export default function DashboardPage() {
                                     ...glassCard,
                                     backdropFilter: 'none',
                                     WebkitBackdropFilter: 'none',
-                                    padding: 'var(--space-5)',
-                                    background: 'linear-gradient(135deg, rgba(var(--accent-500-rgb), 0.15) 0%, var(--bg-glass) 30%, rgba(var(--accent-500-rgb), 0.08) 60%, var(--bg-glass) 100%)',
-                                    boxShadow: 'var(--shadow-card), 0 0 60px rgba(var(--accent-500-rgb), 0.1)',
+                                    padding: 'clamp(24px, 4vw, 40px)',
+                                    background: 'var(--surface-hero)',
+                                    boxShadow: '0 16px 48px rgba(10, 25, 16, 0.12)',
                                 }}
                             >
                                 <div style={glassCardInner}>

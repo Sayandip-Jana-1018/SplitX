@@ -358,9 +358,9 @@ export default function SettlementsPage() {
             <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
                 <div className="page-hero" style={{ paddingTop: 'var(--space-2)' }}>
                     <div className="page-kicker">Settle Smarter</div>
-                    <h2 className="page-hero-title">Minimum transfers, maximum clarity</h2>
+                    <h2 className="page-hero-title">Clear the tab. Keep the good.</h2>
                     <p className="page-hero-subtitle">
-                        Review who owes whom, understand why each transfer exists, and jump into Balance Journey when the route changes.
+                        A simpler way to square things up. Review, pay, and confirm together.
                     </p>
                 </div>
             </motion.div>
@@ -372,7 +372,7 @@ export default function SettlementsPage() {
                 transition={{ duration: 0.5, delay: 0.05 }}
                 style={{ width: '100%', maxWidth: isDesktop ? 860 : undefined, margin: '0 auto' }}
             >
-                <div style={{
+                <div className="product-panel settlement-overview" style={{
                     ...glass, borderRadius: 'var(--radius-2xl)', padding: 'var(--space-4)',
                     background: 'linear-gradient(135deg, rgba(var(--accent-500-rgb), 0.08), var(--bg-glass), rgba(var(--accent-500-rgb), 0.04))',
                     boxShadow: 'var(--shadow-card), 0 0 30px rgba(var(--accent-500-rgb), 0.06)',

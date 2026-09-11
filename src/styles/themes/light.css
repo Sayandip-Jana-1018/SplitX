@@ -8,11 +8,16 @@
     color-scheme: light;
 
     /* ── Backgrounds — layered with subtle warmth ── */
-    --bg-primary: #f0f2f7;
-    --bg-secondary: #f7f8fb;
-    --bg-tertiary: #e8ecf3;
+    --bg-primary: #f5f4f0;
+    --bg-secondary: #faf9f6;
+    --bg-tertiary: #eeede8;
     --bg-elevated: #ffffff;
-    --bg-sunken: #e3e7ef;
+    --bg-sunken: #e7e6df;
+    --surface-hero: #172620;
+    --hero-text: #f5fff6;
+    --hero-muted: #c1d3c7;
+    --hero-accent: #d4f7a8;
+    --nav-surface: rgba(250, 249, 246, 0.94);
     --bg-overlay: rgba(15, 23, 42, 0.85);
     --voice-overlay: rgba(240, 242, 247, 0.92);
 
@@ -22,10 +27,10 @@
     --bg-glass-subtle: rgba(255, 255, 255, 0.7);
 
     /* ── Foregrounds (text) ── */
-    --fg-primary: #0f172a;
-    --fg-secondary: #475569;
-    --fg-tertiary: #94a3b8;
-    --fg-muted: #cbd5e1;
+    --fg-primary: #202b27;
+    --fg-secondary: #52605a;
+    --fg-tertiary: #63716a;
+    --fg-muted: #718078;
     --fg-inverse: #ffffff;
     --fg-on-accent: #ffffff;
 
@@ -37,7 +42,7 @@
     --border-glass: rgba(0, 0, 0, 0.08);
 
     /* ── Surfaces (cards, panels) ── */
-    --surface-card: rgba(255, 255, 255, 0.75);
+    --surface-card: #ffffff;
     --surface-card-hover: rgba(255, 255, 255, 0.95);
     --surface-panel: #ffffff;
     --surface-popover: #ffffff;

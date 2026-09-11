@@ -53,8 +53,8 @@
 }
 
 .closeBtn {
-    width: 32px;
-    height: 32px;
+    width: 44px;
+    height: 44px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -86,11 +86,14 @@
 /* Mobile centering fix */
 @media (max-width: 480px) {
     .overlay {
-        padding: var(--space-3);
+        padding: 16px 0 0;
+        align-items: flex-end;
     }
 
     .modal {
-        max-height: 85vh;
-        margin: auto;
+        max-height: 90dvh;
+        margin: auto 0 0;
+        border-radius: 28px 28px 0 0;
+        padding-bottom: env(safe-area-inset-bottom, 0px);
     }
 }

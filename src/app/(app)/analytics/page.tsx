@@ -168,9 +168,9 @@ export default function AnalyticsPage() {
         >
             <div className="page-hero" style={{ paddingTop: 'var(--space-2)' }}>
                 <div className="page-kicker">Group Analytics</div>
-                <h2 className="page-hero-title">See how one group is spending, clearly</h2>
+                <h2 className="page-hero-title">A little more perspective.</h2>
                 <p className="page-hero-subtitle" suppressHydrationWarning>
-                    Pick a group, then explore its real monthly trend, category mix, and who has paid the most so far without cross-group overlap.
+                    Follow the patterns behind your plans. Trends, categories, and contributions, one group at a time.
                 </p>
             </div>
 
@@ -367,7 +367,7 @@ export default function AnalyticsPage() {
                                 transition={{ delay: 0.08 }}
                                 style={{ width: '100%', maxWidth: isDesktop ? 980 : undefined, margin: '0 auto' }}
                             >
-                                <div style={{
+                                <div className="product-panel analytics-summary" style={{
                                     ...glass, borderRadius: 'var(--radius-2xl)', padding: 'var(--space-4)',
                                     background: 'linear-gradient(135deg, rgba(var(--accent-500-rgb), 0.1), var(--bg-glass), rgba(var(--accent-500-rgb), 0.05))',
                                     boxShadow: 'var(--shadow-card), 0 0 30px rgba(var(--accent-500-rgb), 0.06)',

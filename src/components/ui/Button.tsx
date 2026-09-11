@@ -38,6 +38,7 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         return (
             <motion.button
                 ref={ref}
+                aria-busy={loading || undefined}
                 whileTap={{ scale: 0.97 }}
                 whileHover={{ scale: 1.01 }}
                 transition={{ type: 'spring', stiffness: 400, damping: 17 }}

@@ -132,7 +132,7 @@ export default function HistoryPage() {
                     History
                 </div>
                 <h1 className="page-hero-title" style={{ fontSize: 'clamp(2rem, 6vw, 3rem)' }}>
-                    Choose a group for your Balance Journey
+                    Every balance has a story.
                 </h1>
                 <p className="page-hero-subtitle">
                     This history always shows only your own balance changes. Pick a group to see how your amount moved over time.

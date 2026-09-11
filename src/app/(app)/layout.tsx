@@ -1,6 +1,9 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useSyncExternalStore } from 'react';
+import Link from 'next/link';
+import { Plus, Split } from 'lucide-react';
+import { useDialogFocus } from '@/hooks/useDialogFocus';
 import { usePathname, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import dynamic from 'next/dynamic';
@@ -49,12 +52,11 @@ const NAV_ITEMS = [
 ];
 
 const BOTTOM_NAV = [
-    { href: '/dashboard', icon: LayoutDashboard, label: 'Home', color: '#3b82f6' },
-    { href: '/groups', icon: Users, label: 'Groups', color: '#8b5cf6' },
-    { href: '/history', icon: HistoryIcon, label: 'History', color: '#14b8a6' },
-    { href: '/analytics', icon: BarChart3, label: 'Analytics', color: '#f59e0b' },
-    { href: '/transactions', icon: Receipt, label: 'Activity', color: '#10b981' },
-    { href: '/settlements', icon: ArrowRightLeft, label: 'Settle', color: '#f43f5e' },
+    { href: '/dashboard', icon: LayoutDashboard, label: 'Home' },
+    { href: '/groups', icon: Users, label: 'Groups' },
+    { href: '/transactions/new', icon: Plus, label: 'Add' },
+    { href: '/transactions', icon: Receipt, label: 'Activity' },
+    { href: '/settlements', icon: ArrowRightLeft, label: 'Settle' },
 ];
 
 /* ── Animation variants ── */
@@ -93,6 +95,20 @@ function ActionPlaceholder() {
     );
 }
 
+function subscribeDesktop(callback: () => void) {
+    const mq = window.matchMedia('(min-width: 1024px)');
+    mq.addEventListener('change', callback);
+    return () => mq.removeEventListener('change', callback);
+}
+
+function getDesktopSnapshot() {
+    return window.matchMedia('(min-width: 1024px)').matches;
+}
+
+function getServerDesktopSnapshot() {
+    return false;
+}
+
 export default function AppLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
     const router = useRouter();
@@ -100,23 +116,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     const [deferredReady, setDeferredReady] = useState(false);
     const [chatReady, setChatReady] = useState(false);
     const [tourReady, setTourReady] = useState(false);
-    const [isDesktop, setIsDesktop] = useState(() => {
-        if (typeof window !== 'undefined') {
-            return window.matchMedia('(min-width: 1024px)').matches;
-        }
-        return false;
-    });
+    const isDesktop = useSyncExternalStore(subscribeDesktop, getDesktopSnapshot, getServerDesktopSnapshot);
+    const drawerRef = useDialogFocus(sidebarOpen && !isDesktop, () => setSidebarOpen(false));
     const haptics = useHaptics();
     const { user } = useCurrentUser();
     const { mode } = usePerformanceMode();
-
-    // Detect desktop breakpoint to conditionally render desktop sidebar
-    useEffect(() => {
-        const mq = window.matchMedia('(min-width: 1024px)');
-        const handler = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
-        mq.addEventListener('change', handler);
-        return () => mq.removeEventListener('change', handler);
-    }, []);
 
     const pageTitle = useMemo(
         () => NAV_ITEMS.find((item) => pathname.startsWith(item.href))?.label || 'Dashboard',
@@ -167,7 +171,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     }, [mode, showAppChrome]);
 
     return (
-        <div className={styles.appShell}>
+        <div className={cn(styles.appShell, isPrintRoute && styles.printShell)}>
+            {showAppChrome && <a className={styles.skipLink} href="#workspace">Skip to content</a>}
             {showAppChrome && <OfflineIndicator />}
             <DbKeepAlive />
             {showAppChrome && tourReady && <OnboardingTour />}
@@ -190,6 +195,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <AnimatePresence>
                 {showAppChrome && sidebarOpen && (
                     <motion.aside
+                        ref={drawerRef}
+                        role="dialog"
+                        aria-modal="true"
+                        aria-label="Navigation menu"
+                        tabIndex={-1}
+                        data-focus-dialog
                         className={styles.sidebar}
                         variants={sidebarVariants}
                         initial="closed"
@@ -202,7 +213,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
                         {/* Header */}
                         <motion.div className={styles.sidebarLogo} variants={navItemVariants}>
-                            <div className={styles.sidebarLogoIcon}>⚡</div>
+                            <div className={styles.sidebarLogoIcon}><Split size={22} /></div>
                             <span className="gradient-text-animated" style={{ fontWeight: 800, fontSize: 20 }}>SplitX</span>
                             <motion.button
                                 className={styles.sidebarClose}
@@ -282,7 +293,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 <aside className={cn(styles.sidebar, styles.desktopSidebar)}>
                     <div className={styles.sidebarMesh} />
                     <div className={styles.sidebarLogo}>
-                        <div className={styles.sidebarLogoIcon}>⚡</div>
+                        <div className={styles.sidebarLogoIcon}><Split size={22} /></div>
                         <span className="gradient-text-animated" style={{ fontWeight: 800, fontSize: 20 }}>SplitX</span>
                     </div>
                     <nav className={styles.sidebarNav}>
@@ -355,29 +366,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                         >
                             <Menu size={22} />
                         </motion.button>
-                        <h1 className={styles.headerTitle}>{pageTitle}</h1>
+                        <div><span className={styles.headerEyebrow}>Your shared money</span><span className={styles.headerTitle}>{pathname === '/transactions/new' ? 'New expense' : pathname === '/transactions/scan' ? 'Receipt scanner' : pageTitle}</span></div>
                     </div>
                     <div className={styles.headerRight}>
                         {deferredReady ? <GlobalSearch /> : <ActionPlaceholder />}
                         {deferredReady ? <NotificationPanel /> : <ActionPlaceholder />}
                         <ThemeSelector />
-                        <div
-                            onClick={() => router.push('/settings')}
-                            tabIndex={0}
-                            style={{
-                                cursor: 'pointer',
-                                transition: 'transform 0.15s ease',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center'
-                            }}
-                            onMouseDown={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(0.9)'; }}
-                            onMouseUp={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(1)'; }}
-                            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(1)'; }}
-                            suppressHydrationWarning
-                        >
+                        <Link href="/settings" className={styles.profileButton} aria-label="Your profile and settings">
                             <Avatar name={user?.name || 'User'} image={user?.image} size="sm" />
-                        </div>
+                        </Link>
                     </div>
                 </header>}
 
@@ -397,65 +394,25 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             {showAppChrome && <nav className={styles.bottomNav}>
                 <div className={styles.bottomNavInner}>
                     {BOTTOM_NAV.map((item) => {
-                        const isActive = pathname.startsWith(item.href);
+                        const isAdd = item.href === '/transactions/new';
+                        const isActive = item.href === '/transactions'
+                            ? pathname === item.href || pathname.startsWith('/transactions/receipts')
+                            : pathname.startsWith(item.href);
                         const Icon = item.icon;
                         return (
-                            <div key={item.href} style={{ display: 'contents' }}>
-                                <motion.button
-                                    suppressHydrationWarning
-                                    data-tour={item.href}
-                                    className={cn(
-                                        styles.bottomNavItem,
-                                        isActive && styles.bottomNavItemActive
-                                    )}
-                                    onClick={() => {
-                                        haptics.light();
-                                        router.push(item.href);
-                                    }}
-                                    whileTap={{ scale: 0.85 }}
-                                    style={{
-                                        color: isActive ? item.color : undefined,
-                                    }}
-                                >
-                                    <motion.div
-                                        className={styles.bottomNavIconWrap}
-                                        animate={isActive ? { y: -2, scale: 1.1 } : { y: 0, scale: 1 }}
-                                        transition={{ type: 'spring', damping: 18, stiffness: 350 }}
-                                    >
-                                        <Icon
-                                            size={20}
-                                            strokeWidth={isActive ? 2.5 : 1.8}
-                                            style={{
-                                                color: isActive ? item.color : `${item.color}80`,
-                                                transition: 'color 0.25s ease',
-                                            }}
-                                        />
-                                        {isActive && (
-                                            <motion.div
-                                                className={styles.bottomNavDot}
-                                                layoutId="bottomNavDot"
-                                                transition={{ type: 'spring', damping: 25, stiffness: 400 }}
-                                                style={{
-                                                    background: item.color,
-                                                    boxShadow: `0 0 8px ${item.color}80`,
-                                                }}
-                                            />
-                                        )}
-                                    </motion.div>
-                                    <span className={styles.bottomNavLabel}>{item.label}</span>
-                                    {isActive && (
-                                        <motion.div
-                                            className={styles.bottomNavActivePill}
-                                            layoutId="bottomNavActive"
-                                            transition={{ type: 'spring', damping: 25, stiffness: 350 }}
-                                            style={{
-                                                background: `${item.color}12`,
-                                                borderColor: `${item.color}18`,
-                                            }}
-                                        />
-                                    )}
-                                </motion.button>
-                            </div>
+                            <Link
+                                key={item.href}
+                                href={item.href}
+                                data-tour={item.href}
+                                aria-label={isAdd ? 'Add an expense' : item.label}
+                                aria-current={isActive ? 'page' : undefined}
+                                className={cn(styles.bottomNavItem, isActive && styles.bottomNavItemActive, isAdd && styles.dockAdd)}
+                                onClick={() => haptics.light()}
+                            >
+                                <span className={styles.bottomNavIconWrap}><Icon size={isAdd ? 26 : 21} strokeWidth={isActive ? 2.2 : 1.7} /></span>
+                                <span className={styles.bottomNavLabel}>{item.label}</span>
+                                {isActive && !isAdd && <motion.span className={styles.bottomNavActivePill} layoutId="bottomNavActive" />}
+                            </Link>
                         );
                     })}
                 </div>

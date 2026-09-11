@@ -1,6 +1,6 @@
 'use client';
 
-import { forwardRef, InputHTMLAttributes, TextareaHTMLAttributes, useState } from 'react';
+import { forwardRef, InputHTMLAttributes, TextareaHTMLAttributes, useState, useId } from 'react';
 import styles from './input.module.css';
 import { cn } from '@/lib/utils';
 
@@ -17,12 +17,14 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
 const Input = forwardRef<HTMLInputElement, InputProps>(
     ({ label, error, leftIcon, rightIcon, large, className, wrapperClassName, floating = false, ...props }, ref) => {
         const [focused, setFocused] = useState(false);
+        const generatedId = useId();
+        const inputId = props.id || generatedId;
         const hasValue = !!props.value || !!props.defaultValue;
         const isFloating = floating && label;
 
         return (
             <div className={cn(styles.wrapper, error && styles.error, wrapperClassName)}>
-                {label && !isFloating && <label className={styles.label}>{label}</label>}
+                {label && !isFloating && <label htmlFor={inputId} className={styles.label}>{label}</label>}
                 <div className={cn(styles.inputContainer, isFloating && styles.floatingContainer)}>
                     {leftIcon && <span className={styles.leftIcon}>{leftIcon}</span>}
                     <input
@@ -40,9 +42,13 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
                         onBlur={(e) => { setFocused(false); props.onBlur?.(e); }}
                         placeholder={isFloating ? ' ' : props.placeholder}
                         {...props}
+                        id={inputId}
+                        aria-invalid={error ? true : props['aria-invalid']}
+                        aria-describedby={[props['aria-describedby'], error ? `${inputId}-error` : ''].filter(Boolean).join(' ') || undefined}
                     />
                     {isFloating && (
                         <label
+                            htmlFor={inputId}
                             className={cn(
                                 styles.floatingLabel,
                                 (focused || hasValue) ? styles.floatingLabelActive : undefined,
@@ -54,7 +60,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
                     )}
                     {rightIcon && <span className={styles.rightIcon}>{rightIcon}</span>}
                 </div>
-                {error && <span className={styles.errorText}>{error}</span>}
+                {error && <span id={`${inputId}-error`} role="alert" className={styles.errorText}>{error}</span>}
             </div>
         );
     }
@@ -70,15 +76,20 @@ interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
 
 const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
     ({ label, error, className, ...props }, ref) => {
+        const generatedId = useId();
+        const inputId = props.id || generatedId;
         return (
             <div className={cn(styles.wrapper, error && styles.error)}>
-                {label && <label className={styles.label}>{label}</label>}
+                {label && <label htmlFor={inputId} className={styles.label}>{label}</label>}
                 <textarea
                     ref={ref}
                     className={cn(styles.input, styles.textarea, className)}
                     {...props}
+                    id={inputId}
+                    aria-invalid={error ? true : props['aria-invalid']}
+                    aria-describedby={error ? `${inputId}-error` : props['aria-describedby']}
                 />
-                {error && <span className={styles.errorText}>{error}</span>}
+                {error && <span id={`${inputId}-error`} role="alert" className={styles.errorText}>{error}</span>}
             </div>
         );
     }

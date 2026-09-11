@@ -13,7 +13,7 @@
     font-weight: var(--weight-medium, 500);
     color: var(--fg-secondary);
     margin-bottom: 2px;
-    text-align: center;
+    text-align: left;
 }
 
 .inputContainer {
@@ -24,14 +24,15 @@
 
 .input {
     width: 100%;
-    padding: 10px 14px;
-    font-size: var(--text-sm, 14px);
+    padding: 14px 16px;
+    min-height: 52px;
+    font-size: 16px;
     color: var(--fg-primary);
     background: var(--surface-input, var(--bg-secondary));
     border: 1.5px solid var(--border-default);
     border-radius: var(--radius-lg, 12px);
     outline: none;
-    text-align: center;
+    text-align: left;
     transition:
         border-color 0.25s ease,
         box-shadow 0.25s ease,
@@ -40,7 +41,7 @@
 
 .input::placeholder {
     color: var(--fg-muted);
-    text-align: center;
+    text-align: left;
 }
 
 /* ── Premium Focus Glow ── */

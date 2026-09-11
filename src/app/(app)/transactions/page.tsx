@@ -217,9 +217,9 @@ export default function TransactionsPage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
             <div className="page-hero" style={{ paddingTop: 'var(--space-2)' }}>
                 <div className="page-kicker">Activity Ledger</div>
-                <h2 className="page-hero-title">Every expense in one place</h2>
+                <h2 className="page-hero-title">The little things add up.</h2>
                 <p className="page-hero-subtitle">
-                    Search, inspect, and review split details with a cleaner timeline for your group activity.
+                    Every coffee, cab, and shared adventure. Find a bill or add the next one.
                 </p>
             </div>
 
@@ -229,7 +229,7 @@ export default function TransactionsPage() {
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.5, delay: 0.05 }}
             >
-                <div style={{
+                <div className="product-panel expense-summary" style={{
                     ...glass, borderRadius: 'var(--radius-2xl)', padding: 'var(--space-5)',
                     background: 'linear-gradient(135deg, rgba(var(--accent-500-rgb), 0.08), var(--bg-glass), rgba(var(--accent-500-rgb), 0.04))',
                     boxShadow: 'var(--shadow-card), 0 0 30px rgba(var(--accent-500-rgb), 0.06)',

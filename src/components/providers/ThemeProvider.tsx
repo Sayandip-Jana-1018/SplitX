@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useContext } from 'react';
+import { MotionConfig } from 'framer-motion';
 import { useTheme, COLOR_PALETTES } from '@/hooks/useTheme';
 import type { PaletteId, ColorPalette } from '@/hooks/useTheme';
 
@@ -19,9 +20,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
     return (
         <ThemeContext.Provider value={themeValues}>
-            <div style={themeValues.mounted ? undefined : { visibility: 'hidden' }}>
-                {children}
-            </div>
+            <MotionConfig reducedMotion="user" transition={{ type: 'spring', stiffness: 320, damping: 30 }}>
+                <div style={themeValues.mounted ? undefined : { visibility: 'hidden' }}>
+                    {children}
+                </div>
+            </MotionConfig>
         </ThemeContext.Provider>
     );
 }

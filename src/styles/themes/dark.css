@@ -10,18 +10,23 @@
     color-scheme: dark;
 
     /* ── Backgrounds — neutral deep-space, accent-tinted via overlays ── */
-    --bg-primary: #08080c;
-    --bg-secondary: #0e0e13;
-    --bg-tertiary: #141419;
-    --bg-elevated: #1a1a21;
-    --bg-sunken: #050507;
+    --bg-primary: #101416;
+    --bg-secondary: #171c1f;
+    --bg-tertiary: #22292c;
+    --bg-elevated: #252e31;
+    --bg-sunken: #0b0f10;
+    --surface-hero: #d4f7a8;
+    --hero-text: #142519;
+    --hero-muted: #3c563d;
+    --hero-accent: #193c24;
+    --nav-surface: rgba(23, 28, 31, 0.95);
     --bg-overlay: rgba(0, 0, 0, 0.8);
     --voice-overlay: rgba(8, 8, 12, 0.92);
 
     /* ── Glass — accent-tinted frosted glass ── */
-    --bg-glass: rgba(14, 14, 20, 0.55);
-    --bg-glass-strong: rgba(14, 14, 20, 0.78);
-    --bg-glass-subtle: rgba(14, 14, 20, 0.35);
+    --bg-glass: rgba(28, 35, 38, 0.94);
+    --bg-glass-strong: rgba(30, 38, 41, 0.98);
+    --bg-glass-subtle: rgba(28, 35, 38, 0.7);
     --bg-glass-iridescent: linear-gradient(135deg,
             rgba(var(--accent-500-rgb), 0.06) 0%,
             rgba(var(--accent-500-rgb), 0.03) 30%,
@@ -34,10 +39,10 @@
             transparent 70%);
 
     /* ── Foregrounds (text) — high-contrast with slight warmth ── */
-    --fg-primary: #f0f2f8;
-    --fg-secondary: #a0a8c0;
-    --fg-tertiary: #636d88;
-    --fg-muted: #3d4663;
+    --fg-primary: #f1f4ee;
+    --fg-secondary: #bbc5bf;
+    --fg-tertiary: #a0ada5;
+    --fg-muted: #8d9c94;
     --fg-inverse: #06060f;
     --fg-on-accent: #ffffff;
 
@@ -54,12 +59,12 @@
             rgba(255, 255, 255, 0.06) 100%);
 
     /* ── Surfaces (cards, panels) — neutral glass layering ── */
-    --surface-card: rgba(16, 16, 22, 0.60);
-    --surface-card-hover: rgba(22, 22, 30, 0.72);
-    --surface-panel: rgba(14, 14, 20, 0.78);
-    --surface-popover: rgba(18, 18, 24, 0.95);
-    --surface-input: rgba(16, 16, 22, 0.7);
-    --surface-input-hover: rgba(22, 22, 30, 0.82);
+    --surface-card: #1c2326;
+    --surface-card-hover: #242e31;
+    --surface-panel: #1c2326;
+    --surface-popover: #20282c;
+    --surface-input: #171d20;
+    --surface-input-hover: #242e31;
 
     /* ── Semantic Colors — vibrant neon-ish tints ── */
     --color-success: #34d399;

@@ -1,9 +1,11 @@
 import type { Metadata, Viewport } from 'next';
-import { JetBrains_Mono, Playfair_Display } from 'next/font/google';
+import { Geist, JetBrains_Mono, Playfair_Display } from 'next/font/google';
 import './globals.css';
 import { ThemeProvider } from '@/components/providers/ThemeProvider';
 import { ToastProvider } from '@/components/ui/Toast';
 import AuthProvider from '@/components/providers/AuthProvider';
+
+const geist = Geist({ subsets: ['latin'], variable: '--font-geist', display: 'swap' });
 
 const playfairDisplay = Playfair_Display({
   subsets: ['latin'],
@@ -44,8 +46,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
+  userScalable: true,
   viewportFit: 'cover',
   themeColor: [
     { media: '(prefers-color-scheme: light)', color: '#ffffff' },
@@ -60,7 +61,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" data-theme="dark" data-palette="amethyst-haze" suppressHydrationWarning>
-      <body className={`${playfairDisplay.variable} ${jetBrainsMono.variable}`}>
+      <body className={`${geist.variable} ${playfairDisplay.variable} ${jetBrainsMono.variable}`}>
         <AuthProvider>
           <ThemeProvider>
             <ToastProvider>

@@ -232,15 +232,15 @@ export default function SettingsPage() {
         >
             <div className="page-hero" style={{ paddingTop: 'var(--space-2)' }}>
                 <div className="page-kicker">Personalize SplitX</div>
-                <h2 className="page-hero-title">Make the app feel like yours</h2>
+                <h2 className="page-hero-title">Your space, your way.</h2>
                 <p className="page-hero-subtitle">
-                    Update your profile, theme, export preferences, and install settings from one calm, centered control room.
+                    The essentials about you. Your profile, your look, and your data, all in your hands.
                 </p>
             </div>
 
             {/* ═══ PROFILE CARD — Glassmorphic with glow ring ═══ */}
             <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.5, delay: 0.05 }}>
-                <div style={{
+                <div className="product-panel profile-overview" style={{
                     ...glass, borderRadius: 'var(--radius-2xl)', padding: 'var(--space-5)',
                     background: 'linear-gradient(135deg, rgba(var(--accent-500-rgb), 0.08), var(--bg-glass), rgba(var(--accent-500-rgb), 0.04))',
                     boxShadow: 'var(--shadow-card), 0 0 30px rgba(var(--accent-500-rgb), 0.06)',

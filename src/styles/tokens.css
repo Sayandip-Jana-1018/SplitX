@@ -57,9 +57,16 @@
   --shadow-glow-lg: 0 0 40px rgba(var(--accent-500-rgb), 0.4);
 
   /* ── Typography ── */
-  --font-sans: var(--font-playfair), Georgia, 'Times New Roman', serif;
-  --font-display: var(--font-playfair), Georgia, 'Times New Roman', serif;
+  --font-sans: var(--font-geist), 'Segoe UI', system-ui, sans-serif;
+  --font-display: var(--font-geist), 'Segoe UI', system-ui, sans-serif;
+  --font-editorial: var(--font-playfair), Georgia, serif;
   --font-mono: var(--font-jetbrains-mono), 'Fira Code', monospace;
+  --text-2xs: 0.6875rem;
+  --surface-radius: 24px;
+  --touch-target: 44px;
+  --space-page: clamp(18px, 4vw, 40px);
+  --sidebar-width: 264px;
+  --dock-height: 84px;
 
   --text-xs: 0.75rem;
   /* 12px */

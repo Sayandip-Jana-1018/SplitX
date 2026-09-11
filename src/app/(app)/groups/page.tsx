@@ -175,9 +175,9 @@ export default function GroupsPage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
             <div className="page-hero" style={{ paddingTop: 'var(--space-2)' }}>
                 <div className="page-kicker">Shared Spaces</div>
-                <h2 className="page-hero-title">Your groups, beautifully organized</h2>
+                <h2 className="page-hero-title">Life is better shared.</h2>
                 <p className="page-hero-subtitle">
-                    {groups.length} group{groups.length !== 1 ? 's' : ''} ready for expenses, journeys, settlements, and group-level clarity.
+                    From everyday plans to the next adventure. Keep everyone on the same page.
                 </p>
             </div>
             <div style={{ ...desktopStageStyle, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
@@ -252,7 +252,7 @@ export default function GroupsPage() {
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: i * 0.06, duration: 0.4 }}
                         >
-                            <div style={{
+                            <div className="product-card group-tile" style={{
                                 ...glass, padding: 0,
                                 cursor: 'pointer',
                                 textAlign: 'left',

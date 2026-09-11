@@ -14,7 +14,11 @@
     border: none;
     position: relative;
     overflow: hidden;
-    white-space: nowrap;
+    white-space: normal;
+    text-align: center;
+    min-height: var(--touch-target);
+    letter-spacing: -0.015em;
+    line-height: 1.3;
     user-select: none;
     transition:
         transform 0.2s var(--ease-spring),
