@@ -60,6 +60,19 @@ describe('POST /api/transactions', () => {
         expect(prisma.transaction.create.mock.calls[0][0].data.receiptUrl).toBe(trustedReceipt);
     });
 
+    it('counts expenses with a receipt under source="receipt" and the rest as manual', async () => {
+        const { metrics } = await import('@/lib/metrics');
+        metrics.transactionsCreated.reset();
+        await send({ receiptUrl: trustedReceipt, category: 'food' });
+        await send({ category: 'food' });
+
+        const values = (await metrics.transactionsCreated.get()).values;
+        expect(values).toEqual(expect.arrayContaining([
+            expect.objectContaining({ labels: { source: 'receipt', category: 'food' }, value: 1 }),
+            expect.objectContaining({ labels: { source: 'manual', category: 'food' }, value: 1 }),
+        ]));
+    });
+
     it('stores null when no receipt is attached', async () => {
         await send({});
         expect(prisma.transaction.create.mock.calls[0][0].data.receiptUrl).toBeNull();

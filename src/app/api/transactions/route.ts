@@ -263,7 +263,8 @@ export async function POST(req: Request) {
                 trip: { select: { id: true, title: true } },
             },
         });
-        recordTransactionCreated('manual', category, transaction.amount);
+        // Expenses carrying a receipt come from the scan flow.
+        recordTransactionCreated(receiptUrl ? 'receipt' : 'manual', category, transaction.amount);
 
         await createAuditLog({
             userId: user.id,
