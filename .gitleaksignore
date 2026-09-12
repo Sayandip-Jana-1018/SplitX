@@ -1,0 +1,60 @@
+# Findings in historical commits only. Every secret listed here was rotated or is
+# being rotated (rotate-only policy, no history rewrite — see docs/DECISIONS.md).
+# New commits are still scanned: a fingerprint only matches its original commit.
+
+# infra-password-literal in AWS_SETUP_GUIDE.md @ 8c4a28c
+8c4a28ce869e41e4ee79234e9c8e77f6171bfcda:AWS_SETUP_GUIDE.md:infra-password-literal:335
+# infra-password-literal in AWS_SETUP_GUIDE.md @ a382a1c
+a382a1ce141e201cfa491f8e89cef5c86756804c:AWS_SETUP_GUIDE.md:infra-password-literal:335
+# curl-auth-header in DEMO_GUIDE.md @ 12cc00f
+12cc00fc638f7c8a4a17a2413a53936635979e94:DEMO_GUIDE.md:curl-auth-header:379
+# infra-password-literal in DEMO_GUIDE.md @ 12cc00f
+12cc00fc638f7c8a4a17a2413a53936635979e94:DEMO_GUIDE.md:infra-password-literal:420
+# infra-password-literal in DEMO_GUIDE.md @ 550abcf
+550abcff7eecc7180fb8506ab9aaabff69b7990a:DEMO_GUIDE.md:infra-password-literal:420
+# curl-auth-header in DEMO_GUIDE.md @ 550abcf
+550abcff7eecc7180fb8506ab9aaabff69b7990a:DEMO_GUIDE.md:curl-auth-header:379
+# infra-password-literal in docker-compose.yml @ 12cc00f
+12cc00fc638f7c8a4a17a2413a53936635979e94:docker-compose.yml:infra-password-literal:46
+# infra-password-literal in docker-compose.yml @ 12cc00f
+12cc00fc638f7c8a4a17a2413a53936635979e94:docker-compose.yml:infra-password-literal:108
+# infra-password-literal in docker-compose.yml @ 550abcf
+550abcff7eecc7180fb8506ab9aaabff69b7990a:docker-compose.yml:infra-password-literal:46
+# infra-password-literal in docker-compose.yml @ 550abcf
+550abcff7eecc7180fb8506ab9aaabff69b7990a:docker-compose.yml:infra-password-literal:108
+# infra-password-literal in docker-compose.yml @ 5a0ae66
+5a0ae66dfb54a3c07e458c740e14623c80858f0a:docker-compose.yml:infra-password-literal:25
+# infra-password-literal in docker-compose.yml @ 5a0ae66
+5a0ae66dfb54a3c07e458c740e14623c80858f0a:docker-compose.yml:infra-password-literal:26
+# infra-password-literal in docker-compose.yml @ ae248d8
+ae248d8b2a1fd709fdd25670c5f239ce0e2a6cb3:docker-compose.yml:infra-password-literal:25
+# infra-password-literal in docker-compose.yml @ ae248d8
+ae248d8b2a1fd709fdd25670c5f239ce0e2a6cb3:docker-compose.yml:infra-password-literal:26
+# infra-password-literal in docker-compose.yml @ aee39ca
+aee39ca3109bc0a43353bf2e95003bad170b4cf6:docker-compose.yml:infra-password-literal:46
+# infra-password-literal in docker-compose.yml @ aee39ca
+aee39ca3109bc0a43353bf2e95003bad170b4cf6:docker-compose.yml:infra-password-literal:108
+# infra-password-literal in docker-compose.yml @ d993312
+d99331249ddd628e4fcca57bd4d17f056dc3b653:docker-compose.yml:infra-password-literal:46
+# infra-password-literal in docker-compose.yml @ d993312
+d99331249ddd628e4fcca57bd4d17f056dc3b653:docker-compose.yml:infra-password-literal:108
+# curl-auth-user in jenkins/create-job.sh @ 7b94e73
+7b94e738505093482155e566837f4086e9881561:jenkins/create-job.sh:curl-auth-user:2
+# curl-auth-user in jenkins/create-job.sh @ 7b94e73
+7b94e738505093482155e566837f4086e9881561:jenkins/create-job.sh:curl-auth-user:33
+# curl-auth-user in jenkins/create-job.sh @ 94d247f
+94d247f25dc0076539f46a550de9fa7b87e2e3a1:jenkins/create-job.sh:curl-auth-user:2
+# curl-auth-user in jenkins/create-job.sh @ 94d247f
+94d247f25dc0076539f46a550de9fa7b87e2e3a1:jenkins/create-job.sh:curl-auth-user:33
+# infra-password-literal in jenkins/Jenkinsfile @ 38e1cba
+38e1cba6a3fecedba1b078b6dcbdadcb64f7c4b2:jenkins/Jenkinsfile:infra-password-literal:16
+# sonar-api-token in jenkins/Jenkinsfile @ 7b94e73
+7b94e738505093482155e566837f4086e9881561:jenkins/Jenkinsfile:sonar-api-token:13
+# infra-password-literal in jenkins/Jenkinsfile @ 7b94e73
+7b94e738505093482155e566837f4086e9881561:jenkins/Jenkinsfile:infra-password-literal:66
+# infra-password-literal in jenkins/Jenkinsfile @ 91737f5
+91737f5f12efa84fb94ed0853ed01c2f9a0b1ec9:jenkins/Jenkinsfile:infra-password-literal:16
+# sonar-api-token in jenkins/Jenkinsfile @ 94d247f
+94d247f25dc0076539f46a550de9fa7b87e2e3a1:jenkins/Jenkinsfile:sonar-api-token:13
+# infra-password-literal in jenkins/Jenkinsfile @ 94d247f
+94d247f25dc0076539f46a550de9fa7b87e2e3a1:jenkins/Jenkinsfile:infra-password-literal:66

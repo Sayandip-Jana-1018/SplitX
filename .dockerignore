@@ -10,3 +10,4 @@ docker-compose.yml
 coverage
 tests
 README.md
+public/uploads

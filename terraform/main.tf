@@ -3,12 +3,19 @@
 #   Composes all infrastructure modules
 # ═══════════════════════════════════════════════════════════════
 
+locals {
+  # Single source of truth: the subnet discovery tags and the cluster itself
+  # must agree, or the AWS Load Balancer Controller ignores the subnets.
+  cluster_name = "${var.project_name}-eks-${var.environment}"
+}
+
 # ── VPC Module ──
 module "vpc" {
   source       = "./modules/vpc"
   project_name = var.project_name
   environment  = var.environment
   aws_region   = var.aws_region
+  cluster_name = local.cluster_name
 }
 
 # ── ECR Module (Docker Image Registry) ──
@@ -21,6 +28,7 @@ module "ecr" {
 # ── EKS Module (Kubernetes Cluster) ──
 module "eks" {
   source             = "./modules/eks"
+  cluster_name       = local.cluster_name
   project_name       = var.project_name
   environment        = var.environment
   vpc_id             = module.vpc.vpc_id

@@ -30,8 +30,9 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env
+# env files — every variant is local; only the documented template is committed
+.env*
+!.env.example
 
 # vercel
 .vercel
@@ -45,10 +46,16 @@ terraform/.terraform/
 terraform/terraform.tfstate
 terraform/terraform.tfstate.backup
 terraform/.terraform.tfstate.lock.info
-terraform/.terraform.lock.hcl
+# .terraform.lock.hcl IS committed: it pins provider versions and checksums.
 
 # python
 __pycache__/
 *.py[cod]
 *$py.class
 
+
+# user uploads live in Supabase Storage, never in the repo or the image
+/public/uploads/
+
+# generated scan and test reports
+/reports/

@@ -1,0 +1,21 @@
+# Normalise line endings in the repository and the working tree.
+# Shell scripts, YAML and Dockerfiles run inside Linux containers, where a CRLF
+# line ending breaks them ("bad interpreter", invalid YAML).
+* text=auto eol=lf
+
+# Windows-native scripts keep CRLF.
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary assets are never converted.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.mp4 binary
+*.pdf binary
+*.woff binary
+*.woff2 binary

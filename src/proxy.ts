@@ -3,36 +3,43 @@ import type { NextRequest } from 'next/server';
 
 import { Ratelimit } from '@upstash/ratelimit';
 import { Redis } from '@upstash/redis';
-import { httpRequestsTotal, httpRequestDuration } from '@/lib/metrics';
+import { recordProxyDecision, type ProxyDecision } from '@/lib/metrics';
 
 /**
  * Next.js Proxy — runs on every matched request.
- * Handles: Auth protection, Rate limiting, Security headers, Prometheus metrics
+ * Handles: Auth protection, Rate limiting, Security headers.
+ *
+ * HTTP metrics are not recorded here: the proxy returns before the route
+ * handler runs, so it can see neither the real status code nor the real
+ * duration. They come from the request span in lib/observability/httpMetrics.ts.
  */
 
+// Built once per process — constructing it per request discards the limiter's
+// in-memory cache and allocates on every call.
+let ratelimit: Ratelimit | null | undefined;
+
 function getRatelimit() {
+    if (ratelimit !== undefined) return ratelimit;
+
     const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
     const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
 
-    if (!redisUrl || !redisToken) {
-        return null;
-    }
-
-    const redis = new Redis({
-        url: redisUrl,
-        token: redisToken,
-    });
-
-    return new Ratelimit({
-        redis,
-        limiter: Ratelimit.slidingWindow(50, '1 m'),
-        analytics: true,
-    });
+    ratelimit = redisUrl && redisToken
+        ? new Ratelimit({
+            redis: new Redis({ url: redisUrl, token: redisToken }),
+            limiter: Ratelimit.slidingWindow(50, '1 m'),
+            analytics: true,
+        })
+        : null;
+    return ratelimit;
 }
 
-// Paths to skip rate limiting
+// Paths to skip rate limiting. Probes and scrapes arrive every few seconds from
+// inside the cluster and must never be throttled or wait on Redis.
 const SKIP_PATHS = [
     '/api/auth',
+    '/api/health/',
+    '/api/metrics',
     '/_next',
     '/favicon',
 ];
@@ -62,6 +69,11 @@ function hasSessionToken(request: NextRequest): boolean {
     );
 }
 
+function decide(request: NextRequest, response: NextResponse, decision: ProxyDecision) {
+    recordProxyDecision(decision, request.method, response.status);
+    return response;
+}
+
 export async function proxy(request: NextRequest) {
     const { pathname } = request.nextUrl;
 
@@ -72,51 +84,42 @@ export async function proxy(request: NextRequest) {
 
         // Redirect authenticated users away from login/register
         if (isAuthenticated && AUTH_ROUTES.some((route) => pathname.startsWith(route))) {
-            return NextResponse.redirect(new URL('/dashboard', request.url));
+            return decide(request, NextResponse.redirect(new URL('/dashboard', request.url)), 'redirect_dashboard');
         }
 
         // Redirect unauthenticated users away from protected routes
         if (!isAuthenticated && PROTECTED_ROUTES.some((route) => pathname.startsWith(route))) {
             const loginUrl = new URL('/login', request.url);
             loginUrl.searchParams.set('callbackUrl', pathname);
-            return NextResponse.redirect(loginUrl);
+            return decide(request, NextResponse.redirect(loginUrl), 'redirect_login');
         }
     }
 
     // ── API Rate Limiting (only for /api routes) ──
     if (!pathname.startsWith('/api')) {
-        return NextResponse.next();
+        return decide(request, NextResponse.next(), 'pass');
     }
 
     // Skip auth and internal routes
     if (SKIP_PATHS.some(p => pathname.startsWith(p))) {
-        return NextResponse.next();
+        return decide(request, NextResponse.next(), 'pass');
     }
 
-    // ── API Logging + Prometheus Metrics ──
+    // ── API Logging ──
     const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
-    const method = request.method;
-    const route = pathname.split('/').slice(0, 4).join('/');
 
-    console.log(`[API] ${method} ${pathname} — IP: ${ip} — ${new Date().toISOString()}`);
-
-    // Start Prometheus timer for request duration
-    const metricsTimer = httpRequestDuration.startTimer({ method, route });
+    console.log(`[API] ${request.method} ${pathname} — IP: ${ip} — ${new Date().toISOString()}`);
 
     // ── Global Upstash Rate Limiting ──
-    const ratelimit = getRatelimit();
-    if (!ratelimit) {
+    const limiter = getRatelimit();
+    if (!limiter) {
         const response = NextResponse.next();
         applySecurityHeaders(response);
-        httpRequestsTotal.inc({ method, route, status_code: '200' });
-        metricsTimer({ status_code: '200' });
-        return response;
+        return decide(request, response, 'pass');
     }
 
-    const id = ip;
-    const { success, limit, reset, remaining } = await ratelimit.limit(id);
+    const { success, limit, reset, remaining } = await limiter.limit(ip);
 
-    const statusCode = success ? '200' : '429';
     const response = success ? NextResponse.next() : NextResponse.json(
         {
             success: false,
@@ -138,11 +141,7 @@ export async function proxy(request: NextRequest) {
     // ── Security Headers ──
     applySecurityHeaders(response);
 
-    // ── Record Prometheus metrics ──
-    httpRequestsTotal.inc({ method, route, status_code: statusCode });
-    metricsTimer({ status_code: statusCode });
-
-    return response;
+    return decide(request, response, success ? 'pass' : 'rate_limited');
 }
 
 /** Apply standard security headers to a response */

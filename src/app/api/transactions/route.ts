@@ -4,6 +4,7 @@ import { auth } from '@/lib/auth';
 import { z } from 'zod';
 import { createAuditLog } from '@/lib/auditLog';
 import { serializeTransactionAuditSnapshot } from '@/lib/auditPayloads';
+import { recordTransactionCreated } from '@/lib/metrics';
 
 // Category labels for notification messages
 const CATEGORY_LABELS: Record<string, string> = {
@@ -244,6 +245,7 @@ export async function POST(req: Request) {
                 trip: { select: { id: true, title: true } },
             },
         });
+        recordTransactionCreated('manual', category, transaction.amount);
 
         await createAuditLog({
             userId: user.id,

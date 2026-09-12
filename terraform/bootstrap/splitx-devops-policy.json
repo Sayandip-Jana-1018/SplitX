@@ -1,0 +1,68 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "CoreInfrastructure",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:*", "eks:*", "ecr:*", "elasticloadbalancing:*",
+        "autoscaling:*", "application-autoscaling:*", "cloudfront:*",
+        "logs:*", "cloudwatch:*", "kms:*", "budgets:*", "tag:*",
+        "sts:GetCallerIdentity", "iam:ListRoles", "iam:ListPolicies",
+        "iam:GetUser", "iam:ListOpenIDConnectProviders", "iam:ListInstanceProfiles"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "SplitXBucketsOnly",
+      "Effect": "Allow",
+      "Action": "s3:*",
+      "Resource": ["arn:aws:s3:::splitx-*", "arn:aws:s3:::splitx-*/*"]
+    },
+    {
+      "Sid": "ListBuckets",
+      "Effect": "Allow",
+      "Action": ["s3:ListAllMyBuckets", "s3:GetBucketLocation"],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ScopedRoleManagement",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateRole", "iam:DeleteRole", "iam:GetRole", "iam:PassRole",
+        "iam:AttachRolePolicy", "iam:DetachRolePolicy", "iam:PutRolePolicy",
+        "iam:DeleteRolePolicy", "iam:GetRolePolicy", "iam:ListRolePolicies",
+        "iam:ListAttachedRolePolicies", "iam:TagRole", "iam:UntagRole",
+        "iam:UpdateAssumeRolePolicy", "iam:ListInstanceProfilesForRole"
+      ],
+      "Resource": "arn:aws:iam::918183256068:role/splitx-*"
+    },
+    {
+      "Sid": "ScopedPolicyManagement",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreatePolicy", "iam:DeletePolicy", "iam:GetPolicy",
+        "iam:GetPolicyVersion", "iam:ListPolicyVersions",
+        "iam:CreatePolicyVersion", "iam:DeletePolicyVersion", "iam:TagPolicy"
+      ],
+      "Resource": "arn:aws:iam::918183256068:policy/splitx-*"
+    },
+    {
+      "Sid": "OIDCProvidersForIRSAAndGitHub",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateOpenIDConnectProvider", "iam:DeleteOpenIDConnectProvider",
+        "iam:GetOpenIDConnectProvider", "iam:TagOpenIDConnectProvider",
+        "iam:UpdateOpenIDConnectProviderThumbprint",
+        "iam:AddClientIDToOpenIDConnectProvider"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ServiceLinkedRoles",
+      "Effect": "Allow",
+      "Action": "iam:CreateServiceLinkedRole",
+      "Resource": "arn:aws:iam::918183256068:role/aws-service-role/*"
+    }
+  ]
+}

@@ -19,7 +19,8 @@ scrape_configs:
     scheme: http
     authorization:
       type: Bearer
-      credentials: "splitx-metrics-secret"
+      # Mounted by docker compose from METRICS_TOKEN in .env — never written here.
+      credentials_file: /run/secrets/metrics_token
     static_configs:
       - targets: ["splitx:3000"]
         labels:

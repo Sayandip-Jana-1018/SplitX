@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
+import { recordTransactionCreated } from '@/lib/metrics';
 
 // POST /api/transactions/from-receipt — Create transaction with item-level splits from receipt OCR
 export async function POST(req: Request) {
@@ -101,6 +102,7 @@ export async function POST(req: Request) {
                 payer: { select: { id: true, name: true } },
             },
         });
+        recordTransactionCreated('receipt', category, transaction.amount);
 
         // Auto-send a group message about the new expense
         try {
