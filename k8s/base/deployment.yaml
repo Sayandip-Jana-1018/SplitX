@@ -38,18 +38,25 @@ spec:
             limits:
               memory: "512Mi"
               cpu: "500m"
-          # Kubernetes probes hitting the existing /api/health endpoint
+          # Startup gives a cold Node process up to 60s before liveness applies.
+          startupProbe:
+            httpGet:
+              path: /api/health/live
+              port: 3000
+            periodSeconds: 2
+            failureThreshold: 30
+          # Liveness never touches the database: a DB outage must not restart every pod.
           livenessProbe:
             httpGet:
-              path: /api/health
+              path: /api/health/live
               port: 3000
-            initialDelaySeconds: 15
-            periodSeconds: 30
-            timeoutSeconds: 5
+            periodSeconds: 20
+            timeoutSeconds: 3
             failureThreshold: 3
+          # Readiness pings the database and takes the pod out of the Service until it recovers.
           readinessProbe:
             httpGet:
-              path: /api/health
+              path: /api/health/ready
               port: 3000
             initialDelaySeconds: 5
             periodSeconds: 10

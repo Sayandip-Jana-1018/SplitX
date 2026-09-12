@@ -46,8 +46,8 @@ USER nextjs
 
 EXPOSE 3000
 
-# Kubernetes liveness/readiness probe target
+# Liveness only — the database is checked by readiness, not by the container health.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=5 \
-  CMD ["wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000/api/health"]
+  CMD ["wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000/api/health/live"]
 
 CMD ["node", "server.js"]
