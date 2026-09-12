@@ -209,9 +209,128 @@ p {
     padding: 0 var(--gutter);
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   Liquid glass
+   Layered the way Apple's material is: a blurred pane, a bright top
+   edge, a soft base shadow, and an optional specular sheen that drifts
+   across the surface. Only floating surfaces blur — long lists stay on
+   solid paint so scrolling stays at 60fps.
+   ═══════════════════════════════════════════════════════════════ */
 .glass {
-    background: var(--bg-glass);
-    border: 1px solid var(--border-glass);
+    position: relative;
+    isolation: isolate;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow), var(--glass-inset);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+}
+
+.glass-strong {
+    background: var(--glass-bg-strong);
+    -webkit-backdrop-filter: blur(var(--glass-blur-strong)) saturate(var(--glass-saturate));
+    backdrop-filter: blur(var(--glass-blur-strong)) saturate(var(--glass-saturate));
+}
+
+/* Specular sweep — transform-only, so it costs nothing to animate. */
+.glass-sheen {
+    overflow: hidden;
+}
+
+.glass-sheen::after {
+    content: '';
+    position: absolute;
+    inset: -60% -80%;
+    z-index: -1;
+    background: linear-gradient(100deg, transparent 44%, var(--glass-sheen) 50%, transparent 56%);
+    opacity: 0.7;
+    transform: translate3d(-38%, 0, 0);
+    animation: glassSheen 9s cubic-bezier(0.32, 0.72, 0.24, 1) infinite;
+    pointer-events: none;
+}
+
+@keyframes glassSheen {
+    0%, 62% { transform: translate3d(-38%, 0, 0); }
+    100% { transform: translate3d(38%, 0, 0); }
+}
+
+/* ── Ambient décor: blurred colour fields + floating glyphs ── */
+.ambient {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    overflow: hidden;
+    pointer-events: none;
+    contain: strict;
+}
+
+.ambient-blob {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(64px);
+    opacity: 0.55;
+    will-change: transform;
+    animation: floatDrift var(--float-slow) ease-in-out infinite alternate;
+}
+
+.ambient-glyph {
+    position: absolute;
+    display: grid;
+    place-items: center;
+    will-change: transform;
+    animation: floatY var(--float-medium) ease-in-out infinite;
+    opacity: 0.9;
+}
+
+@keyframes floatY {
+    0%, 100% { transform: translate3d(0, 0, 0) rotate(var(--tilt, 0deg)); }
+    50% { transform: translate3d(0, -18px, 0) rotate(calc(var(--tilt, 0deg) * -1)); }
+}
+
+@keyframes floatDrift {
+    0% { transform: translate3d(0, 0, 0) scale(1); }
+    100% { transform: translate3d(22px, -26px, 0) scale(1.08); }
+}
+
+@keyframes floatOrbit {
+    from { transform: rotate(0deg) translateX(var(--orbit, 70px)) rotate(0deg); }
+    to { transform: rotate(360deg) translateX(var(--orbit, 70px)) rotate(-360deg); }
+}
+
+/* Depth on press — used by cards and tiles across the app. */
+.pressable {
+    transition: transform var(--duration-fast) var(--ease-spring), box-shadow var(--duration-normal) var(--ease-out);
+}
+
+.pressable:active {
+    transform: scale(0.975);
+}
+
+/* Long lists: skip offscreen paint work. */
+.virtualize {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 88px;
+}
+
+/* Calm performance mode and reduced motion drop the expensive layers. */
+[data-motion="calm"] .glass,
+[data-motion="calm"] .glass-strong {
+    background: var(--surface-card);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+}
+
+[data-motion="calm"] .glass-sheen::after,
+[data-motion="calm"] .ambient {
+    display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .glass-sheen::after,
+    .ambient-blob,
+    .ambient-glyph {
+        animation: none !important;
+    }
 }
 
 /* ── Legacy page header helpers (centered, compact) ── */

@@ -1,0 +1,131 @@
+/* ═══════════════════════════════════════════════════════════════
+   Ambient field — drifting colour, floating glyphs.
+   Pure CSS transforms so it costs the compositor, not the CPU.
+   ═══════════════════════════════════════════════════════════════ */
+
+.field {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    overflow: hidden;
+    pointer-events: none;
+    contain: strict;
+}
+
+.blob {
+    position: absolute;
+    border-radius: 50%;
+    will-change: transform;
+    animation: drift 26s ease-in-out infinite alternate;
+}
+
+.blobA {
+    top: -18vh;
+    left: -12vw;
+    width: min(78vw, 620px);
+    aspect-ratio: 1;
+    background: radial-gradient(closest-side, rgba(var(--accent-500-rgb), 0.34), transparent 72%);
+    filter: blur(42px);
+}
+
+.blobB {
+    right: -18vw;
+    bottom: -14vh;
+    width: min(70vw, 540px);
+    aspect-ratio: 1;
+    background: radial-gradient(closest-side, color-mix(in oklab, var(--accent-300) 45%, transparent), transparent 72%);
+    filter: blur(48px);
+    animation-duration: 32s;
+    animation-direction: alternate-reverse;
+}
+
+.blobC {
+    top: 38%;
+    left: 44%;
+    width: min(54vw, 420px);
+    aspect-ratio: 1;
+    background: radial-gradient(closest-side, color-mix(in oklab, var(--accent-600) 34%, transparent), transparent 70%);
+    filter: blur(56px);
+    animation-duration: 38s;
+}
+
+/* Fine grid that fades out at the edges — adds structure behind the glow. */
+.mesh {
+    position: absolute;
+    inset: 0;
+    background-image:
+        linear-gradient(var(--border-subtle) 1px, transparent 1px),
+        linear-gradient(90deg, var(--border-subtle) 1px, transparent 1px);
+    background-size: 46px 46px;
+    -webkit-mask-image: radial-gradient(ellipse 76% 58% at 50% 24%, #000 22%, transparent 76%);
+    mask-image: radial-gradient(ellipse 76% 58% at 50% 24%, #000 22%, transparent 76%);
+    opacity: 0.75;
+}
+
+.glyph {
+    position: absolute;
+    display: grid;
+    place-items: center;
+    width: var(--size, 46px);
+    height: var(--size, 46px);
+    border-radius: 50%;
+    background: var(--glass-bg-strong);
+    -webkit-backdrop-filter: blur(10px) saturate(1.4);
+    backdrop-filter: blur(10px) saturate(1.4);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow), var(--glass-inset);
+    font-size: calc(var(--size, 46px) * 0.46);
+    line-height: 1;
+    will-change: transform;
+    animation: bob var(--dur, 15s) ease-in-out infinite;
+    animation-delay: var(--delay, 0s);
+}
+
+.orbit {
+    position: absolute;
+    display: grid;
+    place-items: center;
+    width: 0;
+    height: 0;
+    animation: orbit var(--dur, 30s) linear infinite;
+    animation-delay: var(--delay, 0s);
+}
+
+.hero .blob {
+    opacity: 0.95;
+}
+
+.page .blob {
+    opacity: 0.55;
+}
+
+.subtle .blob {
+    opacity: 0.4;
+}
+
+.subtle .mesh {
+    opacity: 0.4;
+}
+
+@keyframes drift {
+    0% { transform: translate3d(0, 0, 0) scale(1); }
+    100% { transform: translate3d(26px, -30px, 0) scale(1.1); }
+}
+
+@keyframes bob {
+    0%, 100% { transform: translate3d(0, 0, 0) rotate(var(--tilt, -6deg)); }
+    50% { transform: translate3d(0, -20px, 0) rotate(calc(var(--tilt, -6deg) * -1)); }
+}
+
+@keyframes orbit {
+    from { transform: rotate(0deg) translateX(var(--radius, 120px)) rotate(0deg); }
+    to { transform: rotate(360deg) translateX(var(--radius, 120px)) rotate(-360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .blob,
+    .glyph,
+    .orbit {
+        animation: none;
+    }
+}

@@ -27,9 +27,11 @@
 .ib_lg { width: 48px; height: 48px; }
 
 .ib_surface {
-    background: var(--surface-card);
-    border: 1px solid var(--border-default);
-    box-shadow: var(--shadow-xs);
+    background: var(--glass-bg);
+    -webkit-backdrop-filter: blur(14px) saturate(var(--glass-saturate));
+    backdrop-filter: blur(14px) saturate(var(--glass-saturate));
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--shadow-xs), var(--glass-inset);
 }
 
 .ib_ghost {
@@ -193,7 +195,7 @@
     background: var(--surface-card);
     border: 1px solid var(--border-default);
     border-radius: var(--radius-2xl);
-    box-shadow: var(--shadow-card);
+    box-shadow: var(--shadow-card), var(--surface-inset);
     overflow: hidden;
 }
 
@@ -403,8 +405,11 @@
     width: 100%;
     padding: 4px;
     border-radius: var(--radius-full);
-    background: var(--bg-tertiary);
-    border: 1px solid var(--border-subtle);
+    background: var(--glass-bg);
+    -webkit-backdrop-filter: blur(14px) saturate(var(--glass-saturate));
+    backdrop-filter: blur(14px) saturate(var(--glass-saturate));
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-inset);
 }
 
 .segItem {
@@ -494,6 +499,7 @@
     border-radius: var(--radius-full);
     background: var(--surface-card);
     border: 1px solid var(--border-default);
+    box-shadow: var(--surface-inset);
     color: var(--fg-secondary);
     font-size: 13px;
     font-weight: 600;

@@ -3,12 +3,17 @@ import withPWAInit from '@ducanh2912/next-pwa';
 
 const withPWA = withPWAInit({
   dest: 'public',
-  cacheOnFrontEndNav: true,
-  aggressiveFrontEndNavCaching: true,
+  cacheOnFrontEndNav: false,
+  aggressiveFrontEndNavCaching: false,
   reloadOnOnline: true,
   disable: process.env.NODE_ENV === 'development',
   extendDefaultRuntimeCaching: true,
   workboxOptions: {
+    // A new deploy must take over immediately — otherwise the old worker keeps
+    // serving chunks that no longer exist and the app throws on navigation.
+    skipWaiting: true,
+    clientsClaim: true,
+    cleanupOutdatedCaches: true,
     navigateFallbackDenylist: [/^\/api\//],
     runtimeCaching: [
       {

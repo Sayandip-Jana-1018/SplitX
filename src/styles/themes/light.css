@@ -107,3 +107,33 @@
     --shadow-glow-sm: 0 4px 14px -4px rgba(var(--accent-500-rgb), 0.4);
     --shadow-dock: 0 1px 0 rgba(255, 255, 255, 0.9) inset, 0 10px 30px -8px rgba(16, 18, 27, 0.18), 0 2px 6px rgba(16, 18, 27, 0.05);
 }
+
+/* ── Liquid glass ── */
+[data-theme="light"] {
+    --glass-bg: linear-gradient(152deg, rgba(255, 255, 255, 0.86) 0%, rgba(255, 255, 255, 0.62) 52%, rgba(255, 255, 255, 0.78) 100%);
+    --glass-bg-strong: linear-gradient(152deg, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.84));
+    --glass-border: rgba(255, 255, 255, 0.9);
+    --glass-sheen: rgba(255, 255, 255, 0.75);
+    --glass-tint: color-mix(in oklab, var(--accent-500) 7%, transparent);
+    --glass-shadow:
+        0 24px 48px -28px rgba(16, 18, 27, 0.34),
+        0 8px 18px -12px rgba(16, 18, 27, 0.14);
+    --glass-inset:
+        inset 0 1px 0 rgba(255, 255, 255, 0.95),
+        inset 0 -1px 0 rgba(16, 18, 27, 0.05);
+}
+
+/* ── Inner edge light that gives flat surfaces depth without a blur ── */
+[data-theme="light"] {
+    --surface-inset:
+        inset 0 1px 0 rgba(255, 255, 255, 0.92),
+        inset 0 -1px 0 rgba(16, 18, 27, 0.035);
+}
+
+/* Legacy aliases point at the liquid material so older surfaces inherit it */
+[data-theme="light"] {
+    --bg-glass: var(--glass-bg);
+    --bg-glass-strong: var(--glass-bg-strong);
+    --bg-glass-subtle: var(--glass-bg);
+    --border-glass: var(--glass-border);
+}

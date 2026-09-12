@@ -7,6 +7,7 @@ import { motion } from 'framer-motion';
 import { Eye, EyeOff } from 'lucide-react';
 import BrandMark from '@/components/ui/BrandMark';
 import Navbar from '@/components/ui/Navbar';
+import Ambient from '@/components/ui/Ambient';
 import { Spinner } from '@/components/ui/kit';
 import { cn } from '@/lib/utils';
 import styles from './auth.module.css';
@@ -51,11 +52,7 @@ export function apiErrorMessage(data: unknown, fallback: string) {
 export function PublicShell({ children }: { children: ReactNode }) {
     return (
         <div className={styles.shell}>
-            <div className={styles.backdrop} aria-hidden="true">
-                <span className={styles.glowA} />
-                <span className={styles.glowB} />
-                <span className={styles.gridLines} />
-            </div>
+            <Ambient variant="page" />
             <Navbar />
             <main className={styles.main}>{children}</main>
         </div>

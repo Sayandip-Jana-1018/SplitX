@@ -8,7 +8,8 @@ export type ResolvedTheme = 'light' | 'dark';
 export type PaletteId =
     | 'amethyst-haze' | 'cosmic-night' | 'bold-tech' | 'sky-blue' | 'ocean-breeze'
     | 'perpetuity' | 'emerald-glow' | 'lime-fusion' | 'amber-minimal' | 'solar-dusk'
-    | 'cherry-blossom' | 'quantum-rose' | 'cyberpunk';
+    | 'cherry-blossom' | 'quantum-rose' | 'cyberpunk'
+    | 'copper-glow' | 'graphite-mono' | 'merlot-night';
 
 export interface ColorPalette {
     id: PaletteId;
@@ -39,6 +40,9 @@ export const COLOR_PALETTES: ColorPalette[] = [
     { id: 'cherry-blossom', name: 'Rose', accent400: '#fb7185', accent500: '#f43f5e', accent600: '#e11d48', accent500rgb: '244, 63, 94', swatches: ['#fda4af', '#f43f5e', '#be123c'] },
     { id: 'quantum-rose', name: 'Blush', accent400: '#f472b6', accent500: '#ec4899', accent600: '#db2777', accent500rgb: '236, 72, 153', swatches: ['#f9a8d4', '#ec4899', '#be185d'] },
     { id: 'cyberpunk', name: 'Orchid', accent400: '#e879f9', accent500: '#d946ef', accent600: '#c026d3', accent500rgb: '217, 70, 239', swatches: ['#f0abfc', '#d946ef', '#a21caf'] },
+    { id: 'copper-glow', name: 'Copper', accent400: '#d6824f', accent500: '#c06835', accent600: '#a2522a', accent500rgb: '192, 104, 53', swatches: ['#e4a578', '#c06835', '#833f24'] },
+    { id: 'merlot-night', name: 'Merlot', accent400: '#dc6188', accent500: '#c23a67', accent600: '#a62851', accent500rgb: '194, 58, 103', swatches: ['#ec97b0', '#c23a67', '#8a1e42'] },
+    { id: 'graphite-mono', name: 'Graphite', accent400: '#8b95a7', accent500: '#66718a', accent600: '#515a70', accent500rgb: '102, 113, 138', swatches: ['#b6bdca', '#66718a', '#43495b'] },
 ];
 
 const LEGACY_PALETTES: Record<string, PaletteId> = {

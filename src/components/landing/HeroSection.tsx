@@ -3,7 +3,7 @@
 import { useRef } from 'react';
 import { motion, useScroll, useTransform, Variants } from 'framer-motion';
 import Link from 'next/link';
-import { ArrowRight, Sparkles, Wallet } from 'lucide-react';
+import { ArrowRight, Check, Sparkles, TrendingUp, Wallet } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import styles from '@/app/landing.module.css';
 
@@ -149,6 +149,34 @@ export default function HeroSection() {
                             />
                             <div className={styles.heroVideoOverlay} />
                         </div>
+                        <motion.div
+                            className={`${styles.heroFloatCard} ${styles.heroFloatCardOne}`}
+                            initial={{ opacity: 0, y: 18, scale: 0.9 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            transition={{ delay: 0.55, type: 'spring', stiffness: 220, damping: 22 }}
+                            aria-hidden="true"
+                        >
+                            <span className={styles.heroFloatIcon}><TrendingUp size={15} /></span>
+                            <span className={styles.heroFloatText}>
+                                <strong>+₹2,650</strong>
+                                owed to you
+                            </span>
+                        </motion.div>
+
+                        <motion.div
+                            className={`${styles.heroFloatCard} ${styles.heroFloatCardTwo}`}
+                            initial={{ opacity: 0, y: 18, scale: 0.9 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            transition={{ delay: 0.75, type: 'spring', stiffness: 220, damping: 22 }}
+                            aria-hidden="true"
+                        >
+                            <span className={`${styles.heroFloatIcon} ${styles.heroFloatIconDone}`}><Check size={15} strokeWidth={3} /></span>
+                            <span className={styles.heroFloatText}>
+                                <strong>Goa trip</strong>
+                                settled in 2 taps
+                            </span>
+                        </motion.div>
+
                         <div className={styles.heroVideoTags} aria-hidden="true">
                             <span className={styles.heroVideoTag}>Friends argue less</span>
                             <span className={styles.heroVideoTag}>Balances stay clear</span>
