@@ -29,7 +29,11 @@ jobs:
           cache: npm
 
       - name: Install dependencies
+        # postinstall generates the Prisma client from prisma/schema.prisma
         run: npm ci --no-audit --no-fund
+
+      - name: Type check
+        run: npx tsc --noEmit
 
       - name: Test
         run: npm test
