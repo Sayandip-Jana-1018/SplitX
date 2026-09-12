@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { createAuditLog } from '@/lib/auditLog';
 import { serializeTransactionAuditSnapshot } from '@/lib/auditPayloads';
 import { recordTransactionCreated } from '@/lib/metrics';
+import { isTrustedReceiptUrl, withTrustedReceipt } from '@/lib/receiptUrl';
 
 // Category labels for notification messages
 const CATEGORY_LABELS: Record<string, string> = {
@@ -27,7 +28,7 @@ const CreateTransactionSchema = z.object({
     category: z.string().default('other'),
     method: z.string().default('cash'),
     description: z.string().optional(),
-    receiptUrl: z.string().url().optional(),
+    receiptUrl: z.string().refine(isTrustedReceiptUrl, { message: 'receiptUrl must point to SplitX receipt storage' }).optional(),
     payerId: z.string().optional(), // who paid — defaults to logged-in user
     splitType: z.enum(['equal', 'percentage', 'custom']).default('equal'),
     splitAmong: z.array(z.string()).optional(), // subset of member IDs to split among
@@ -90,7 +91,7 @@ export async function GET(req: Request) {
                 orderBy: { createdAt: 'desc' },
                 take: limit,
             });
-            return NextResponse.json(transactions);
+            return NextResponse.json(transactions.map(withTrustedReceipt));
         }
 
         // No tripId — auto-discover all trips for this user's groups
@@ -131,7 +132,7 @@ export async function GET(req: Request) {
             take: limit,
         });
 
-        return NextResponse.json(transactions);
+        return NextResponse.json(transactions.map(withTrustedReceipt));
     } catch {
         return NextResponse.json({ error: 'Failed to fetch transactions' }, { status: 500 });
     }
@@ -159,6 +160,7 @@ export async function POST(req: Request) {
             where: {
                 id: parsed.data.tripId,
                 group: {
+                    deletedAt: null,
                     OR: [
                         { ownerId: user.id },
                         { members: { some: { userId: user.id } } },
@@ -174,7 +176,7 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'Trip not found or access denied' }, { status: 404 });
         }
 
-        const { title, amount, category, method, description, splitType, splitAmong, splits, payerId: requestedPayerId } = parsed.data;
+        const { title, amount, category, method, description, receiptUrl, splitType, splitAmong, splits, payerId: requestedPayerId } = parsed.data;
 
         // Determine actual payer — use request payerId if valid, otherwise logged-in user
         const allMemberIds: string[] = trip.group.members.map((m: { userId: string }) => m.userId);
@@ -202,6 +204,13 @@ export async function POST(req: Request) {
                 amount: perPerson + (i === 0 ? remainder : 0),
             }));
         } else if (splits) {
+            // Each member appears once — the database allows one split row per user.
+            if (new Set(splits.map((s) => s.userId)).size !== splits.length) {
+                return NextResponse.json(
+                    { error: 'Each member can appear only once in a split' },
+                    { status: 400 }
+                );
+            }
             // Validate custom splits sum to total
             const splitTotal = splits.reduce((sum, s) => sum + s.amount, 0);
             if (splitTotal !== amount) {
@@ -221,6 +230,14 @@ export async function POST(req: Request) {
             splitData = splits;
         }
 
+        // A non-equal split without per-member amounts would record an expense nobody owes.
+        if (splitData.length === 0) {
+            return NextResponse.json(
+                { error: `A ${splitType} split needs the amount each member owes` },
+                { status: 400 }
+            );
+        }
+
         // Create transaction + splits atomically
         const transaction = await prisma.transaction.create({
             data: {
@@ -231,6 +248,7 @@ export async function POST(req: Request) {
                 category,
                 method,
                 description,
+                receiptUrl: receiptUrl ?? null,
                 splitType,
                 splits: {
                     create: splitData.map((s) => ({

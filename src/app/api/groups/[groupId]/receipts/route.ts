@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
+import { isTrustedReceiptUrl } from '@/lib/receiptUrl';
 
 // GET /api/groups/[groupId]/receipts — get all transactions with receipt images for a group
 export async function GET(
@@ -80,7 +81,7 @@ export async function GET(
         }));
 
         const receipts = transactions
-            .filter(t => t.receiptUrl)
+            .filter(t => isTrustedReceiptUrl(t.receiptUrl))
             .map(t => ({
                 id: t.id,
                 title: t.title,
