@@ -26,7 +26,7 @@ import {
     type LucideIcon,
 } from 'lucide-react';
 import ClipboardBanner from '@/components/features/ClipboardBanner';
-import ThemeSelector, { ThemeModeSwitch } from '@/components/features/ThemeSelector';
+import ThemeSelector from '@/components/features/ThemeSelector';
 import Avatar from '@/components/ui/Avatar';
 import BrandMark from '@/components/ui/BrandMark';
 import OfflineIndicator from '@/components/ui/OfflineIndicator';
@@ -321,6 +321,22 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                                         className={styles.mobileOnly}
                                     />
                                 )}
+                                {!meta.composer && (
+                                    <IconButton
+                                        icon={(
+                                            <motion.span
+                                                className={styles.liveIcon}
+                                                animate={{ scale: [1, 1.16, 1], rotate: [0, 8, -6, 0] }}
+                                                transition={{ duration: 3.2, repeat: Infinity, repeatDelay: 2.4, ease: 'easeInOut' }}
+                                            >
+                                                <Sparkles size={18} />
+                                            </motion.span>
+                                        )}
+                                        label="Ask SplitX AI"
+                                        onClick={() => setAssistantOpen(true)}
+                                        tour="ai"
+                                    />
+                                )}
                             </div>
 
                             <div className={styles.headerCenter}>
@@ -341,14 +357,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
                             <div className={styles.headerEnd}>
                                 <ThemeSelector size={38} />
-                                {!meta.composer && (
-                                    <IconButton
-                                        icon={<Sparkles size={18} />}
-                                        label="Ask SplitX AI"
-                                        onClick={() => setAssistantOpen(true)}
-                                        tour="ai"
-                                    />
-                                )}
                                 {deferredReady ? <NotificationPanel /> : <span className={styles.headerPlaceholder} />}
                             </div>
                         </div>
@@ -392,7 +400,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                                         data-tour={item.href}
                                         onClick={() => haptics.medium()}
                                     >
-                                        <Icon size={24} strokeWidth={2.6} />
+                                        <motion.span
+                                            className={styles.dockAddGlyph}
+                                            animate={{ y: [0, -3, 0], scale: [1, 1.08, 1] }}
+                                            transition={{ duration: 2.8, repeat: Infinity, ease: 'easeInOut' }}
+                                        >
+                                            <Icon size={24} strokeWidth={2.6} />
+                                        </motion.span>
                                     </Link>
                                 );
                             }
@@ -498,8 +512,6 @@ function NavPanel({
             </nav>
 
             <div className={styles.navFooter}>
-                <span className={styles.navLabel}>Appearance</span>
-                <ThemeModeSwitch size="sm" />
                 <button type="button" className={styles.signOut} onClick={() => signOut({ callbackUrl: '/login' })}>
                     <LogOut size={17} />
                     Sign out

@@ -1,6 +1,7 @@
 /* ═══════════════════════════════════════════════════════════════
-   Ambient field — drifting colour, floating glyphs.
-   Pure CSS transforms so it costs the compositor, not the CPU.
+   Ambient field — accent spotlights that blend into the canvas,
+   a faint mesh, and floating glyphs. Pure CSS transforms, so the
+   compositor does the work and the main thread stays free.
    ═══════════════════════════════════════════════════════════════ */
 
 .field {
@@ -12,44 +13,78 @@
     contain: strict;
 }
 
-.blob {
+/* The wash behind the header that bleeds into the hero card. */
+.aurora {
+    position: absolute;
+    top: 0;
+    right: 0;
+    left: 0;
+    height: 58vh;
+    background:
+        radial-gradient(130% 78% at 50% -16%, rgba(var(--accent-500-rgb), 0.34), transparent 62%),
+        radial-gradient(90% 60% at 6% 0%, color-mix(in oklab, var(--accent-400) 26%, transparent), transparent 70%);
+}
+
+/* Spotlights spread down the page so scrolling always reveals colour. */
+.spot {
     position: absolute;
     border-radius: 50%;
     will-change: transform;
-    animation: drift 26s ease-in-out infinite alternate;
+    animation: drift 28s ease-in-out infinite alternate;
 }
 
-.blobA {
-    top: -18vh;
-    left: -12vw;
-    width: min(78vw, 620px);
+.spotA {
+    top: 6vh;
+    left: -22vw;
+    width: min(74vw, 460px);
     aspect-ratio: 1;
-    background: radial-gradient(closest-side, rgba(var(--accent-500-rgb), 0.34), transparent 72%);
-    filter: blur(42px);
+    background: radial-gradient(closest-side, rgba(var(--accent-500-rgb), 0.42), transparent 72%);
+    filter: blur(40px);
 }
 
-.blobB {
-    right: -18vw;
-    bottom: -14vh;
-    width: min(70vw, 540px);
+.spotB {
+    top: 30vh;
+    right: -26vw;
+    width: min(78vw, 500px);
     aspect-ratio: 1;
-    background: radial-gradient(closest-side, color-mix(in oklab, var(--accent-300) 45%, transparent), transparent 72%);
-    filter: blur(48px);
-    animation-duration: 32s;
+    background: radial-gradient(closest-side, color-mix(in oklab, var(--accent-300) 48%, transparent), transparent 72%);
+    filter: blur(46px);
+    animation-duration: 34s;
     animation-direction: alternate-reverse;
 }
 
-.blobC {
-    top: 38%;
-    left: 44%;
-    width: min(54vw, 420px);
+.spotC {
+    bottom: -14vh;
+    left: 8vw;
+    width: min(70vw, 430px);
     aspect-ratio: 1;
-    background: radial-gradient(closest-side, color-mix(in oklab, var(--accent-600) 34%, transparent), transparent 70%);
-    filter: blur(56px);
-    animation-duration: 38s;
+    background: radial-gradient(closest-side, color-mix(in oklab, var(--accent-600) 40%, transparent), transparent 70%);
+    filter: blur(52px);
+    animation-duration: 40s;
 }
 
-/* Fine grid that fades out at the edges — adds structure behind the glow. */
+.spotD {
+    top: 58vh;
+    left: 26vw;
+    width: min(58vw, 340px);
+    aspect-ratio: 1;
+    background: radial-gradient(closest-side, color-mix(in oklab, var(--accent-400) 34%, transparent), transparent 70%);
+    filter: blur(44px);
+    animation-duration: 24s;
+    animation-direction: alternate-reverse;
+}
+
+.spotE {
+    right: 4vw;
+    bottom: 6vh;
+    width: min(52vw, 300px);
+    aspect-ratio: 1;
+    background: radial-gradient(closest-side, rgba(var(--accent-500-rgb), 0.3), transparent 70%);
+    filter: blur(38px);
+    animation-duration: 30s;
+}
+
+/* Fine grid that fades at the edges — structure behind the glow. */
 .mesh {
     position: absolute;
     inset: 0;
@@ -57,9 +92,9 @@
         linear-gradient(var(--border-subtle) 1px, transparent 1px),
         linear-gradient(90deg, var(--border-subtle) 1px, transparent 1px);
     background-size: 46px 46px;
-    -webkit-mask-image: radial-gradient(ellipse 76% 58% at 50% 24%, #000 22%, transparent 76%);
-    mask-image: radial-gradient(ellipse 76% 58% at 50% 24%, #000 22%, transparent 76%);
-    opacity: 0.75;
+    -webkit-mask-image: radial-gradient(ellipse 78% 60% at 50% 26%, #000 20%, transparent 78%);
+    mask-image: radial-gradient(ellipse 78% 60% at 50% 26%, #000 20%, transparent 78%);
+    opacity: 0.7;
 }
 
 .glyph {
@@ -91,21 +126,16 @@
     animation-delay: var(--delay, 0s);
 }
 
-.hero .blob {
-    opacity: 0.95;
-}
+/* Per-variant intensity */
+.hero .spot { opacity: 1; }
+.hero .aurora { opacity: 1; }
 
-.page .blob {
-    opacity: 0.55;
-}
+.page .spot { opacity: 0.8; }
+.page .aurora { opacity: 0.85; }
 
-.subtle .blob {
-    opacity: 0.4;
-}
-
-.subtle .mesh {
-    opacity: 0.4;
-}
+.subtle .spot { opacity: 0.62; }
+.subtle .aurora { opacity: 0.7; }
+.subtle .mesh { opacity: 0.45; }
 
 @keyframes drift {
     0% { transform: translate3d(0, 0, 0) scale(1); }
@@ -123,7 +153,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .blob,
+    .spot,
     .glyph,
     .orbit {
         animation: none;

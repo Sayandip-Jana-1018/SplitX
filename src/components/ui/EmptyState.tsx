@@ -86,8 +86,13 @@ export default function EmptyState({
             )}
             <motion.div
                 initial={{ scale: 0.8, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ delay: 0.06, type: 'spring', stiffness: 360, damping: 22 }}
+                animate={{ scale: 1, opacity: 1, y: [0, -6, 0] }}
+                transition={{
+                    delay: 0.06,
+                    scale: { type: 'spring', stiffness: 360, damping: 22 },
+                    opacity: { duration: 0.28 },
+                    y: { duration: 4.4, repeat: Infinity, ease: 'easeInOut' },
+                }}
                 style={{
                     position: 'relative',
                     width: compact ? 52 : 60,

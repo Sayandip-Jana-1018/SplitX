@@ -254,6 +254,7 @@
 }
 
 .dockAdd {
+    position: relative;
     display: grid;
     place-items: center;
     justify-self: center;
@@ -390,9 +391,10 @@
     align-items: center;
     gap: 12px;
     width: 100%;
-    height: 50px;
-    padding: 0 12px 0 16px;
-    border-radius: 16px;
+    height: 56px;
+    margin: 4px 0 2px;
+    padding: 0 14px 0 18px;
+    border-radius: 18px;
     background: var(--surface-input);
     border: 1px solid var(--border-default);
     color: var(--fg-muted);
@@ -552,5 +554,40 @@
 
     .printShell .main {
         margin-left: 0;
+    }
+}
+
+/* ── Idle motion helpers ── */
+.dockAddGlyph {
+    display: grid;
+    place-items: center;
+}
+
+.liveIcon {
+    display: grid;
+    place-items: center;
+}
+
+/* A halo that keeps breathing around the add button. */
+.dockAdd::after {
+    content: '';
+    position: absolute;
+    inset: -7px;
+    border-radius: 25px;
+    border: 1.5px solid rgba(var(--accent-500-rgb), 0.45);
+    animation: dockHalo 3s ease-out infinite;
+    pointer-events: none;
+}
+
+@keyframes dockHalo {
+    0% { transform: scale(0.82); opacity: 0.85; }
+    70% { transform: scale(1.18); opacity: 0; }
+    100% { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .dockAdd::after {
+        animation: none;
+        opacity: 0;
     }
 }

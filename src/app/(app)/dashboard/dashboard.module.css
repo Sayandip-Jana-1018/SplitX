@@ -230,6 +230,7 @@
 }
 
 .quickIcon {
+    position: relative;
     display: grid;
     place-items: center;
     width: 58px;
@@ -404,5 +405,42 @@
 
     .quick {
         gap: 16px;
+    }
+}
+
+/* ── Idle motion: Home never feels frozen ── */
+.quickItem {
+    animation: quickBob 4.8s ease-in-out infinite;
+}
+
+.quickItem:nth-child(2) { animation-delay: 0.4s; }
+.quickItem:nth-child(3) { animation-delay: 0.8s; }
+.quickItem:nth-child(4) { animation-delay: 1.2s; }
+
+.quickIconPrimary::after {
+    content: '';
+    position: absolute;
+    inset: -6px;
+    border-radius: 24px;
+    border: 1.5px solid rgba(var(--accent-500-rgb), 0.4);
+    animation: quickHalo 3.2s ease-out infinite;
+    pointer-events: none;
+}
+
+@keyframes quickBob {
+    0%, 100% { transform: translate3d(0, 0, 0); }
+    50% { transform: translate3d(0, -5px, 0); }
+}
+
+@keyframes quickHalo {
+    0% { transform: scale(0.84); opacity: 0.8; }
+    70% { transform: scale(1.2); opacity: 0; }
+    100% { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .quickItem,
+    .quickIconPrimary::after {
+        animation: none;
     }
 }
