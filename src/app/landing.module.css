@@ -1948,3 +1948,99 @@
         padding: 44px 24px 20px;
     }
 }
+
+/* ── Floating product proof cards around the hero media ── */
+.heroFloatCard {
+    position: absolute;
+    z-index: 3;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    border-radius: 18px;
+    background: var(--glass-bg-strong);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow), var(--glass-inset);
+    animation: heroFloat 7s ease-in-out infinite;
+}
+
+.heroFloatCardOne {
+    top: 8%;
+    left: -6px;
+}
+
+.heroFloatCardTwo {
+    right: -6px;
+    bottom: 22%;
+    animation-delay: 1.4s;
+}
+
+.heroFloatIcon {
+    display: grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: rgba(var(--accent-500-rgb), 0.16);
+    color: var(--accent-strong);
+}
+
+.heroFloatIconDone {
+    background: rgba(16, 185, 129, 0.16);
+    color: #10b981;
+}
+
+.heroFloatText {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.25;
+    font-size: 11.5px;
+    color: var(--fg-tertiary);
+    text-align: left;
+}
+
+.heroFloatText strong {
+    font-size: 14px;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    color: var(--fg-primary);
+    font-variant-numeric: tabular-nums;
+}
+
+@keyframes heroFloat {
+    0%, 100% { transform: translate3d(0, 0, 0); }
+    50% { transform: translate3d(0, -12px, 0); }
+}
+
+@media (max-width: 520px) {
+    .heroFloatCard {
+        padding: 8px 11px;
+        border-radius: 15px;
+    }
+
+    .heroFloatCardOne {
+        top: 4%;
+        left: -2px;
+    }
+
+    .heroFloatCardTwo {
+        right: -2px;
+        bottom: 16%;
+    }
+
+    .heroFloatText {
+        font-size: 10.5px;
+    }
+
+    .heroFloatText strong {
+        font-size: 12.5px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .heroFloatCard {
+        animation: none;
+    }
+}

@@ -2,10 +2,10 @@
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Check, Monitor, Moon, Palette, Sun } from 'lucide-react';
+import { Check, Monitor, Moon, Sun } from 'lucide-react';
 import { useThemeContext, COLOR_PALETTES } from '@/components/providers/ThemeProvider';
 import type { PaletteId, ThemePreference } from '@/components/providers/ThemeProvider';
-import { IconButton, Segmented } from '@/components/ui/kit';
+import { Segmented } from '@/components/ui/kit';
 import Modal from '@/components/ui/Modal';
 import styles from './theme.module.css';
 
@@ -67,19 +67,36 @@ export function ThemeModeSwitch({ size = 'md' }: { size?: 'sm' | 'md' }) {
     );
 }
 
-/** Compact theme controls for public pages (landing, auth). */
-export default function ThemeSelector() {
-    const { theme, palette, toggleTheme, setPalette } = useThemeContext();
+/**
+ * One tap opens everything about how SplitX looks: mode + accent.
+ * The button itself previews the palette you're on.
+ */
+export default function ThemeSelector({ size = 40 }: { size?: number }) {
+    const { theme, palette, setPalette } = useThemeContext();
     const [open, setOpen] = useState(false);
+    const current = COLOR_PALETTES.find((entry) => entry.id === palette) ?? COLOR_PALETTES[0];
 
     return (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <IconButton
-                label="Toggle dark/light mode"
-                onClick={toggleTheme}
-                icon={theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
-            />
-            <IconButton label="Choose color palette" onClick={() => setOpen(true)} icon={<Palette size={17} />} />
+        <>
+            <motion.button
+                type="button"
+                className={styles.appearanceButton}
+                style={{ width: size, height: size }}
+                onClick={() => setOpen(true)}
+                whileTap={{ scale: 0.9 }}
+                aria-label="Appearance — theme and accent colour"
+                title="Appearance"
+            >
+                <span
+                    className={styles.appearanceDisc}
+                    style={{
+                        background: `conic-gradient(from 210deg, ${current.swatches[0]}, ${current.accent500}, ${current.swatches[2]}, ${current.swatches[0]})`,
+                    }}
+                />
+                <span className={styles.appearanceGlyph}>
+                    {theme === 'dark' ? <Moon size={12} strokeWidth={2.6} /> : <Sun size={12} strokeWidth={2.6} />}
+                </span>
+            </motion.button>
 
             <Modal
                 isOpen={open}
@@ -99,6 +116,6 @@ export default function ThemeSelector() {
                     </div>
                 </div>
             </Modal>
-        </div>
+        </>
     );
 }

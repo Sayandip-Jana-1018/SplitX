@@ -26,10 +26,11 @@ import {
     type LucideIcon,
 } from 'lucide-react';
 import ClipboardBanner from '@/components/features/ClipboardBanner';
-import { ThemeModeSwitch } from '@/components/features/ThemeSelector';
+import ThemeSelector, { ThemeModeSwitch } from '@/components/features/ThemeSelector';
 import Avatar from '@/components/ui/Avatar';
 import BrandMark from '@/components/ui/BrandMark';
 import OfflineIndicator from '@/components/ui/OfflineIndicator';
+import Ambient from '@/components/ui/Ambient';
 import { IconButton } from '@/components/ui/kit';
 import DbKeepAlive from '@/components/providers/DbKeepAlive';
 import { useDialogFocus } from '@/hooks/useDialogFocus';
@@ -248,6 +249,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
     return (
         <div className={cn(styles.shell, isPrintRoute && styles.printShell)}>
+            {showChrome && <Ambient variant="subtle" glyphs={false} />}
             {showChrome && <a className={styles.skipLink} href="#workspace">Skip to content</a>}
             {showChrome && <OfflineIndicator />}
             <DbKeepAlive />
@@ -338,6 +340,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                             </div>
 
                             <div className={styles.headerEnd}>
+                                <ThemeSelector size={38} />
                                 {!meta.composer && (
                                     <IconButton
                                         icon={<Sparkles size={18} />}

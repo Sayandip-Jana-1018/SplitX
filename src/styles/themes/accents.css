@@ -232,6 +232,57 @@
     --fg-on-accent: #ffffff;
 }
 
+/* ── Copper (warm bronze) ── */
+[data-palette="copper-glow"] {
+    --accent-50: #fdf5ef;
+    --accent-100: #f9e7d6;
+    --accent-200: #f0c9a9;
+    --accent-300: #e4a578;
+    --accent-400: #d6824f;
+    --accent-500: #c06835;
+    --accent-600: #a2522a;
+    --accent-700: #833f24;
+    --accent-800: #6a3421;
+    --accent-900: #582d1e;
+    --accent-950: #31160d;
+    --accent-500-rgb: 192, 104, 53;
+    --fg-on-accent: #ffffff;
+}
+
+/* ── Merlot (deep wine) ── */
+[data-palette="merlot-night"] {
+    --accent-50: #fdf2f4;
+    --accent-100: #fbe3e9;
+    --accent-200: #f6c4d2;
+    --accent-300: #ec97b0;
+    --accent-400: #dc6188;
+    --accent-500: #c23a67;
+    --accent-600: #a62851;
+    --accent-700: #8a1e42;
+    --accent-800: #731c3a;
+    --accent-900: #5f1a33;
+    --accent-950: #380a19;
+    --accent-500-rgb: 194, 58, 103;
+    --fg-on-accent: #ffffff;
+}
+
+/* ── Graphite (monochrome stealth) ── */
+[data-palette="graphite-mono"] {
+    --accent-50: #f6f7f9;
+    --accent-100: #eceef2;
+    --accent-200: #d9dde4;
+    --accent-300: #b6bdca;
+    --accent-400: #8b95a7;
+    --accent-500: #66718a;
+    --accent-600: #515a70;
+    --accent-700: #43495b;
+    --accent-800: #3a3f4d;
+    --accent-900: #333743;
+    --accent-950: #1c1f27;
+    --accent-500-rgb: 102, 113, 138;
+    --fg-on-accent: #ffffff;
+}
+
 /* ── Contrast tuning for bright palettes on light canvas ── */
 [data-theme="light"][data-palette="lime-fusion"],
 [data-theme="light"][data-palette="amber-minimal"],

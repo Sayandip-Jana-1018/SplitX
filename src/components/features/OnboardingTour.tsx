@@ -65,6 +65,8 @@ export default function OnboardingTour() {
     const [active, setActive] = useState(false);
     const [step, setStep] = useState(0);
     const [spotlightRect, setSpotlightRect] = useState<DOMRect | null>(null);
+    const [tooltipHeight, setTooltipHeight] = useState(210);
+    const tooltipRef = useRef<HTMLDivElement | null>(null);
     const timerRef = useRef<number | undefined>(undefined);
 
     useEffect(() => {
@@ -190,15 +192,23 @@ export default function OnboardingTour() {
     const isLast = step === TOUR_STEPS.length - 1;
 
     const getTooltipStyle = (): React.CSSProperties => {
-        const viewportWidth = window.innerWidth;
-        const viewportHeight = window.innerHeight;
+        // The visual viewport matters on phones: the URL bar and keyboard shrink it.
+        const viewportWidth = window.visualViewport?.width ?? window.innerWidth;
+        const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
         const edge = 16;
         const gap = 14;
-        const width = Math.min(320, viewportWidth - edge * 2);
-        const estimatedHeight = 190;
+        const width = Math.min(340, viewportWidth - edge * 2);
+        const estimatedHeight = Math.min(tooltipHeight || 210, viewportHeight - edge * 2);
 
+        // Centre numerically: framer-motion owns the transform, so a CSS
+        // translate(-50%) here gets overwritten mid-animation and the card
+        // would hang off the right edge.
         if (!spotlightRect) {
-            return { top: '50%', left: '50%', width, transform: 'translate(-50%, -50%)' };
+            return {
+                top: Math.max(edge, (viewportHeight - estimatedHeight) / 2),
+                left: Math.max(edge, (viewportWidth - width) / 2),
+                width,
+            };
         }
 
         const centerX = spotlightRect.left + spotlightRect.width / 2;
@@ -208,7 +218,7 @@ export default function OnboardingTour() {
             : spotlightRect.bottom + gap;
         if (top + estimatedHeight > viewportHeight - edge) top = spotlightRect.top - gap - estimatedHeight;
         if (top < edge) top = Math.min(spotlightRect.bottom + gap, viewportHeight - estimatedHeight - edge);
-        return { top: Math.max(edge, top), left, width };
+        return { top: Math.max(edge, Math.min(top, viewportHeight - estimatedHeight - edge)), left, width };
     };
 
     const visibleSteps = TOUR_STEPS.filter(isStepAvailable);
@@ -261,6 +271,11 @@ export default function OnboardingTour() {
 
                 <motion.div
                     key={step}
+                    ref={(node) => {
+                        tooltipRef.current = node;
+                        const height = node?.getBoundingClientRect().height;
+                        if (height && Math.abs(height - tooltipHeight) > 4) setTooltipHeight(height);
+                    }}
                     role="dialog"
                     aria-label={current.title}
                     initial={{ opacity: 0, y: 10, scale: 0.98 }}

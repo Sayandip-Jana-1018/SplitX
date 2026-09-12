@@ -71,10 +71,10 @@
 }
 
 .headerScrolled {
-    background: var(--header-surface);
-    -webkit-backdrop-filter: saturate(1.7) blur(18px);
-    backdrop-filter: saturate(1.7) blur(18px);
-    box-shadow: 0 1px 0 var(--border-subtle);
+    background: var(--glass-bg);
+    -webkit-backdrop-filter: saturate(var(--glass-saturate)) blur(var(--glass-blur));
+    backdrop-filter: saturate(var(--glass-saturate)) blur(var(--glass-blur));
+    box-shadow: 0 1px 0 var(--border-subtle), var(--glass-inset);
 }
 
 .headerInner {
@@ -106,7 +106,7 @@
 .headerEnd {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 7px;
     justify-self: end;
 }
 
@@ -200,11 +200,11 @@
     height: var(--dock-height);
     padding: 0 6px;
     border-radius: 24px;
-    background: var(--dock-surface);
-    -webkit-backdrop-filter: saturate(1.8) blur(20px);
-    backdrop-filter: saturate(1.8) blur(20px);
-    border: 1px solid var(--border-default);
-    box-shadow: var(--shadow-dock);
+    background: var(--glass-bg-strong);
+    -webkit-backdrop-filter: saturate(var(--glass-saturate)) blur(var(--glass-blur-strong));
+    backdrop-filter: saturate(var(--glass-saturate)) blur(var(--glass-blur-strong));
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--shadow-dock), var(--glass-inset);
     pointer-events: auto;
 }
 
@@ -292,13 +292,15 @@
     z-index: var(--z-drawer);
     display: flex;
     flex-direction: column;
-    width: min(86vw, 340px);
+    width: min(80vw, 306px);
     overflow: hidden;
     outline: none;
-    background: var(--drawer-surface);
-    border-right: 1px solid var(--border-default);
-    border-radius: 0 28px 28px 0;
-    box-shadow: var(--shadow-2xl);
+    background: var(--glass-bg-strong);
+    -webkit-backdrop-filter: saturate(var(--glass-saturate)) blur(var(--glass-blur-strong));
+    backdrop-filter: saturate(var(--glass-saturate)) blur(var(--glass-blur-strong));
+    border-right: 1px solid var(--glass-border);
+    border-radius: 0 30px 30px 0;
+    box-shadow: var(--shadow-2xl), var(--glass-inset);
 }
 
 .sidebar {
@@ -386,11 +388,11 @@
 .searchField {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
     width: 100%;
-    height: 44px;
-    padding: 0 12px 0 14px;
-    border-radius: 14px;
+    height: 50px;
+    padding: 0 12px 0 16px;
+    border-radius: 16px;
     background: var(--surface-input);
     border: 1px solid var(--border-default);
     color: var(--fg-muted);

@@ -167,7 +167,7 @@ export default function SettlementsPage() {
     const [scope, setScope] = useState<string | null>(null);
     const [tab, setTab] = useState<'pending' | 'settled'>('pending');
     const [busyId, setBusyId] = useState<string | null>(null);
-    const [flowOpen, setFlowOpen] = useState(false);
+    const [flowOpen, setFlowOpen] = useState(true);
     const [cashConfirm, setCashConfirm] = useState<TransferItem | null>(null);
     const [upi, setUpi] = useState<{ open: boolean; amount: number; payeeName: string; payeeUpiId?: string; settlementId?: string }>({
         open: false,
@@ -424,6 +424,49 @@ export default function SettlementsPage() {
                     </StaggerItem>
                 )}
 
+                {!isGlobal && activeGroup && graphSettlements.length > 0 && (
+                    <StaggerItem>
+                        <section className={styles.flowCard}>
+                            <button type="button" className={styles.flowToggle} onClick={() => setFlowOpen((open) => !open)} aria-expanded={flowOpen}>
+                                <IconTile><GitBranch size={18} /></IconTile>
+                                <span className={styles.flowText}>
+                                    <span className={styles.flowTitle}>Money flow map</span>
+                                    <span className={styles.flowSubtitle}>
+                                        {graphSettlements.length} simplified transfer{graphSettlements.length === 1 ? '' : 's'} settle every balance
+                                    </span>
+                                </span>
+                                <ChevronDown size={18} className={cn(styles.flowChevron, flowOpen && styles.flowChevronOpen)} />
+                            </button>
+                            <AnimatePresence initial={false}>
+                                {flowOpen && (
+                                    <motion.div
+                                        key="flow"
+                                        initial={{ height: 0, opacity: 0 }}
+                                        animate={{ height: 'auto', opacity: 1 }}
+                                        exit={{ height: 0, opacity: 0 }}
+                                        transition={{ type: 'spring', stiffness: 260, damping: 32 }}
+                                        style={{ overflow: 'hidden' }}
+                                    >
+                                        <div className={styles.flowBody}>
+                                            <Notice tone="info" icon={<Info size={15} />}>
+                                                Debts are simplified so the group settles in the fewest payments. Drag the people around to explore.
+                                            </Notice>
+                                            <SettlementGraph
+                                                members={graphMembers}
+                                                settlements={graphSettlements}
+                                                memberImages={graphImages}
+                                                compact
+                                                performanceMode={mode}
+                                                instanceId={activeGroup.groupId}
+                                            />
+                                        </div>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                        </section>
+                    </StaggerItem>
+                )}
+
                 <StaggerItem>
                     <Segmented<'pending' | 'settled'>
                         ariaLabel="Settlement status"
@@ -485,49 +528,6 @@ export default function SettlementsPage() {
                         </div>
                     )}
                 </StaggerItem>
-
-                {!isGlobal && activeGroup && graphSettlements.length > 0 && (
-                    <StaggerItem>
-                        <section className={styles.flowCard}>
-                            <button type="button" className={styles.flowToggle} onClick={() => setFlowOpen((open) => !open)} aria-expanded={flowOpen}>
-                                <IconTile><GitBranch size={18} /></IconTile>
-                                <span className={styles.flowText}>
-                                    <span className={styles.flowTitle}>Money flow map</span>
-                                    <span className={styles.flowSubtitle}>
-                                        {graphSettlements.length} simplified transfer{graphSettlements.length === 1 ? '' : 's'} settle every balance
-                                    </span>
-                                </span>
-                                <ChevronDown size={18} className={cn(styles.flowChevron, flowOpen && styles.flowChevronOpen)} />
-                            </button>
-                            <AnimatePresence initial={false}>
-                                {flowOpen && (
-                                    <motion.div
-                                        key="flow"
-                                        initial={{ height: 0, opacity: 0 }}
-                                        animate={{ height: 'auto', opacity: 1 }}
-                                        exit={{ height: 0, opacity: 0 }}
-                                        transition={{ type: 'spring', stiffness: 260, damping: 32 }}
-                                        style={{ overflow: 'hidden' }}
-                                    >
-                                        <div className={styles.flowBody}>
-                                            <Notice tone="info" icon={<Info size={15} />}>
-                                                Debts are simplified so the group settles in the fewest payments. Drag the people around to explore.
-                                            </Notice>
-                                            <SettlementGraph
-                                                members={graphMembers}
-                                                settlements={graphSettlements}
-                                                memberImages={graphImages}
-                                                compact
-                                                performanceMode={mode}
-                                                instanceId={activeGroup.groupId}
-                                            />
-                                        </div>
-                                    </motion.div>
-                                )}
-                            </AnimatePresence>
-                        </section>
-                    </StaggerItem>
-                )}
 
                 {!isGlobal && activeGroup && (
                     <StaggerItem>

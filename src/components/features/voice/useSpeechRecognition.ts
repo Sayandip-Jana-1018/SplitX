@@ -36,6 +36,9 @@ export function useSpeechRecognition({
     const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
     const stateRef = useRef<VoiceState>('idle');
     const finalTextRef = useRef('');
+    // Android Chrome re-delivers results it has already marked final; tracking
+    // the indexes we've consumed keeps the transcript from echoing itself.
+    const seenFinalRef = useRef<Set<number>>(new Set());
     const processingRef = useRef(false);
     const memberNamesRef = useRef(memberNames);
     const groupNameRef = useRef(groupName);
@@ -114,6 +117,7 @@ export function useSpeechRecognition({
 
             // Reset
             finalTextRef.current = '';
+            seenFinalRef.current = new Set();
             processingRef.current = false;
 
             recognition.onstart = () => {
@@ -121,30 +125,39 @@ export function useSpeechRecognition({
                 onInterimTextChange('');
                 onFinalTextChange('');
                 finalTextRef.current = '';
+                seenFinalRef.current = new Set();
                 if (navigator.vibrate) navigator.vibrate(50);
             };
 
             recognition.onresult = (event: SpeechRecognitionEvent) => {
                 let interim = '';
-                let finalResult = '';
 
-                for (let i = 0; i < event.results.length; i++) {
+                // Only consume results from resultIndex onwards, and only once
+                // each — otherwise every event re-appends the whole utterance.
+                for (let i = event.resultIndex; i < event.results.length; i++) {
                     const result = event.results[i];
+                    const text = (result[0]?.transcript ?? '').trim();
+                    if (!text) continue;
+
                     if (result.isFinal) {
-                        finalResult += result[0].transcript;
+                        if (seenFinalRef.current.has(i)) continue;
+                        seenFinalRef.current.add(i);
+                        const existing = finalTextRef.current;
+                        if (!existing) {
+                            finalTextRef.current = text;
+                        } else if (!existing.toLowerCase().endsWith(text.toLowerCase())) {
+                            finalTextRef.current = `${existing} ${text}`;
+                        }
+                        finalTextRef.current = deduplicateTranscript(finalTextRef.current);
+                        onFinalTextChange(finalTextRef.current);
+                        onInterimTextChange('');
                     } else {
-                        interim += result[0].transcript;
+                        // Interim results are cumulative already — keep the latest.
+                        interim = text;
                     }
                 }
 
-                if (finalResult) {
-                    finalTextRef.current = finalResult.trim();
-                    onFinalTextChange(finalTextRef.current);
-                    onInterimTextChange('');
-                }
-                if (interim) {
-                    onInterimTextChange(interim);
-                }
+                if (interim) onInterimTextChange(deduplicateTranscript(interim));
             };
 
             recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
@@ -186,6 +199,7 @@ export function useSpeechRecognition({
 
     const reset = useCallback(() => {
         finalTextRef.current = '';
+        seenFinalRef.current = new Set();
         processingRef.current = false;
     }, []);
 

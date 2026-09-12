@@ -127,3 +127,19 @@
 
   --accent-gradient: linear-gradient(135deg, var(--accent-500) 0%, var(--accent-600) 100%);
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   Liquid glass — geometry shared by every floating surface.
+   Colours live in the theme files so glass reads correctly in both.
+   ═══════════════════════════════════════════════════════════════ */
+:root {
+  --glass-blur: 20px;
+  --glass-blur-strong: 30px;
+  --glass-saturate: 1.7;
+  --glass-radius: 26px;
+
+  /* Ambient motion timings for floating décor */
+  --float-slow: 26s;
+  --float-medium: 18s;
+  --float-fast: 12s;
+}

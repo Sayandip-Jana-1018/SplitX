@@ -1,41 +1,48 @@
 /**
- * Deduplicate a transcript that has repeated words/phrases from mobile
- * speech engine (e.g. "split split split 542 542 542" → "split 542").
+ * Mobile speech engines (Android Chrome especially) re-emit phrases they have
+ * already delivered, so a clean "split 450 between Ankan and Ankit" arrives as
+ * "split split split 450 between between Ankan and Ankit".
  *
- * Shared between client-side (VoiceInput) and server-side (parse-voice API).
+ * This collapses any phrase that repeats back-to-back, longest phrase first,
+ * so both word-level and phrase-level echoes disappear while genuine speech
+ * survives untouched.
+ *
+ * Shared by the voice hook (client) and the parse-voice API (server).
  */
+
+const MAX_PHRASE = 6;
+
+function sameWords(a: string[], b: string[]) {
+    for (let i = 0; i < a.length; i++) {
+        if (a[i].toLowerCase() !== b[i].toLowerCase()) return false;
+    }
+    return true;
+}
+
 export function deduplicateTranscript(raw: string): string {
     if (!raw) return '';
-    const words = raw.trim().split(/\s+/);
-    if (words.length <= 3) return raw.trim();
+    let words = raw.trim().split(/\s+/).filter(Boolean);
+    if (words.length < 2) return words.join(' ');
 
-    // Strategy 1: Detect repeated phrases (2-6 word patterns)
-    for (let patternLen = 6; patternLen >= 2; patternLen--) {
-        if (words.length < patternLen * 2) continue;
-        const pattern = words.slice(0, patternLen).join(' ').toLowerCase();
-        let count = 0;
-        for (let i = 0; i <= words.length - patternLen; i += patternLen) {
-            const chunk = words.slice(i, i + patternLen).join(' ').toLowerCase();
-            if (chunk === pattern) count++;
-            else break;
+    for (let size = MAX_PHRASE; size >= 1; size--) {
+        if (words.length < size * 2) continue;
+        const out: string[] = [];
+        let index = 0;
+        while (index < words.length) {
+            const phrase = words.slice(index, index + size);
+            if (phrase.length < size) {
+                out.push(...words.slice(index));
+                break;
+            }
+            out.push(...phrase);
+            let next = index + size;
+            while (next + size <= words.length && sameWords(words.slice(next, next + size), phrase)) {
+                next += size;
+            }
+            index = next;
         }
-        if (count >= 3) {
-            return words.slice(0, patternLen).join(' ');
-        }
+        words = out;
     }
 
-    // Strategy 2: Remove consecutive duplicate words (keep one)
-    const cleaned: string[] = [words[0]];
-    let consecutiveCount = 0;
-    for (let i = 1; i < words.length; i++) {
-        if (words[i].toLowerCase() === words[i - 1].toLowerCase()) {
-            consecutiveCount++;
-            if (consecutiveCount >= 2) continue;
-        } else {
-            consecutiveCount = 0;
-        }
-        cleaned.push(words[i]);
-    }
-
-    return cleaned.join(' ');
+    return words.join(' ');
 }
