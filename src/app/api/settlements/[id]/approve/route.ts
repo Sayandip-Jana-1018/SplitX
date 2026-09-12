@@ -6,6 +6,7 @@ import { createAuditLog } from '@/lib/auditLog';
 import { serializeSettlementAuditSnapshot } from '@/lib/auditPayloads';
 import { createBulkNotifications, createNotification } from '@/lib/notifications';
 import { isAwaitingReceiverApproval, isCompletedSettlementStatus } from '@/lib/settlementStatus';
+import { recordSettlementCompleted } from '@/lib/metrics';
 
 const ApprovalSchema = z.object({
     action: z.enum(['approve', 'reject']).default('approve'),
@@ -70,6 +71,9 @@ export async function POST(
             where: { id },
             data: { status: nextStatus },
         });
+        if (nextStatus === 'completed') {
+            recordSettlementCompleted(updated.method, updated.amount);
+        }
 
         await createAuditLog({
             userId: user.id,

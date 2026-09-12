@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { z } from 'zod';
 import { createNotification } from '@/lib/notifications';
+import { recordSettlementCompleted } from '@/lib/metrics';
 import {
     canInitiateSettlementPayment,
     isCompletedSettlementStatus,
@@ -88,6 +89,7 @@ export async function POST(
                 where: { id },
                 data: { status: 'completed', method: 'cash' },
             });
+            recordSettlementCompleted('cash', settlement.amount);
             try {
                 await createNotification({
                     userId: settlement.fromId,

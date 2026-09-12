@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { isFeatureEnabled } from '@/lib/featureFlags';
+import { recordAiChat } from '@/lib/metrics';
 
 /**
  * POST /api/ai/chat — AI expense assistant powered by Gemini.
@@ -311,7 +312,9 @@ Note: All amounts shown are in ₹ (INR). Internally stored in paise (100 paise 
         let reply: string;
 
         if (apiKey) {
-            reply = await callGemini(apiKey, contextStr, message);
+            const gemini = await callGemini(apiKey, contextStr, message);
+            reply = gemini.reply;
+            recordAiChat('gemini', gemini.ok ? 'ok' : 'error');
         } else {
             reply = generateLocalResponse(message, {
                 userName: user.name || 'there',
@@ -335,6 +338,7 @@ Note: All amounts shown are in ₹ (INR). Internally stored in paise (100 paise 
                     splitCount: t.splits.length,
                 })),
             });
+            recordAiChat('local', 'ok');
         }
 
         // Save chat messages
@@ -355,7 +359,7 @@ Note: All amounts shown are in ₹ (INR). Internally stored in paise (100 paise 
 }
 
 /** Call Gemini API */
-async function callGemini(apiKey: string, context: string, message: string): Promise<string> {
+async function callGemini(apiKey: string, context: string, message: string): Promise<{ reply: string; ok: boolean }> {
     const systemPrompt = `You are SplitX AI, the intelligent financial assistant inside SplitX — a premium expense-splitting app for groups and trips.
 
 Your capabilities:
@@ -396,13 +400,16 @@ ${context}`;
 
         if (!res.ok) {
             console.error('Gemini API error:', res.status);
-            return 'Sorry, I couldn\'t process that right now. Try again in a moment.';
+            return { reply: 'Sorry, I couldn\'t process that right now. Try again in a moment.', ok: false };
         }
 
         const data = await res.json();
-        return data?.candidates?.[0]?.content?.parts?.[0]?.text || 'I couldn\'t understand that. Try rephrasing?';
+        const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+        return text
+            ? { reply: text, ok: true }
+            : { reply: 'I couldn\'t understand that. Try rephrasing?', ok: false };
     } catch {
-        return 'Sorry, I\'m having trouble connecting. Please try again.';
+        return { reply: 'Sorry, I\'m having trouble connecting. Please try again.', ok: false };
     }
 }
 

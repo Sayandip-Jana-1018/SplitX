@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
+import { recordReceiptScan } from '@/lib/metrics';
 
 /**
  * POST /api/receipt-scan — Advanced AI receipt scanning via OpenAI GPT-4o-mini vision.
@@ -124,6 +125,7 @@ export async function POST(req: Request) {
         if (!openaiRes.ok) {
             const err = await openaiRes.text();
             console.error('OpenAI API error:', openaiRes.status, err);
+            recordReceiptScan(openaiRes.status === 429 ? 'rate_limited' : 'upstream_error');
             if (openaiRes.status === 401) {
                 return NextResponse.json({ error: 'Invalid OpenAI API key' }, { status: 503 });
             }
@@ -137,6 +139,7 @@ export async function POST(req: Request) {
         const content = openaiData.choices?.[0]?.message?.content;
 
         if (!content) {
+            recordReceiptScan('upstream_error');
             return NextResponse.json({ error: 'Empty response from AI' }, { status: 502 });
         }
 
@@ -150,6 +153,7 @@ export async function POST(req: Request) {
             parsed = JSON.parse(cleaned);
         } catch {
             console.error('Failed to parse AI response:', content);
+            recordReceiptScan('unparseable');
             return NextResponse.json(
                 { error: 'AI returned invalid data. Please try again with a clearer image.' },
                 { status: 422 }
@@ -212,9 +216,11 @@ export async function POST(req: Request) {
             }
         }
 
+        recordReceiptScan('success');
         return NextResponse.json(result);
     } catch (error) {
         console.error('Receipt scan error:', error);
+        recordReceiptScan('error');
         return NextResponse.json(
             { error: 'Failed to process receipt. Please try again.' },
             { status: 500 }

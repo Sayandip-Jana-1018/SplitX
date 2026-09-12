@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { deduplicateTranscript } from '@/lib/deduplicateTranscript';
+import { recordVoiceParse } from '@/lib/metrics';
 
 /**
  * POST /api/ai/parse-voice — Parse voice transcript into structured transaction data.
@@ -51,11 +52,13 @@ export async function POST(req: Request) {
         if (!apiKey) {
             // Local fallback: simple regex-based parsing
             const result = parseTranscriptLocally(cleanedTranscript, memberNames);
+            recordVoiceParse('local');
             return NextResponse.json(result);
         }
 
         // Use Gemini for intelligent parsing
-        const result = await parseWithGemini(apiKey, cleanedTranscript, memberNames, groupName);
+        const { result, provider } = await parseWithGemini(apiKey, cleanedTranscript, memberNames, groupName);
+        recordVoiceParse(provider);
         return NextResponse.json(result);
     } catch (error) {
         console.error('Voice parse error:', error);
@@ -68,7 +71,7 @@ async function parseWithGemini(
     transcript: string,
     memberNames: string[],
     groupName: string
-): Promise<ParsedVoiceResult> {
+): Promise<{ result: ParsedVoiceResult; provider: 'gemini' | 'gemini_fallback' }> {
     const systemPrompt = `You are a precise transaction parser for the SplitX app. Parse the user's voice transcript into structured expense data.
 
 RULES:
@@ -129,14 +132,14 @@ RESPOND WITH ONLY VALID JSON (no markdown, no explanation):
 
         if (!res.ok) {
             console.error('Gemini parse error:', res.status);
-            return parseTranscriptLocally(transcript, memberNames);
+            return { result: parseTranscriptLocally(transcript, memberNames), provider: 'gemini_fallback' };
         }
 
         const data = await res.json();
         const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text;
 
         if (!raw) {
-            return parseTranscriptLocally(transcript, memberNames);
+            return { result: parseTranscriptLocally(transcript, memberNames), provider: 'gemini_fallback' };
         }
 
         // Parse the JSON response, handle potential markdown wrapping
@@ -185,10 +188,10 @@ RESPOND WITH ONLY VALID JSON (no markdown, no explanation):
             }
         }
 
-        return parsed;
+        return { result: parsed, provider: 'gemini' };
     } catch (error) {
         console.error('Gemini parse failed, using local fallback:', error);
-        return parseTranscriptLocally(transcript, memberNames);
+        return { result: parseTranscriptLocally(transcript, memberNames), provider: 'gemini_fallback' };
     }
 }
 
