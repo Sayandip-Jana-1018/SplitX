@@ -37,6 +37,4 @@ env:
   NODE_ENV: "production"
   NEXT_TELEMETRY_DISABLED: "1"
   PORT: "3000"
-  METRICS_TOKEN: "splitx-metrics-secret"
-  # Minimal DB for Kind demo — uses in-memory SQLite-style fallback
-  DATABASE_URL: "postgresql://splitx:splitx_dev_password@host.docker.internal:5432/splitx"
+# DATABASE_URL, METRICS_TOKEN and other secrets come from the `splitx-env` Secret.

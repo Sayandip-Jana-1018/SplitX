@@ -2,6 +2,12 @@
 #   SplitX — Full Development Stack
 #   Run: docker compose --profile monitoring --profile ci up -d
 #   App only: docker compose up -d
+#
+#   Required in .env: POSTGRES_PASSWORD, METRICS_TOKEN, GF_ADMIN_PASSWORD (see .env.example).
+#   Every port except the app binds to 127.0.0.1 — admin UIs with known
+#   defaults must not be reachable from a shared network (e.g. campus wifi).
+#   Postgres/Redis use host ports 5433/6380 so they can't be shadowed by a
+#   native Postgres/Redis already listening on 5432/6379.
 # ═══════════════════════════════════════════════════════════════
 
 services:
@@ -22,9 +28,9 @@ services:
       PORT: 3000
       HOSTNAME: "0.0.0.0"
       NEXTAUTH_URL: "http://localhost:3000"
-      DATABASE_URL: "postgresql://splitx:${POSTGRES_PASSWORD:-splitx_dev_password}@postgres:5432/splitx"
-      DIRECT_URL: "postgresql://splitx:${POSTGRES_PASSWORD:-splitx_dev_password}@postgres:5432/splitx"
-      METRICS_TOKEN: ${METRICS_TOKEN:-splitx-metrics-secret}
+      DATABASE_URL: "postgresql://splitx:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/splitx"
+      DIRECT_URL: "postgresql://splitx:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/splitx"
+      METRICS_TOKEN: ${METRICS_TOKEN:?Set METRICS_TOKEN in .env}
     depends_on:
       postgres:
         condition: service_healthy
@@ -32,7 +38,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000/"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000/api/health/live"]
       interval: 30s
       timeout: 5s
       retries: 5
@@ -46,10 +52,10 @@ services:
     container_name: splitx-postgres
     environment:
       POSTGRES_USER: splitx
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-splitx_dev_password}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
       POSTGRES_DB: splitx
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -66,7 +72,7 @@ services:
     image: redis:7-alpine
     container_name: splitx-redis
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6380:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -84,11 +90,13 @@ services:
     container_name: splitx-prometheus
     profiles: ["monitoring"]
     ports:
-      - "9090:9090"
+      - "127.0.0.1:9090:9090"
     volumes:
       - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./monitoring/prometheus/alert-rules.yml:/etc/prometheus/alert-rules.yml:ro
       - prometheus_data:/prometheus
+    secrets:
+      - metrics_token
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.retention.time=7d'
@@ -105,10 +113,10 @@ services:
     container_name: splitx-grafana
     profiles: ["monitoring"]
     ports:
-      - "3001:3000"
+      - "127.0.0.1:3001:3000"
     environment:
       GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: ${GF_ADMIN_PASSWORD:-splitx_grafana}
+      GF_SECURITY_ADMIN_PASSWORD: ${GF_ADMIN_PASSWORD:?Set GF_ADMIN_PASSWORD in .env}
       GF_USERS_ALLOW_SIGN_UP: "false"
       GF_FEATURE_TOGGLES_ENABLE: "lokiLogsDataplane"
     volumes:
@@ -128,7 +136,7 @@ services:
     container_name: splitx-loki
     profiles: ["monitoring"]
     ports:
-      - "3100:3100"
+      - "127.0.0.1:3100:3100"
     volumes:
       - ./monitoring/loki/loki-config.yml:/etc/loki/local-config.yaml:ro
       - loki_data:/loki
@@ -169,8 +177,8 @@ services:
     container_name: splitx-jenkins
     profiles: ["ci"]
     ports:
-      - "8080:8080"
-      - "50000:50000"
+      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:50000:50000"
     volumes:
       - jenkins_data:/var/jenkins_home
       - /var/run/docker.sock:/var/run/docker.sock
@@ -182,11 +190,11 @@ services:
 
   # ── SonarQube (Code Quality Analysis) ──
   sonarqube:
-    image: sonarqube:10-community
+    image: sonarqube:10.7.0-community
     container_name: splitx-sonarqube
     profiles: ["ci"]
     ports:
-      - "9000:9000"
+      - "127.0.0.1:9000:9000"
     environment:
       SONAR_ES_BOOTSTRAP_CHECKS_DISABLE: "true"
     volumes:
@@ -199,12 +207,12 @@ services:
 
   # ── Nexus (Artifact Repository) ──
   nexus:
-    image: sonatype/nexus3:latest
+    image: sonatype/nexus3:3.92.0
     container_name: splitx-nexus
     profiles: ["ci"]
     ports:
-      - "8081:8081"
-      - "8082:8082"
+      - "127.0.0.1:8081:8081"
+      - "127.0.0.1:8082:8082"
     volumes:
       - nexus_data:/nexus-data
     restart: unless-stopped
@@ -226,3 +234,8 @@ volumes:
 networks:
   splitx-network:
     driver: bridge
+
+secrets:
+  # Handed to Prometheus as a file so the scrape token never appears in prometheus.yml.
+  metrics_token:
+    environment: METRICS_TOKEN

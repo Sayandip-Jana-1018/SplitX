@@ -37,17 +37,19 @@ autoscaling:
   targetMemoryUtilization: 80
 
 probes:
+  # Liveness never touches the database, so a DB outage can't restart every pod.
   liveness:
-    path: /api/health
+    path: /api/health/live
     initialDelaySeconds: 15
-    periodSeconds: 30
+    periodSeconds: 20
   readiness:
-    path: /api/health
+    path: /api/health/ready
     initialDelaySeconds: 5
     periodSeconds: 10
 
+# Non-secret settings only. Secrets (DATABASE_URL, NEXTAUTH_SECRET, METRICS_TOKEN, ...)
+# come from the `splitx-env` Secret — see k8s/base/secret.example.yaml.
 env:
   NODE_ENV: "production"
   NEXT_TELEMETRY_DISABLED: "1"
   PORT: "3000"
-  METRICS_TOKEN: "splitx-metrics-secret"

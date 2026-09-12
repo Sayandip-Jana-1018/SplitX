@@ -332,7 +332,7 @@ helm repo update
 helm install monitoring prometheus-community/kube-prometheus-stack \
     --namespace monitoring \
     --create-namespace \
-    --set grafana.adminPassword=splitx_grafana \
+    --set grafana.adminPassword="$GF_ADMIN_PASSWORD" \
     --set prometheus.prometheusSpec.serviceMonitorSelectorNilUsesHelmValues=false
 ```
 

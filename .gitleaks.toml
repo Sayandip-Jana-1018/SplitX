@@ -1,0 +1,41 @@
+# ═══════════════════════════════════════════════════════════════
+#   SplitX — secret scanning (gitleaks v8)
+#   Runs in the pre-commit hook and on every CI run over full history.
+# ═══════════════════════════════════════════════════════════════
+
+title = "SplitX"
+
+[extend]
+useDefault = true
+
+# The default rules missed the passwords that actually leaked in this repo
+# (Jenkins, Nexus, SonarQube, ArgoCD) because they were plain literals in CI,
+# infrastructure and documentation files. This rule covers exactly those files.
+# Values starting with $, < or { are references/placeholders, not secrets.
+[[rules]]
+id = "infra-password-literal"
+description = "Password literal in CI, infrastructure or documentation files"
+regex = '''(?i)(?:password|passwd|_pass|_psw|admin_pw)["']?\s*[:=]\s*["']?([^\s"'$<{][^\s"']{5,})'''
+secretGroup = 1
+path = '''(?i)(Jenkinsfile|\.(ya?ml|sh|ps1|properties|md|html|xml|tf|tfvars|toml|conf))$'''
+keywords = ["password", "passwd", "_pass", "_psw", "admin_pw"]
+
+[[allowlists]]
+description = "Documented templates and lockfiles"
+paths = [
+  '''(^|/)\.env\.example$''',
+  '''(^|/)k8s/base/secret\.example\.yaml$''',
+  '''(^|/)package-lock\.json$''',
+]
+
+[[allowlists]]
+description = "Line shapes that are not secrets: env-var references, commands, diagram labels"
+regexTarget = "line"
+regexes = [
+  # curl credentials supplied through required environment variables
+  '''-u\s+"\$\{[A-Z_]+:\?[^}]*\}:\$\{[A-Z_]+:\?[^}]*\}"''',
+  # PowerShell capturing a command's output into $password
+  '''\$password\s*=\s*kubectl\s''',
+  # UML class-diagram attribute ("password : String? «bcrypt»") in the synopsis figures
+  '''password\s*:\s*String\??\s*\x{ab}bcrypt\x{bb}''',
+]

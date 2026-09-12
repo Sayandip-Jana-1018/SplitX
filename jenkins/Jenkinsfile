@@ -10,10 +10,9 @@ pipeline {
         APP_NAME     = 'splitx'
         DOCKER_IMAGE = 'splitx:local'
         SONAR_HOST   = 'http://splitx-sonarqube:9000'
-        SONAR_TOKEN  = 'sqp_dde8317a522329fea430855113d72b6f793bde82'
+        SONAR_TOKEN  = credentials('sonar-token')     // Jenkins → Credentials → Secret text
         NEXUS_HOST   = 'splitx-nexus:8082'
-        NEXUS_USER   = 'admin'
-        NEXUS_PASS   = 'adminsj2003'
+        NEXUS        = credentials('nexus-admin')     // Username/password → exposes NEXUS_USR / NEXUS_PSW
     }
 
     options {
@@ -65,8 +64,7 @@ pipeline {
                         -Dsonar.projectName="SplitX" \
                         -Dsonar.sources=src \
                         -Dsonar.host.url=http://splitx-sonarqube:9000 \
-                        -Dsonar.login=admin \
-                        -Dsonar.password=Sonar@Sj2003 \
+                        -Dsonar.token=$SONAR_TOKEN \
                         -Dsonar.exclusions="**/node_modules/**,**/.next/**" \
                         || echo "SonarQube analysis submitted"
                 '''
@@ -97,7 +95,7 @@ pipeline {
             steps {
                 echo "📦 Pushing image to Nexus artifact registry..."
                 sh '''
-                    echo $NEXUS_PASS | docker login $NEXUS_HOST -u $NEXUS_USER --password-stdin
+                    echo "$NEXUS_PSW" | docker login $NEXUS_HOST -u "$NEXUS_USR" --password-stdin
                     docker tag splitx:local $NEXUS_HOST/splitx:latest
                     docker tag splitx:local $NEXUS_HOST/splitx:${BUILD_NUMBER}
                     docker push $NEXUS_HOST/splitx:latest

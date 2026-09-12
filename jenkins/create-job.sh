@@ -1,5 +1,5 @@
 #!/bin/bash
-CRUMB=$(curl -s "http://localhost:8080/crumbIssuer/api/json" -u "admin:admin" | sed 's/.*"crumb":"\([^"]*\)".*/\1/')
+CRUMB=$(curl -s "http://localhost:8080/crumbIssuer/api/json" -u "${JENKINS_USER:?export JENKINS_USER}:${JENKINS_API_TOKEN:?export JENKINS_API_TOKEN}" | sed 's/.*"crumb":"\([^"]*\)".*/\1/')
 echo "Crumb: $CRUMB"
 
 cat > /tmp/job.xml << 'EOF'
@@ -31,7 +31,7 @@ cat > /tmp/job.xml << 'EOF'
 EOF
 
 curl -s -X POST "http://localhost:8080/createItem?name=SplitX-Pipeline" \
-  -u "admin:admin" \
+  -u "${JENKINS_USER:?export JENKINS_USER}:${JENKINS_API_TOKEN:?export JENKINS_API_TOKEN}" \
   -H "Jenkins-Crumb: $CRUMB" \
   -H "Content-Type: application/xml" \
   --data-binary "@/tmp/job.xml"

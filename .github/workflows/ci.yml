@@ -43,3 +43,29 @@ jobs:
       - name: Validate Docker image
         if: ${{ vars.ENABLE_DOCKER_CI == 'true' }}
         run: docker build -t splitx-ci .
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GITLEAKS_VERSION: 8.30.1
+
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Install gitleaks (checksum verified)
+        run: |
+          base="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}"
+          archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -sSfL -o "$archive" "$base/$archive"
+          curl -sSfL -o checksums.txt "$base/gitleaks_${GITLEAKS_VERSION}_checksums.txt"
+          grep " $archive\$" checksums.txt | sha256sum --check --strict -
+          tar -xzf "$archive" gitleaks
+
+      - name: Scan every commit for secrets
+        # Findings in historical commits whose secrets were rotated are listed by
+        # fingerprint in .gitleaksignore; anything new fails the build.
+        run: ./gitleaks git . --config .gitleaks.toml --redact --no-banner --verbose
