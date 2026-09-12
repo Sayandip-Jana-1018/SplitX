@@ -34,10 +34,13 @@ const ORBIT_GLYPHS: GlyphSpec[] = [
     { emoji: '🏷️', x: 50, y: 32, size: 30, duration: 46, delay: -12, tilt: 0, orbit: 232 },
 ];
 
+const SPOTS = ['spotA', 'spotB', 'spotC', 'spotD', 'spotE'] as const;
+
 /**
- * The colour and motion that sits behind a page: drifting accent fields, a
- * faint mesh, and a few glass glyphs that bob or orbit. Purely decorative —
- * it never intercepts pointer events, and it steps aside in calm mode.
+ * The colour and motion behind a page: an aurora wash under the header,
+ * accent spotlights spread down the viewport, a faint mesh, and a few glass
+ * glyphs that bob or orbit. Decorative only — it never takes pointer events,
+ * and it steps aside in calm mode.
  */
 export default function Ambient({
     variant = 'page',
@@ -57,20 +60,19 @@ export default function Ambient({
         return variant === 'hero' ? EXPENSE_GLYPHS : EXPENSE_GLYPHS.slice(0, 3);
     }, [glyphs, mode, variant]);
 
-    if (mode === 'calm') {
-        return (
-            <div className={cn(styles.field, styles[variant], className)} aria-hidden="true">
-                <span className={cn(styles.blob, styles.blobA)} style={{ animation: 'none' }} />
-            </div>
-        );
-    }
+    const spots = useMemo(() => {
+        if (mode === 'calm') return SPOTS.slice(0, 2);
+        if (mode === 'balanced') return SPOTS.slice(0, 4);
+        return SPOTS;
+    }, [mode]);
 
     return (
         <div className={cn(styles.field, styles[variant], className)} aria-hidden="true">
-            <span className={cn(styles.blob, styles.blobA)} />
-            <span className={cn(styles.blob, styles.blobB)} />
-            {variant === 'hero' && <span className={cn(styles.blob, styles.blobC)} />}
-            <span className={styles.mesh} />
+            <span className={styles.aurora} />
+            {spots.map((spot) => (
+                <span key={spot} className={cn(styles.spot, styles[spot])} />
+            ))}
+            {mode !== 'calm' && <span className={styles.mesh} />}
 
             {floating.map((glyph) => (
                 <span

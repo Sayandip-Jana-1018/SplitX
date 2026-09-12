@@ -75,6 +75,7 @@
     font-weight: 700;
     letter-spacing: var(--tracking-wide);
     text-transform: uppercase;
+    text-align: center;
     color: var(--fg-muted);
     margin-bottom: 10px;
 }

@@ -87,15 +87,21 @@ export default function ThemeSelector({ size = 40 }: { size?: number }) {
                 aria-label="Appearance — theme and accent colour"
                 title="Appearance"
             >
-                <span
+                <motion.span
                     className={styles.appearanceDisc}
                     style={{
                         background: `conic-gradient(from 210deg, ${current.swatches[0]}, ${current.accent500}, ${current.swatches[2]}, ${current.swatches[0]})`,
                     }}
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 16, repeat: Infinity, ease: 'linear' }}
                 />
-                <span className={styles.appearanceGlyph}>
+                <motion.span
+                    className={styles.appearanceGlyph}
+                    animate={{ scale: [1, 1.12, 1] }}
+                    transition={{ duration: 3.4, repeat: Infinity, ease: 'easeInOut' }}
+                >
                     {theme === 'dark' ? <Moon size={12} strokeWidth={2.6} /> : <Sun size={12} strokeWidth={2.6} />}
-                </span>
+                </motion.span>
             </motion.button>
 
             <Modal
