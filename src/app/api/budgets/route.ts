@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
+import { logger } from '@/lib/logger';
 
 /**
  * GET  /api/budgets — list user's budgets for a month (default: current)
@@ -27,7 +28,7 @@ export async function GET(req: Request) {
 
         return NextResponse.json({ data: budgets });
     } catch (error) {
-        console.error('Budgets GET error:', error);
+        logger.error('Budgets GET error', { err: error });
         return NextResponse.json({ error: 'Failed to fetch budgets' }, { status: 500 });
     }
 }
@@ -71,7 +72,7 @@ export async function POST(req: Request) {
 
         return NextResponse.json({ data: budget });
     } catch (error) {
-        console.error('Budgets POST error:', error);
+        logger.error('Budgets POST error', { err: error });
         return NextResponse.json({ error: 'Failed to save budget' }, { status: 500 });
     }
 }

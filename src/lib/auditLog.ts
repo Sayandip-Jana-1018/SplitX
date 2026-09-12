@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/db';
 import { Prisma } from '@prisma/client';
 import { isFeatureEnabled } from '@/lib/featureFlags';
+import { logger } from '@/lib/logger';
 
 // ═══════════════════════════════════════════════════════════════
 // Audit Log Helper — call from API routes on data mutations.
@@ -35,7 +36,7 @@ export async function createAuditLog(params: AuditLogParams) {
             },
         });
     } catch (error) {
-        console.error('Failed to create audit log:', error);
+        logger.error('Failed to create audit log', { err: error });
         return null;
     }
 }

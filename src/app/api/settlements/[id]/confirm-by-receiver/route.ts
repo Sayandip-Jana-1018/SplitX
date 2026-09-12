@@ -9,6 +9,7 @@ import {
     isCompletedSettlementStatus,
     isAwaitingReceiverApproval,
 } from '@/lib/settlementStatus';
+import { logger } from '@/lib/logger';
 
 const ActionSchema = z.object({
     action: z.enum(['confirm', 'accept_cash', 'reject']).default('confirm'),
@@ -121,7 +122,7 @@ export async function POST(
 
         return NextResponse.json({ message: 'Settlement moved to paid_pending for approval' });
     } catch (error) {
-        console.error('Settlement confirm-by-receiver error:', error);
+        logger.error('Settlement confirm-by-receiver error', { err: error });
         return NextResponse.json({ error: 'Failed to update settlement' }, { status: 500 });
     }
 }

@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { getSupabaseClient } from '@/lib/supabase';
 import { createClient } from '@supabase/supabase-js';
+import { logger } from '@/lib/logger';
 
 const AVATAR_BUCKETS = ['avatars', 'receipts'] as const;
 
@@ -69,7 +70,7 @@ export async function POST(req: Request) {
                 break;
             }
 
-            console.warn(`Supabase avatar upload failed for bucket "${bucket}":`, uploadError);
+            logger.warn('Supabase avatar upload failed', { bucket, err: uploadError });
         }
 
         if (!imageUrl) {
@@ -84,7 +85,7 @@ export async function POST(req: Request) {
 
         return NextResponse.json({ image: imageUrl });
     } catch (error) {
-        console.error('Avatar upload error:', error);
+        logger.error('Avatar upload error', { err: error });
         return NextResponse.json({ error: 'Failed to upload avatar' }, { status: 500 });
     }
 }

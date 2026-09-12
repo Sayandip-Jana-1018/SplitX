@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { logger } from '@/lib/logger';
 
 /**
  * GET /api/health — Lightweight DB ping to keep Neon warm.
@@ -11,7 +12,7 @@ export async function GET() {
         await prisma.$queryRaw`SELECT 1`;
         return NextResponse.json({ status: 'ok', db: 'connected', ts: Date.now() });
     } catch (error) {
-        console.error('[Health] DB ping failed:', error);
+        logger.error('DB ping failed', { err: error });
         return NextResponse.json(
             { status: 'error', db: 'unreachable', ts: Date.now() },
             { status: 503 }

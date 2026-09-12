@@ -8,6 +8,7 @@ import {
     FinanceTransactionSnapshot,
     simplifyGroupBalances,
 } from '@/lib/groupFinance';
+import { logger } from '@/lib/logger';
 
 function buildFinanceMembers(group: {
     owner: { id: string; name: string | null; image: string | null; upiId: string | null };
@@ -241,7 +242,7 @@ export async function GET() {
             },
         });
     } catch (error) {
-        console.error('Settlements by-group error:', error);
+        logger.error('Settlements by-group error', { err: error });
         return NextResponse.json({ error: 'Failed to compute settlements' }, { status: 500 });
     }
 }

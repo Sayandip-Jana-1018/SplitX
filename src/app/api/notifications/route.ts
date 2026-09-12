@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { isFeatureEnabled } from '@/lib/featureFlags';
 import { z } from 'zod';
+import { logger } from '@/lib/logger';
 
 const CreateNotificationSchema = z.object({
     userId: z.string().min(1),
@@ -126,7 +127,7 @@ export async function GET() {
 
         return NextResponse.json({ data: notifications, unreadCount });
     } catch (error) {
-        console.error('Notifications GET error:', error);
+        logger.error('Notifications GET error', { err: error });
         return NextResponse.json({ error: 'Failed to fetch notifications' }, { status: 500 });
     }
 }
@@ -158,7 +159,7 @@ export async function PATCH(req: Request) {
 
         return NextResponse.json({ success: true });
     } catch (error) {
-        console.error('Notifications PATCH error:', error);
+        logger.error('Notifications PATCH error', { err: error });
         return NextResponse.json({ error: 'Failed to update notifications' }, { status: 500 });
     }
 }
@@ -227,7 +228,7 @@ export async function POST(req: Request) {
 
         return NextResponse.json(notification, { status: 201 });
     } catch (error) {
-        console.error('Notifications POST error:', error);
+        logger.error('Notifications POST error', { err: error });
         return NextResponse.json({ error: 'Failed to create notification' }, { status: 500 });
     }
 }

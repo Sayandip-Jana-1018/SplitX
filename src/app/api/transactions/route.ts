@@ -6,6 +6,7 @@ import { createAuditLog } from '@/lib/auditLog';
 import { serializeTransactionAuditSnapshot } from '@/lib/auditPayloads';
 import { recordTransactionCreated } from '@/lib/metrics';
 import { isTrustedReceiptUrl, withTrustedReceipt } from '@/lib/receiptUrl';
+import { logger } from '@/lib/logger';
 
 // Category labels for notification messages
 const CATEGORY_LABELS: Record<string, string> = {
@@ -133,7 +134,8 @@ export async function GET(req: Request) {
         });
 
         return NextResponse.json(transactions.map(withTrustedReceipt));
-    } catch {
+    } catch (error) {
+        logger.error('Failed to fetch transactions', { err: error });
         return NextResponse.json({ error: 'Failed to fetch transactions' }, { status: 500 });
     }
 }
@@ -319,7 +321,8 @@ export async function POST(req: Request) {
         }
 
         return NextResponse.json(transaction, { status: 201 });
-    } catch {
+    } catch (error) {
+        logger.error('Failed to create transaction', { err: error });
         return NextResponse.json({ error: 'Failed to create transaction' }, { status: 500 });
     }
 }

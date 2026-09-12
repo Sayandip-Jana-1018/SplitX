@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { createNotification } from '@/lib/notifications';
 import { z } from 'zod';
+import { logger } from '@/lib/logger';
 
 const ActionSchema = z.object({
     status: z.enum(['accepted', 'declined']),
@@ -108,7 +109,7 @@ export async function PATCH(
             groupId: newStatus === 'accepted' ? invitation.groupId : undefined,
         });
     } catch (error) {
-        console.error('Invitation action error:', error);
+        logger.error('Invitation action error', { err: error });
         return NextResponse.json({ error: 'Failed to process invitation' }, { status: 500 });
     }
 }

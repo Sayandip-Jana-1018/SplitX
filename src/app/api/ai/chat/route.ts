@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { isFeatureEnabled } from '@/lib/featureFlags';
 import { recordAiChat } from '@/lib/metrics';
+import { logger } from '@/lib/logger';
 
 /**
  * POST /api/ai/chat — AI expense assistant powered by Gemini.
@@ -353,7 +354,7 @@ Note: All amounts shown are in ₹ (INR). Internally stored in paise (100 paise 
 
         return NextResponse.json({ reply });
     } catch (error) {
-        console.error('AI Chat error:', error);
+        logger.error('AI Chat error', { err: error });
         return NextResponse.json({ error: 'Something went wrong with AI chat' }, { status: 500 });
     }
 }
@@ -399,7 +400,7 @@ ${context}`;
         );
 
         if (!res.ok) {
-            console.error('Gemini API error:', res.status);
+            logger.error('Gemini API error', { status: res.status });
             return { reply: 'Sorry, I couldn\'t process that right now. Try again in a moment.', ok: false };
         }
 

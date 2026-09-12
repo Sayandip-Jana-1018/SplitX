@@ -9,6 +9,7 @@ import {
     isAwaitingReceiverApproval,
     isCompletedSettlementStatus,
 } from '@/lib/settlementStatus';
+import { logger } from '@/lib/logger';
 
 // POST /api/settlements/:id/confirm — Payer confirms "I've Paid" → receiver must approve
 export async function POST(
@@ -135,7 +136,7 @@ export async function POST(
             message: 'Payment request sent for receiver approval.',
         });
     } catch (error) {
-        console.error('Settlement confirm error:', error);
+        logger.error('Settlement confirm error', { err: error });
         return NextResponse.json({ error: 'Failed to confirm payment' }, { status: 500 });
     }
 }

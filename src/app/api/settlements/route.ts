@@ -12,6 +12,7 @@ import {
     FinanceTransactionSnapshot,
     simplifyGroupBalances,
 } from '@/lib/groupFinance';
+import { logger } from '@/lib/logger';
 
 const SettleSchema = z.object({
     tripId: z.string().cuid(),
@@ -337,7 +338,8 @@ export async function GET(req: Request) {
         }
 
         return NextResponse.json({ computed, recorded, balances });
-    } catch {
+    } catch (error) {
+        logger.error('Failed to compute settlements', { err: error });
         return NextResponse.json({ error: 'Failed to compute settlements' }, { status: 500 });
     }
 }
@@ -559,7 +561,7 @@ export async function POST(req: Request) {
 
         return NextResponse.json(settlement, { status: 201 });
     } catch (error) {
-        console.error('Settlement create error:', error);
+        logger.error('Settlement create error', { err: error });
         return NextResponse.json({ error: 'Failed to record settlement' }, { status: 500 });
     }
 }

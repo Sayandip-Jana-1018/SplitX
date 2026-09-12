@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { deduplicateTranscript } from '@/lib/deduplicateTranscript';
 import { recordVoiceParse } from '@/lib/metrics';
+import { logger } from '@/lib/logger';
 
 /**
  * POST /api/ai/parse-voice — Parse voice transcript into structured transaction data.
@@ -61,7 +62,7 @@ export async function POST(req: Request) {
         recordVoiceParse(provider);
         return NextResponse.json(result);
     } catch (error) {
-        console.error('Voice parse error:', error);
+        logger.error('Voice parse error', { err: error });
         return NextResponse.json({ error: 'Failed to parse voice input' }, { status: 500 });
     }
 }
@@ -131,7 +132,7 @@ RESPOND WITH ONLY VALID JSON (no markdown, no explanation):
         );
 
         if (!res.ok) {
-            console.error('Gemini parse error:', res.status);
+            logger.error('Gemini parse error', { status: res.status });
             return { result: parseTranscriptLocally(transcript, memberNames), provider: 'gemini_fallback' };
         }
 
@@ -190,7 +191,7 @@ RESPOND WITH ONLY VALID JSON (no markdown, no explanation):
 
         return { result: parsed, provider: 'gemini' };
     } catch (error) {
-        console.error('Gemini parse failed, using local fallback:', error);
+        logger.error('Gemini parse failed, using local fallback', { err: error });
         return { result: parseTranscriptLocally(transcript, memberNames), provider: 'gemini_fallback' };
     }
 }

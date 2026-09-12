@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
+import { logger } from '@/lib/logger';
 
 // GET /api/search?q=query — search across transactions, groups
 export async function GET(req: Request) {
@@ -63,7 +64,7 @@ export async function GET(req: Request) {
 
         return NextResponse.json({ transactions, groups });
     } catch (error) {
-        console.error('Search error:', error);
+        logger.error('Search error', { err: error });
         return NextResponse.json({ error: 'Search failed' }, { status: 500 });
     }
 }

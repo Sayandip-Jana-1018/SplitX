@@ -4,6 +4,7 @@ import Google from 'next-auth/providers/google';
 import GitHub from 'next-auth/providers/github';
 import { prisma } from '@/lib/db';
 import bcrypt from 'bcryptjs';
+import { logger } from '@/lib/logger';
 
 const oauthProviders = [];
 
@@ -123,12 +124,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                             email = primary?.email || verified?.email || emails[0]?.email;
                         }
                     } catch (emailErr) {
-                        console.error('Failed to fetch GitHub email:', emailErr);
+                        logger.error('Failed to fetch GitHub email', { err: emailErr });
                     }
                 }
 
                 if (!email) {
-                    console.error(`OAuth sign-in failed: no email from ${account.provider}`);
+                    logger.error('OAuth sign-in failed: provider returned no email', { provider: account.provider });
                     return false;
                 }
 
@@ -190,7 +191,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
                         return true; // Success — DB synced
                     } catch (error) {
-                        console.error(`OAuth DB sync attempt ${attempt + 1} failed:`, error);
+                        logger.error('OAuth database sync attempt failed', { attempt: attempt + 1, err: error });
 
                         if (attempt < MAX_RETRIES) {
                             // Wait before retrying (DB may be waking up)
@@ -198,7 +199,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                         } else {
                             // All retries exhausted — still allow sign-in
                             // JWT session works without DB sync; DB will sync on next sign-in
-                            console.warn('OAuth DB sync failed after retries — allowing sign-in anyway');
+                            logger.warn('OAuth database sync failed after retries; allowing sign-in');
                             return true;
                         }
                     }

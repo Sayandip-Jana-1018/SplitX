@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { withTimeout } from '@/lib/withTimeout';
+import { logger } from '@/lib/logger';
 
 /**
  * GET /api/health/ready — readiness probe.
@@ -23,7 +24,7 @@ export async function GET() {
             { headers: noStore }
         );
     } catch (error) {
-        console.error('[health/ready] database check failed:', error instanceof Error ? error.message : error);
+        logger.error('Readiness database check failed', { err: error });
         return NextResponse.json(
             { status: 'not_ready', checks: { database: 'unreachable' } },
             { status: 503, headers: noStore }

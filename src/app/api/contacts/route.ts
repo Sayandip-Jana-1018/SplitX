@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { z } from 'zod';
+import { logger } from '@/lib/logger';
 
 const CreateContactSchema = z.object({
     name: z.string().min(1, 'Name is required').max(100),
@@ -32,7 +33,7 @@ export async function GET() {
 
         return NextResponse.json(contacts);
     } catch (error) {
-        console.error('Contacts fetch error:', error);
+        logger.error('Contacts fetch error', { err: error });
         return NextResponse.json({ error: 'Failed to fetch contacts' }, { status: 500 });
     }
 }
@@ -85,7 +86,7 @@ export async function POST(req: Request) {
 
         return NextResponse.json(contact, { status: 201 });
     } catch (error) {
-        console.error('Contact create error:', error);
+        logger.error('Contact create error', { err: error });
         return NextResponse.json({ error: 'Failed to create contact' }, { status: 500 });
     }
 }
@@ -119,7 +120,7 @@ export async function DELETE(req: Request) {
 
         return NextResponse.json({ success: true });
     } catch (error) {
-        console.error('Contact delete error:', error);
+        logger.error('Contact delete error', { err: error });
         return NextResponse.json({ error: 'Failed to delete contact' }, { status: 500 });
     }
 }

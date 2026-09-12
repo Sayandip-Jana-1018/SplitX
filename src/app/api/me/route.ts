@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { z } from 'zod';
+import { logger } from '@/lib/logger';
 
 // GET /api/me — returns current authenticated user
 export async function GET() {
@@ -55,7 +56,8 @@ export async function GET() {
         }
 
         return NextResponse.json(user);
-    } catch {
+    } catch (error) {
+        logger.error('Failed to fetch user', { err: error });
         return NextResponse.json({ error: 'Failed to fetch user' }, { status: 500 });
     }
 }
@@ -102,7 +104,8 @@ export async function PATCH(req: Request) {
         });
 
         return NextResponse.json(user);
-    } catch {
+    } catch (error) {
+        logger.error('Failed to update profile', { err: error });
         return NextResponse.json({ error: 'Failed to update profile' }, { status: 500 });
     }
 }
@@ -150,7 +153,7 @@ export async function DELETE() {
 
         return NextResponse.json({ message: 'Account deleted successfully' });
     } catch (error) {
-        console.error('Account deletion error:', error);
+        logger.error('Account deletion error', { err: error });
         return NextResponse.json({ error: 'Failed to delete account' }, { status: 500 });
     }
 }

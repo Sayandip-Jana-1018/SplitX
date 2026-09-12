@@ -3,11 +3,13 @@ import type { NextRequest } from 'next/server';
 
 import { Ratelimit } from '@upstash/ratelimit';
 import { Redis } from '@upstash/redis';
+import { logger } from '@/lib/logger';
 import { recordProxyDecision, type ProxyDecision } from '@/lib/metrics';
+import { newTraceContext, REQUEST_ID_HEADER, type TraceContext } from '@/lib/observability/trace';
 
 /**
  * Next.js Proxy — runs on every matched request.
- * Handles: Auth protection, Rate limiting, Security headers.
+ * Handles: request IDs, auth redirects, rate limiting, security headers.
  *
  * HTTP metrics are not recorded here: the proxy returns before the route
  * handler runs, so it can see neither the real status code nor the real
@@ -69,13 +71,40 @@ function hasSessionToken(request: NextRequest): boolean {
     );
 }
 
-function decide(request: NextRequest, response: NextResponse, decision: ProxyDecision) {
+/** Lets the request continue to its route, carrying this request's trace. */
+function forward(request: NextRequest, trace: TraceContext) {
+    const headers = new Headers(request.headers);
+    headers.set('traceparent', trace.traceparent);
+    headers.delete('tracestate');
+    headers.set(REQUEST_ID_HEADER, trace.traceId);
+    return NextResponse.next({ request: { headers } });
+}
+
+// Set by the Kubernetes downward API. Naming the pod in each response makes load
+// balancing across replicas visible; outside Kubernetes nothing is exposed.
+const SERVED_BY = process.env.POD_NAME;
+
+function decide(request: NextRequest, trace: TraceContext, response: NextResponse, decision: ProxyDecision) {
+    response.headers.set(REQUEST_ID_HEADER, trace.traceId);
+    if (SERVED_BY) response.headers.set('x-served-by', SERVED_BY);
     recordProxyDecision(decision, request.method, response.status);
+    if (decision !== 'pass') {
+        // Requests answered here never reach a route, so they get their access log line here.
+        logger.info('request', {
+            requestId: trace.traceId,
+            method: request.method,
+            route: '(proxy)',
+            path: request.nextUrl.pathname,
+            status: response.status,
+            decision,
+        });
+    }
     return response;
 }
 
 export async function proxy(request: NextRequest) {
     const { pathname } = request.nextUrl;
+    const trace = newTraceContext();
 
     // ── Auth Route Protection ──
     // Skip auth checks for static assets and API routes (API routes have their own auth)
@@ -84,43 +113,40 @@ export async function proxy(request: NextRequest) {
 
         // Redirect authenticated users away from login/register
         if (isAuthenticated && AUTH_ROUTES.some((route) => pathname.startsWith(route))) {
-            return decide(request, NextResponse.redirect(new URL('/dashboard', request.url)), 'redirect_dashboard');
+            return decide(request, trace, NextResponse.redirect(new URL('/dashboard', request.url)), 'redirect_dashboard');
         }
 
         // Redirect unauthenticated users away from protected routes
         if (!isAuthenticated && PROTECTED_ROUTES.some((route) => pathname.startsWith(route))) {
             const loginUrl = new URL('/login', request.url);
             loginUrl.searchParams.set('callbackUrl', pathname);
-            return decide(request, NextResponse.redirect(loginUrl), 'redirect_login');
+            return decide(request, trace, NextResponse.redirect(loginUrl), 'redirect_login');
         }
     }
 
     // ── API Rate Limiting (only for /api routes) ──
     if (!pathname.startsWith('/api')) {
-        return decide(request, NextResponse.next(), 'pass');
+        return decide(request, trace, forward(request, trace), 'pass');
     }
 
     // Skip auth and internal routes
     if (SKIP_PATHS.some(p => pathname.startsWith(p))) {
-        return decide(request, NextResponse.next(), 'pass');
+        return decide(request, trace, forward(request, trace), 'pass');
     }
 
-    // ── API Logging ──
     const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
-
-    console.log(`[API] ${request.method} ${pathname} — IP: ${ip} — ${new Date().toISOString()}`);
 
     // ── Global Upstash Rate Limiting ──
     const limiter = getRatelimit();
     if (!limiter) {
-        const response = NextResponse.next();
+        const response = forward(request, trace);
         applySecurityHeaders(response);
-        return decide(request, response, 'pass');
+        return decide(request, trace, response, 'pass');
     }
 
     const { success, limit, reset, remaining } = await limiter.limit(ip);
 
-    const response = success ? NextResponse.next() : NextResponse.json(
+    const response = success ? forward(request, trace) : NextResponse.json(
         {
             success: false,
             error: 'Too many requests. Please wait a moment.',
@@ -135,13 +161,13 @@ export async function proxy(request: NextRequest) {
     response.headers.set('X-RateLimit-Reset', String(retryAfter));
     if (!success) {
         response.headers.set('Retry-After', String(retryAfter));
-        console.warn(`[API] Rate limit exceeded for IP: ${ip}`);
+        logger.warn('Rate limit exceeded', { requestId: trace.traceId, ip, path: pathname });
     }
 
     // ── Security Headers ──
     applySecurityHeaders(response);
 
-    return decide(request, response, success ? 'pass' : 'rate_limited');
+    return decide(request, trace, response, success ? 'pass' : 'rate_limited');
 }
 
 /** Apply standard security headers to a response */

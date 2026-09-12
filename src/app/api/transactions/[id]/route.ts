@@ -4,6 +4,7 @@ import { auth } from '@/lib/auth';
 import { z } from 'zod';
 import { createAuditLog } from '@/lib/auditLog';
 import { serializeTransactionAuditSnapshot } from '@/lib/auditPayloads';
+import { logger } from '@/lib/logger';
 
 const UpdateTransactionSchema = z.object({
     title: z.string().min(1).max(100).optional(),
@@ -61,7 +62,8 @@ export async function GET(
         }
 
         return NextResponse.json(transaction);
-    } catch {
+    } catch (error) {
+        logger.error('Failed to fetch transaction', { err: error });
         return NextResponse.json({ error: 'Failed to fetch transaction' }, { status: 500 });
     }
 }
@@ -232,7 +234,7 @@ export async function PUT(
 
         return NextResponse.json(full);
     } catch (error) {
-        console.error('Update transaction error:', error);
+        logger.error('Update transaction error', { err: error });
         return NextResponse.json({ error: 'Failed to update transaction' }, { status: 500 });
     }
 }
@@ -350,7 +352,8 @@ export async function DELETE(
         }
 
         return NextResponse.json({ message: 'Transaction deleted' });
-    } catch {
+    } catch (error) {
+        logger.error('Failed to delete transaction', { err: error });
         return NextResponse.json({ error: 'Failed to delete transaction' }, { status: 500 });
     }
 }

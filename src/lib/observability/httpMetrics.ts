@@ -1,5 +1,6 @@
 import { AlwaysOnSampler, NodeTracerProvider } from '@opentelemetry/sdk-trace-node';
 import type { ReadableSpan, Span, SpanProcessor } from '@opentelemetry/sdk-trace-node';
+import { logger } from '@/lib/logger';
 import { httpMethodLabel, metrics } from '@/lib/metrics';
 
 /**
@@ -36,6 +37,14 @@ function routeLabel(route: unknown, target: unknown) {
     return '(unmatched)';
 }
 
+// Probes and scrapes arrive every few seconds per pod; logging them would bury
+// real traffic. Their counts are still in the metrics.
+const UNLOGGED_ROUTES = new Set(['/api/health', '/api/health/live', '/api/health/ready', '/api/metrics']);
+
+function shouldLog(route: string) {
+    return !route.startsWith('/_next') && !UNLOGGED_ROUTES.has(route);
+}
+
 class HttpMetricsProcessor implements SpanProcessor {
     onStart(span: Span) {
         if (isRequestSpan(span)) metrics.httpRequestsInFlight.inc();
@@ -60,6 +69,18 @@ class HttpMetricsProcessor implements SpanProcessor {
         };
         metrics.httpRequestsTotal.inc(labels);
         metrics.httpRequestDuration.observe(labels, elapsed);
+
+        if (shouldLog(labels.route)) {
+            const status = Number(labels.status_code);
+            // The proxy started this trace, so its ID is the request's X-Request-Id.
+            logger[status >= 500 ? 'error' : 'info']('request', {
+                requestId: span.spanContext().traceId,
+                method: labels.method,
+                route: labels.route,
+                status,
+                durationMs: Math.round(elapsed * 1000),
+            });
+        }
     }
 
     forceFlush() {

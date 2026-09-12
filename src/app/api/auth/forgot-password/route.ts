@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { sendPasswordResetEmail } from '@/lib/email';
 import crypto from 'crypto';
+import { logger } from '@/lib/logger';
 
 export async function POST(req: Request) {
     try {
@@ -51,7 +52,7 @@ export async function POST(req: Request) {
 
         return successResponse;
     } catch (error) {
-        console.error('Forgot password error:', error);
+        logger.error('Forgot password error', { err: error });
         return NextResponse.json(
             { error: 'Something went wrong. Please try again.' },
             { status: 500 }
