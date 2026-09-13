@@ -100,11 +100,31 @@ describe('sliding window on real Redis', () => {
         expect(ttl).toBeLessThanOrEqual(2 * windowMs);
     });
 
+    it("checks a new process's first request instead of letting it through before Redis connects (found in Docker)", async () => {
+        const fresh = createRedisStore(REDIS_URL, () => {});
+        // Same tick as the client was created: the connection isn't up yet.
+        const result = await fresh.hit(uniqueKey(), 5, 60_000, midWindow(60_000));
+
+        expect(result).toMatchObject({ allowed: true, count: 1 });
+        await fresh.close();
+    });
+
     it('fails fast instead of hanging when Redis is unreachable', async () => {
-        const unreachable = createRedisStore('redis://127.0.0.1:1', () => {});
+        const unreachable = createRedisStore('redis://127.0.0.1:1', () => {}, { startupGraceMs: 0 });
         const started = performance.now();
         await expect(unreachable.hit(uniqueKey(), 10, 60_000, Date.now())).rejects.toThrow();
         expect(performance.now() - started).toBeLessThan(2_500);
+        await unreachable.close();
+    });
+
+    it('stops waiting for a Redis that never comes up once the start-up grace period ends', async () => {
+        const unreachable = createRedisStore('redis://127.0.0.1:1', () => {}, { startupGraceMs: 300 });
+        const started = performance.now();
+        await expect(unreachable.hit(uniqueKey(), 10, 60_000, Date.now())).rejects.toThrow();
+        const waited = performance.now() - started;
+
+        expect(waited).toBeGreaterThanOrEqual(250);
+        expect(waited).toBeLessThan(2_500);
         await unreachable.close();
     });
 });

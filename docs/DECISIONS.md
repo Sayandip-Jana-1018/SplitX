@@ -295,7 +295,7 @@ initials on the next deploy.
   instead of spinning, so a bug can never pin a pod's CPU.
 - `postinstall: prisma generate` (a clean `npm ci` otherwise type-checks against
   an empty Prisma client) and a type-check step in CI.
-- **Now:** 671 unit tests, 7 integration tests, 5 hardening checks.
+- **Now:** 671 unit tests, 9 integration tests, 5 hardening checks.
 
 ### D-019 · Receipts are kept; only SplitX storage URLs are accepted
 **2026-09-13** · ✅ done
@@ -358,7 +358,7 @@ Validating an endpoint nothing calls would only have kept attack surface alive.
   warning every 30 s. **Verified** with Redis stopped: requests were served in
   6–10 ms, one warning was logged, and limiting resumed after reconnect.
 - 429s carry `Retry-After`, `X-RateLimit-*` and the request ID.
-- **Three bugs found by testing live, all fixed with regression tests:**
+- **Four bugs found by testing live, all fixed with regression tests:**
   1. Rounding the previous window's weight **down** let one extra request
      through at a window boundary. It now rounds up.
   2. **Cold start:** the first requests reached the limiter before ioredis had
@@ -368,6 +368,14 @@ Validating an endpoint nothing calls would only have kept attack surface alive.
   3. **Upstash cold start:** the first request paid for TLS plus a script cache
      miss and exceeded the timeout. The script is now loaded at startup.
      **Verified:** 10 allowed, 4 denied, 0 errors.
+  4. **Found in the Docker image:** opening the connection at start-up was not
+     enough. In a container, the server was ready in 110 ms, but Redis (via
+     `host.docker.internal`) took about 0.5 s to connect, so the first request
+     was let through unchecked. Until the first connection (or 5 s after
+     start-up), a request now waits for it, still bounded by the 300 ms timeout.
+     After that, a lost connection fails fast as before.
+     **Verified in the container:** the first request, 37 ms after the server
+     answered, was counted (`X-RateLimit-Remaining: 119`), with no warnings logged.
 - **Correction:** I first blamed the "6 allowed out of 5" observation on a
   minute boundary. The metric arithmetic (13 errors where 12 were expected)
   showed it was bug 2. Both fixes stand.

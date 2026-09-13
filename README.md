@@ -67,7 +67,7 @@ the alternatives rejected, and the evidence behind each claim is recorded in
 | **Rate limiting** | Sliding window in Redis (one atomic Lua script), keyed by the verified signed-in user or the client IP; per-route limits; fails open with a metric when Redis is down | 200 concurrent requests against a limit of 25 admit exactly 25; with Redis stopped, requests are still served |
 | **Request tracing** | One request ID from the proxy to the route's log lines; JSON logs with pod and version for Loki | `X-Request-Id` on a response matches `requestId` in its log lines |
 | **Autoscaling load target** | `POST /api/settlements/preview` runs the real settle-up planner — pure CPU, no database — and sheds load (503) once a request has queued for 1 s | `scripts/load-preview.mjs`: CPU per request and the one-core ceiling of a single pod, recorded in [D-025](docs/DECISIONS.md) |
-| **Tests** | 671 unit tests (property-based, mutation-checked), 7 integration tests against a real Redis | CI jobs `verify` and `integration` |
+| **Tests** | 671 unit tests (property-based, mutation-checked), 9 integration tests against a real Redis | CI jobs `verify` and `integration` |
 | **Commit standards** | Husky + Commitlint enforce Conventional Commits | Git history |
 
 ### Being rebuilt, phase by phase

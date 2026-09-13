@@ -67,7 +67,14 @@ type ScriptedRedis = IORedis & {
     splitxSlidingWindow(current: string, previous: string, limit: number, windowMs: number, now: number): Promise<unknown>;
 };
 
-export function createRedisStore(url: string, onError: (error: Error) => void): RateLimitStore {
+/** How long after start-up requests wait for the first Redis connection. */
+export const STARTUP_GRACE_MS = 5_000;
+
+export function createRedisStore(
+    url: string,
+    onError: (error: Error) => void,
+    { startupGraceMs = STARTUP_GRACE_MS }: { startupGraceMs?: number } = {}
+): RateLimitStore {
     const client = new IORedis(url, {
         // Fail immediately while disconnected instead of queueing: the caller
         // lets requests through rather than making users wait on Redis.
@@ -79,9 +86,24 @@ export function createRedisStore(url: string, onError: (error: Error) => void): 
     client.on('error', onError);
     client.defineCommand('splitxSlidingWindow', { numberOfKeys: 2, lua: SLIDING_WINDOW_SCRIPT });
 
+    // A new process can take requests before its first connection is up (half a
+    // second to Redis from a container, measured). Failing fast then would let a
+    // new pod's first requests through unchecked, so until the first connection
+    // or the end of the grace period a request waits for it instead — still
+    // bounded by the caller's timeout. After that, a lost connection fails fast.
+    let everConnected = false;
+    const startup = Promise.race([
+        new Promise<void>((resolve) => client.once('ready', () => {
+            everConnected = true;
+            resolve();
+        })),
+        new Promise<void>((resolve) => setTimeout(resolve, startupGraceMs).unref()),
+    ]);
+
     return {
         backend: 'redis',
         async hit(key, limit, windowMs, now) {
+            if (!everConnected) await startup;
             const [current, previous] = windowKeys(key, windowMs, now);
             return parseReply(await client.splitxSlidingWindow(current, previous, limit, windowMs, now));
         },
