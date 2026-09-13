@@ -12,6 +12,7 @@ import {
     simplifyGroupBalances,
     computeGroupBalances,
 } from '@/lib/groupFinance';
+import { logger } from '@/lib/logger';
 
 export async function GET(
     req: Request,
@@ -196,7 +197,7 @@ export async function GET(
             nextCursor: history.nextCursor,
         });
     } catch (error) {
-        console.error('Balance history error:', error);
+        logger.error('Balance history error', { err: error });
         return NextResponse.json({ error: 'Failed to fetch balance history' }, { status: 500 });
     }
 }

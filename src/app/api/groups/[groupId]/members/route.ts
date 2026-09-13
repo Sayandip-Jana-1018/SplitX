@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { createAuditLog } from '@/lib/auditLog';
+import { logger } from '@/lib/logger';
 
 // DELETE /api/groups/:groupId/members — remove a member from the group
 export async function DELETE(
@@ -200,7 +201,7 @@ export async function DELETE(
             message: `${removedName} removed and splits recalculated`,
         });
     } catch (error) {
-        console.error('Remove member error:', error);
+        logger.error('Remove member error', { err: error });
         return NextResponse.json({ error: 'Failed to remove member' }, { status: 500 });
     }
 }

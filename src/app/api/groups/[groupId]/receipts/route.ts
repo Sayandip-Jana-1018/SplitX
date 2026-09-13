@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
+import { isTrustedReceiptUrl } from '@/lib/receiptUrl';
+import { logger } from '@/lib/logger';
 
 // GET /api/groups/[groupId]/receipts — get all transactions with receipt images for a group
 export async function GET(
@@ -80,7 +82,7 @@ export async function GET(
         }));
 
         const receipts = transactions
-            .filter(t => t.receiptUrl)
+            .filter(t => isTrustedReceiptUrl(t.receiptUrl))
             .map(t => ({
                 id: t.id,
                 title: t.title,
@@ -93,7 +95,7 @@ export async function GET(
 
         return NextResponse.json({ receipts, members });
     } catch (error) {
-        console.error('Failed to fetch receipts:', error);
+        logger.error('Failed to fetch receipts', { err: error });
         return NextResponse.json({ error: 'Failed to fetch receipts' }, { status: 500 });
     }
 }

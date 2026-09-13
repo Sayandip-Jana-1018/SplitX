@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
+import { logger } from '@/lib/logger';
 
 const CATEGORY_LABELS: Record<string, string> = {
     food: 'Food',
@@ -276,7 +277,7 @@ export async function GET(req: Request) {
             },
         });
     } catch (error) {
-        console.error('Analytics GET error:', error);
+        logger.error('Analytics GET error', { err: error });
         return NextResponse.json({ error: 'Failed to compute analytics' }, { status: 500 });
     }
 }

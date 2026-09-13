@@ -1,48 +1,20 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-import { Ratelimit } from '@upstash/ratelimit';
-import { Redis } from '@upstash/redis';
+import { logger } from '@/lib/logger';
 import { recordProxyDecision, type ProxyDecision } from '@/lib/metrics';
+import { newTraceContext, REQUEST_ID_HEADER, type TraceContext } from '@/lib/observability/trace';
+import { checkRateLimit } from '@/lib/rateLimit';
+import { REQUEST_START_HEADER, requestStartValue } from '@/lib/requestQueue';
 
 /**
  * Next.js Proxy — runs on every matched request.
- * Handles: Auth protection, Rate limiting, Security headers.
+ * Handles: request IDs, auth redirects, rate limiting, security headers.
  *
  * HTTP metrics are not recorded here: the proxy returns before the route
  * handler runs, so it can see neither the real status code nor the real
  * duration. They come from the request span in lib/observability/httpMetrics.ts.
  */
-
-// Built once per process — constructing it per request discards the limiter's
-// in-memory cache and allocates on every call.
-let ratelimit: Ratelimit | null | undefined;
-
-function getRatelimit() {
-    if (ratelimit !== undefined) return ratelimit;
-
-    const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
-    const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
-
-    ratelimit = redisUrl && redisToken
-        ? new Ratelimit({
-            redis: new Redis({ url: redisUrl, token: redisToken }),
-            limiter: Ratelimit.slidingWindow(50, '1 m'),
-            analytics: true,
-        })
-        : null;
-    return ratelimit;
-}
-
-// Paths to skip rate limiting. Probes and scrapes arrive every few seconds from
-// inside the cluster and must never be throttled or wait on Redis.
-const SKIP_PATHS = [
-    '/api/auth',
-    '/api/health/',
-    '/api/metrics',
-    '/_next',
-    '/favicon',
-];
 
 // Routes that require authentication
 const PROTECTED_ROUTES = [
@@ -69,13 +41,42 @@ function hasSessionToken(request: NextRequest): boolean {
     );
 }
 
-function decide(request: NextRequest, response: NextResponse, decision: ProxyDecision) {
+/** Lets the request continue to its route, carrying its trace and arrival time. */
+function forward(request: NextRequest, trace: TraceContext, receivedAt: number) {
+    const headers = new Headers(request.headers);
+    headers.set('traceparent', trace.traceparent);
+    headers.delete('tracestate');
+    headers.set(REQUEST_ID_HEADER, trace.traceId);
+    headers.set(REQUEST_START_HEADER, requestStartValue(receivedAt));
+    return NextResponse.next({ request: { headers } });
+}
+
+// Set by the Kubernetes downward API. Naming the pod in each response makes load
+// balancing across replicas visible; outside Kubernetes nothing is exposed.
+const SERVED_BY = process.env.POD_NAME;
+
+function decide(request: NextRequest, trace: TraceContext, response: NextResponse, decision: ProxyDecision) {
+    response.headers.set(REQUEST_ID_HEADER, trace.traceId);
+    if (SERVED_BY) response.headers.set('x-served-by', SERVED_BY);
     recordProxyDecision(decision, request.method, response.status);
+    if (decision === 'redirect_login' || decision === 'redirect_dashboard' || decision === 'rate_limited') {
+        // Requests answered here never reach a route, so they get their access log line here.
+        logger.info('request', {
+            requestId: trace.traceId,
+            method: request.method,
+            route: '(proxy)',
+            path: request.nextUrl.pathname,
+            status: response.status,
+            decision,
+        });
+    }
     return response;
 }
 
 export async function proxy(request: NextRequest) {
+    const receivedAt = Date.now();
     const { pathname } = request.nextUrl;
+    const trace = newTraceContext();
 
     // ── Auth Route Protection ──
     // Skip auth checks for static assets and API routes (API routes have their own auth)
@@ -84,64 +85,61 @@ export async function proxy(request: NextRequest) {
 
         // Redirect authenticated users away from login/register
         if (isAuthenticated && AUTH_ROUTES.some((route) => pathname.startsWith(route))) {
-            return decide(request, NextResponse.redirect(new URL('/dashboard', request.url)), 'redirect_dashboard');
+            return decide(request, trace, NextResponse.redirect(new URL('/dashboard', request.url)), 'redirect_dashboard');
         }
 
         // Redirect unauthenticated users away from protected routes
         if (!isAuthenticated && PROTECTED_ROUTES.some((route) => pathname.startsWith(route))) {
             const loginUrl = new URL('/login', request.url);
             loginUrl.searchParams.set('callbackUrl', pathname);
-            return decide(request, NextResponse.redirect(loginUrl), 'redirect_login');
+            return decide(request, trace, NextResponse.redirect(loginUrl), 'redirect_login');
         }
     }
 
-    // ── API Rate Limiting (only for /api routes) ──
-    if (!pathname.startsWith('/api')) {
-        return decide(request, NextResponse.next(), 'pass');
+    // ── Rate Limiting ──
+    const limit = await checkRateLimit(request);
+
+    if (limit.outcome === 'skip') {
+        return decide(request, trace, forward(request, trace, receivedAt), 'pass');
     }
 
-    // Skip auth and internal routes
-    if (SKIP_PATHS.some(p => pathname.startsWith(p))) {
-        return decide(request, NextResponse.next(), 'pass');
-    }
-
-    // ── API Logging ──
-    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
-
-    console.log(`[API] ${request.method} ${pathname} — IP: ${ip} — ${new Date().toISOString()}`);
-
-    // ── Global Upstash Rate Limiting ──
-    const limiter = getRatelimit();
-    if (!limiter) {
-        const response = NextResponse.next();
+    if (limit.outcome === 'disabled' || limit.outcome === 'error') {
+        // Fail open: a missing or unavailable limiter must not take the API down.
+        const response = forward(request, trace, receivedAt);
         applySecurityHeaders(response);
-        return decide(request, response, 'pass');
+        return decide(request, trace, response, limit.outcome === 'error' ? 'limiter_error' : 'pass');
     }
 
-    const { success, limit, reset, remaining } = await limiter.limit(ip);
+    const retryAfterSeconds = Math.max(1, Math.ceil(limit.resetMs / 1000));
+    const response = limit.outcome === 'allow'
+        ? forward(request, trace, receivedAt)
+        : NextResponse.json(
+            {
+                success: false,
+                error: 'Too many requests. Please wait a moment.',
+                code: 'RATE_LIMITED',
+                requestId: trace.traceId,
+            },
+            { status: 429 }
+        );
 
-    const response = success ? NextResponse.next() : NextResponse.json(
-        {
-            success: false,
-            error: 'Too many requests. Please wait a moment.',
-            code: 'RATE_LIMITED',
-        },
-        { status: 429 }
-    );
-
-    const retryAfter = Math.ceil((reset - Date.now()) / 1000);
-    response.headers.set('X-RateLimit-Limit', String(limit));
-    response.headers.set('X-RateLimit-Remaining', String(remaining));
-    response.headers.set('X-RateLimit-Reset', String(retryAfter));
-    if (!success) {
-        response.headers.set('Retry-After', String(retryAfter));
-        console.warn(`[API] Rate limit exceeded for IP: ${ip}`);
+    response.headers.set('X-RateLimit-Limit', String(limit.limit));
+    response.headers.set('X-RateLimit-Remaining', String(limit.remaining));
+    response.headers.set('X-RateLimit-Reset', String(retryAfterSeconds));
+    if (limit.outcome === 'deny') {
+        response.headers.set('Retry-After', String(retryAfterSeconds));
+        logger.warn('Rate limit exceeded', {
+            requestId: trace.traceId,
+            policy: limit.policy.name,
+            identity: limit.identity.kind,
+            path: pathname,
+        });
     }
 
     // ── Security Headers ──
     applySecurityHeaders(response);
 
-    return decide(request, response, success ? 'pass' : 'rate_limited');
+    return decide(request, trace, response, limit.outcome === 'allow' ? 'pass' : 'rate_limited');
 }
 
 /** Apply standard security headers to a response */

@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { z } from 'zod';
 import { createAuditLog } from '@/lib/auditLog';
+import { logger } from '@/lib/logger';
 
 const CreateGroupSchema = z.object({
     name: z.string().min(1).max(50),
@@ -50,7 +51,8 @@ export async function GET() {
         }));
 
         return NextResponse.json(enriched);
-    } catch {
+    } catch (error) {
+        logger.error('Failed to fetch groups', { err: error });
         return NextResponse.json({ error: 'Failed to fetch groups' }, { status: 500 });
     }
 }
@@ -104,7 +106,8 @@ export async function POST(req: Request) {
         });
 
         return NextResponse.json(group, { status: 201 });
-    } catch {
+    } catch (error) {
+        logger.error('Failed to create group', { err: error });
         return NextResponse.json({ error: 'Failed to create group' }, { status: 500 });
     }
 }

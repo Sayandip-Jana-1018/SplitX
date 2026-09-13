@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { metrics, register } from '@/lib/metrics';
 import { withTimeout } from '@/lib/withTimeout';
+import { logger } from '@/lib/logger';
 
 /**
  * GET /api/metrics — Prometheus scrape endpoint.
@@ -48,7 +49,7 @@ export async function GET(request: Request) {
         }
     } else if (process.env.NODE_ENV === 'production') {
         if (!warnedUnconfigured) {
-            console.error('[metrics] METRICS_TOKEN is not set; refusing to serve metrics');
+            logger.error('METRICS_TOKEN is not set; refusing to serve metrics');
             warnedUnconfigured = true;
         }
         return NextResponse.json({ error: 'Metrics endpoint is not configured' }, { status: 503 });
@@ -63,7 +64,8 @@ export async function GET(request: Request) {
                 'Cache-Control': 'no-store',
             },
         });
-    } catch {
+    } catch (error) {
+        logger.error('Failed to collect metrics', { err: error });
         return NextResponse.json({ error: 'Failed to collect metrics' }, { status: 500 });
     }
 }

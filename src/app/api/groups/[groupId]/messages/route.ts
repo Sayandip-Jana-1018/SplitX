@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
+import { logger } from '@/lib/logger';
 
 // GET /api/groups/:groupId/messages — Fetch paginated group messages
 export async function GET(
@@ -74,7 +75,7 @@ export async function GET(
             hasMore,
         });
     } catch (error) {
-        console.error('Group messages GET error:', error);
+        logger.error('Group messages GET error', { err: error });
         return NextResponse.json({ error: 'Failed to fetch messages' }, { status: 500 });
     }
 }
@@ -207,7 +208,7 @@ export async function POST(
 
         return NextResponse.json({ message });
     } catch (error) {
-        console.error('Group messages POST error:', error);
+        logger.error('Group messages POST error', { err: error });
         return NextResponse.json({ error: 'Failed to send message' }, { status: 500 });
     }
 }

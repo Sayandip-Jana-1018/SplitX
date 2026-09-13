@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { z } from 'zod';
+import { logger } from '@/lib/logger';
 
 const InviteSchema = z.object({
     contactId: z.string().min(1),
@@ -57,7 +58,7 @@ export async function POST(req: Request) {
             message: `Hey ${contact.name}! Join me on SplitX to split expenses easily. Click here: ${inviteUrl}`,
         });
     } catch (error) {
-        console.error('Invite error:', error);
+        logger.error('Invite error', { err: error });
         return NextResponse.json({ error: 'Failed to send invite' }, { status: 500 });
     }
 }

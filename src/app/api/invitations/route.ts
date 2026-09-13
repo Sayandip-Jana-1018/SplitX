@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { createNotification } from '@/lib/notifications';
 import { z } from 'zod';
+import { logger } from '@/lib/logger';
 
 const InviteSchema = z.object({
     groupId: z.string().min(1),
@@ -93,7 +94,7 @@ export async function POST(req: Request) {
             invitation: { id: invitation.id, status: invitation.status },
         }, { status: 201 });
     } catch (error) {
-        console.error('Create invitation error:', error);
+        logger.error('Create invitation error', { err: error });
         return NextResponse.json({ error: 'Failed to send invitation' }, { status: 500 });
     }
 }
@@ -122,7 +123,7 @@ export async function GET() {
 
         return NextResponse.json(invitations);
     } catch (error) {
-        console.error('List invitations error:', error);
+        logger.error('List invitations error', { err: error });
         return NextResponse.json({ error: 'Failed to fetch invitations' }, { status: 500 });
     }
 }

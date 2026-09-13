@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/db';
 import { isFeatureEnabled } from '@/lib/featureFlags';
+import { logger } from '@/lib/logger';
 
 // ═══════════════════════════════════════════════════════════════
 // Notification Creator — call from any API route to trigger
@@ -44,7 +45,7 @@ export async function createNotification(params: CreateNotificationParams) {
             },
         });
     } catch (error) {
-        console.error('Failed to create notification:', error);
+        logger.error('Failed to create notification', { err: error });
         return null;
     }
 }
@@ -70,6 +71,6 @@ export async function createBulkNotifications(
             })),
         });
     } catch (error) {
-        console.error('Failed to create bulk notifications:', error);
+        logger.error('Failed to create bulk notifications', { err: error });
     }
 }

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { z } from 'zod';
+import { logger } from '@/lib/logger';
 
 const JoinGroupSchema = z.object({
     inviteCode: z.string().min(1),
@@ -78,7 +79,7 @@ export async function POST(req: Request) {
             groupId: group.id,
         }, { status: 201 });
     } catch (error) {
-        console.error('Join group error:', error);
+        logger.error('Join group error', { err: error });
         return NextResponse.json({ error: 'Failed to join group' }, { status: 500 });
     }
 }
@@ -107,7 +108,8 @@ export async function GET(req: Request) {
         }
 
         return NextResponse.json(group);
-    } catch {
+    } catch (error) {
+        logger.error('Failed to look up group', { err: error });
         return NextResponse.json({ error: 'Failed to look up group' }, { status: 500 });
     }
 }

@@ -8,6 +8,7 @@ import {
     FinanceTransactionSnapshot,
     simplifyGroupBalances,
 } from '@/lib/groupFinance';
+import { logger } from '@/lib/logger';
 
 // GET /api/groups/[groupId]/balances — compute balances for a specific group
 export async function GET(
@@ -158,7 +159,7 @@ export async function GET(
             totalSpent: transactions.reduce((s, t) => s + t.amount, 0),
         });
     } catch (error) {
-        console.error('Failed to compute group balances:', error);
+        logger.error('Failed to compute group balances', { err: error });
         return NextResponse.json({ error: 'Failed to fetch balances' }, { status: 500 });
     }
 }

@@ -7,6 +7,7 @@ import { serializeSettlementAuditSnapshot } from '@/lib/auditPayloads';
 import { createBulkNotifications, createNotification } from '@/lib/notifications';
 import { isAwaitingReceiverApproval, isCompletedSettlementStatus } from '@/lib/settlementStatus';
 import { recordSettlementCompleted } from '@/lib/metrics';
+import { logger } from '@/lib/logger';
 
 const ApprovalSchema = z.object({
     action: z.enum(['approve', 'reject']).default('approve'),
@@ -183,7 +184,7 @@ export async function POST(
             message: 'Approval request sent back to the payer for follow-up.',
         });
     } catch (error) {
-        console.error('Settlement approval error:', error);
+        logger.error('Settlement approval error', { err: error });
         return NextResponse.json({ error: 'Failed to update settlement approval' }, { status: 500 });
     }
 }

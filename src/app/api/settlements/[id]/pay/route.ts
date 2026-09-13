@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { generateUpiLink } from '@/lib/upi';
 import { canInitiateSettlementPayment, isAwaitingReceiverApproval, isCompletedSettlementStatus } from '@/lib/settlementStatus';
+import { logger } from '@/lib/logger';
 
 // POST /api/settlements/:id/pay — Generate UPI deep link and mark settlement as initiated
 export async function POST(
@@ -97,7 +98,7 @@ export async function POST(
             payeeUpiId: settlement.to.upiId,
         });
     } catch (error) {
-        console.error('Settlement pay error:', error);
+        logger.error('Settlement pay error', { err: error });
         return NextResponse.json({ error: 'Failed to generate payment link' }, { status: 500 });
     }
 }

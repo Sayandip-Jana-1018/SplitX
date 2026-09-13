@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { createAuditLog } from '@/lib/auditLog';
+import { logger } from '@/lib/logger';
 
 // GET /api/groups/:groupId — full group detail
 export async function GET(
@@ -102,7 +103,7 @@ export async function GET(
             currentUserId: user.id,
         });
     } catch (error) {
-        console.error('Group detail error:', error);
+        logger.error('Group detail error', { err: error });
         return NextResponse.json({ error: 'Failed to fetch group' }, { status: 500 });
     }
 }
@@ -222,7 +223,7 @@ export async function DELETE(
             groupName: group.name,
         });
     } catch (error) {
-        console.error('Group delete error:', error);
+        logger.error('Group delete error', { err: error });
         return NextResponse.json({ error: 'Failed to delete group' }, { status: 500 });
     }
 }

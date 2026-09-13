@@ -35,7 +35,7 @@ const nextConfig: NextConfig = {
   // Load these from node_modules once per process instead of bundling a copy
   // into each server entry point. Separate copies split the metrics registry
   // and the OpenTelemetry context that instrumentation relies on.
-  serverExternalPackages: ['prom-client', '@opentelemetry/api', '@opentelemetry/sdk-trace-node'],
+  serverExternalPackages: ['prom-client', '@opentelemetry/api', '@opentelemetry/sdk-trace-node', 'ioredis'],
   images: {
     remotePatterns: [
       {

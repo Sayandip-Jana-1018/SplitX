@@ -53,6 +53,48 @@ function createMetrics() {
             registers: [register],
         }),
 
+        // ── Rate limiting ──
+        rateLimitChecks: new client.Counter({
+            name: 'splitx_rate_limit_checks_total',
+            help: 'Rate limit checks, by policy and outcome (allow, deny, or error when the backend failed and the request was let through)',
+            labelNames: ['policy', 'outcome'] as const,
+            registers: [register],
+        }),
+        rateLimitDuration: new client.Histogram({
+            name: 'splitx_rate_limit_duration_seconds',
+            help: 'Time spent waiting on the rate limit backend, in seconds',
+            labelNames: ['backend'] as const,
+            buckets: [0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1],
+            registers: [register],
+        }),
+        rateLimiterInfo: new client.Gauge({
+            name: 'splitx_rate_limiter_info',
+            help: 'The configured rate limit backend (redis, upstash, or disabled) — 1 for the active one',
+            labelNames: ['backend'] as const,
+            registers: [register],
+        }),
+
+        // ── Settlement preview: pure CPU, the endpoint autoscaling is demonstrated on ──
+        settlementPreviews: new client.Counter({
+            name: 'splitx_settlement_previews_total',
+            help: 'Settlement preview requests, by input mode and outcome (ok, invalid, too_large, shed)',
+            labelNames: ['mode', 'outcome'] as const,
+            registers: [register],
+        }),
+        settlementPreviewCompute: new client.Histogram({
+            name: 'splitx_settlement_preview_compute_seconds',
+            help: 'Time spent simulating and planning a settlement preview, by input mode and the algorithm that produced the plan, in seconds',
+            labelNames: ['mode', 'algorithm'] as const,
+            buckets: [0.0005, 0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1],
+            registers: [register],
+        }),
+        settlementPreviewQueue: new client.Histogram({
+            name: 'splitx_settlement_preview_queue_seconds',
+            help: 'How long settlement preview requests waited in the process before being handled, in seconds',
+            buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5],
+            registers: [register],
+        }),
+
         // ── Business events (recorded in the route handlers that cause them) ──
         transactionsCreated: new client.Counter({
             name: 'splitx_transactions_created_total',
@@ -146,7 +188,10 @@ export function httpMethodLabel(value: unknown) {
     return HTTP_METHODS.has(method) ? method : 'OTHER';
 }
 
-export type ProxyDecision = 'pass' | 'redirect_login' | 'redirect_dashboard' | 'rate_limited';
+export type ProxyDecision = 'pass' | 'limiter_error' | 'redirect_login' | 'redirect_dashboard' | 'rate_limited';
+
+/** Decisions where the proxy writes the response itself instead of forwarding. */
+const ANSWERED_BY_PROXY = new Set<ProxyDecision>(['redirect_login', 'redirect_dashboard', 'rate_limited']);
 
 /**
  * Requests the proxy answers itself (redirects, 429s) never reach a route, so
@@ -155,7 +200,7 @@ export type ProxyDecision = 'pass' | 'redirect_login' | 'redirect_dashboard' | '
  */
 export function recordProxyDecision(decision: ProxyDecision, method: string, status: number) {
     metrics.proxyDecisions.inc({ decision });
-    if (decision !== 'pass') {
+    if (ANSWERED_BY_PROXY.has(decision)) {
         metrics.httpRequestsTotal.inc({ method: httpMethodLabel(method), route: '(proxy)', status_code: String(status) });
     }
 }

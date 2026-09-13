@@ -3,7 +3,7 @@
 #   Run: docker compose --profile monitoring --profile ci up -d
 #   App only: docker compose up -d
 #
-#   Required in .env: POSTGRES_PASSWORD, METRICS_TOKEN, GF_ADMIN_PASSWORD (see .env.example).
+#   Required in .env: POSTGRES_PASSWORD, REDIS_PASSWORD, METRICS_TOKEN, GF_ADMIN_PASSWORD (see .env.example).
 #   Every port except the app binds to 127.0.0.1 — admin UIs with known
 #   defaults must not be reachable from a shared network (e.g. campus wifi).
 #   Postgres/Redis use host ports 5433/6380 so they can't be shadowed by a
@@ -31,6 +31,10 @@ services:
       DATABASE_URL: "postgresql://splitx:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/splitx"
       DIRECT_URL: "postgresql://splitx:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/splitx"
       METRICS_TOKEN: ${METRICS_TOKEN:?Set METRICS_TOKEN in .env}
+      # Rate limiting uses the compose Redis over TCP (takes precedence over Upstash).
+      REDIS_URL: "redis://:${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}@redis:6379/0"
+      # Nothing sits in front of the container locally, so no forwarded address is trustworthy.
+      TRUSTED_PROXY_HOPS: "0"
     depends_on:
       postgres:
         condition: service_healthy
@@ -67,16 +71,30 @@ services:
     networks:
       - splitx-network
 
-  # ── Redis (Local Cache / Rate Limiting) ──
+  # ── Redis (rate limiting) ──
+  # Limiter counters are ephemeral by design: no persistence, bounded memory,
+  # least-recently-used keys evicted first. A restart only resets the windows.
   redis:
-    image: redis:7-alpine
+    image: redis:7.4.9-alpine
     container_name: splitx-redis
+    command:
+      - redis-server
+      - --requirepass
+      - ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
+      - --maxmemory
+      - 128mb
+      - --maxmemory-policy
+      - allkeys-lru
+      - --save
+      - ""
+      - --appendonly
+      - "no"
+    environment:
+      REDISCLI_AUTH: ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
     ports:
       - "127.0.0.1:6380:6379"
-    volumes:
-      - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
       interval: 10s
       timeout: 5s
       retries: 5

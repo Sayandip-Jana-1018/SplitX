@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 import { registerSchema } from '@/lib/validators';
+import { logger } from '@/lib/logger';
 
 export async function POST(req: Request) {
     try {
@@ -52,7 +53,7 @@ export async function POST(req: Request) {
             { status: 201 }
         );
     } catch (error) {
-        console.error('Registration error:', error);
+        logger.error('Registration error', { err: error });
         return NextResponse.json(
             { error: 'Something went wrong. Please try again.' },
             { status: 500 }
