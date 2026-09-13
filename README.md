@@ -64,13 +64,17 @@ the alternatives rejected, and the evidence behind each claim is recorded in
 | **Docker Compose** | App, Postgres, Redis, Prometheus, Grafana, Loki, Promtail, Jenkins, SonarQube, Nexus; admin ports on 127.0.0.1 only; required secrets; pinned versions | Prometheus scrapes the app through a file-mounted token (target `up`) |
 | **AWS identity** | Least-privilege IAM user; IAM actions limited to `splitx-*` names; no root access keys in use | `iam:ListUsers` is denied — [terraform/bootstrap](terraform/bootstrap/README.md) |
 | **Terraform** | VPC, ECR and EKS modules; subnet discovery tags match the cluster; provider lock file committed | `terraform validate` and `terraform plan` |
+| **Rate limiting** | Sliding window in Redis (one atomic Lua script), keyed by the verified signed-in user or the client IP; per-route limits; fails open with a metric when Redis is down | 200 concurrent requests against a limit of 25 admit exactly 25; with Redis stopped, requests are still served |
+| **Request tracing** | One request ID from the proxy to the route's log lines; JSON logs with pod and version for Loki | `X-Request-Id` on a response matches `requestId` in its log lines |
+| **Autoscaling load target** | `POST /api/settlements/preview` runs the real settle-up planner — pure CPU, no database — and sheds load (503) once a request has queued for 1 s | `scripts/load-preview.mjs`: CPU per request and the one-core ceiling of a single pod, recorded in [D-025](docs/DECISIONS.md) |
+| **Tests** | 671 unit tests (property-based, mutation-checked), 7 integration tests against a real Redis | CI jobs `verify` and `integration` |
 | **Commit standards** | Husky + Commitlint enforce Conventional Commits | Git history |
 
 ### Being rebuilt, phase by phase
 
 | Phase | Scope |
 |---|---|
-| 1 | Backend: settlement preview API, a rate limiter that survives real load, real unit tests |
+| ✅ 1 | Backend: settlement planner and preview API, rate limiter, request tracing, signed storage uploads, real tests — [D-018 to D-027](docs/DECISIONS.md) |
 | 2 | Docker image size and build provenance |
 | 3–4 | Kubernetes on Kind and EKS, autoscaling driven by real traffic, k6 load tests |
 | 5 | Alertmanager, Grafana dashboards, labelled logs in Loki |
@@ -81,15 +85,18 @@ the alternatives rejected, and the evidence behind each claim is recorded in
 
 ## 💻 Local + CI Workflow
 
-1. Copy `.env.example` to `.env`. Compose refuses to start without `POSTGRES_PASSWORD`, `METRICS_TOKEN` and `GF_ADMIN_PASSWORD`.
+1. Copy `.env.example` to `.env`. Compose refuses to start without `POSTGRES_PASSWORD`, `REDIS_PASSWORD`, `METRICS_TOKEN` and `GF_ADMIN_PASSWORD`.
 2. Start what you need:
    - App, Postgres and Redis: `docker compose up -d`
    - Metrics and logs: `docker compose --profile monitoring up -d` → Prometheus `127.0.0.1:9090`, Grafana `127.0.0.1:3001`
    - CI tools: `docker compose --profile ci up -d` → Jenkins `127.0.0.1:8080`, SonarQube `127.0.0.1:9000`, Nexus `127.0.0.1:8081`
 3. Host tools reach the Compose Postgres on `localhost:5433` and Redis on `localhost:6380` (chosen so a native Postgres/Redis on the default ports can't shadow them).
-4. Prove metrics are live: `npm run verify:metrics` (point it at a single instance).
-5. Scan for secrets before pushing: `npm run scan:secrets` (the pre-commit hook scans staged changes automatically).
-6. CI (`.github/workflows/ci.yml`) runs tests, lint and a production build, and scans every commit for secrets.
+4. Test: `npm test` (unit tests and hardening checks). The integration tests need a real Redis:
+   `REDIS_URL=redis://:<REDIS_PASSWORD>@127.0.0.1:6380/15 npm run test:integration`.
+5. Prove metrics are live: `npm run verify:metrics` (point it at a single instance).
+6. Measure the load target: `node --env-file=.env scripts/load-preview.mjs <baseUrl> --sizes 100,500,1000,2000` for CPU per request, or `--members 1000 --steps 1,4,16,64` for behaviour under load (raise `RATE_LIMIT_PREVIEW_PER_MINUTE` on that instance first).
+7. Scan for secrets before pushing: `npm run scan:secrets` (the pre-commit hook scans staged changes automatically).
+8. CI (`.github/workflows/ci.yml`) type-checks, tests, lints and builds; runs the integration tests against a Redis service container; and scans every commit for secrets.
 
 Secrets never live in the repository: local values go in `.env`, CI values in GitHub/Jenkins credentials, cluster values in Kubernetes Secrets.
 
@@ -376,7 +383,7 @@ erDiagram
 | **System Health Dashboard** | Real-time service status, DB latency, data counts, server uptime |
 | **Audit Logging** | Track transaction, settlement, group, and member mutations with entity details for explainability and safer debugging |
 | **Feature Flags** | Toggle features on/off without code changes |
-| **Rate Limiting Middleware** | Tiered in-memory rate limiter: 5/hr register, 10/15min auth, 30/min settlements, 120/min default |
+| **Rate Limiting** | Sliding window in Redis, shared by every pod: 10/min per IP for login, registration and password reset; 60/min for the settlement preview; 120/min per signed-in user for the rest of the API. Fails open (and counts it) if Redis is unavailable |
 | **Security Headers** | HSTS, X-Frame-Options DENY, X-Content-Type-Options, Permissions-Policy (no camera/mic/geo), Referrer-Policy |
 | **Soft Deletes** | All destructive operations (group delete, transaction delete, settlement cancel) use soft deletes with `deletedAt` guards on all queries including DELETE endpoints |
 | **Over-Settlement Guard** | Server-side pairwise debt calculation prevents settling more than what's owed; graceful degradation on calculation failure |
@@ -432,7 +439,10 @@ src/
 │   │   ├── me/                   # Current user profile, avatar, and account export
 │   │   ├── groups/               # CRUD + join + balances + balance history
 │   │   ├── transactions/         # CRUD with split management
-│   │   ├── settlements/          # Create & list settlements
+│   │   ├── settlements/          # Create & list settlements; preview (fewest payments, the load target)
+│   │   ├── receipts/upload-url/  # Signed upload URLs for receipt photos
+│   │   ├── health/               # Liveness (live) and readiness (ready) probes
+│   │   ├── metrics/              # Prometheus metrics (token-protected)
 │   │   ├── trips/                # Trip management
 │   │   ├── search/               # Global search across entities
 │   │   ├── notifications/        # GET (list + unread) / PATCH (mark read)
@@ -451,25 +461,31 @@ src/
 │   ├── charts/                   # Recharts-based spending charts
 │   └── providers/                # Theme & session providers
 ├── hooks/                        # 6 custom React hooks
-├── lib/                          # 11 utility modules
+├── lib/                          # Server and shared modules
 │   ├── auth.ts                   # NextAuth configuration
 │   ├── db.ts                     # Prisma client singleton
-│   ├── settlement.ts             # Dual settlement algorithm (greedy + optimized)
+│   ├── groupFinance.ts           # Balances, settle-up routes and balance-history derivation
+│   ├── settlementPlanner.ts      # Fewest-payments planner (exact up to 16 people, bounded search beyond)
+│   ├── settlementScenario.ts     # Seeded simulated trips for the preview endpoint and load tests
+│   ├── splits.ts                 # Equal shares in paise
+│   ├── rateLimit/                # Redis sliding-window limiter: policies, identity, client IP, store
+│   ├── observability/            # Request-span metrics and W3C trace context
+│   ├── metrics.ts                # Prometheus registry (one per process) and recorders
+│   ├── logger.ts                 # JSON logs with request ID, pod and version
+│   ├── requestQueue.ts           # Queue-time measurement for load shedding
+│   ├── readJsonBody.ts           # JSON body reader with a hard size cap
+│   ├── storage.ts                # Service-role storage: signed receipt uploads, avatars, image sniffing
+│   ├── receiptUrl.ts             # Trusted and owned receipt URL checks
+│   ├── supabase.ts               # Browser storage client (uploads through signed URLs only)
 │   ├── transactionParser.ts      # UPI/SMS regex parser
-│   ├── voiceParser.ts            # Local fallback parser for voice input
 │   ├── export.ts                 # CSV/JSON export + balance journey export
-│   ├── groupFinance.ts           # Shared balance and balance-history derivation engine
-│   ├── auditPayloads.ts          # Audit snapshot helpers for mutations
+│   ├── auditLog.ts, auditPayloads.ts  # Audit log recording and snapshots
+│   ├── notifications.ts, email.ts     # Notification and email helpers
 │   ├── upi.ts                    # UPI deep-link generator
 │   ├── validators.ts             # Zod schemas
-│   ├── utils.ts                  # General utilities
-│   ├── featureFlags.ts           # Feature toggle system
 │   ├── apiResponse.ts            # Standardized API response helpers
-│   ├── rateLimit.ts              # Sliding-window rate limiter
-│   ├── recomputeBalances.ts      # Group balance recomputation
-│   ├── notifications.ts          # Notification creation helpers
-│   ├── auditLog.ts               # Audit log recording
-│   └── middleware.ts             # API rate limiting & logging
+│   ├── featureFlags.ts           # Feature toggle system
+│   └── utils.ts                  # General utilities
 └── prisma/
     └── schema.prisma             # Database schema (13 models)
 ```
@@ -548,7 +564,7 @@ npm start
 |---|---|---|
 | `POST` | `/api/register` | Create a new user account |
 | `GET` | `/api/me` | Get current user profile |
-| `GET` | `/api/me/avatar` | Get user avatar |
+| `POST` | `/api/me/avatar` | Upload a profile photo (type checked from the file's bytes, stored under the user's folder) |
 | `GET` | `/api/me/export` | Export the current user's account data bundle |
 | `GET` | `/api/groups` | List user's groups (filters soft-deleted) |
 | `POST` | `/api/groups` | Create a new group |
@@ -567,6 +583,8 @@ npm start
 | `POST` | `/api/settlements` | Create or update settlement |
 | `POST` | `/api/settlements/:id/pay` | Generate UPI deep-link and mark as initiated |
 | `POST` | `/api/settlements/:id/confirm` | Confirm UPI payment — notifies **all** group members |
+| `POST` | `/api/settlements/preview` | Fewest payments for supplied balances, or for a seeded simulated trip (`{ "scenario": { "members": 500, "seed": 42 } }`). No sign-in; rate limited; 503 when the pod is saturated |
+| `POST` | `/api/receipts/upload-url` | One-time signed URL to upload a receipt photo straight to storage, into the caller's own folder |
 | `GET` | `/api/trips` | List trips |
 | `POST` | `/api/trips` | Create a trip |
 | `GET` | `/api/search?q=` | Global search |
@@ -584,26 +602,25 @@ npm start
 | `POST` | `/api/ai/parse-voice`| Parse natural language transcripts into structured transaction objects |
 | `POST` | `/api/receipt-scan` | Advanced receipt scan via OpenAI Vision (returns items, taxes, total) |
 | `GET` | `/api/admin/health` | System health diagnostics |
+| `GET` | `/api/health/live` | Liveness: the process is up (no dependencies) |
+| `GET` | `/api/health/ready` | Readiness: the database answers within 2 s |
+| `GET` | `/api/metrics` | Prometheus metrics (bearer token; refuses to serve in production without one) |
 
 ---
 
 ## 🧮 Debt Simplification Algorithm
 
-SplitX uses a **dual-algorithm approach** to minimize settlement transfers:
+Every settle-up screen uses one planner (`src/lib/settlementPlanner.ts`). Any
+settle-up plan splits the group into sets of people whose balances add up to
+zero, and a set of *k* people settles in *k − 1* payments. The fewest payments
+therefore means the most such sets.
 
-### Algorithm 1: Greedy Netting
-1. Compute each member's **net balance** (total paid − total owed)
-2. Separate into **debtors** (negative balance) and **creditors** (positive balance)
-3. Sort debtors by largest debt, creditors by largest credit
-4. Iteratively match the largest debtor with the largest creditor
-5. Transfer the minimum of the two amounts, reducing both
+1. **Exact opposites first.** Someone who owes exactly what another person is owed pays them directly. This never costs optimality.
+2. **Exact solution for real groups.** With up to 16 people left, dynamic programming over every subset finds the provably fewest payments (0.66 ms in the worst case).
+3. **Larger groups.** Sets of three that cancel exactly (two people add up to a third) settle with two payments each, within a fixed work budget. Everyone else is settled largest-first.
+4. **No churn.** The classic largest-debtor-pays-largest-creditor plan is kept unchanged unless it needs more payments.
 
-### Algorithm 2: Optimized Exact-Match Pruning
-1. Compute net balances (same as above)
-2. **Phase 1 — Exact matches**: Find debtors and creditors with matching amounts and pair them directly (one transfer each)
-3. **Phase 2 — Sorted merge**: Pair remaining debtors/creditors by size
-
-The engine runs both algorithms and **automatically picks the one with fewer transfers**, reporting savings when applicable.
+For groups of a few friends the largest-first plan is almost always already optimal; the planner guarantees it. In large groups it saves real payments: a simulated 2,000-person event needs 1,818 payments instead of 1,999, where repaying each expense directly would take 23,602. Details and measurements: [D-023](docs/DECISIONS.md).
 
 ---
 
