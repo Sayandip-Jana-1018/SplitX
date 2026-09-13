@@ -7,4 +7,7 @@ export async function register() {
 
     const { startHttpMetrics } = await import('./lib/observability/httpMetrics');
     startHttpMetrics();
+
+    const { warmRateLimiter } = await import('./lib/rateLimit');
+    warmRateLimiter();
 }

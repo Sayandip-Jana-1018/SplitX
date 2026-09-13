@@ -19,9 +19,12 @@ describe('newTraceContext', () => {
 describe('proxy request IDs', () => {
     beforeEach(() => {
         // No limiter backend: exercise the plain forwarding path.
+        vi.stubEnv('REDIS_URL', '');
         vi.stubEnv('UPSTASH_REDIS_REST_URL', '');
         vi.stubEnv('UPSTASH_REDIS_REST_TOKEN', '');
         vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+        // The "rate limiting is disabled" warning goes to stderr.
+        vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     });
     afterEach(() => {
         vi.restoreAllMocks();

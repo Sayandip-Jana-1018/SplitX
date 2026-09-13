@@ -1,11 +1,10 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-import { Ratelimit } from '@upstash/ratelimit';
-import { Redis } from '@upstash/redis';
 import { logger } from '@/lib/logger';
 import { recordProxyDecision, type ProxyDecision } from '@/lib/metrics';
 import { newTraceContext, REQUEST_ID_HEADER, type TraceContext } from '@/lib/observability/trace';
+import { checkRateLimit } from '@/lib/rateLimit';
 
 /**
  * Next.js Proxy — runs on every matched request.
@@ -15,36 +14,6 @@ import { newTraceContext, REQUEST_ID_HEADER, type TraceContext } from '@/lib/obs
  * handler runs, so it can see neither the real status code nor the real
  * duration. They come from the request span in lib/observability/httpMetrics.ts.
  */
-
-// Built once per process — constructing it per request discards the limiter's
-// in-memory cache and allocates on every call.
-let ratelimit: Ratelimit | null | undefined;
-
-function getRatelimit() {
-    if (ratelimit !== undefined) return ratelimit;
-
-    const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
-    const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
-
-    ratelimit = redisUrl && redisToken
-        ? new Ratelimit({
-            redis: new Redis({ url: redisUrl, token: redisToken }),
-            limiter: Ratelimit.slidingWindow(50, '1 m'),
-            analytics: true,
-        })
-        : null;
-    return ratelimit;
-}
-
-// Paths to skip rate limiting. Probes and scrapes arrive every few seconds from
-// inside the cluster and must never be throttled or wait on Redis.
-const SKIP_PATHS = [
-    '/api/auth',
-    '/api/health/',
-    '/api/metrics',
-    '/_next',
-    '/favicon',
-];
 
 // Routes that require authentication
 const PROTECTED_ROUTES = [
@@ -88,7 +57,7 @@ function decide(request: NextRequest, trace: TraceContext, response: NextRespons
     response.headers.set(REQUEST_ID_HEADER, trace.traceId);
     if (SERVED_BY) response.headers.set('x-served-by', SERVED_BY);
     recordProxyDecision(decision, request.method, response.status);
-    if (decision !== 'pass') {
+    if (decision === 'redirect_login' || decision === 'redirect_dashboard' || decision === 'rate_limited') {
         // Requests answered here never reach a route, so they get their access log line here.
         logger.info('request', {
             requestId: trace.traceId,
@@ -124,50 +93,50 @@ export async function proxy(request: NextRequest) {
         }
     }
 
-    // ── API Rate Limiting (only for /api routes) ──
-    if (!pathname.startsWith('/api')) {
+    // ── Rate Limiting ──
+    const limit = await checkRateLimit(request);
+
+    if (limit.outcome === 'skip') {
         return decide(request, trace, forward(request, trace), 'pass');
     }
 
-    // Skip auth and internal routes
-    if (SKIP_PATHS.some(p => pathname.startsWith(p))) {
-        return decide(request, trace, forward(request, trace), 'pass');
-    }
-
-    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
-
-    // ── Global Upstash Rate Limiting ──
-    const limiter = getRatelimit();
-    if (!limiter) {
+    if (limit.outcome === 'disabled' || limit.outcome === 'error') {
+        // Fail open: a missing or unavailable limiter must not take the API down.
         const response = forward(request, trace);
         applySecurityHeaders(response);
-        return decide(request, trace, response, 'pass');
+        return decide(request, trace, response, limit.outcome === 'error' ? 'limiter_error' : 'pass');
     }
 
-    const { success, limit, reset, remaining } = await limiter.limit(ip);
+    const retryAfterSeconds = Math.max(1, Math.ceil(limit.resetMs / 1000));
+    const response = limit.outcome === 'allow'
+        ? forward(request, trace)
+        : NextResponse.json(
+            {
+                success: false,
+                error: 'Too many requests. Please wait a moment.',
+                code: 'RATE_LIMITED',
+                requestId: trace.traceId,
+            },
+            { status: 429 }
+        );
 
-    const response = success ? forward(request, trace) : NextResponse.json(
-        {
-            success: false,
-            error: 'Too many requests. Please wait a moment.',
-            code: 'RATE_LIMITED',
-        },
-        { status: 429 }
-    );
-
-    const retryAfter = Math.ceil((reset - Date.now()) / 1000);
-    response.headers.set('X-RateLimit-Limit', String(limit));
-    response.headers.set('X-RateLimit-Remaining', String(remaining));
-    response.headers.set('X-RateLimit-Reset', String(retryAfter));
-    if (!success) {
-        response.headers.set('Retry-After', String(retryAfter));
-        logger.warn('Rate limit exceeded', { requestId: trace.traceId, ip, path: pathname });
+    response.headers.set('X-RateLimit-Limit', String(limit.limit));
+    response.headers.set('X-RateLimit-Remaining', String(limit.remaining));
+    response.headers.set('X-RateLimit-Reset', String(retryAfterSeconds));
+    if (limit.outcome === 'deny') {
+        response.headers.set('Retry-After', String(retryAfterSeconds));
+        logger.warn('Rate limit exceeded', {
+            requestId: trace.traceId,
+            policy: limit.policy.name,
+            identity: limit.identity.kind,
+            path: pathname,
+        });
     }
 
     // ── Security Headers ──
     applySecurityHeaders(response);
 
-    return decide(request, trace, response, success ? 'pass' : 'rate_limited');
+    return decide(request, trace, response, limit.outcome === 'allow' ? 'pass' : 'rate_limited');
 }
 
 /** Apply standard security headers to a response */

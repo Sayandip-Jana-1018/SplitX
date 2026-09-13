@@ -48,6 +48,39 @@ jobs:
         if: ${{ vars.ENABLE_DOCKER_CI == 'true' }}
         run: docker build -t splitx-ci .
 
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      redis:
+        image: redis:7.4.9-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      # The integration suite fails instead of skipping when this is missing.
+      REDIS_URL: redis://127.0.0.1:6379/15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Rate limiter against real Redis
+        run: npm run test:integration
+
   secret-scan:
     runs-on: ubuntu-latest
     timeout-minutes: 10

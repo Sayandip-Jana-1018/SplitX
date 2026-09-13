@@ -21,6 +21,18 @@ export default defineConfig({
                     include: ['tests/unit/**/*.test.ts'],
                 },
             },
+            {
+                extends: true,
+                test: {
+                    // Runs against real infrastructure (Redis). It fails rather than
+                    // skipping when that infrastructure isn't configured.
+                    name: 'integration',
+                    include: ['tests/integration/**/*.test.ts'],
+                    setupFiles: ['tests/integration/setup.ts'],
+                    testTimeout: 20_000,
+                    fileParallelism: false,
+                },
+            },
         ],
     },
 });
