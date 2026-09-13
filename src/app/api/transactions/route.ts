@@ -7,6 +7,7 @@ import { serializeTransactionAuditSnapshot } from '@/lib/auditPayloads';
 import { recordTransactionCreated } from '@/lib/metrics';
 import { isTrustedReceiptUrl, withTrustedReceipt } from '@/lib/receiptUrl';
 import { logger } from '@/lib/logger';
+import { equalShares } from '@/lib/splits';
 
 // Category labels for notification messages
 const CATEGORY_LABELS: Record<string, string> = {
@@ -199,12 +200,8 @@ export async function POST(req: Request) {
                 return NextResponse.json({ error: 'At least one member must be included in the split' }, { status: 400 });
             }
 
-            const perPerson = Math.floor(amount / targetIds.length);
-            const remainder = amount - perPerson * targetIds.length;
-            splitData = targetIds.map((id: string, i: number) => ({
-                userId: id,
-                amount: perPerson + (i === 0 ? remainder : 0),
-            }));
+            const shares = equalShares(amount, targetIds.length);
+            splitData = targetIds.map((userId, i) => ({ userId, amount: shares[i] }));
         } else if (splits) {
             // Each member appears once — the database allows one split row per user.
             if (new Set(splits.map((s) => s.userId)).size !== splits.length) {

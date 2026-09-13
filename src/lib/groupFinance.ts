@@ -1,3 +1,4 @@
+import { planSettlement } from '@/lib/settlementPlanner';
 import { isCompletedSettlementStatus } from '@/lib/settlementStatus';
 
 export interface FinanceMember {
@@ -176,60 +177,34 @@ export function computeGroupBalances(params: {
     return balances;
 }
 
+/**
+ * Who should pay whom to settle a group: the fewest payments, from the planner
+ * in lib/settlementPlanner.ts. A balance of ±1 paisa counts as settled.
+ */
 export function simplifyGroupBalances(params: {
     balances: Record<string, number>;
     members: FinanceMember[];
-}) {
-    const debtors: { id: string; amount: number }[] = [];
-    const creditors: { id: string; amount: number }[] = [];
+}): SimplifiedTransfer[] {
     const memberMap = new Map(params.members.map((member) => [member.id, member]));
+    const accounts = params.members.map((member) => ({
+        id: member.id,
+        amount: Math.round(params.balances[member.id] || 0),
+    }));
 
-    for (const member of params.members) {
-        const balance = params.balances[member.id] || 0;
-        if (balance < -1) {
-            debtors.push({ id: member.id, amount: -balance });
-        } else if (balance > 1) {
-            creditors.push({ id: member.id, amount: balance });
-        }
-    }
-
-    debtors.sort((a, b) => b.amount - a.amount);
-    creditors.sort((a, b) => b.amount - a.amount);
-
-    const transfers: SimplifiedTransfer[] = [];
-    let debtorIndex = 0;
-    let creditorIndex = 0;
-
-    while (debtorIndex < debtors.length && creditorIndex < creditors.length) {
-        const transfer = Math.min(
-            debtors[debtorIndex].amount,
-            creditors[creditorIndex].amount
-        );
-
-        if (transfer > 0) {
-            const fromMember = memberMap.get(debtors[debtorIndex].id);
-            const toMember = memberMap.get(creditors[creditorIndex].id);
-
-            transfers.push({
-                from: debtors[debtorIndex].id,
-                to: creditors[creditorIndex].id,
-                amount: Math.round(transfer),
-                fromName: fromMember?.name || 'Unknown',
-                toName: toMember?.name || 'Unknown',
-                fromImage: fromMember?.image || null,
-                toImage: toMember?.image || null,
-                toUpiId: toMember?.upiId || null,
-            });
-        }
-
-        debtors[debtorIndex].amount -= transfer;
-        creditors[creditorIndex].amount -= transfer;
-
-        if (debtors[debtorIndex].amount < 1) debtorIndex += 1;
-        if (creditors[creditorIndex].amount < 1) creditorIndex += 1;
-    }
-
-    return transfers;
+    return planSettlement(accounts, { tolerance: 1 }).transfers.map((transfer) => {
+        const fromMember = memberMap.get(transfer.from);
+        const toMember = memberMap.get(transfer.to);
+        return {
+            from: transfer.from,
+            to: transfer.to,
+            amount: transfer.amount,
+            fromName: fromMember?.name || 'Unknown',
+            toName: toMember?.name || 'Unknown',
+            fromImage: fromMember?.image || null,
+            toImage: toMember?.image || null,
+            toUpiId: toMember?.upiId || null,
+        };
+    });
 }
 
 export function summarizeUserRoute(
@@ -277,7 +252,15 @@ export function buildBalanceHistory(params: {
 
     const timeline = buildTimelineEvents(params);
     const runningBalances = createZeroBalances(params.members.map((member) => member.id));
-    const entries: BalanceHistoryEntry[] = [];
+    const changes: {
+        event: TimelineEvent;
+        balancesBefore: Record<string, number>;
+        beforeBalance: number;
+        afterBalance: number;
+        id: string;
+        createdAt: string;
+        filterKey: BalanceHistoryFilterKey;
+    }[] = [];
     const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
     let changeCountThisWeek = 0;
 
@@ -287,48 +270,62 @@ export function buildBalanceHistory(params: {
             continue;
         }
 
+        const balancesBefore = cloneBalances(runningBalances);
         const beforeBalance = runningBalances[params.userId] || 0;
-        const beforeRouteSummary = summarizeUserRoute(
-            simplifyGroupBalances({ balances: cloneBalances(runningBalances), members: params.members }),
-            params.userId
-        );
-
         applyDeltaMap(runningBalances, event.deltaByUser);
-
-        const afterBalance = runningBalances[params.userId] || 0;
-        const afterRouteSummary = summarizeUserRoute(
-            simplifyGroupBalances({ balances: cloneBalances(runningBalances), members: params.members }),
-            params.userId
-        );
 
         if (event.occurredAt.getTime() >= weekAgo) {
             changeCountThisWeek += 1;
         }
 
-        entries.push({
+        changes.push({
+            event,
+            balancesBefore,
+            beforeBalance,
+            afterBalance: runningBalances[params.userId] || 0,
+            id: event.id,
+            createdAt: event.occurredAt.toISOString(),
+            filterKey: event.filterKey,
+        });
+    }
+
+    const filteredChanges = changes
+        .sort(compareBalanceHistoryEntriesDesc)
+        .filter((change) => matchesHistoryFilters(change, params.filterKey || 'all', params.dateRange || 'all'))
+        .filter((change) => isBeforeHistoryCursor(change, params.beforeCreatedAt || null, params.beforeId || null));
+
+    // Settle-up routes are planned only for the page being returned, not for
+    // every change in the group's history.
+    const limitedEntries = filteredChanges.slice(0, params.limit).map((change): BalanceHistoryEntry => {
+        const { event } = change;
+        const balancesAfter = cloneBalances(change.balancesBefore);
+        applyDeltaMap(balancesAfter, event.deltaByUser);
+        const beforeRouteSummary = summarizeUserRoute(
+            simplifyGroupBalances({ balances: change.balancesBefore, members: params.members }),
+            params.userId
+        );
+        const afterRouteSummary = summarizeUserRoute(
+            simplifyGroupBalances({ balances: balancesAfter, members: params.members }),
+            params.userId
+        );
+
+        return {
             id: event.id,
             eventType: event.eventType,
             sourceId: event.sourceId,
             sourceLabel: event.sourceLabel,
-            createdAt: event.occurredAt.toISOString(),
-            beforeBalance,
+            createdAt: change.createdAt,
+            beforeBalance: change.beforeBalance,
             delta: event.deltaByUser[params.userId] || 0,
-            afterBalance,
+            afterBalance: change.afterBalance,
             counterparties: event.counterparties,
             explanation: `${event.explanation} ${describeRouteChange(beforeRouteSummary, afterRouteSummary)}`.trim(),
             filterKey: event.filterKey,
             beforeRouteSummary,
             afterRouteSummary,
-        });
-    }
-
-    const filteredEntries = entries
-        .sort(compareBalanceHistoryEntriesDesc)
-        .filter((entry) => matchesHistoryFilters(entry, params.filterKey || 'all', params.dateRange || 'all'))
-        .filter((entry) => isBeforeHistoryCursor(entry, params.beforeCreatedAt || null, params.beforeId || null));
-
-    const limitedEntries = filteredEntries.slice(0, params.limit);
-    const hasMore = filteredEntries.length > params.limit;
+        };
+    });
+    const hasMore = filteredChanges.length > params.limit;
     const nextCursor = hasMore && limitedEntries.length > 0
         ? {
             beforeCreatedAt: limitedEntries[limitedEntries.length - 1].createdAt,
@@ -349,14 +346,16 @@ export function buildBalanceHistory(params: {
     };
 }
 
-function compareBalanceHistoryEntriesDesc(a: BalanceHistoryEntry, b: BalanceHistoryEntry) {
+type HistoryOrderFields = Pick<BalanceHistoryEntry, 'id' | 'createdAt' | 'filterKey'>;
+
+function compareBalanceHistoryEntriesDesc(a: HistoryOrderFields, b: HistoryOrderFields) {
     const timeDiff = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     if (timeDiff !== 0) return timeDiff;
     return b.id.localeCompare(a.id);
 }
 
 function matchesHistoryFilters(
-    entry: BalanceHistoryEntry,
+    entry: HistoryOrderFields,
     filterKey: BalanceHistoryFilterKey,
     dateRange: BalanceHistoryDateRange
 ) {
@@ -374,7 +373,7 @@ function matchesHistoryFilters(
 }
 
 function isBeforeHistoryCursor(
-    entry: BalanceHistoryEntry,
+    entry: HistoryOrderFields,
     beforeCreatedAt: string | null,
     beforeId: string | null
 ) {
