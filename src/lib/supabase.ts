@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { RECEIPTS_BUCKET } from '@/lib/receiptUrl';
 
 function getSupabaseConfig() {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -17,21 +18,30 @@ export function getSupabaseClient(): SupabaseClient {
 }
 
 /**
- * Uploads a file to the 'receipts' bucket and returns its public URL
+ * Uploads a receipt photo and returns its public URL, or null when it couldn't
+ * be saved. The server issues a signed upload URL for a new object in the
+ * signed-in user's own folder; the photo goes straight to storage with it.
  */
-export async function uploadReceipt(file: File, path: string): Promise<string | null> {
+export async function uploadReceipt(file: File): Promise<string | null> {
     try {
-        const supabase = getSupabaseClient();
-        const { error } = await supabase.storage
-            .from('receipts')
-            .upload(path, file, { upsert: true });
+        const res = await fetch('/api/receipts/upload-url', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ contentType: file.type, size: file.size }),
+        });
+        if (!res.ok) {
+            console.error('Receipt upload was refused:', res.status);
+            return null;
+        }
+        const { data } = (await res.json()) as { data: { path: string; token: string; publicUrl: string } };
 
+        const { error } = await getSupabaseClient()
+            .storage.from(RECEIPTS_BUCKET)
+            .uploadToSignedUrl(data.path, data.token, file, { contentType: file.type });
         if (error) {
             console.error('Supabase upload error:', error);
             return null;
         }
-
-        const { data } = supabase.storage.from('receipts').getPublicUrl(path);
         return data.publicUrl;
     } catch (err) {
         console.error('Failed to upload receipt:', err);

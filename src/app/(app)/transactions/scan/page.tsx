@@ -276,12 +276,7 @@ function ScanReceipt() {
     const uploadCurrentReceipt = async () => {
         const file = fileRef.current;
         if (!file) return null;
-        const extension = file.name.split('.').pop() || 'jpg';
-        try {
-            return await uploadReceipt(file, `receipt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}.${extension}`);
-        } catch {
-            return null;
-        }
+        return uploadReceipt(file);
     };
 
     const goToComposer = (params: URLSearchParams) => {

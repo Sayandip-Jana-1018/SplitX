@@ -1,26 +1,17 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
-import { getSupabaseClient } from '@/lib/supabase';
-import { createClient } from '@supabase/supabase-js';
 import { logger } from '@/lib/logger';
+import { RECEIPTS_BUCKET } from '@/lib/receiptUrl';
+import { avatarObjectPath, MAX_AVATAR_BYTES, sniffImageType, storageAdmin, StorageUnavailableError } from '@/lib/storage';
 
-const AVATAR_BUCKETS = ['avatars', 'receipts'] as const;
+/** Multipart framing on top of the largest allowed photo. */
+const MAX_REQUEST_BYTES = MAX_AVATAR_BYTES + 64 * 1024;
 
-function getSupabaseAdminClient() {
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-
-    if (!serviceRoleKey || !supabaseUrl) {
-        return null;
-    }
-
-    return createClient(supabaseUrl, serviceRoleKey, {
-        auth: { autoRefreshToken: false, persistSession: false },
-    });
-}
-
-// POST /api/me/avatar — upload profile image to Supabase Storage
+// POST /api/me/avatar — upload a profile photo to Supabase Storage.
+// The photo is stored under the user's own folder with a random name; the
+// type comes from the file's bytes. If storage is unavailable the upload
+// fails visibly rather than keeping the image somewhere else.
 export async function POST(req: Request) {
     try {
         const session = await auth();
@@ -28,63 +19,52 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const formData = await req.formData();
-        const file = formData.get('file') as File | null;
+        if (Number(req.headers.get('content-length')) > MAX_REQUEST_BYTES) {
+            return NextResponse.json({ error: 'File too large. Max 2MB.' }, { status: 413 });
+        }
 
-        if (!file) {
+        const formData = await req.formData();
+        const file = formData.get('file');
+        if (!(file instanceof File)) {
             return NextResponse.json({ error: 'No file provided' }, { status: 400 });
         }
-
-        // Validate file type
-        const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-        if (!validTypes.includes(file.type)) {
-            return NextResponse.json({ error: 'Invalid file type. Use JPEG, PNG, WebP, or GIF.' }, { status: 400 });
-        }
-
-        // Validate file size (max 2MB)
-        if (file.size > 2 * 1024 * 1024) {
+        if (file.size > MAX_AVATAR_BYTES) {
             return NextResponse.json({ error: 'File too large. Max 2MB.' }, { status: 400 });
         }
 
-        // Generate unique filename
-        const ext = file.name.split('.').pop() || 'jpg';
-        const sanitized = session.user.email.replace(/[^a-z0-9]/gi, '_');
-        const filename = `avatars/${sanitized}_${Date.now()}.${ext}`;
-
-        // Upload to Supabase Storage (receipts bucket — we reuse it for avatars too)
-        const buffer = Buffer.from(await file.arrayBuffer());
-        const storageClient = getSupabaseAdminClient() || getSupabaseClient();
-        let imageUrl: string | null = null;
-
-        for (const bucket of AVATAR_BUCKETS) {
-            const { error: uploadError } = await storageClient.storage
-                .from(bucket)
-                .upload(filename, buffer, {
-                    contentType: file.type,
-                    upsert: true,
-                });
-
-            if (!uploadError) {
-                const { data: urlData } = storageClient.storage.from(bucket).getPublicUrl(filename);
-                imageUrl = urlData.publicUrl;
-                break;
-            }
-
-            logger.warn('Supabase avatar upload failed', { bucket, err: uploadError });
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        const contentType = sniffImageType(bytes);
+        if (!contentType) {
+            return NextResponse.json({ error: 'Invalid file type. Use JPEG, PNG, WebP, or GIF.' }, { status: 400 });
         }
 
-        if (!imageUrl) {
-            imageUrl = `data:${file.type};base64,${buffer.toString('base64')}`;
+        const user = await prisma.user.findUnique({ where: { email: session.user.email }, select: { id: true } });
+        if (!user) {
+            return NextResponse.json({ error: 'User not found' }, { status: 404 });
         }
 
-        // Update user record
-        await prisma.user.update({
-            where: { email: session.user.email },
-            data: { image: imageUrl },
+        const bucket = storageAdmin().storage.from(RECEIPTS_BUCKET);
+        const path = avatarObjectPath(user.id, contentType);
+        const { error: uploadError } = await bucket.upload(path, bytes, {
+            contentType,
+            // Every upload gets a new name, so the object never changes.
+            cacheControl: '31536000',
+            upsert: false,
         });
+        if (uploadError) {
+            logger.error('Avatar upload failed', { err: uploadError });
+            return NextResponse.json({ error: 'Could not save your photo. Please try again.' }, { status: 502 });
+        }
 
-        return NextResponse.json({ image: imageUrl });
+        const image = bucket.getPublicUrl(path).data.publicUrl;
+        await prisma.user.update({ where: { id: user.id }, data: { image } });
+
+        return NextResponse.json({ image });
     } catch (error) {
+        if (error instanceof StorageUnavailableError) {
+            logger.error('Avatar upload requested but storage is not configured', { err: error });
+            return NextResponse.json({ error: 'Photo uploads are unavailable right now' }, { status: 503 });
+        }
         logger.error('Avatar upload error', { err: error });
         return NextResponse.json({ error: 'Failed to upload avatar' }, { status: 500 });
     }

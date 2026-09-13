@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { createAuditLog } from '@/lib/auditLog';
 import { serializeTransactionAuditSnapshot } from '@/lib/auditPayloads';
 import { recordTransactionCreated } from '@/lib/metrics';
-import { isTrustedReceiptUrl, withTrustedReceipt } from '@/lib/receiptUrl';
+import { isOwnReceiptUrl, isTrustedReceiptUrl, withTrustedReceipt } from '@/lib/receiptUrl';
 import { logger } from '@/lib/logger';
 import { equalShares } from '@/lib/splits';
 
@@ -157,6 +157,11 @@ export async function POST(req: Request) {
 
         const user = await prisma.user.findUnique({ where: { email: session.user.email } });
         if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
+
+        // Uploads land in the uploader's own folder: a new expense can't borrow someone else's photo.
+        if (parsed.data.receiptUrl && !isOwnReceiptUrl(parsed.data.receiptUrl, user.id)) {
+            return NextResponse.json({ error: 'Attach a receipt photo you uploaded' }, { status: 400 });
+        }
 
         // Verify trip exists and user has access
         const trip = await prisma.trip.findFirst({

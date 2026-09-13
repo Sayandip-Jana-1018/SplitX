@@ -8,6 +8,9 @@
  * rejected on write and dropped on read.
  */
 
+/** The public bucket that holds receipt photos (and, under avatars/, profile photos). */
+export const RECEIPTS_BUCKET = 'receipts';
+
 const STORAGE_PATH_PREFIX = '/storage/v1/object/';
 const MAX_URL_LENGTH = 2_048;
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1']);
@@ -34,6 +37,15 @@ export function isTrustedReceiptUrl(value: unknown): value is string {
     } catch {
         return false;
     }
+}
+
+/**
+ * A receipt this user uploaded through SplitX: signed uploads always land in
+ * the uploader's own folder, so a new expense can't borrow anyone else's photo.
+ */
+export function isOwnReceiptUrl(value: unknown, userId: string): value is string {
+    if (!isTrustedReceiptUrl(value)) return false;
+    return new URL(value).pathname.startsWith(`${STORAGE_PATH_PREFIX}public/${RECEIPTS_BUCKET}/${userId}/`);
 }
 
 /** Clears a stored receipt URL that fails the trust check (rows saved before validation existed). */
