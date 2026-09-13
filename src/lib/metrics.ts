@@ -74,6 +74,27 @@ function createMetrics() {
             registers: [register],
         }),
 
+        // ── Settlement preview: pure CPU, the endpoint autoscaling is demonstrated on ──
+        settlementPreviews: new client.Counter({
+            name: 'splitx_settlement_previews_total',
+            help: 'Settlement preview requests, by input mode and outcome (ok, invalid, too_large, shed)',
+            labelNames: ['mode', 'outcome'] as const,
+            registers: [register],
+        }),
+        settlementPreviewCompute: new client.Histogram({
+            name: 'splitx_settlement_preview_compute_seconds',
+            help: 'Time spent simulating and planning a settlement preview, by input mode and the algorithm that produced the plan, in seconds',
+            labelNames: ['mode', 'algorithm'] as const,
+            buckets: [0.0005, 0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1],
+            registers: [register],
+        }),
+        settlementPreviewQueue: new client.Histogram({
+            name: 'splitx_settlement_preview_queue_seconds',
+            help: 'How long settlement preview requests waited in the process before being handled, in seconds',
+            buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5],
+            registers: [register],
+        }),
+
         // ── Business events (recorded in the route handlers that cause them) ──
         transactionsCreated: new client.Counter({
             name: 'splitx_transactions_created_total',

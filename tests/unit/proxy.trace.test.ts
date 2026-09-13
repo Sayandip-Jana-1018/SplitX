@@ -60,6 +60,16 @@ describe('proxy request IDs', () => {
         expect(res.headers.get('x-middleware-override-headers')).not.toContain('tracestate');
     });
 
+    it('stamps when the request arrived, replacing any stamp the client sent', async () => {
+        const before = Date.now();
+        const res = await run('http://localhost/api/me', { 'x-request-start': 't=1000000000000' });
+        const stamp = res.headers.get('x-middleware-request-x-request-start');
+
+        expect(stamp).toMatch(/^t=\d{13}$/);
+        expect(Number(stamp!.slice(2))).toBeGreaterThanOrEqual(before);
+        expect(Number(stamp!.slice(2))).toBeLessThanOrEqual(Date.now());
+    });
+
     it('names the serving pod only when running in Kubernetes', async () => {
         expect((await run('http://localhost/api/me')).headers.get('x-served-by')).toBeNull();
 

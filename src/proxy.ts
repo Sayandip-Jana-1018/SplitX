@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { recordProxyDecision, type ProxyDecision } from '@/lib/metrics';
 import { newTraceContext, REQUEST_ID_HEADER, type TraceContext } from '@/lib/observability/trace';
 import { checkRateLimit } from '@/lib/rateLimit';
+import { REQUEST_START_HEADER, requestStartValue } from '@/lib/requestQueue';
 
 /**
  * Next.js Proxy — runs on every matched request.
@@ -40,12 +41,13 @@ function hasSessionToken(request: NextRequest): boolean {
     );
 }
 
-/** Lets the request continue to its route, carrying this request's trace. */
-function forward(request: NextRequest, trace: TraceContext) {
+/** Lets the request continue to its route, carrying its trace and arrival time. */
+function forward(request: NextRequest, trace: TraceContext, receivedAt: number) {
     const headers = new Headers(request.headers);
     headers.set('traceparent', trace.traceparent);
     headers.delete('tracestate');
     headers.set(REQUEST_ID_HEADER, trace.traceId);
+    headers.set(REQUEST_START_HEADER, requestStartValue(receivedAt));
     return NextResponse.next({ request: { headers } });
 }
 
@@ -72,6 +74,7 @@ function decide(request: NextRequest, trace: TraceContext, response: NextRespons
 }
 
 export async function proxy(request: NextRequest) {
+    const receivedAt = Date.now();
     const { pathname } = request.nextUrl;
     const trace = newTraceContext();
 
@@ -97,19 +100,19 @@ export async function proxy(request: NextRequest) {
     const limit = await checkRateLimit(request);
 
     if (limit.outcome === 'skip') {
-        return decide(request, trace, forward(request, trace), 'pass');
+        return decide(request, trace, forward(request, trace, receivedAt), 'pass');
     }
 
     if (limit.outcome === 'disabled' || limit.outcome === 'error') {
         // Fail open: a missing or unavailable limiter must not take the API down.
-        const response = forward(request, trace);
+        const response = forward(request, trace, receivedAt);
         applySecurityHeaders(response);
         return decide(request, trace, response, limit.outcome === 'error' ? 'limiter_error' : 'pass');
     }
 
     const retryAfterSeconds = Math.max(1, Math.ceil(limit.resetMs / 1000));
     const response = limit.outcome === 'allow'
-        ? forward(request, trace)
+        ? forward(request, trace, receivedAt)
         : NextResponse.json(
             {
                 success: false,
