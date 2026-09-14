@@ -260,14 +260,16 @@ for a different cluster, so ALB provisioning would have failed. A single
 `+ name = "splitx-eks-dev"`.
 
 ### D-017 · User uploads never ship in the image
-**2026-09-13** · 🚧 image done, git removal pending
+**2026-09-13** · ✅ done (untracked 2026-09-14)
 
 Eleven avatar photos with real email addresses in their filenames were committed
 under `public/uploads/avatars/` and are publicly served by the live site. Uploads
 have gone to Supabase Storage for months. They are now excluded from the Docker
 image and ignored going forward. Removing them from git waits for a production
 check (B-007), because a profile still pointing at one would fall back to
-initials on the next deploy.
+initials on the next deploy. **2026-09-14:** production Neon returned 0 profiles
+pointing at `/uploads/`, so the 11 files are no longer tracked. They remain in git
+history (D-003: history is not rewritten).
 
 ---
 
@@ -496,7 +498,7 @@ pushes its load onto the others.
   accepted requests still reached p99 ≈ 2.2–2.5 s.
 
 ### D-027 · Storage: signed upload URLs, no anonymous writes, no silent fallbacks
-**2026-09-13** · ✅ code done · ⏳ live check waits on B-014
+**2026-09-13** · ✅ done · verified live 2026-09-14
 
 **Before:**
 - The browser uploaded receipts with the public anon key and `upsert: true`.
@@ -521,6 +523,15 @@ pushes its load onto the others.
   bandwidth and memory on bytes the app never reads.
 - The bucket's own MIME-type and size limits are the final check on what a signed
   URL can upload; they are configured in Supabase, not in code.
+- **Verified live against the production bucket (2026-09-14), after the user deleted
+  every storage policy:**
+  - the secret key has storage admin rights;
+  - a server-signed upload succeeds and is readable byte for byte at its public URL;
+  - the same token cannot overwrite it ("The resource already exists");
+  - the server-side avatar upload works;
+  - with the public key alone, uploading is refused by row-level security, listing
+    shows nothing, and deleting removes nothing.
+  - Three 68-byte probe images were left under `_e2e/` and `avatars/_e2e/`.
 
 ---
 
@@ -534,20 +545,21 @@ pushes its load onto the others.
 | B-004 | `POST /api/transactions/from-receipt` had no input validation. | Floats, negatives or strings as amounts. | ✅ Resolved — endpoint removed (D-020). |
 | B-005 | Readiness depends on the shared database. | A full DB outage removes every pod from the Service. Accepted for now: nearly every page needs the DB, and 3 failures × 10 s rides out Neon cold starts. | Revisit when tuning probes in phase 3. |
 | B-006 | Jenkins admin password is still the leaked one (user no longer knows it; it is in `jenkins/create-job.sh` history). | Jenkins becomes internet-reachable when the webhook tunnel opens. | Phase 6: Jenkins Configuration-as-Code with the admin password from `.env`. |
-| B-007 | Committed avatars may still be referenced by production profiles. | Removing them could change what real users see. | Run on production Neon: `SELECT count(*) FROM "User" WHERE image LIKE '/uploads/%';` — if 0, untrack `public/uploads/`. |
+| B-007 | Committed avatars may still be referenced by production profiles. | Removing them could change what real users see. | ✅ Resolved 2026-09-14 — production returned 0; the files are untracked (D-017). |
 | B-008 | Jenkinsfile stages are still theatre (`docker images` as "build", `|| echo` after Sonar). Only the secrets were removed in phase 0. | Examiner-visible. | Phase 6 rewrite. |
 | B-009 | `DEMO_GUIDE.html`, `AWS_SETUP_GUIDE.md` describe removed or wrong things (Ansible, t3.small, 23 resources). | Misleading docs. | Phase 8. |
 | B-010 | Prisma pool size across up to 12 pods is unset. | Connection exhaustion under autoscaling. | Phase 3: `connection_limit` in `DATABASE_URL`. |
 | B-011 | `/api/metrics` and `/api/health/ready` will be reachable through CloudFront. | Metrics are token-protected, but readiness pings the DB per request. | Phase 7: block at the edge; Prometheus scrapes in-cluster. |
-| B-012 | Supabase access policies not reviewed. SplitX's database is Neon; Supabase only stores files. | Since D-027 the app never writes with the anon key, so any anon write policy on the `receipts` bucket is now pure risk. | User: remove anon INSERT/UPDATE/DELETE policies on the bucket; set allowed types (JPEG, PNG, WebP, GIF) and a 10 MB limit. |
+| B-012 | Supabase access policies not reviewed. SplitX's database is Neon; Supabase only stores files. | Since D-027 the app never writes with the anon key, so any anon policy on the `receipts` bucket is pure risk. | 🚧 Policies: all deleted by the user 2026-09-14 (verified, D-027). Still open: the bucket's size limit (10 MB) and allowed types (JPEG, PNG, WebP, GIF), both unset. |
 | B-013 | `npm test` was 65 lines of source-regex assertions. | CI "passed tests" that exercised no behaviour. | ✅ Resolved — D-018. |
-| B-014 | The Supabase project URL in the local `.env` did not resolve. | Storage couldn't be exercised, and uploads on the live site were failing. | ✅ Resolved 2026-09-14 — the free-tier project had been **paused**; the user resumed it. URL and publishable key verified against it. The service role (secret) key is still missing from `.env`, so D-027 is not yet verified live. |
+| B-014 | The Supabase project URL in the local `.env` did not resolve. | Storage couldn't be exercised, and uploads on the live site were failing. | ✅ Resolved 2026-09-14 — the free-tier project had been **paused**; the user resumed it and added the secret key to `.env` and Vercel. Verified live (D-027). |
 | B-015 | Anonymous preview requests from one network share an IP bucket (60/min). | A classroom behind one NAT would be rate limited as one person during the demo. | Phase 4: a per-device guest identity or a demo-window limit, decided with measurements. |
 | B-016 | Queue-time shedding can't see the time a request waits before the proxy runs (D-026). | Accepted requests reached p99 ≈ 2.2–2.5 s at 96 concurrent 2,000-person previews on one process. | Phase 4, on the cluster: tune `PREVIEW_MAX_QUEUE_MS` with pods behind a Service; compare with load-balancer timing. |
 | B-017 | Deliberately shed 503s are logged at error level by the access log. | 365 error lines in one load test, all intended. Noise hides real errors. | Phase 5: alert from metrics; consider warn level for shed responses. |
-| B-019 | **Anyone can list the `receipts` bucket.** Found 2026-09-14: an anonymous request with the public key listed its contents. | A public bucket serves files by URL without any policy; listing needs a SELECT policy, and one exists. Anyone can enumerate every receipt photo. | User, after D-027 is deployed (the old browser upload with `upsert: true` needs SELECT/UPDATE): delete the bucket's anon policies. Later: consider a private bucket with signed read URLs. |
-| B-020 | The Docker image's browser code has no Supabase URL or key. `NEXT_PUBLIC_*` values are compiled in at build time, and `.env*` is excluded from the build context (verified: 0 browser chunks in the image contain the project URL). | Receipt uploads cannot work from the container, or later from Kubernetes. | Phase 2: upload with the full signed URL the server returns, so the browser needs no Supabase configuration and one image runs in every environment. Verify it once the service role key is available. |
-| B-018 | Old uploads keep their old names: receipts at the bucket root, avatars named after email addresses, and any avatar saved as a `data:` URL. | Email addresses remain in public URLs until those files are replaced. | After B-014: `SELECT count(*) FROM "User" WHERE image LIKE 'data:%' OR image LIKE '%@%';` then a one-off migration. |
+| B-019 | **Anyone could list the `receipts` bucket.** Found 2026-09-14: an anonymous request with the public key listed its contents. | Anyone could enumerate every receipt photo. | ✅ Resolved 2026-09-14 — the user deleted all three policies; anonymous listing now returns nothing (D-027). Later: consider a private bucket with signed read URLs. |
+| B-020 | The Docker image's browser code has no Supabase URL or key. `NEXT_PUBLIC_*` values are compiled in at build time, and `.env*` is excluded from the build context (verified: 0 browser chunks in the image contain the project URL). | Receipt uploads cannot work from the container, or later from Kubernetes. | Phase 2: upload with the full signed URL the server returns, so the browser needs no Supabase configuration and one image runs in every environment. **Verified possible 2026-09-14:** a plain `PUT` to a signed URL with no key succeeded against the production bucket. |
+| B-018 | Old uploads keep their old names: receipts at the bucket root, avatars named after email addresses, and any avatar saved as a `data:` URL. | Email addresses remain in public URLs until those files are replaced. | Waiting on the second query's result: `SELECT count(*) FROM "User" WHERE image LIKE 'data:%' OR image LIKE '%@%';` (the first query returned 0). |
+| B-021 | **The AWS root user still has two active access keys.** Found 2026-09-14 in the console: one created 142 days ago, the other 18 days ago and last used 2026-09-13 (IAM, most likely the bootstrap of `splitx-devops`). | Root keys can't be restricted by any policy. The local CLI now uses the `splitx-devops` key, and no workflow, Jenkinsfile or Terraform file references AWS keys, so nothing here needs them. The root user does have MFA (a security key). | User: deactivate both keys, then delete them. |
 
 ## Environment notes (this machine)
 
