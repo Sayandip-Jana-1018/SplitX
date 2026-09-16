@@ -23,3 +23,14 @@ components:
 images:
   - name: splitx
     newTag: local
+
+configMapGenerator:
+  - name: splitx-config
+    behavior: merge
+    literals:
+      # ingress-nginx stamps X-Request-Start on every request and overwrites any
+      # value a client sent (helm/platform/ingress-nginx.values.yaml), so the app
+      # measures queue time from the edge (B-016). The AWS overlay leaves this
+      # unset: an ALB adds no such header, and trusting one there would mean
+      # trusting whatever the client wrote.
+      - TRUST_UPSTREAM_REQUEST_START=true
