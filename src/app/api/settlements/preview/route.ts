@@ -4,6 +4,7 @@ import { apiError, apiSuccess } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { metrics } from '@/lib/metrics';
 import { BodyTooLargeError, InvalidJsonError, readJsonBody } from '@/lib/readJsonBody';
+import { PREVIEW_ADMISSION_HEADER, releasePreview } from '@/lib/previewAdmission';
 import { previewMaxQueueMs, queuedMs } from '@/lib/requestQueue';
 import { planSettlement, type AccountBalance, type PlannedTransfer, type SettlementPlan } from '@/lib/settlementPlanner';
 import { MAX_SCENARIO_MEMBERS, MIN_SCENARIO_MEMBERS, simulateTrip } from '@/lib/settlementScenario';
@@ -58,6 +59,17 @@ const ScenarioRequest = z.strictObject({
 type Mode = 'balances' | 'scenario' | 'unknown';
 
 export async function POST(request: Request) {
+    // The proxy admitted this request into a limited number of slots; give the
+    // slot back however planning ends: served, refused, invalid or failed.
+    const admission = request.headers.get(PREVIEW_ADMISSION_HEADER);
+    try {
+        return await plan(request);
+    } finally {
+        releasePreview(admission);
+    }
+}
+
+async function plan(request: Request) {
     try {
         let body: unknown;
         try {

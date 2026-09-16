@@ -6,6 +6,7 @@ import { metrics, recordProxyDecision, type ProxyDecision } from '@/lib/metrics'
 import { newTraceContext, REQUEST_ID_HEADER, type TraceContext } from '@/lib/observability/trace';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { DEVICE_COOKIE, deviceCookieOptions, mintDevice, verifyDevice } from '@/lib/rateLimit/device';
+import { PREVIEW_ADMISSION_HEADER, tryAdmitPreview } from '@/lib/previewAdmission';
 import { arrivalTime, previewMaxQueueMs, REQUEST_START_HEADER, requestStartValue } from '@/lib/requestQueue';
 
 /**
@@ -43,13 +44,26 @@ function hasSessionToken(request: NextRequest): boolean {
 }
 
 /** Lets the request continue to its route, carrying its trace and arrival time. */
-function forward(request: NextRequest, trace: TraceContext, receivedAt: number) {
+function forward(request: NextRequest, trace: TraceContext, receivedAt: number, previewAdmission?: string) {
     const headers = new Headers(request.headers);
     headers.set('traceparent', trace.traceparent);
     headers.delete('tracestate');
     headers.set(REQUEST_ID_HEADER, trace.traceId);
     headers.set(REQUEST_START_HEADER, requestStartValue(receivedAt));
+    // Only this proxy grants admissions. A value sent by a client would let one
+    // request release the slot another request is holding.
+    headers.delete(PREVIEW_ADMISSION_HEADER);
+    if (previewAdmission) headers.set(PREVIEW_ADMISSION_HEADER, previewAdmission);
     return NextResponse.next({ request: { headers } });
+}
+
+function overloaded(trace: TraceContext) {
+    const response = NextResponse.json(
+        { success: false, error: 'SplitX is busy right now. Please try again in a moment.', code: 'OVERLOADED', requestId: trace.traceId },
+        { status: 503, headers: { 'Retry-After': '1' } }
+    );
+    applySecurityHeaders(response);
+    return response;
 }
 
 /** Whether the visitor's own connection is HTTPS, as reported by the proxy that terminated it. */
@@ -125,14 +139,10 @@ export async function proxy(request: NextRequest) {
     // front of the route were the queue, refused requests waited 22 s to hear
     // so, and liveness probes waited behind them. Counted, not logged, so an
     // overload cannot add a synchronous log write per refused request.
-    if (request.method === 'POST' && pathname === '/api/settlements/preview' && Date.now() - receivedAt > previewMaxQueueMs()) {
+    const isPreview = request.method === 'POST' && pathname === '/api/settlements/preview';
+    if (isPreview && Date.now() - receivedAt > previewMaxQueueMs()) {
         metrics.settlementPreviews.inc({ mode: 'unknown', outcome: 'shed' });
-        const response = NextResponse.json(
-            { success: false, error: 'SplitX is busy right now. Please try again in a moment.', code: 'OVERLOADED', requestId: trace.traceId },
-            { status: 503, headers: { 'Retry-After': '1' } }
-        );
-        applySecurityHeaders(response);
-        return decide(request, trace, response, 'shed');
+        return decide(request, trace, overloaded(trace), 'shed_queue');
     }
 
     // ── Rate Limiting ──
@@ -142,16 +152,28 @@ export async function proxy(request: NextRequest) {
         return decide(request, trace, forward(request, trace, receivedAt), 'pass');
     }
 
+    // A preview the limiter lets through still needs a free slot in this process
+    // (lib/previewAdmission.ts): the cap on accepted work is what keeps the event
+    // loop, and every probe waiting on it, responsive under overload.
+    let admission: string | undefined;
+    if (isPreview && limit.outcome !== 'deny') {
+        if (!tryAdmitPreview(trace.traceId)) {
+            metrics.settlementPreviews.inc({ mode: 'unknown', outcome: 'shed' });
+            return decide(request, trace, overloaded(trace), 'shed_capacity');
+        }
+        admission = trace.traceId;
+    }
+
     if (limit.outcome === 'disabled' || limit.outcome === 'error') {
         // Fail open: a missing or unavailable limiter must not take the API down.
-        const response = forward(request, trace, receivedAt);
+        const response = forward(request, trace, receivedAt, admission);
         applySecurityHeaders(response);
         return decide(request, trace, response, limit.outcome === 'error' ? 'limiter_error' : 'pass');
     }
 
     const retryAfterSeconds = Math.max(1, Math.ceil(limit.resetMs / 1000));
     const response = limit.outcome === 'allow'
-        ? forward(request, trace, receivedAt)
+        ? forward(request, trace, receivedAt, admission)
         : NextResponse.json(
             {
                 success: false,

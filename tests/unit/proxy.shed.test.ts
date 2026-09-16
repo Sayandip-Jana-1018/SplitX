@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { metrics } from '@/lib/metrics';
 import { setRateLimitStore } from '@/lib/rateLimit';
+import { PREVIEW_ADMISSION_HEADER, previewsInFlight, resetPreviewAdmissions, tryAdmitPreview } from '@/lib/previewAdmission';
 import type { RateLimitStore } from '@/lib/rateLimit/store';
 import { proxy } from '@/proxy';
 
@@ -10,8 +11,8 @@ const nginxStamp = (msAgo: number) => {
     return 't=' + Math.floor(at / 1000) + '.' + String(at % 1000).padStart(3, '0');
 };
 
-const send = (path: string, msAgo: number, method = 'POST') =>
-    proxy(new NextRequest('http://localhost' + path, { method, headers: { 'x-forwarded-for': '203.0.113.9', 'x-request-start': nginxStamp(msAgo) } }));
+const send = (path: string, msAgo: number, method = 'POST', extra: Record<string, string> = {}) =>
+    proxy(new NextRequest('http://localhost' + path, { method, headers: { 'x-forwarded-for': '203.0.113.9', 'x-request-start': nginxStamp(msAgo), ...extra } }));
 
 type ReadableCounter = { get(): Promise<{ values: { value: number; labels: Partial<Record<string, string | number>> }[] }> };
 
@@ -31,6 +32,7 @@ describe('front-door load shedding (B-016)', () => {
         metrics.proxyDecisions.reset();
         metrics.settlementPreviews.reset();
         metrics.httpRequestsTotal.reset();
+        resetPreviewAdmissions();
         vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
         vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     });
@@ -54,7 +56,7 @@ describe('front-door load shedding (B-016)', () => {
         writes.mockClear();
         await send('/api/settlements/preview', 1_500);
 
-        expect(await counter(metrics.proxyDecisions, { decision: 'shed' })).toBe(1);
+        expect(await counter(metrics.proxyDecisions, { decision: 'shed_queue' })).toBe(1);
         expect(await counter(metrics.settlementPreviews, { mode: 'unknown', outcome: 'shed' })).toBe(1);
         expect(await counter(metrics.httpRequestsTotal, { route: '(proxy)', status_code: '503' })).toBe(1);
         expect(writes).not.toHaveBeenCalled();
@@ -83,5 +85,39 @@ describe('front-door load shedding (B-016)', () => {
         expect((await send('/api/groups', 30_000)).status).toBe(200);
         expect((await send('/api/settlements/preview', 30_000, 'GET')).status).toBe(200);
         expect((await send('/api/health/live', 30_000, 'GET')).status).toBe(200);
+    });
+
+    it('admits a preview the limiter allows, and tells the route which slot it holds', async () => {
+        const res = await send('/api/settlements/preview', 100);
+        expect(res.status).toBe(200);
+        expect(res.headers.get('x-middleware-request-' + PREVIEW_ADMISSION_HEADER)).toBe(res.headers.get('x-request-id'));
+        expect(previewsInFlight()).toBe(1);
+    });
+
+    it('refuses at once, after the limiter, when this process already holds its cap', async () => {
+        for (let i = 0; i < 8; i++) tryAdmitPreview('busy' + i);
+        const res = await send('/api/settlements/preview', 100);
+
+        expect(res.status).toBe(503);
+        expect(res.headers.get('retry-after')).toBe('1');
+        expect(await res.json()).toMatchObject({ code: 'OVERLOADED' });
+        expect(hit).toHaveBeenCalledTimes(1);
+        expect(await counter(metrics.proxyDecisions, { decision: 'shed_capacity' })).toBe(1);
+        expect(previewsInFlight()).toBe(8);
+    });
+
+    it('does not spend a slot on a preview the rate limiter refuses', async () => {
+        hit.mockResolvedValue({ allowed: false, count: 60, resetMs: 30_000 });
+        expect((await send('/api/settlements/preview', 100)).status).toBe(429);
+        expect(previewsInFlight()).toBe(0);
+    });
+
+    it('strips an admission a client made up, and replaces it with the real one', async () => {
+        const forged = { [PREVIEW_ADMISSION_HEADER]: 'someone-elses-slot' };
+        const other = await send('/api/groups', 100, 'POST', forged);
+        expect(other.headers.get('x-middleware-request-' + PREVIEW_ADMISSION_HEADER)).toBeNull();
+
+        const own = await send('/api/settlements/preview', 100, 'POST', forged);
+        expect(own.headers.get('x-middleware-request-' + PREVIEW_ADMISSION_HEADER)).toBe(own.headers.get('x-request-id'));
     });
 });
