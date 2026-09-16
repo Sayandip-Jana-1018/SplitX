@@ -13,6 +13,7 @@ a class on campus Wi-Fi reaches the internet through one NAT. ([load/classroom.j
 
 | Run | Build | Student plans served | Students refused (429) | Greedy device served | Greedy refused (429) | Student p95 |
 |---|---|---|---|---|---|---|
+| [after](load/classroom-after.json) | `77178161f36c` | 1,912 of 1,912 | 0 (0%) | 168 of 617 | 449 (72.8%) | 28 ms |
 | [before](load/classroom-before.json) | `f4b2dc209824` | 129 of 1,907 | 1,777 (93.2%) | 66 of 623 | 557 (89.4%) | 25 ms |
 
 ## Saturation: more work than two pods can do
@@ -23,5 +24,7 @@ that are served once the backlog builds. ([load/saturation.js](../../load/satura
 
 | Run | Build | Arrival rate | Served | Shed (503) | Other | Served p50 | p95 | p99 | max | Queue clock |
 |---|---|---|---|---|---|---|---|---|---|---|
+| [after-clock](load/saturation-after-clock.json) | `77178161f36c` | 60/s | 2,984 | 4,190 (58.2%) | 26 | 1337 ms | 1888 ms | 2337 ms | 74621 ms | ingress-nginx |
+| [after-probes](load/saturation-after-probes.json) | `77178161f36c` | 60/s | 3,145 | 4,005 (55.6%) | 51 | 1320 ms | 1915 ms | 74467 ms | 80366 ms | ingress-nginx |
 | [before](load/saturation-before.json) | `f4b2dc209824` | 60/s | 3,065 | 2,223 (33.7%) | 1,314 | 2475 ms | 26082 ms | 30749 ms | 79409 ms | app proxy |
 

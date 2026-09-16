@@ -7,7 +7,7 @@
  * until requests start waiting longer than PREVIEW_MAX_QUEUE_MS, and from then
  * on the question is what the requests that ARE served experience.
  */
-import { preview, summarise } from './lib.js';
+import { live, preview, summarise } from './lib.js';
 
 const RATE = Number(__ENV.RATE || 60);
 const MEMBERS = Number(__ENV.MEMBERS || 2000);
@@ -23,12 +23,28 @@ export const options = {
             duration: DURATION,
             preAllocatedVUs: 300,
             maxVUs: 1500,
+            exec: 'overload',
+        },
+        // Two liveness checks a second alongside the overload, to measure what
+        // a probe waits for on a pod that is busy but healthy.
+        liveness: {
+            executor: 'constant-arrival-rate',
+            rate: 2,
+            timeUnit: '1s',
+            duration: DURATION,
+            preAllocatedVUs: 10,
+            maxVUs: 40,
+            exec: 'probe',
         },
     },
     summaryTrendStats: ['avg', 'p(50)', 'p(95)', 'p(99)', 'max'],
 };
 
-export default function overload() {
+export function probe() {
+    live({ test: 'saturation' });
+}
+
+export function overload() {
     preview(MEMBERS, { test: 'saturation' });
 }
 

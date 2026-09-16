@@ -26,6 +26,15 @@ export function arrive(tags = {}) {
     return http.get(BASE_URL + '/', { tags: { name: 'arrive', ...tags } });
 }
 
+/**
+ * What the kubelet's liveness probe experiences: the same endpoint, waiting on
+ * the same event loop. A long timeout so latencies past the probe's own timeout
+ * are measured rather than cut off.
+ */
+export function live(tags = {}) {
+    return http.get(BASE_URL + '/api/health/live', { tags: { name: 'live', ...tags }, timeout: '15s' });
+}
+
 /** Plans a simulated trip — the endpoint the autoscaler is driven by. */
 export function preview(members, tags = {}) {
     const response = http.post(

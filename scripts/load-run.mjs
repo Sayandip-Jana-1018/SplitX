@@ -156,16 +156,19 @@ async function analyse(csvPath) {
             continue;
         }
         const cells = line.split(',');
-        if (cells[columns.metric_name] !== 'http_req_duration' || cells[columns.name] !== 'preview') continue;
+        const requestName = cells[columns.name];
+        if (cells[columns.metric_name] !== 'http_req_duration' || (requestName !== 'preview' && requestName !== 'live')) continue;
 
         const timestamp = Number(cells[columns.timestamp]);
         if (firstTimestamp === null || timestamp < firstTimestamp) firstTimestamp = firstTimestamp === null ? timestamp : Math.min(firstTimestamp, timestamp);
         const status = Number(cells[columns.status]);
         const duration = Number(cells[columns.metric_value]);
         const tags = new URLSearchParams(cells[columns.extra_tags] ?? '');
-        const who = tags.get('who') ?? 'all';
+        const who = requestName === 'live' ? 'liveness' : tags.get('who') ?? 'all';
+        // Liveness checks are measured on their own and kept out of the request timeline.
+        const targets = requestName === 'live' ? [[groups, who]] : [[buckets, timestamp], [groups, who]];
 
-        for (const [map, key] of [[buckets, timestamp], [groups, who]]) {
+        for (const [map, key] of targets) {
             if (!map.has(key)) map.set(key, blank());
             const entry = map.get(key);
             entry.requests += 1;
