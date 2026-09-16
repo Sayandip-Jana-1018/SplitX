@@ -24,7 +24,7 @@ import { IconTile, ListGroup, ListRow, Progress, Segmented, Tag } from '@/compon
 import { useToast } from '@/components/ui/Toast';
 import SplitByItems from '@/components/features/SplitByItems';
 import { useIsClient } from '@/hooks/useMediaQuery';
-import { uploadReceipt } from '@/lib/supabase';
+import { uploadReceipt } from '@/lib/receiptUpload';
 import { parseTransactionText, type ParsedTransaction } from '@/lib/transactionParser';
 import { cn, formatCurrency } from '@/lib/utils';
 import styles from './scan.module.css';

@@ -535,6 +535,121 @@ pushes its load onto the others.
 
 ---
 
+---
+
+## Phase 2 — One image, and only what the server runs
+
+### D-028 · The browser uploads with a signed URL alone, so one image runs everywhere
+**2026-09-14** · ✅ done · verified live
+
+B-020: `NEXT_PUBLIC_*` values are compiled into browser code at build time, and
+`.env*` is excluded from the build context. The image therefore contained no
+Supabase URL or key, and a receipt upload from a container could only fail
+(verified: **no** browser chunk in the image contained the project URL).
+
+- **Fix:** `POST /api/receipts/upload-url` now returns the full signed upload
+  URL, which carries its own one-time token. The browser `PUT`s the photo
+  there with no key and no Supabase client at all.
+- **Verified against the production bucket:** a plain `PUT` with no key
+  succeeds and the photo reads back byte for byte; the browser preflight from
+  `https://splitsj.vercel.app` is allowed for `content-type`, `cache-control`
+  and `x-upsert`.
+- The Supabase client is gone from browser code, and the app no longer needs
+  `NEXT_PUBLIC_SUPABASE_ANON_KEY` anywhere.
+- **Rejected — passing `NEXT_PUBLIC_*` as build arguments:** that bakes one
+  environment into the image, so the artifact tested locally could not be the
+  artifact promoted to Kubernetes and to production.
+
+### D-029 · The image carries only what the server runs
+**2026-09-14** · ✅ done
+
+Everything below was measured inside the image, then removed and re-measured —
+see `docs/evidence/image-comparison.md`.
+
+- **Node 24 on Alpine 3.24, both pinned by digest.** Node 20 reached end of
+  life in April 2026, so the old base no longer receives security fixes.
+- **The runtime stage is Alpine plus the `node` binary** (and `libstdc++`).
+  npm, npx, yarn and corepack are never used by a running server and carry a
+  large share of the base image's vulnerabilities.
+- **Removed from the traced output**, after checking what actually loads it:
+  | Removed | Size | Why it was there |
+  |---|---|---|
+  | `typescript` | 19 MB | compiles `next.config.ts` at build time only |
+  | `@img/sharp-*-linux-x64` | 16 MB | glibc builds of the image library; this image is musl |
+  | `@prisma/client/runtime/*.wasm-base64.*` | 50 MB | WebAssembly engines for edge runtimes and for MySQL, SQLite, SQL Server and CockroachDB |
+  | `.prisma/client/*.wasm` | 2 MB | the same engine for the edge client |
+- Application files stay owned by root and the server runs as uid 1001, so a
+  compromised process cannot rewrite the code it runs. Only `.next/cache`
+  (optimized images) is writable.
+- `HOSTNAME=0.0.0.0` is baked in: Next binds `$HOSTNAME`, and Kubernetes sets
+  that variable to the pod name, which would bind a single interface and break
+  `kubectl port-forward` and any localhost probe. Verified that the image value
+  survives `docker run`.
+**Measured against the naive build** (full table in `docs/evidence/image-comparison.md`):
+
+| | Naive | Production |
+|---|---|---|
+| Download size | 1091 MB | 81 MB |
+| Unpacked size | 2960 MB | 217 MB |
+| Vulnerabilities | 4139: 35 critical · 636 high · 2124 medium · 1321 low | 0: 0 critical · 0 high · 0 medium · 0 low |
+| Runs as | root | nextjs |
+| `docker run` to healthy | 2.6 s | 0.9 s |
+
+- **Rejected — deleting npm in a later layer:** layers are additive, so the
+  files still ship; only the file listing looks cleaner.
+- **Rejected — Debian-slim or distroless:** the Prisma engine and sharp both
+  ship musl builds that match Alpine, and distroless (glibc) starts larger than
+  the entire Alpine runtime stage here.
+
+### D-030 · No init process in the image
+**2026-09-14** · ✅ decided
+
+The usual advice is to add `tini` or `dumb-init` as PID 1. Checked instead:
+Next.js registers its own `SIGTERM` handler, which stops accepting connections,
+lets in-flight requests finish and then closes — so signals are handled, and
+the server spawns no child processes that could be orphaned. `docker stop` and
+the in-flight requests during it are measured in the evidence file.
+
+### D-031 · A naive image, built and measured next to the real one
+**2026-09-14** · ✅ done
+
+`Dockerfile.naive` is the same app containerised without any care: one stage,
+the full Debian Node image, every dev dependency, the build toolchain, and root.
+It exists only so the production image's claims are comparative and checkable —
+`npm run image:report` builds both, measures both and writes
+`docs/evidence/image-comparison.md`. `docker-bake.hcl` builds them, with
+`GIT_SHA`, `APP_VERSION` and `BUILD_DATE` from git and `package.json`, so a
+running pod can be traced to the commit it came from
+(`splitx_app_info{version, git_sha}` and the OCI labels).
+
+Trivy runs as a **container pinned by digest**: the project's own release
+pipeline was compromised in 2026, and a scanner is exactly the tool an attacker
+wants you to pull by floating tag.
+
+### D-032 · The scanner gates the build, and it caught real problems on its first run
+**2026-09-16** · ✅ done
+
+`./scripts/scan-image.sh` fails when the image has vulnerabilities at or above
+HIGH **that already have a fix** — the ones a pipeline can act on. Its first run
+against the new image failed, with 18 findings:
+
+| Package | Installed | Fixed in | What |
+|---|---|---|---|
+| `next` | 16.1.6 | 16.3.3 | 14 findings, including server-side request forgery through Server Actions and two denial-of-service advisories |
+| `sharp` | 0.34.5 | 0.35.0 | libvips and libheif vulnerabilities |
+| `libssl3`, `libcrypto3` | 3.5.7-r0 | 3.5.8-r0 | OpenSSL, newer than the pinned Alpine release carries |
+
+- Next.js was upgraded to **16.3.5**, which requires sharp 0.35.4, so both
+  application findings closed together.
+- The Alpine packages are patched by `apk upgrade` during the build.
+- **The framework upgrade is exactly what the phase 0 harness exists for:**
+  HTTP metrics are read from Next's internal request spans, so a minor upgrade
+  could silently stop them. `scripts/verify-metrics.mjs` was run against a
+  container of the new image: **15/15**, with every response still counted
+  exactly once. Image optimisation (sharp, musl build) was checked in the same
+  container.
+- The gate now passes with no fixable HIGH or CRITICAL findings.
+
 ## Open problems
 
 | ID | Problem | Why it matters | Status / planned fix |
@@ -550,16 +665,16 @@ pushes its load onto the others.
 | B-009 | `DEMO_GUIDE.html`, `AWS_SETUP_GUIDE.md` describe removed or wrong things (Ansible, t3.small, 23 resources). | Misleading docs. | Phase 8. |
 | B-010 | Prisma pool size across up to 12 pods is unset. | Connection exhaustion under autoscaling. | Phase 3: `connection_limit` in `DATABASE_URL`. |
 | B-011 | `/api/metrics` and `/api/health/ready` will be reachable through CloudFront. | Metrics are token-protected, but readiness pings the DB per request. | Phase 7: block at the edge; Prometheus scrapes in-cluster. |
-| B-012 | Supabase access policies not reviewed. SplitX's database is Neon; Supabase only stores files. | Since D-027 the app never writes with the anon key, so any anon policy on the `receipts` bucket is pure risk. | 🚧 Policies: all deleted by the user 2026-09-14 (verified, D-027). Still open: the bucket's size limit (10 MB) and allowed types (JPEG, PNG, WebP, GIF), both unset. |
+| B-012 | Supabase access policies not reviewed. | Any anon policy on the `receipts` bucket was pure risk once the app stopped writing with the anon key. | ✅ Resolved 2026-09-16 — the user deleted every policy and set the bucket to 10 MB and image types only. Verified: an SVG is refused (HTTP 415) even through a valid signed upload URL. |
 | B-013 | `npm test` was 65 lines of source-regex assertions. | CI "passed tests" that exercised no behaviour. | ✅ Resolved — D-018. |
 | B-014 | The Supabase project URL in the local `.env` did not resolve. | Storage couldn't be exercised, and uploads on the live site were failing. | ✅ Resolved 2026-09-14 — the free-tier project had been **paused**; the user resumed it and added the secret key to `.env` and Vercel. Verified live (D-027). |
 | B-015 | Anonymous preview requests from one network share an IP bucket (60/min). | A classroom behind one NAT would be rate limited as one person during the demo. | Phase 4: a per-device guest identity or a demo-window limit, decided with measurements. |
 | B-016 | Queue-time shedding can't see the time a request waits before the proxy runs (D-026). | Accepted requests reached p99 ≈ 2.2–2.5 s at 96 concurrent 2,000-person previews on one process. | Phase 4, on the cluster: tune `PREVIEW_MAX_QUEUE_MS` with pods behind a Service; compare with load-balancer timing. |
 | B-017 | Deliberately shed 503s are logged at error level by the access log. | 365 error lines in one load test, all intended. Noise hides real errors. | Phase 5: alert from metrics; consider warn level for shed responses. |
 | B-019 | **Anyone could list the `receipts` bucket.** Found 2026-09-14: an anonymous request with the public key listed its contents. | Anyone could enumerate every receipt photo. | ✅ Resolved 2026-09-14 — the user deleted all three policies; anonymous listing now returns nothing (D-027). Later: consider a private bucket with signed read URLs. |
-| B-020 | The Docker image's browser code has no Supabase URL or key. `NEXT_PUBLIC_*` values are compiled in at build time, and `.env*` is excluded from the build context (verified: 0 browser chunks in the image contain the project URL). | Receipt uploads cannot work from the container, or later from Kubernetes. | Phase 2: upload with the full signed URL the server returns, so the browser needs no Supabase configuration and one image runs in every environment. **Verified possible 2026-09-14:** a plain `PUT` to a signed URL with no key succeeded against the production bucket. |
-| B-018 | Old uploads keep their old names: receipts at the bucket root, avatars named after email addresses, and any avatar saved as a `data:` URL. | Email addresses remain in public URLs until those files are replaced. | Waiting on the second query's result: `SELECT count(*) FROM "User" WHERE image LIKE 'data:%' OR image LIKE '%@%';` (the first query returned 0). |
-| B-021 | **The AWS root user still has two active access keys.** Found 2026-09-14 in the console: one created 142 days ago, the other 18 days ago and last used 2026-09-13 (IAM, most likely the bootstrap of `splitx-devops`). | Root keys can't be restricted by any policy. The local CLI now uses the `splitx-devops` key, and no workflow, Jenkinsfile or Terraform file references AWS keys, so nothing here needs them. The root user does have MFA (a security key). | User: deactivate both keys, then delete them. |
+| B-020 | The Docker image's browser code had no Supabase URL or key, so uploads could not work from a container. | Receipt uploads would have failed on Kubernetes. | ✅ Resolved 2026-09-16 — the browser now PUTs to the signed URL alone, with no key and no Supabase client (D-028). |
+| B-018 | One profile still carries an avatar that isn't a normal storage URL. | Photos kept as `data:` text sit in every API response that includes that user; email-named files keep an address in a public URL. | The first query was wrong — the old code replaced `@` with `_`, so `LIKE '%@%'` could never match those names. Corrected: ``SELECT count(*) FILTER (WHERE image LIKE 'data:%') AS in_database, count(*) FILTER (WHERE image LIKE '%/avatars/%' AND image NOT LIKE '%/avatars/%/%') AS email_named FROM "User";`` One profile matched the old query, so at most one needs migrating. |
+| B-021 | The AWS root user still had two active access keys. | Root keys cannot be restricted by any policy. | ✅ Resolved 2026-09-16 — the user deleted both. Root keeps MFA (a security key), the CLI uses `splitx-devops`, and no repository file or GitHub Actions secret holds AWS keys. |
 
 ## Environment notes (this machine)
 

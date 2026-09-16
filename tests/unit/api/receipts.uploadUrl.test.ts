@@ -30,7 +30,10 @@ beforeEach(() => {
     vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     auth.mockResolvedValue({ user: { email: 'alice@example.com' } });
     prisma.user.findUnique.mockResolvedValue({ id: ids.alice });
-    bucket.createSignedUploadUrl.mockImplementation(async (path: string) => ({ data: { path, token: 'signed-token', signedUrl: `https://x/${path}` }, error: null }));
+    bucket.createSignedUploadUrl.mockImplementation(async (path: string) => ({
+        data: { path, token: 'signed-token', signedUrl: `https://abcdproject.supabase.co/storage/v1/object/upload/sign/receipts/${path}?token=signed-token` },
+        error: null,
+    }));
 });
 
 afterEach(() => {
@@ -49,7 +52,11 @@ describe('POST /api/receipts/upload-url', () => {
         expect(from).toHaveBeenCalledWith('receipts');
         expect(data.path).toMatch(new RegExp(`^${ids.alice}/[0-9a-f-]{36}\\.webp$`));
         expect(bucket.createSignedUploadUrl).toHaveBeenCalledWith(data.path);
-        expect(data).toEqual({ path: data.path, token: 'signed-token', publicUrl: `https://abcdproject.supabase.co/storage/v1/object/public/receipts/${data.path}` });
+        expect(data).toEqual({
+            path: data.path,
+            uploadUrl: `https://abcdproject.supabase.co/storage/v1/object/upload/sign/receipts/${data.path}?token=signed-token`,
+            publicUrl: `https://abcdproject.supabase.co/storage/v1/object/public/receipts/${data.path}`,
+        });
     });
 
     it('never reuses a name', async () => {

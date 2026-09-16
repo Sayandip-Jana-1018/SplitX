@@ -1,0 +1,19 @@
+# ═══════════════════════════════════════════════════════════════
+#   SplitX — NAIVE image. A comparison exhibit only: never deploy it.
+#
+#   This is how the app would be containerised without any care:
+#   one stage, the full Debian Node image, every dev dependency and
+#   the build toolchain shipped, no cache mounts, running as root.
+#   scripts/image-report.mjs builds it next to the real Dockerfile
+#   and writes the difference to docs/evidence/image-comparison.md.
+#
+#   It still uses the same .dockerignore, so no secrets reach it.
+# ═══════════════════════════════════════════════════════════════
+FROM node:24.21.0-bookworm@sha256:6dac556d980b7f0e5498d08f08cee0ca67798b4ad6c23964a9214920e67758d0
+
+WORKDIR /app
+COPY . .
+RUN npm ci && npm run build
+
+EXPOSE 3000
+CMD ["npm", "start"]

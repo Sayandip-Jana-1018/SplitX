@@ -12,12 +12,12 @@ import { MAX_RECEIPT_BYTES, RECEIPT_TYPES, receiptObjectPath, storageAdmin, Stor
  * Body: { "contentType": "image/jpeg", "size": 834122 }
  *
  * The server chooses the object path (the caller's own folder, a random name)
- * and signs it with the service role key; the browser then uploads the photo
- * straight to Supabase Storage with the returned token. Photos never pass
- * through the app's pods, the public anon key needs no write access, and the
- * token cannot overwrite an existing object. Signed upload URLs expire after
- * two hours. The bucket's own type and size limits are the final check on
- * what is actually uploaded.
+ * and signs it with the service role key; the browser then PUTs the photo
+ * straight to Supabase Storage at the returned URL. Photos never pass through
+ * the app's pods, the browser needs no storage key, and the URL cannot
+ * overwrite an existing object. Signed upload URLs expire after two hours.
+ * The bucket's own type and size limits (10 MB; JPEG, PNG, WebP, GIF) are the
+ * final check on what is actually uploaded.
  */
 
 const UploadRequest = z.strictObject({
@@ -49,7 +49,8 @@ export async function POST(request: Request) {
 
         return apiSuccess({
             path: data.path,
-            token: data.token,
+            // Carries its own one-time token: the browser PUTs the photo here with no key.
+            uploadUrl: data.signedUrl,
             publicUrl: bucket.getPublicUrl(data.path).data.publicUrl,
         });
     } catch (error) {

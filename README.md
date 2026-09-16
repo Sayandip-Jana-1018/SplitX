@@ -61,13 +61,14 @@ the alternatives rejected, and the evidence behind each claim is recorded in
 | **Prometheus metrics** | HTTP rate, errors and latency per route pattern with the true status code; proxy (auth + rate-limit) time; business events — expenses, settlements, AI replies, receipt scans, voice parses | `npm run verify:metrics` — 15 checks; each response counted exactly once |
 | **Health probes** | `/api/health/live` (no dependencies) and `/api/health/ready` (database, 2 s timeout) | Readiness caught a real database misconfiguration on its first run |
 | **Secret scanning** | gitleaks on every commit (pre-commit hook) and over full history in CI | Working tree and history both scan clean |
-| **Docker Compose** | App, Postgres, Redis, Prometheus, Grafana, Loki, Promtail, Jenkins, SonarQube, Nexus; admin ports on 127.0.0.1 only; required secrets; pinned versions | Prometheus scrapes the app through a file-mounted token (target `up`) |
+| **Docker Compose** | App, Postgres, Redis, Prometheus, Grafana, Loki, Promtail, Jenkins, SonarQube, Nexus; admin ports on 127.0.0.1 only; required secrets; every image pinned by digest; memory limits that fit the 10 GB Docker VM | Prometheus scrapes the app through a file-mounted token (target `up`) |
 | **AWS identity** | Least-privilege IAM user for all automation; IAM actions limited to `splitx-*` names; root user protected by a security key (its two old access keys are being deleted) | `iam:ListUsers` is denied — [terraform/bootstrap](terraform/bootstrap/README.md) |
 | **Terraform** | VPC, ECR and EKS modules; subnet discovery tags match the cluster; provider lock file committed | `terraform validate` and `terraform plan` |
 | **Rate limiting** | Sliding window in Redis (one atomic Lua script), keyed by the verified signed-in user or the client IP; per-route limits; fails open with a metric when Redis is down | 200 concurrent requests against a limit of 25 admit exactly 25; with Redis stopped, requests are still served |
 | **Request tracing** | One request ID from the proxy to the route's log lines; JSON logs with pod and version for Loki | `X-Request-Id` on a response matches `requestId` in its log lines |
 | **Autoscaling load target** | `POST /api/settlements/preview` runs the real settle-up planner — pure CPU, no database — and sheds load (503) once a request has queued for 1 s | `scripts/load-preview.mjs`: CPU per request and the one-core ceiling of a single pod, recorded in [D-025](docs/DECISIONS.md) |
-| **Tests** | 671 unit tests (property-based, mutation-checked), 9 integration tests against a real Redis | CI jobs `verify` and `integration` |
+| **Container image** | Node 24 on Alpine, pinned by digest; runtime stage is Alpine plus the `node` binary — no npm, yarn or build tools; runs as a non-root user; carries its commit as OCI labels and in `splitx_app_info` | Built and measured against a deliberately naive image: 1091 MB → 81 MB to download, 4139 → 0 vulnerabilities — [docs/evidence/image-comparison.md](docs/evidence/image-comparison.md) |
+| **Tests** | 675 unit tests (property-based, mutation-checked), 9 integration tests against a real Redis | CI jobs `verify` and `integration` |
 | **Commit standards** | Husky + Commitlint enforce Conventional Commits | Git history |
 
 ### Being rebuilt, phase by phase
@@ -75,7 +76,7 @@ the alternatives rejected, and the evidence behind each claim is recorded in
 | Phase | Scope |
 |---|---|
 | ✅ 1 | Backend: settlement planner and preview API, rate limiter, request tracing, signed storage uploads, real tests — [D-018 to D-027](docs/DECISIONS.md) |
-| 2 | Docker image size and build provenance |
+| ✅ 2 | One image for every environment, measured against a naive build — [D-028 to D-031](docs/DECISIONS.md) |
 | 3–4 | Kubernetes on Kind and EKS, autoscaling driven by real traffic, k6 load tests |
 | 5 | Alertmanager, Grafana dashboards, labelled logs in Loki |
 | 6 | Jenkins pipeline that builds, scans, deploys and rolls back; GitHub Actions CD; webhooks |
@@ -95,8 +96,9 @@ the alternatives rejected, and the evidence behind each claim is recorded in
    `REDIS_URL=redis://:<REDIS_PASSWORD>@127.0.0.1:6380/15 npm run test:integration`.
 5. Prove metrics are live: `npm run verify:metrics` (point it at a single instance).
 6. Measure the load target: `node --env-file=.env scripts/load-preview.mjs <baseUrl> --sizes 100,500,1000,2000` for CPU per request, or `--members 1000 --steps 1,4,16,64` for behaviour under load (raise `RATE_LIMIT_PREVIEW_PER_MINUTE` on that instance first).
-7. Scan for secrets before pushing: `npm run scan:secrets` (the pre-commit hook scans staged changes automatically).
-8. CI (`.github/workflows/ci.yml`) type-checks, tests, lints and builds; runs the integration tests against a Redis service container; and scans every commit for secrets.
+7. Build the image with its commit baked in: `npm run image:build` (tags `splitx:<sha>` and `splitx:local`). `npm run image:report` rebuilds it next to the naive image and rewrites the comparison; `./scripts/scan-image.sh splitx:local` runs Trivy and fails on fixable HIGH/CRITICAL findings.
+8. Scan for secrets before pushing: `npm run scan:secrets` (the pre-commit hook scans staged changes automatically).
+9. CI (`.github/workflows/ci.yml`) type-checks, tests, lints and builds; runs the integration tests against a Redis service container; and scans every commit for secrets.
 
 Secrets never live in the repository: local values go in `.env`, CI values in GitHub/Jenkins credentials, cluster values in Kubernetes Secrets.
 
