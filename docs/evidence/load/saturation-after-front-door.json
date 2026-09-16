@@ -1,0 +1,773 @@
+{
+  "test": "saturation",
+  "label": "after-front-door",
+  "ranAt": "2026-09-16T20:00:54.257Z",
+  "k6ExitCode": 0,
+  "image": {
+    "gitSha": "39cc320452d1",
+    "version": "0.1.0+39cc320452d1"
+  },
+  "overlay": "k8s/overlays/saturation",
+  "settings": {
+    "k6Env": [],
+    "k6": {
+      "test": "saturation",
+      "rate": 60,
+      "members": 2000,
+      "duration": "2m"
+    },
+    "autoscaler": {
+      "min": 2,
+      "max": 2,
+      "cpuTarget": 60,
+      "behavior": {
+        "scaleDown": {
+          "policies": [
+            {
+              "periodSeconds": 60,
+              "type": "Pods",
+              "value": 1
+            }
+          ],
+          "selectPolicy": "Max",
+          "stabilizationWindowSeconds": 300
+        },
+        "scaleUp": {
+          "policies": [
+            {
+              "periodSeconds": 15,
+              "type": "Percent",
+              "value": 100
+            },
+            {
+              "periodSeconds": 15,
+              "type": "Pods",
+              "value": 4
+            }
+          ],
+          "selectPolicy": "Max",
+          "stabilizationWindowSeconds": 0
+        }
+      }
+    },
+    "config": {
+      "PREVIEW_MAX_QUEUE_MS": "1000",
+      "RATE_LIMIT_PREVIEW_NETWORK_PER_MINUTE": "1000000",
+      "RATE_LIMIT_PREVIEW_PER_MINUTE": "1000000",
+      "TRUSTED_PROXY_HOPS": "1",
+      "TRUST_UPSTREAM_REQUEST_START": "true"
+    }
+  },
+  "loadSeconds": 126,
+  "observeSeconds": 20,
+  "requests": {
+    "bucketSeconds": 10,
+    "timeline": [
+      {
+        "t": 0,
+        "requests": 28,
+        "ok": 20,
+        "limited": 0,
+        "shed": 8,
+        "other": 0,
+        "statuses": {
+          "200": 20,
+          "503": 8
+        },
+        "p50": 5.4,
+        "p95": 6.7,
+        "p99": 6.7,
+        "max": 6.7,
+        "rate": 2.8
+      },
+      {
+        "t": 30,
+        "requests": 356,
+        "ok": 271,
+        "limited": 0,
+        "shed": 85,
+        "other": 0,
+        "statuses": {
+          "200": 271,
+          "503": 85
+        },
+        "p50": 949.8,
+        "p95": 1578.4,
+        "p99": 1828,
+        "max": 1871.9,
+        "rate": 35.6
+      },
+      {
+        "t": 40,
+        "requests": 546,
+        "ok": 295,
+        "limited": 0,
+        "shed": 250,
+        "other": 1,
+        "statuses": {
+          "200": 295,
+          "502": 1,
+          "503": 250
+        },
+        "p50": 1357.9,
+        "p95": 1819.6,
+        "p99": 1906.5,
+        "max": 1970.9,
+        "rate": 54.6
+      },
+      {
+        "t": 50,
+        "requests": 631,
+        "ok": 231,
+        "limited": 0,
+        "shed": 393,
+        "other": 7,
+        "statuses": {
+          "200": 231,
+          "502": 7,
+          "503": 393
+        },
+        "p50": 1321.4,
+        "p95": 1880.1,
+        "p99": 2290.1,
+        "max": 2390.1,
+        "rate": 63.1
+      },
+      {
+        "t": 60,
+        "requests": 612,
+        "ok": 246,
+        "limited": 0,
+        "shed": 357,
+        "other": 9,
+        "statuses": {
+          "200": 246,
+          "502": 9,
+          "503": 357
+        },
+        "p50": 1301.3,
+        "p95": 1851,
+        "p99": 1934.6,
+        "max": 1961.4,
+        "rate": 61.2
+      },
+      {
+        "t": 70,
+        "requests": 619,
+        "ok": 306,
+        "limited": 0,
+        "shed": 303,
+        "other": 10,
+        "statuses": {
+          "200": 306,
+          "502": 10,
+          "503": 303
+        },
+        "p50": 1403.6,
+        "p95": 1878.8,
+        "p99": 1948.3,
+        "max": 1967.1,
+        "rate": 61.9
+      },
+      {
+        "t": 80,
+        "requests": 570,
+        "ok": 266,
+        "limited": 0,
+        "shed": 302,
+        "other": 2,
+        "statuses": {
+          "200": 266,
+          "502": 2,
+          "503": 302
+        },
+        "p50": 1386.9,
+        "p95": 2179.8,
+        "p99": 2479.1,
+        "max": 2563.6,
+        "rate": 57
+      },
+      {
+        "t": 90,
+        "requests": 567,
+        "ok": 259,
+        "limited": 0,
+        "shed": 301,
+        "other": 7,
+        "statuses": {
+          "200": 259,
+          "502": 7,
+          "503": 301
+        },
+        "p50": 1307.7,
+        "p95": 1861.3,
+        "p99": 1974.7,
+        "max": 2040.1,
+        "rate": 56.7
+      },
+      {
+        "t": 100,
+        "requests": 612,
+        "ok": 305,
+        "limited": 0,
+        "shed": 306,
+        "other": 1,
+        "statuses": {
+          "200": 305,
+          "502": 1,
+          "503": 306
+        },
+        "p50": 1424.1,
+        "p95": 1875.8,
+        "p99": 1944.1,
+        "max": 1987.9,
+        "rate": 61.2
+      },
+      {
+        "t": 110,
+        "requests": 602,
+        "ok": 272,
+        "limited": 0,
+        "shed": 328,
+        "other": 2,
+        "statuses": {
+          "200": 272,
+          "502": 2,
+          "503": 328
+        },
+        "p50": 1393.1,
+        "p95": 1996.9,
+        "p99": 2415.7,
+        "max": 2481.2,
+        "rate": 60.2
+      },
+      {
+        "t": 120,
+        "requests": 554,
+        "ok": 247,
+        "limited": 0,
+        "shed": 296,
+        "other": 11,
+        "statuses": {
+          "200": 247,
+          "502": 11,
+          "503": 296
+        },
+        "p50": 1325.2,
+        "p95": 1871.7,
+        "p99": 1938.2,
+        "max": 1965.2,
+        "rate": 55.4
+      },
+      {
+        "t": 130,
+        "requests": 584,
+        "ok": 308,
+        "limited": 0,
+        "shed": 274,
+        "other": 2,
+        "statuses": {
+          "200": 308,
+          "502": 2,
+          "503": 274
+        },
+        "p50": 1409.8,
+        "p95": 1883,
+        "p99": 1947.7,
+        "max": 1970,
+        "rate": 58.4
+      },
+      {
+        "t": 140,
+        "requests": 568,
+        "ok": 259,
+        "limited": 0,
+        "shed": 308,
+        "other": 1,
+        "statuses": {
+          "200": 259,
+          "502": 1,
+          "503": 308
+        },
+        "p50": 1325.3,
+        "p95": 1874.4,
+        "p99": 2173.1,
+        "max": 2324.3,
+        "rate": 56.8
+      },
+      {
+        "t": 150,
+        "requests": 344,
+        "ok": 149,
+        "limited": 0,
+        "shed": 194,
+        "other": 1,
+        "statuses": {
+          "200": 149,
+          "502": 1,
+          "503": 194
+        },
+        "p50": 1424.8,
+        "p95": 1905.4,
+        "p99": 1982.4,
+        "max": 1990.9,
+        "rate": 34.4
+      }
+    ],
+    "byGroup": {
+      "liveness": {
+        "requests": 241,
+        "ok": 227,
+        "limited": 0,
+        "shed": 0,
+        "other": 14,
+        "statuses": {
+          "0": 14,
+          "200": 227
+        },
+        "p50": 549,
+        "p95": 6288.1,
+        "p99": 12577.3,
+        "max": 53059.7
+      },
+      "all": {
+        "requests": 7193,
+        "ok": 3434,
+        "limited": 0,
+        "shed": 3705,
+        "other": 54,
+        "statuses": {
+          "200": 3434,
+          "502": 54,
+          "503": 3705
+        },
+        "p50": 1329.1,
+        "p95": 1883,
+        "p99": 2129.4,
+        "max": 2563.6
+      }
+    }
+  },
+  "cluster": [
+    {
+      "t": 0.3,
+      "desired": 2,
+      "current": 2,
+      "cpu": null,
+      "replicas": 2,
+      "ready": 2,
+      "pods": 2,
+      "pending": 0,
+      "restarts": 0,
+      "perNode": {
+        "splitx-worker2": 1,
+        "splitx-worker": 1
+      }
+    },
+    {
+      "t": 5.6,
+      "desired": 2,
+      "current": 2,
+      "cpu": null,
+      "replicas": 2,
+      "ready": 2,
+      "pods": 2,
+      "pending": 0,
+      "restarts": 0,
+      "perNode": {
+        "splitx-worker2": 1,
+        "splitx-worker": 1
+      }
+    },
+    {
+      "t": 11,
+      "desired": 2,
+      "current": 2,
+      "cpu": null,
+      "replicas": 2,
+      "ready": 2,
+      "pods": 2,
+      "pending": 0,
+      "restarts": 0,
+      "perNode": {
+        "splitx-worker2": 1,
+        "splitx-worker": 1
+      }
+    },
+    {
+      "t": 16.3,
+      "desired": 2,
+      "current": 2,
+      "cpu": 8,
+      "replicas": 2,
+      "ready": 2,
+      "pods": 2,
+      "pending": 0,
+      "restarts": 0,
+      "perNode": {
+        "splitx-worker2": 1,
+        "splitx-worker": 1
+      }
+    },
+    {
+      "t": 21.7,
+      "desired": 2,
+      "current": 2,
+      "cpu": 8,
+      "replicas": 2,
+      "ready": 2,
+      "pods": 2,
+      "pending": 0,
+      "restarts": 0,
+      "perNode": {
+        "splitx-worker2": 1,
+        "splitx-worker": 1
+      }
+    },
+    {
+      "t": 27,
+      "desired": 2,
+      "current": 2,
+      "cpu": 8,
+      "replicas": 2,
+      "ready": 2,
+      "pods": 2,
+      "pending": 0,
+      "restarts": 0,
+      "perNode": {
+        "splitx-worker2": 1,
+        "splitx-worker": 1
+      }
+    },
+    {
+      "t": 32.4,
+      "desired": 2,
+      "current": 2,
+      "cpu": 242,
+      "replicas": 2,
+      "ready": 2,
+      "pods": 2,
+      "pending": 0,
+      "restarts": 0,
+      "perNode": {
+        "splitx-worker2": 1,
+        "splitx-worker": 1
+      }
+    },
+    {
+      "t": 37.8,
+      "desired": 2,
+      "current": 2,
+      "cpu": 242,
+      "replicas": 2,
+      "ready": 2,
+      "pods": 2,
+      "pending": 0,
+      "restarts": 0,
+      "perNode": {
+        "splitx-worker2": 1,
+        "splitx-worker": 1
+      }
+    },
+    {
+      "t": 43.1,
+      "desired": 2,
+      "current": 2,
+      "cpu": 242,
+      "replicas": 2,
+      "ready": 2,
+      "pods": 2,
+      "pending": 0,
+      "restarts": 0,
+      "perNode": {
+        "splitx-worker2": 1,
+        "splitx-worker": 1
+      }
+    },
+    {
+      "t": 48.5,
+      "desired": 2,
+      "current": 2,
+      "cpu": null,
+      "replicas": 2,
+      "ready": 2,
+      "pods": 2,
+      "pending": 0,
+      "restarts": 0,
+      "perNode": {
+        "splitx-worker2": 1,
+        "splitx-worker": 1
+      }
+    },
+    {
+      "t": 53.9,
+      "desired": 2,
+      "current": 2,
+      "cpu": null,
+      "replicas": 2,
+      "ready": 2,
+      "pods": 2,
+      "pending": 0,
+      "restarts": 0,
+      "perNode": {
+        "splitx-worker2": 1,
+        "splitx-worker": 1
+      }
+    },
+    {
+      "t": 59.3,
+      "desired": 2,
+      "current": 2,
+      "cpu": null,
+      "replicas": 2,
+      "ready": 2,
+      "pods": 2,
+      "pending": 0,
+      "restarts": 0,
+      "perNode": {
+        "splitx-worker2": 1,
+        "splitx-worker": 1
+      }
+    },
+    {
+      "t": 64.6,
+      "desired": 2,
+      "current": 2,
+      "cpu": null,
+      "replicas": 2,
+      "ready": 2,
+      "pods": 2,
+      "pending": 0,
+      "restarts": 0,
+      "perNode": {
+        "splitx-worker2": 1,
+        "splitx-worker": 1
+      }
+    },
+    {
+      "t": 70,
+      "desired": 2,
+      "current": 2,
+      "cpu": null,
+      "replicas": 2,
+      "ready": 2,
+      "pods": 2,
+      "pending": 0,
+      "restarts": 0,
+      "perNode": {
+        "splitx-worker2": 1,
+        "splitx-worker": 1
+      }
+    },
+    {
+      "t": 75.4,
+      "desired": 2,
+      "current": 2,
+      "cpu": null,
+      "replicas": 2,
+      "ready": 2,
+      "pods": 2,
+      "pending": 0,
+      "restarts": 0,
+      "perNode": {
+        "splitx-worker2": 1,
+        "splitx-worker": 1
+      }
+    },
+    {
+      "t": 80.7,
+      "desired": 2,
+      "current": 2,
+      "cpu": null,
+      "replicas": 2,
+      "ready": 2,
+      "pods": 2,
+      "pending": 0,
+      "restarts": 0,
+      "perNode": {
+        "splitx-worker2": 1,
+        "splitx-worker": 1
+      }
+    },
+    {
+      "t": 86.1,
+      "desired": 2,
+      "current": 2,
+      "cpu": null,
+      "replicas": 2,
+      "ready": 2,
+      "pods": 2,
+      "pending": 0,
+      "restarts": 0,
+      "perNode": {
+        "splitx-worker2": 1,
+        "splitx-worker": 1
+      }
+    },
+    {
+      "t": 91.4,
+      "desired": 2,
+      "current": 2,
+      "cpu": null,
+      "replicas": 2,
+      "ready": 2,
+      "pods": 2,
+      "pending": 0,
+      "restarts": 0,
+      "perNode": {
+        "splitx-worker2": 1,
+        "splitx-worker": 1
+      }
+    },
+    {
+      "t": 96.8,
+      "desired": 2,
+      "current": 2,
+      "cpu": null,
+      "replicas": 2,
+      "ready": 1,
+      "pods": 2,
+      "pending": 0,
+      "restarts": 0,
+      "perNode": {
+        "splitx-worker2": 1,
+        "splitx-worker": 1
+      }
+    },
+    {
+      "t": 102.2,
+      "desired": 2,
+      "current": 2,
+      "cpu": null,
+      "replicas": 2,
+      "ready": 2,
+      "pods": 2,
+      "pending": 0,
+      "restarts": 0,
+      "perNode": {
+        "splitx-worker2": 1,
+        "splitx-worker": 1
+      }
+    },
+    {
+      "t": 107.5,
+      "desired": 2,
+      "current": 2,
+      "cpu": null,
+      "replicas": 2,
+      "ready": 2,
+      "pods": 2,
+      "pending": 0,
+      "restarts": 0,
+      "perNode": {
+        "splitx-worker2": 1,
+        "splitx-worker": 1
+      }
+    },
+    {
+      "t": 112.9,
+      "desired": 2,
+      "current": 2,
+      "cpu": null,
+      "replicas": 2,
+      "ready": 2,
+      "pods": 2,
+      "pending": 0,
+      "restarts": 0,
+      "perNode": {
+        "splitx-worker2": 1,
+        "splitx-worker": 1
+      }
+    },
+    {
+      "t": 118.2,
+      "desired": 2,
+      "current": 2,
+      "cpu": null,
+      "replicas": 2,
+      "ready": 2,
+      "pods": 2,
+      "pending": 0,
+      "restarts": 0,
+      "perNode": {
+        "splitx-worker2": 1,
+        "splitx-worker": 1
+      }
+    },
+    {
+      "t": 123.6,
+      "desired": 2,
+      "current": 2,
+      "cpu": null,
+      "replicas": 2,
+      "ready": 1,
+      "pods": 2,
+      "pending": 0,
+      "restarts": 0,
+      "perNode": {
+        "splitx-worker2": 1,
+        "splitx-worker": 1
+      }
+    },
+    {
+      "t": 128.9,
+      "desired": 2,
+      "current": 2,
+      "cpu": null,
+      "replicas": 2,
+      "ready": 2,
+      "pods": 2,
+      "pending": 0,
+      "restarts": 0,
+      "perNode": {
+        "splitx-worker2": 1,
+        "splitx-worker": 1
+      }
+    },
+    {
+      "t": 134.2,
+      "desired": 2,
+      "current": 2,
+      "cpu": null,
+      "replicas": 2,
+      "ready": 2,
+      "pods": 2,
+      "pending": 0,
+      "restarts": 0,
+      "perNode": {
+        "splitx-worker2": 1,
+        "splitx-worker": 1
+      }
+    },
+    {
+      "t": 139.6,
+      "desired": 2,
+      "current": 2,
+      "cpu": 390,
+      "replicas": 2,
+      "ready": 2,
+      "pods": 2,
+      "pending": 0,
+      "restarts": 0,
+      "perNode": {
+        "splitx-worker2": 1,
+        "splitx-worker": 1
+      }
+    },
+    {
+      "t": 144.9,
+      "desired": 2,
+      "current": 2,
+      "cpu": 390,
+      "replicas": 2,
+      "ready": 2,
+      "pods": 2,
+      "pending": 0,
+      "restarts": 0,
+      "perNode": {
+        "splitx-worker2": 1,
+        "splitx-worker": 1
+      }
+    }
+  ]
+}

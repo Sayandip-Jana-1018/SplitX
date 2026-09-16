@@ -25,6 +25,8 @@ that are served once the backlog builds. ([load/saturation.js](../../load/satura
 | Run | Build | Arrival rate | Served | Shed (503) | Other | Served p50 | p95 | p99 | max | Queue clock |
 |---|---|---|---|---|---|---|---|---|---|---|
 | [after-clock](load/saturation-after-clock.json) | `77178161f36c` | 60/s | 2,984 | 4,190 (58.2%) | 26 | 1337 ms | 1888 ms | 2337 ms | 74621 ms | ingress-nginx |
+| [after-front-door](load/saturation-after-front-door.json) | `39cc320452d1` | 60/s | 3,434 | 3,705 (51.5%) | 54 | 1329 ms | 1883 ms | 2129 ms | 2564 ms | ingress-nginx |
+| [after-keepalive](load/saturation-after-keepalive.json) | `39cc320452d1` | 60/s | 3,355 | 3,846 (53.4%) | 0 | 1379 ms | 1908 ms | 2291 ms | 74257 ms | ingress-nginx |
 | [after-probes](load/saturation-after-probes.json) | `77178161f36c` | 60/s | 3,145 | 4,005 (55.6%) | 51 | 1320 ms | 1915 ms | 74467 ms | 80366 ms | ingress-nginx |
 | [before](load/saturation-before.json) | `f4b2dc209824` | 60/s | 3,065 | 2,223 (33.7%) | 1,314 | 2475 ms | 26082 ms | 30749 ms | 79409 ms | app proxy |
 
