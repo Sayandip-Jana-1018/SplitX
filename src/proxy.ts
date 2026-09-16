@@ -2,11 +2,11 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 import { logger } from '@/lib/logger';
-import { recordProxyDecision, type ProxyDecision } from '@/lib/metrics';
+import { metrics, recordProxyDecision, type ProxyDecision } from '@/lib/metrics';
 import { newTraceContext, REQUEST_ID_HEADER, type TraceContext } from '@/lib/observability/trace';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { DEVICE_COOKIE, deviceCookieOptions, mintDevice, verifyDevice } from '@/lib/rateLimit/device';
-import { arrivalTime, REQUEST_START_HEADER, requestStartValue } from '@/lib/requestQueue';
+import { arrivalTime, previewMaxQueueMs, REQUEST_START_HEADER, requestStartValue } from '@/lib/requestQueue';
 
 /**
  * Next.js Proxy — runs on every matched request.
@@ -116,6 +116,23 @@ export async function proxy(request: NextRequest) {
             loginUrl.searchParams.set('callbackUrl', pathname);
             return decide(request, trace, NextResponse.redirect(loginUrl), 'redirect_login');
         }
+    }
+
+    // ── Load shedding at the front door ──
+    // A settlement preview that has already waited past its budget is refused
+    // here, before the rate limiter's Redis round trip and before its body is
+    // read. Refusing it in the route came too late: under overload the steps in
+    // front of the route were the queue, refused requests waited 22 s to hear
+    // so, and liveness probes waited behind them. Counted, not logged, so an
+    // overload cannot add a synchronous log write per refused request.
+    if (request.method === 'POST' && pathname === '/api/settlements/preview' && Date.now() - receivedAt > previewMaxQueueMs()) {
+        metrics.settlementPreviews.inc({ mode: 'unknown', outcome: 'shed' });
+        const response = NextResponse.json(
+            { success: false, error: 'SplitX is busy right now. Please try again in a moment.', code: 'OVERLOADED', requestId: trace.traceId },
+            { status: 503, headers: { 'Retry-After': '1' } }
+        );
+        applySecurityHeaders(response);
+        return decide(request, trace, response, 'shed');
     }
 
     // ── Rate Limiting ──

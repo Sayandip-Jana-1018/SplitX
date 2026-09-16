@@ -42,6 +42,12 @@ export function parseRequestStart(value: string | null | undefined): number | nu
     return null;
 }
 
+/** How long a settlement preview may wait before it is refused rather than planned. */
+export function previewMaxQueueMs() {
+    const value = Number(process.env.PREVIEW_MAX_QUEUE_MS);
+    return Number.isInteger(value) && value > 0 ? value : 1_000;
+}
+
 export function trustsUpstreamRequestStart() {
     return process.env.TRUST_UPSTREAM_REQUEST_START === 'true';
 }

@@ -188,10 +188,10 @@ export function httpMethodLabel(value: unknown) {
     return HTTP_METHODS.has(method) ? method : 'OTHER';
 }
 
-export type ProxyDecision = 'pass' | 'limiter_error' | 'redirect_login' | 'redirect_dashboard' | 'rate_limited';
+export type ProxyDecision = 'pass' | 'limiter_error' | 'redirect_login' | 'redirect_dashboard' | 'rate_limited' | 'shed';
 
 /** Decisions where the proxy writes the response itself instead of forwarding. */
-const ANSWERED_BY_PROXY = new Set<ProxyDecision>(['redirect_login', 'redirect_dashboard', 'rate_limited']);
+const ANSWERED_BY_PROXY = new Set<ProxyDecision>(['redirect_login', 'redirect_dashboard', 'rate_limited', 'shed']);
 
 /**
  * Requests the proxy answers itself (redirects, 429s) never reach a route, so
