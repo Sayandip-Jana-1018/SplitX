@@ -5,7 +5,8 @@ import { logger } from '@/lib/logger';
 import { recordProxyDecision, type ProxyDecision } from '@/lib/metrics';
 import { newTraceContext, REQUEST_ID_HEADER, type TraceContext } from '@/lib/observability/trace';
 import { checkRateLimit } from '@/lib/rateLimit';
-import { REQUEST_START_HEADER, requestStartValue } from '@/lib/requestQueue';
+import { DEVICE_COOKIE, deviceCookieOptions, mintDevice, verifyDevice } from '@/lib/rateLimit/device';
+import { arrivalTime, REQUEST_START_HEADER, requestStartValue } from '@/lib/requestQueue';
 
 /**
  * Next.js Proxy — runs on every matched request.
@@ -51,6 +52,24 @@ function forward(request: NextRequest, trace: TraceContext, receivedAt: number) 
     return NextResponse.next({ request: { headers } });
 }
 
+/** Whether the visitor's own connection is HTTPS, as reported by the proxy that terminated it. */
+function isHttps(request: NextRequest) {
+    const forwarded = request.headers.get('x-forwarded-proto')?.split(',')[0]?.trim();
+    return forwarded ? forwarded === 'https' : request.nextUrl.protocol === 'https:';
+}
+
+/**
+ * Gives an anonymous browser a signed device identity to send back, so it is
+ * rate limited as itself rather than as everyone on its network (B-015). Set on
+ * the first response of any kind; a signed-in visitor is limited by account
+ * and needs none.
+ */
+function ensureDeviceCookie(request: NextRequest, response: NextResponse) {
+    if (hasSessionToken(request) || verifyDevice(request.cookies.get(DEVICE_COOKIE)?.value)) return;
+    const value = mintDevice();
+    if (value) response.cookies.set(DEVICE_COOKIE, value, deviceCookieOptions(isHttps(request)));
+}
+
 // Set by the Kubernetes downward API. Naming the pod in each response makes load
 // balancing across replicas visible; outside Kubernetes nothing is exposed.
 const SERVED_BY = process.env.POD_NAME;
@@ -58,6 +77,7 @@ const SERVED_BY = process.env.POD_NAME;
 function decide(request: NextRequest, trace: TraceContext, response: NextResponse, decision: ProxyDecision) {
     response.headers.set(REQUEST_ID_HEADER, trace.traceId);
     if (SERVED_BY) response.headers.set('x-served-by', SERVED_BY);
+    ensureDeviceCookie(request, response);
     recordProxyDecision(decision, request.method, response.status);
     if (decision === 'redirect_login' || decision === 'redirect_dashboard' || decision === 'rate_limited') {
         // Requests answered here never reach a route, so they get their access log line here.
@@ -74,7 +94,9 @@ function decide(request: NextRequest, trace: TraceContext, response: NextRespons
 }
 
 export async function proxy(request: NextRequest) {
-    const receivedAt = Date.now();
+    // The ingress's arrival time when it is trusted to stamp one (B-016), so the
+    // wait before this proxy ran counts too.
+    const receivedAt = arrivalTime(request.headers);
     const { pathname } = request.nextUrl;
     const trace = newTraceContext();
 
@@ -132,6 +154,7 @@ export async function proxy(request: NextRequest) {
             requestId: trace.traceId,
             policy: limit.policy.name,
             identity: limit.identity.kind,
+            scope: limit.scope,
             path: pathname,
         });
     }

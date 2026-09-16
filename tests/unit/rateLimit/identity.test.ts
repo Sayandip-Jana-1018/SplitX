@@ -1,5 +1,6 @@
 import { encode } from 'next-auth/jwt';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { mintDevice } from '@/lib/rateLimit/device';
 import { clearIdentityCache, ipIdentity, resolveIdentity } from '@/lib/rateLimit/identity';
 
 const SECRET = 'test-secret-that-is-long-enough-for-hkdf-000000';
@@ -68,5 +69,50 @@ describe('resolveIdentity', () => {
         vi.stubEnv('AUTH_SECRET', '');
         vi.stubEnv('NEXTAUTH_SECRET', '');
         expect((await resolveIdentity(request(cookie), '198.51.100.7')).kind).toBe('ip');
+    });
+});
+
+describe('resolveIdentity for anonymous devices (B-015)', () => {
+    beforeEach(() => {
+        vi.stubEnv('AUTH_SECRET', SECRET);
+        clearIdentityCache();
+    });
+    afterEach(() => vi.unstubAllEnvs());
+
+    const device = () => 'sx_device=' + mintDevice();
+
+    it('counts a genuine device cookie against the device, and remembers its network', async () => {
+        const identity = await resolveIdentity(request(device()), '203.0.113.50');
+
+        expect(identity.kind).toBe('device');
+        expect(identity.key).toMatch(/^device:[0-9a-f]{32}$/);
+        expect(identity.network).toEqual(ipIdentity('203.0.113.50'));
+    });
+
+    it('gives two phones behind one NAT their own identities but the same network', async () => {
+        const a = await resolveIdentity(request(device()), '203.0.113.50');
+        const b = await resolveIdentity(request(device()), '203.0.113.50');
+
+        expect(a.key).not.toBe(b.key);
+        expect(a.network).toEqual(b.network);
+    });
+
+    it('never puts the raw device identifier in the key', async () => {
+        const value = mintDevice()!;
+        const { key } = await resolveIdentity(request('sx_device=' + value), '203.0.113.50');
+        expect(key).not.toContain(value.split('.')[0]);
+    });
+
+    it('prefers a verified session over a device cookie', async () => {
+        const cookie = (await sessionCookie({ id: 'alice' })) + '; ' + device();
+        const identity = await resolveIdentity(request(cookie), '203.0.113.50');
+
+        expect(identity.kind).toBe('user');
+        expect(identity.network).toBeUndefined();
+    });
+
+    it('treats a forged device cookie as no cookie at all', async () => {
+        const forged = 'sx_device=AAAAAAAAAAAAAAAAAAAAAA.AAAAAAAAAAAAAAAAAAAAAA';
+        expect(await resolveIdentity(request(forged), '203.0.113.50')).toEqual(ipIdentity('203.0.113.50'));
     });
 });

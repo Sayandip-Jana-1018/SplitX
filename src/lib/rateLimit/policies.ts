@@ -9,6 +9,12 @@
  *
  * Probes, scrapes and NextAuth's own session polling are never limited.
  * Limits are per minute and configurable per environment.
+ *
+ * Identity-keyed policies also carry a network ceiling. An anonymous device is
+ * limited on its own so a classroom behind one NAT is not one person (B-015),
+ * but device identities are free to mint, so the address they share keeps a
+ * limit too. The defaults are sized for a demo of about a hundred phones on one
+ * network, each planning a trip every few seconds, with room to spare.
  */
 
 export type PolicyName = 'auth' | 'preview' | 'api';
@@ -18,6 +24,8 @@ export interface RateLimitPolicy {
     limit: number;
     windowMs: number;
     keyBy: 'ip' | 'identity';
+    /** The most a whole network address may send when its requests come from anonymous devices. */
+    networkLimit?: number;
 }
 
 const MINUTE_MS = 60_000;
@@ -47,7 +55,19 @@ export function policyFor(method: string, pathname: string): RateLimitPolicy | n
     if (pathname.startsWith('/api/auth/')) return null;
 
     if (pathname === '/api/settlements/preview') {
-        return { name: 'preview', limit: perMinute('RATE_LIMIT_PREVIEW_PER_MINUTE', 60), windowMs: MINUTE_MS, keyBy: 'identity' };
+        return {
+            name: 'preview',
+            limit: perMinute('RATE_LIMIT_PREVIEW_PER_MINUTE', 60),
+            windowMs: MINUTE_MS,
+            keyBy: 'identity',
+            networkLimit: perMinute('RATE_LIMIT_PREVIEW_NETWORK_PER_MINUTE', 2_400),
+        };
     }
-    return { name: 'api', limit: perMinute('RATE_LIMIT_API_PER_MINUTE', 120), windowMs: MINUTE_MS, keyBy: 'identity' };
+    return {
+        name: 'api',
+        limit: perMinute('RATE_LIMIT_API_PER_MINUTE', 120),
+        windowMs: MINUTE_MS,
+        keyBy: 'identity',
+        networkLimit: perMinute('RATE_LIMIT_API_NETWORK_PER_MINUTE', 3_600),
+    };
 }

@@ -70,6 +70,23 @@ describe('proxy request IDs', () => {
         expect(Number(stamp!.slice(2))).toBeLessThanOrEqual(Date.now());
     });
 
+    it('keeps the ingress arrival time when the deployment trusts it (B-016)', async () => {
+        vi.stubEnv('TRUST_UPSTREAM_REQUEST_START', 'true');
+        const arrived = Date.now() - 3_210;
+        const nginxStamp = 't=' + Math.floor(arrived / 1000) + '.' + String(arrived % 1000).padStart(3, '0');
+        const res = await run('http://localhost/api/me', { 'x-request-start': nginxStamp });
+
+        expect(res.headers.get('x-middleware-request-x-request-start')).toBe('t=' + arrived);
+    });
+
+    it('still replaces an unbelievable stamp when trusting the ingress', async () => {
+        vi.stubEnv('TRUST_UPSTREAM_REQUEST_START', 'true');
+        const before = Date.now();
+        const res = await run('http://localhost/api/me', { 'x-request-start': 't=1000000000.000' });
+
+        expect(Number(res.headers.get('x-middleware-request-x-request-start')!.slice(2))).toBeGreaterThanOrEqual(before);
+    });
+
     it('names the serving pod only when running in Kubernetes', async () => {
         expect((await run('http://localhost/api/me')).headers.get('x-served-by')).toBeNull();
 

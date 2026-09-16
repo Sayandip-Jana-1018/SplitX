@@ -26,6 +26,8 @@ export type RateLimitResult =
     | { outcome: 'error'; policy: RateLimitPolicy; identity: RequestIdentity; error: unknown }
     | {
         outcome: 'allow' | 'deny';
+        /** Which limit decided: the identity's own, or its network's ceiling. */
+        scope: 'identity' | 'network';
         policy: RateLimitPolicy;
         identity: RequestIdentity;
         limit: number;
@@ -99,10 +101,35 @@ export async function checkRateLimit(request: NextRequest): Promise<RateLimitRes
             backend.hit(`${policy.name}:${identity.key}`, policy.limit, policy.windowMs, Date.now()),
             timeoutMs()
         );
-        metrics.rateLimitDuration.observe({ backend: backend.backend }, (performance.now() - started) / 1000);
         metrics.rateLimitChecks.inc({ policy: policy.name, outcome: hit.allowed ? 'allow' : 'deny' });
+
+        // An anonymous device counts against its network's ceiling as well (B-015).
+        // Only once the device itself is allowed: refused requests are not counted,
+        // so one greedy device cannot use up the allowance of everyone beside it.
+        if (hit.allowed && identity.network && policy.networkLimit) {
+            const networkHit = await withTimeout(
+                backend.hit(`${policy.name}:net:${identity.network.key}`, policy.networkLimit, policy.windowMs, Date.now()),
+                timeoutMs()
+            );
+            metrics.rateLimitChecks.inc({ policy: `${policy.name}_network`, outcome: networkHit.allowed ? 'allow' : 'deny' });
+            if (!networkHit.allowed) {
+                metrics.rateLimitDuration.observe({ backend: backend.backend }, (performance.now() - started) / 1000);
+                return {
+                    outcome: 'deny',
+                    scope: 'network',
+                    policy,
+                    identity,
+                    limit: policy.networkLimit,
+                    remaining: 0,
+                    resetMs: networkHit.resetMs,
+                };
+            }
+        }
+
+        metrics.rateLimitDuration.observe({ backend: backend.backend }, (performance.now() - started) / 1000);
         return {
             outcome: hit.allowed ? 'allow' : 'deny',
+            scope: 'identity',
             policy,
             identity,
             limit: policy.limit,
