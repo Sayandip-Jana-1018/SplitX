@@ -103,16 +103,26 @@ spec:
               path: /api/health/live
               port: http
             periodSeconds: 2
+            # The kubelet default of 1 s is shorter than a first request to a
+            # cold Next.js route can take.
+            timeoutSeconds: 3
             failureThreshold: 30
           # Liveness never touches the database: a database outage must not
-          # restart every pod in the deployment.
+          # restart every pod in the deployment. It must not restart a pod that
+          # is merely busy either. This endpoint waits on the same event loop as
+          # the work, so an overloaded pod answers it slowly, not never — and
+          # with a 3 s timeout and 3 failures, healthy containers were restarted
+          # under measured overload, killing every request they were serving
+          # (docs/evidence/load-tests.md). A hung process still fails every
+          # check and is restarted in about two minutes; readiness has taken it
+          # out of the Service long before then.
           livenessProbe:
             httpGet:
               path: /api/health/live
               port: http
             periodSeconds: 20
-            timeoutSeconds: 3
-            failureThreshold: 3
+            timeoutSeconds: 5
+            failureThreshold: 6
           # Readiness pings the database and takes the pod out of the Service
           # until it answers again. It never restarts anything.
           readinessProbe:
