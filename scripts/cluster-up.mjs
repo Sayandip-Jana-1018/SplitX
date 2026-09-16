@@ -141,8 +141,11 @@ const redisPassword = encodeURIComponent(process.env.REDIS_PASSWORD);
 const pgBase = 'postgresql://splitx:' + pgPassword + '@splitx-postgres:5432/splitx';
 
 const stringData = {
-    // Deliberately NOT the DATABASE_URL from .env: that one points at Neon, the
-    // production database. The rehearsal cluster runs its own Postgres.
+    // Built here, never read from .env. The DATABASE_URL in .env points at the
+    // Compose Postgres on localhost, which inside a pod means the pod itself —
+    // and the Neon URL sits one comment character above it in the same file, so
+    // a file edited in a hurry could otherwise aim the rehearsal cluster at the
+    // deployed site's data, including the test that scales the database to zero.
     // connection_limit is explicit because ten pods with Prisma's default pool
     // would exhaust a small database (B-010).
     DATABASE_URL: pgBase + '?connection_limit=5&pool_timeout=10',

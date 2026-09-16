@@ -18,6 +18,8 @@
     "image:build": "node scripts/image-build.mjs",
     "image:report": "node --env-file=.env scripts/image-report.mjs",
     "db:schema": "node scripts/db-schema.mjs",
+    "avatars:check": "node --env-file=.env scripts/migrate-avatars.mjs",
+    "avatars:migrate": "node --env-file=.env scripts/migrate-avatars.mjs --apply",
     "k8s:up": "node scripts/cluster-up.mjs",
     "k8s:verify": "node scripts/cluster-verify.mjs",
     "k8s:render": "kubectl kustomize k8s/overlays/aws",
