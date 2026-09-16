@@ -4,6 +4,9 @@
 #   App only: docker compose up -d
 #
 #   Required in .env: POSTGRES_PASSWORD, REDIS_PASSWORD, METRICS_TOKEN, GF_ADMIN_PASSWORD (see .env.example).
+#   Images are pinned by digest, and every service has a memory limit so the
+#   whole stack fits the 10 GB Docker VM. Build the app image with provenance
+#   using `npm run image:build`; Compose then just runs `splitx:local`.
 #   Every port except the app binds to 127.0.0.1 — admin UIs with known
 #   defaults must not be reachable from a shared network (e.g. campus wifi).
 #   Postgres/Redis use host ports 5433/6380 so they can't be shadowed by a
@@ -17,8 +20,19 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        # Filled in by `npm run image:build` (git commit, version, build time);
+        # a plain `docker compose build` leaves them unknown.
+        GIT_SHA: ${GIT_SHA:-unknown}
+        APP_VERSION: ${APP_VERSION:-dev}
+        BUILD_DATE: ${BUILD_DATE:-unknown}
     image: splitx:local
     container_name: splitx-app
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+          cpus: "2"
     ports:
       - "3000:3000"
     env_file:
@@ -52,8 +66,12 @@ services:
 
   # ── PostgreSQL (Local Development DB) ──
   postgres:
-    image: postgres:16-alpine
+    image: postgres:16-alpine@sha256:4e6e670bb069649261c9c18031f0aded7bb249a5b6664ddec29c013a89310d50
     container_name: splitx-postgres
+    deploy:
+      resources:
+        limits:
+          memory: 512m
     environment:
       POSTGRES_USER: splitx
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
@@ -75,8 +93,12 @@ services:
   # Limiter counters are ephemeral by design: no persistence, bounded memory,
   # least-recently-used keys evicted first. A restart only resets the windows.
   redis:
-    image: redis:7.4.9-alpine
+    image: redis:7.4.9-alpine@sha256:6ab0b6e7381779332f97b8ca76193e45b0756f38d4c0dcda72dbb3c32061ab99
     container_name: splitx-redis
+    deploy:
+      resources:
+        limits:
+          memory: 192m
     command:
       - redis-server
       - --requirepass
@@ -104,8 +126,12 @@ services:
 
   # ── Prometheus (Metrics Collection) ──
   prometheus:
-    image: prom/prometheus:v3.4.1
+    image: prom/prometheus:v3.4.1@sha256:9abc6cf6aea7710d163dbb28d8eeb7dc5baef01e38fa4cd146a406dd9f07f70d
     container_name: splitx-prometheus
+    deploy:
+      resources:
+        limits:
+          memory: 768m
     profiles: ["monitoring"]
     ports:
       - "127.0.0.1:9090:9090"
@@ -127,8 +153,12 @@ services:
 
   # ── Grafana (Dashboards & Visualization) ──
   grafana:
-    image: grafana/grafana:11.6.1
+    image: grafana/grafana:11.6.1@sha256:52c3e20686b860c6dc1f623811565773cf51eefa378817a4896dfc863c3c82c8
     container_name: splitx-grafana
+    deploy:
+      resources:
+        limits:
+          memory: 384m
     profiles: ["monitoring"]
     ports:
       - "127.0.0.1:3001:3000"
@@ -150,8 +180,12 @@ services:
 
   # ── Loki (Log Aggregation Database) ──
   loki:
-    image: grafana/loki:3.4.2
+    image: grafana/loki:3.4.2@sha256:58a6c186ce78ba04d58bfe2a927eff296ba733a430df09645d56cdc158f3ba08
     container_name: splitx-loki
+    deploy:
+      resources:
+        limits:
+          memory: 512m
     profiles: ["monitoring"]
     ports:
       - "127.0.0.1:3100:3100"
@@ -171,8 +205,12 @@ services:
 
   # ── Promtail (Log Collector Agent) ──
   promtail:
-    image: grafana/promtail:3.4.2
+    image: grafana/promtail:3.4.2@sha256:c6e9a987ca086cbfef945b8ebd708eb09f98b5e78bfb659e4e5a8b3bd604d11b
     container_name: splitx-promtail
+    deploy:
+      resources:
+        limits:
+          memory: 128m
     profiles: ["monitoring"]
     user: root
     volumes:
@@ -193,6 +231,10 @@ services:
       context: ./jenkins
       dockerfile: Dockerfile.jenkins
     container_name: splitx-jenkins
+    deploy:
+      resources:
+        limits:
+          memory: 2g
     profiles: ["ci"]
     ports:
       - "127.0.0.1:8080:8080"
@@ -210,6 +252,10 @@ services:
   sonarqube:
     image: sonarqube:10.7.0-community
     container_name: splitx-sonarqube
+    deploy:
+      resources:
+        limits:
+          memory: 3g
     profiles: ["ci"]
     ports:
       - "127.0.0.1:9000:9000"
@@ -227,6 +273,10 @@ services:
   nexus:
     image: sonatype/nexus3:3.92.0
     container_name: splitx-nexus
+    deploy:
+      resources:
+        limits:
+          memory: 2g
     profiles: ["ci"]
     ports:
       - "127.0.0.1:8081:8081"
@@ -239,7 +289,6 @@ services:
 
 volumes:
   postgres_data:
-  redis_data:
   prometheus_data:
   grafana_data:
   loki_data:

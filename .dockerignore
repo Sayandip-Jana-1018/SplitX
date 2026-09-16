@@ -1,13 +1,46 @@
+# The build context is only what `npm ci` and `next build` read. Everything
+# else stays out, so no secret can reach an image and an unrelated change
+# (a README edit, a Helm value, a test) doesn't invalidate the build cache.
+
+# Secrets and local state
+.env*
+.claude
 .git
-.github
 .next
 node_modules
-npm-debug.log
-Dockerfile
-docker-compose.yml
-.env*
-!.env.example
 coverage
-tests
-README.md
+tsconfig.tsbuildinfo
+npm-debug.log
+.buildx-cache
+reports
+
+# User uploads live in Supabase Storage, never in an image
 public/uploads
+
+# Not part of the application build
+.github
+.husky
+tests
+docs
+scripts
+k8s
+helm
+argocd
+terraform
+monitoring
+jenkins
+synopsis
+*.md
+*.html
+Dockerfile*
+docker-bake.hcl
+docker-compose.yml
+.dockerignore
+.gitattributes
+.gitignore
+.gitleaks.toml
+.gitleaksignore
+commitlint.config.js
+eslint.config.mjs
+sonar-project.properties
+vitest.config.mts
