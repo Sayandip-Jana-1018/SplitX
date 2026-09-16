@@ -313,7 +313,15 @@ record(
 );
 k(['scale', 'statefulset/splitx-postgres', '--replicas=1']);
 k(['rollout', 'status', 'statefulset/splitx-postgres', '--timeout=180s']);
-const recovered = await waitFor(async () => ((await status('/api/health/live')) === 200 && (await status('/')) === 200 ? true : null), { timeoutMs: 180_000 });
+// Every replica, not just the first one to answer: Prisma reconnects lazily,
+// so a pod can still be failing readiness while its neighbour is already
+// serving. Starting the next test from a half-recovered deployment would
+// measure the recovery, not the release.
+const recovered = await waitFor(async () => {
+    const deployment = json(['get', 'deployment', 'splitx', '-n', NS]);
+    const allReady = deployment.status?.readyReplicas === deployment.spec.replicas;
+    return allReady && (await status('/api/health/live')) === 200 && (await status('/')) === 200 ? true : null;
+}, { timeoutMs: 180_000 });
 const restartsAfter = appPods().map((p) => p.status.containerStatuses[0].restartCount).reduce((a, b) => a + b, 0);
 record(
     'The same pods serve again once the database is back',
@@ -342,7 +350,7 @@ sections.push({
 // ── 8. A release under traffic ────────────────────────────────────────────
 console.log('[8] Rolling restart under continuous traffic');
 const before = new Set(appPods().map((p) => p.metadata.name));
-const traffic = { total: 0, ok: 0, notOk: 0, failed: 0, pods: new Map() };
+const traffic = { total: 0, ok: 0, notOk: 0, failed: 0, pods: new Map(), codes: new Map() };
 let hammering = true;
 
 async function hammer() {
@@ -356,6 +364,9 @@ async function hammer() {
                 traffic.pods.set(body.pod, (traffic.pods.get(body.pod) ?? 0) + 1);
             } else {
                 traffic.notOk += 1;
+                // Which code it is matters: 503 means the Service had no ready
+                // endpoint, 502 means nginx reached a pod that had already gone.
+                traffic.codes.set(response.status, (traffic.codes.get(response.status) ?? 0) + 1);
                 await response.text();
             }
         } catch {
@@ -383,16 +394,27 @@ record(
     'No request was lost while every pod was replaced',
     traffic.notOk === 0 && traffic.failed === 0,
     traffic.total + ' requests in ' + rolloutSeconds + ' s: ' + traffic.ok + ' OK, ' + traffic.notOk + ' non-200, ' + traffic.failed + ' failed'
+        + (traffic.codes.size ? ' [' + [...traffic.codes.entries()].map(([code, n]) => code + ' x' + n).join(', ') + ']' : '')
 );
 const servedBy = [...traffic.pods.entries()].sort((a, b) => b[1] - a[1]);
-// Which pod answers a given request is nginx's decision, and with keep-alive
-// connections a short rollout can be served almost entirely by one upstream.
-// What has to be true afterwards is that traffic is on the new generation.
-const settled = await (await fetch(BASE + '/api/health/live')).json();
+// For a few seconds after Kubernetes calls the rollout complete, ingress-nginx
+// still holds connections to the pods that are draining — which is exactly what
+// the preStop delay keeps alive, and those requests are answered normally. What
+// has to be true is that traffic moves off them promptly.
+let lastPod = null;
+const drainStarted = Date.now();
+const settled = await waitFor(async () => {
+    const body = await (await fetch(BASE + '/api/health/live')).json();
+    lastPod = body.pod;
+    return after.has(body.pod) ? body.pod : null;
+}, { timeoutMs: 45_000, everyMs: 500 });
+const drainMs = Date.now() - drainStarted;
 record(
-    'Traffic ends up on the new pods',
-    after.has(settled.pod),
-    'served by ' + settled.pod + '; ' + servedBy.length + ' distinct pod(s) answered during the release'
+    'Traffic settles on the new pods',
+    settled !== null,
+    settled
+        ? 'within ' + drainMs + ' ms of the rollout completing; ' + servedBy.length + ' pod(s) answered during it'
+        : 'still answered by ' + lastPod + ' after 45 s'
 );
 sections.push({
     title: 'A release with no dropped requests',
@@ -406,9 +428,10 @@ sections.push({
         '|---|---|',
         '| Requests during the release | ' + traffic.total + ' in ' + rolloutSeconds + ' s |',
         '| HTTP 200 | ' + traffic.ok + ' |',
-        '| Non-200 responses | ' + traffic.notOk + ' |',
+        '| Non-200 responses | ' + traffic.notOk + (traffic.codes.size ? ' (' + [...traffic.codes.entries()].map(([code, n]) => n + ' x HTTP ' + code).join(', ') + ')' : '') + ' |',
         '| Connection failures | ' + traffic.failed + ' |',
         '| Pods that answered | ' + servedBy.length + ' |',
+        '| Traffic fully on the new pods | ' + (settled ? drainMs + ' ms after the rollout reported complete' : 'not within 45 s') + ' |',
         '',
         'Requests answered per pod (the name comes from the pod itself, through the downward API).',
         'nginx reuses upstream connections, so a short rollout can be served mostly by one pod; what',

@@ -802,11 +802,33 @@ notices the endpoint is gone.
 Measured during `kubectl rollout restart` with four concurrent clients:
 
 ```
-3541 requests in 6.9 s — 3541 OK, 0 non-200, 0 connection failures
+3090 requests in 6.9 s — 3090 OK, 0 non-200, 0 connection failures
+traffic fully on the new pods 11 ms after the rollout reported complete
 ```
 
 Three distinct pods answered during the release, which is what shows the traffic
 actually moved rather than the test finishing before the rollout started.
+
+**The test earned its place on its second run.** It reported 40 non-200
+responses out of 2061, where earlier runs had reported none. The cause was not
+the release: the check that the database had recovered from the previous test
+waited for a single 200, and one pod answering is not the same as the
+deployment being available again. Prisma reconnects lazily, so the other
+replica was still failing readiness while the rollout began — a release into a
+fleet that was still recovering. The check now waits for `readyReplicas` to
+equal the desired count, and the same rollout loses nothing.
+
+That is worth more than a green tick: **do not start a release while the fleet
+is still recovering from something else**, and a deploy pipeline that only
+checks "is one instance answering" will do exactly that. Phase 6's pipeline
+gates on the same condition.
+
+A second observation from the same test: for a few seconds after Kubernetes
+reports the rollout complete, ingress-nginx still sends some requests to pods
+that are draining. Those requests are answered normally, because the `preStop`
+delay is keeping the container alive on purpose — that is the mechanism working,
+not a leak. The check measures how long traffic takes to move off them (11 ms
+here) rather than demanding an instant cutover that no proxy performs.
 
 ### D-039 · The autoscaler scales on CPU only
 **2026-09-16** · ✅ done
