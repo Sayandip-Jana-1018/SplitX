@@ -1,40 +1,50 @@
 #!/usr/bin/env node
 /**
  * Moves profile photos that are stored as `data:` text in the database into
- * Supabase Storage, and points the profile at the stored object instead.
+ * Supabase Storage, and points each profile at the stored object instead.
  *
- *   npm run avatars:check     report only
- *   npm run avatars:migrate   make the change
- *
- * Which database it touches: MIGRATION_DATABASE_URL if it is set, otherwise
- * DATABASE_URL. The local .env points DATABASE_URL at the Compose Postgres, so
- * to clean up the deployed site's profiles put the Neon URL in
- * MIGRATION_DATABASE_URL — the script prints the database it is connected to
- * before it touches anything, and reports only unless given --apply.
+ *   npm run avatars:check                  report only
+ *   npm run avatars:migrate                make the change
+ *   ... -- --https                         reach Neon over port 443 instead of 5432
  *
  * Why this exists (B-018): an avatar kept as a data URL is carried, in full, in
  * every API response that includes that user — group members, expense payers,
- * settlement participants. A 200 KB photo becomes 200 KB on every page that
- * mentions them, for everyone in the group, forever.
+ * settlement participants. The one found in production is 847 KB of text.
+ *
+ * Which database: MIGRATION_DATABASE_URL if set, otherwise DATABASE_URL. The
+ * local .env points DATABASE_URL at the Compose Postgres, so cleaning up the
+ * deployed site means putting the Neon URL in MIGRATION_DATABASE_URL. The
+ * script names the database it reached before it touches anything.
+ *
+ * --https: some networks (this project's development network among them) block
+ * outbound 5432. Neon also accepts SQL over HTTPS; this speaks that protocol
+ * with plain fetch — the endpoint is the connection host with its first label
+ * replaced by "api", the connection string travels in a header, and parameters
+ * are bound server-side exactly as they are over the Postgres protocol.
  *
  * Safety:
  *   • nothing is written without --apply
- *   • the old value is saved to a backup file before any row is updated
- *   • the image type is taken from the bytes, not from the data URL's own
- *     claim, and anything that is not a real JPEG, PNG, WebP or GIF is skipped
- *   • uploads never overwrite: each object gets a fresh random name
+ *   • the old value is saved to a backup file before any row changes
+ *   • the image type comes from the bytes, never from the data URL's own claim
+ *   • uploads never overwrite, and the row update only applies if the profile
+ *     still holds a data: avatar — otherwise the new upload is removed again
  */
 import { randomUUID } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { PrismaClient } from '@prisma/client';
 import { createClient } from '@supabase/supabase-js';
 
 const apply = process.argv.includes('--apply');
+const overHttps = process.argv.includes('--https');
 const BUCKET = 'receipts';
 const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 const EXTENSIONS = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif' };
+
+function fail(message) {
+    console.error(message);
+    process.exit(1);
+}
 
 function sniffImageType(bytes) {
     const startsWith = (signature, offset = 0) => signature.every((byte, i) => bytes[offset + i] === byte);
@@ -45,98 +55,126 @@ function sniffImageType(bytes) {
     return null;
 }
 
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-if (!url || !key) {
-    console.error('NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are needed. Run with --env-file=.env');
-    process.exit(1);
-}
-
 const connectionString = process.env.MIGRATION_DATABASE_URL || process.env.DATABASE_URL;
-if (!connectionString) {
-    console.error('No MIGRATION_DATABASE_URL or DATABASE_URL. Run with --env-file=.env');
-    process.exit(1);
+if (!connectionString) fail('No MIGRATION_DATABASE_URL or DATABASE_URL. Run with --env-file=.env');
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+if (!supabaseUrl || !supabaseKey) fail('NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are needed.');
+
+async function openDatabase() {
+    const host = new URL(connectionString).hostname;
+    if (overHttps) {
+        const endpoint = 'https://api.' + host.slice(host.indexOf('.') + 1) + '/sql';
+        const call = async (query, params) => {
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: {
+                    'content-type': 'application/json',
+                    'Neon-Connection-String': connectionString,
+                    'Neon-Raw-Text-Output': 'true',
+                    'Neon-Array-Mode': 'false',
+                },
+                body: JSON.stringify({ query, params }),
+            });
+            const body = await response.json();
+            if (!response.ok) throw new Error('Neon refused the query: ' + (body.message ?? 'HTTP ' + response.status));
+            return body;
+        };
+        return {
+            label: host + ' (SQL over HTTPS, port 443)',
+            query: async (query, params = []) => (await call(query, params)).rows,
+            execute: async (query, params = []) => Number((await call(query, params)).rowCount),
+            close: async () => {},
+        };
+    }
+    const { PrismaClient } = await import('@prisma/client');
+    const prisma = new PrismaClient({ datasources: { db: { url: connectionString } } });
+    return {
+        label: host + ' (Postgres protocol, port 5432)',
+        query: (query, params = []) => prisma.$queryRawUnsafe(query, ...params),
+        execute: (query, params = []) => prisma.$executeRawUnsafe(query, ...params),
+        close: () => prisma.$disconnect(),
+    };
 }
-const prisma = new PrismaClient({ datasources: { db: { url: connectionString } } });
 
-// Say out loud which database this is before touching it: the difference
-// between the Compose Postgres and Neon is one environment variable.
-const [where] = await prisma.$queryRaw`SELECT current_database() AS db, inet_server_addr()::text AS addr`;
-const host = (() => {
-    // No regex: the host is between the credentials and the database name.
-    const at = connectionString.indexOf('@');
-    if (at < 0) return 'unknown';
-    const rest = connectionString.slice(at + 1);
-    const end = rest.search(/[:/?]/);
-    return end < 0 ? rest : rest.slice(0, end);
-})();
-console.log('Connected to database "' + where.db + '" on ' + host + (apply ? '  — WILL WRITE' : '  — read only'));
+const db = await openDatabase();
+const bucket = createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false } }).storage.from(BUCKET);
 
-const bucket = createClient(url, key, { auth: { persistSession: false } }).storage.from(BUCKET);
+try {
+    const [where] = await db.query('SELECT current_database() AS db');
+    console.log('Connected to database "' + where.db + '" on ' + db.label + (apply ? ' — WILL WRITE' : ' — read only'));
 
-const rows = await prisma.$queryRaw`
-    SELECT id, email, image FROM "User" WHERE image LIKE 'data:%' ORDER BY id
-`;
+    const rows = await db.query('SELECT id, image FROM "User" WHERE image LIKE \'data:%\' ORDER BY id');
+    console.log(rows.length + ' profile(s) hold an avatar as data: text' + (apply ? '' : ' (pass --apply to move them)'));
+    if (rows.length === 0) process.exit(0);
 
-console.log(rows.length + ' profile(s) hold an avatar as data: text' + (apply ? '' : '  (reporting only — pass --apply to change them)'));
-if (rows.length === 0) {
-    await prisma.$disconnect();
-    process.exit(0);
-}
-
-const backupPath = join(tmpdir(), 'splitx-avatar-backup-' + Date.now() + '.json');
-writeFileSync(backupPath, JSON.stringify(rows.map((r) => ({ id: r.id, image: r.image })), null, 2));
-console.log('Previous values saved to ' + backupPath);
-
-let moved = 0;
-let skipped = 0;
-
-for (const row of rows) {
-    const match = /^data:([^;,]+)(;base64)?,(.*)$/s.exec(row.image);
-    if (!match || !match[2]) {
-        console.log('  skip ' + row.id + ': not a base64 data URL');
-        skipped += 1;
-        continue;
+    if (apply) {
+        const backupPath = join(tmpdir(), 'splitx-avatar-backup-' + Date.now() + '.json');
+        writeFileSync(backupPath, JSON.stringify(rows.map((row) => ({ id: row.id, image: row.image })), null, 2));
+        console.log('Previous values saved to ' + backupPath);
     }
-    const declared = match[1];
-    const bytes = Buffer.from(match[3], 'base64');
-    const actual = sniffImageType(bytes);
-    const summary = row.id + '  ' + (row.image.length / 1024).toFixed(0) + ' KB of text, '
-        + (bytes.length / 1024).toFixed(0) + ' KB decoded, declared ' + declared + ', actually ' + (actual ?? 'not an image');
 
-    if (!actual) {
-        console.log('  skip ' + summary);
-        skipped += 1;
-        continue;
-    }
-    if (bytes.length > MAX_AVATAR_BYTES) {
-        console.log('  skip ' + summary + ' — over the 2 MB avatar limit');
-        skipped += 1;
-        continue;
-    }
-    if (!apply) {
-        console.log('  would move ' + summary);
+    let moved = 0;
+    let skipped = 0;
+    for (const row of rows) {
+        const match = /^data:([^;,]+)(;base64)?,(.*)$/s.exec(row.image);
+        if (!match || !match[2]) {
+            console.log('  skip ' + row.id + ': not a base64 data URL');
+            skipped += 1;
+            continue;
+        }
+        const bytes = Buffer.from(match[3], 'base64');
+        const actual = sniffImageType(bytes);
+        const summary = row.id + ': ' + Math.round(row.image.length / 1024) + ' KB of text, '
+            + Math.round(bytes.length / 1024) + ' KB of image, declared ' + match[1] + ', actually ' + (actual ?? 'not an image');
+
+        if (!actual || bytes.length > MAX_AVATAR_BYTES) {
+            console.log('  skip ' + summary + (actual ? ' (over the 2 MB avatar limit)' : ''));
+            skipped += 1;
+            continue;
+        }
+        if (!apply) {
+            console.log('  would move ' + summary);
+            moved += 1;
+            continue;
+        }
+
+        const path = 'avatars/' + row.id + '/' + randomUUID() + '.' + EXTENSIONS[actual];
+        const uploaded = await bucket.upload(path, bytes, { contentType: actual, cacheControl: '31536000', upsert: false });
+        if (uploaded.error) {
+            console.log('  FAILED to upload ' + row.id + ': ' + uploaded.error.message);
+            skipped += 1;
+            continue;
+        }
+        const publicUrl = bucket.getPublicUrl(path).data.publicUrl;
+        // Only if the profile still holds a data: avatar — someone may have
+        // uploaded a new photo since the row was read.
+        const changed = await db.execute(
+            'UPDATE "User" SET image = $1 WHERE id = $2 AND image LIKE \'data:%\'',
+            [publicUrl, row.id]
+        );
+        if (changed !== 1) {
+            await bucket.remove([path]);
+            console.log('  skip ' + row.id + ': the profile changed while this ran; upload removed');
+            skipped += 1;
+            continue;
+        }
+
+        // Prove the replacement actually serves the same image before calling it done.
+        const served = await fetch(publicUrl);
+        const servedBytes = Buffer.from(await served.arrayBuffer());
+        const identical = served.ok && servedBytes.equals(bytes);
+        console.log('  moved ' + summary);
+        console.log('    now ' + publicUrl);
+        console.log('    served: HTTP ' + served.status + ', ' + served.headers.get('content-type') + ', ' + servedBytes.length + ' bytes, ' + (identical ? 'byte-identical to the original' : 'DIFFERENT from the original'));
         moved += 1;
-        continue;
     }
 
-    const path = 'avatars/' + row.id + '/' + randomUUID() + '.' + EXTENSIONS[actual];
-    const uploaded = await bucket.upload(path, bytes, { contentType: actual, cacheControl: '31536000', upsert: false });
-    if (uploaded.error) {
-        console.log('  FAILED ' + row.id + ': ' + uploaded.error.message);
-        skipped += 1;
-        continue;
+    console.log((apply ? 'Moved ' : 'Would move ') + moved + ', skipped ' + skipped + '.');
+    if (apply) {
+        const [left] = await db.query('SELECT count(*)::int AS n FROM "User" WHERE image LIKE \'data:%\'');
+        console.log(left.n + ' profile(s) still hold a data: avatar.');
     }
-    const publicUrl = bucket.getPublicUrl(path).data.publicUrl;
-    await prisma.user.update({ where: { id: row.id }, data: { image: publicUrl } });
-    console.log('  moved ' + summary);
-    console.log('        -> ' + publicUrl);
-    moved += 1;
+} finally {
+    await db.close();
 }
-
-console.log((apply ? 'Moved ' : 'Would move ') + moved + ', skipped ' + skipped + '.');
-if (apply && moved > 0) {
-    const left = await prisma.$queryRaw`SELECT count(*)::int AS n FROM "User" WHERE image LIKE 'data:%'`;
-    console.log(left[0].n + ' profile(s) still hold a data: avatar.');
-}
-await prisma.$disconnect();
