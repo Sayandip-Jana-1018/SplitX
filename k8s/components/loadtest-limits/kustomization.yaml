@@ -1,0 +1,20 @@
+# ═══════════════════════════════════════════════════════════════
+#   Rate limits lifted, for load tests that exist to exercise CPU and the
+#   autoscaler rather than the limiter.
+#
+#   A load generator is one network address making far more requests than
+#   any real visitor or classroom. Under production limits it would measure
+#   the rate limiter doing its job. The limiter has its own test with
+#   production limits (load/classroom.js); this component is only ever
+#   applied by scripts/load-run.mjs, which puts the local overlay back when
+#   the test ends.
+# ═══════════════════════════════════════════════════════════════
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+configMapGenerator:
+  - name: splitx-config
+    behavior: merge
+    literals:
+      - RATE_LIMIT_PREVIEW_PER_MINUTE=1000000
+      - RATE_LIMIT_PREVIEW_NETWORK_PER_MINUTE=1000000

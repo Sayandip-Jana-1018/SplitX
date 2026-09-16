@@ -1,0 +1,10 @@
+# The local cluster with rate limits lifted: load/staircase.js drives the
+# autoscaler from 2 to 10 pods through this overlay.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../local
+
+components:
+  - ../../components/loadtest-limits

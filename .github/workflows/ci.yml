@@ -138,7 +138,7 @@ jobs:
 
       - name: Render and validate both overlays
         run: |
-          for overlay in local aws; do
+          for overlay in local aws loadtest saturation; do
             echo "── $overlay ──"
             kubectl kustomize "k8s/overlays/$overlay" > "/tmp/$overlay.yaml"
             docker run --rm -i "$KUBECONFORM" \
