@@ -186,6 +186,29 @@ kubectl(['-n', NAMESPACE, 'rollout', 'status', 'deployment/splitx-redis', '--tim
 kubectl(['-n', NAMESPACE, 'wait', '--for=condition=complete', 'job/splitx-schema-init', '--timeout=240s']);
 kubectl(['-n', NAMESPACE, 'rollout', 'status', 'deployment/splitx', '--timeout=300s']);
 
+heading('Are the pods running the image just loaded?');
+// The local overlay deploys a tag, splitx:local, and a new build is loaded under
+// that same tag. Nothing in the Deployment changes, so Kubernetes has no reason
+// to replace a pod, and the old build keeps serving while this script reports
+// success. It happened: a fix was "deployed" and measured without running.
+// The node's containerd and the pods use the same image-ID scheme, so compare
+// those and roll the deployment when they differ.
+const nodeImage = run('docker', ['exec', CLUSTER + '-worker', 'crictl', 'inspecti', '-o', 'json', 'docker.io/library/' + IMAGE], { capture: true, allowFailure: true });
+const loadedId = nodeImage.code === 0 ? JSON.parse(nodeImage.stdout).status?.id : null;
+const runningIds = [...new Set(JSON.parse(kubectl(['-n', NAMESPACE, 'get', 'pods', '-l', 'app.kubernetes.io/name=splitx', '-o', 'json'], { capture: true }).stdout).items
+    .filter((pod) => !pod.metadata.deletionTimestamp)
+    .map((pod) => pod.status.containerStatuses?.[0]?.imageID))];
+if (!loadedId) {
+    console.log('    could not read the loaded image ID from the node; restarting to be sure');
+}
+if (!loadedId || runningIds.some((id) => id !== loadedId)) {
+    console.log('    pods run ' + runningIds.map((id) => String(id).slice(7, 19)).join(', ') + ', the node has ' + String(loadedId).slice(7, 19) + ': rolling the deployment');
+    kubectl(['-n', NAMESPACE, 'rollout', 'restart', 'deployment/splitx'], { capture: true });
+    kubectl(['-n', NAMESPACE, 'rollout', 'status', 'deployment/splitx', '--timeout=300s']);
+} else {
+    console.log('    yes: ' + loadedId.slice(7, 19));
+}
+
 heading('Can the pods open new connections?');
 // Readiness can pass on connections a pod opened before something broke, so it
 // cannot answer this. After a host restart Kind's network-policy engine can keep
