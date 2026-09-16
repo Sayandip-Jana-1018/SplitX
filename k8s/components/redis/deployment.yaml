@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: splitx-redis
+  labels:
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/component: rate-limit
+    app.kubernetes.io/part-of: splitx
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: redis
+  strategy:
+    # One instance holds the rate-limit windows. Replacing it before the old one
+    # is gone would mean two counters for the same key for a moment.
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: redis
+        app.kubernetes.io/component: rate-limit
+        app.kubernetes.io/part-of: splitx
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999           # the redis user inside redis:7.4-alpine
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: redis
+          image: redis:7.4.9-alpine@sha256:6ab0b6e7381779332f97b8ca76193e45b0756f38d4c0dcda72dbb3c32061ab99
+          # The password is written to a file the process reads, never passed as
+          # an argument: anything on the command line is visible to every
+          # process in the container and in `kubectl describe`.
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+              umask 077
+              printf 'requirepass %s\n' "$REDIS_PASSWORD" > /tmp/redis.conf
+              exec redis-server /tmp/redis.conf \
+                --maxmemory 128mb \
+                --maxmemory-policy allkeys-lru \
+                --save '' \
+                --appendonly no
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: splitx-secrets
+                  key: REDIS_PASSWORD
+            # redis-cli reads this, so the probes need no password on their
+            # command line either.
+            - name: REDISCLI_AUTH
+              valueFrom:
+                secretKeyRef:
+                  name: splitx-secrets
+                  key: REDIS_PASSWORD
+          ports:
+            - name: redis
+              containerPort: 6379
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 192Mi
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 10
+            periodSeconds: 20
+      volumes:
+        # Rate-limit counters are deliberately not persisted: a restart resets
+        # the windows, which costs one minute of history and no data.
+        - name: tmp
+          emptyDir:
+            sizeLimit: 8Mi

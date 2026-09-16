@@ -1,0 +1,31 @@
+{
+  "_comment": [
+    "Third-party charts the platform installs, pinned to an exact version.",
+    "scripts/cluster-up.mjs reads this file; nothing is installed from an",
+    "unpinned `helm install` in a script or a README, so the rehearsal cluster",
+    "and the graded demo get identical components. Phase 5 adds the",
+    "monitoring charts here."
+  ],
+  "charts": [
+    {
+      "release": "ingress-nginx",
+      "repo": "https://kubernetes.github.io/ingress-nginx",
+      "chart": "ingress-nginx/ingress-nginx",
+      "version": "4.15.1",
+      "appVersion": "1.15.1",
+      "namespace": "ingress-nginx",
+      "values": "helm/platform/ingress-nginx.values.yaml",
+      "why": "Turns Ingress objects into a real HTTP entry point on 80/443."
+    },
+    {
+      "release": "metrics-server",
+      "repo": "https://kubernetes-sigs.github.io/metrics-server/",
+      "chart": "metrics-server/metrics-server",
+      "version": "3.14.0",
+      "appVersion": "0.9.0",
+      "namespace": "kube-system",
+      "values": "helm/platform/metrics-server.values.yaml",
+      "why": "Supplies the CPU readings the HorizontalPodAutoscaler scales on."
+    }
+  ]
+}

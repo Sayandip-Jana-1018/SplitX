@@ -1,0 +1,25 @@
+# ═══════════════════════════════════════════════════════════════
+#   Local overlay — the Kind rehearsal cluster.
+#
+#   Self-contained on purpose: its own Postgres and Redis, so the whole
+#   platform can be rehearsed with no network, no AWS and no cost. The
+#   image is the one built by `npm run image:build` and loaded into the
+#   nodes with `kind load`, which is why it is never pulled.
+#
+#   Apply with: npm run k8s:up  (or kubectl apply -k k8s/overlays/local)
+# ═══════════════════════════════════════════════════════════════
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: splitx
+
+resources:
+  - ../../base
+
+components:
+  - ../../components/postgres
+  - ../../components/redis
+
+images:
+  - name: splitx
+    newTag: local

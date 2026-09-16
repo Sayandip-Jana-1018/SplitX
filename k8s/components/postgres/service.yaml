@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: splitx-postgres
+  labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/part-of: splitx
+spec:
+  # Headless, as a StatefulSet's governing Service must be: DNS answers with the
+  # pod's own address, so a client always reaches the one real database.
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres

@@ -1,0 +1,23 @@
+# ═══════════════════════════════════════════════════════════════
+#   metrics-server — the source the HorizontalPodAutoscaler reads.
+#
+#   Without it, `kubectl top` and every CPU-based HPA report <unknown> and
+#   nothing ever scales. EKS ships it as a managed add-on; Kind does not,
+#   so the rehearsal cluster installs the same chart.
+# ═══════════════════════════════════════════════════════════════
+args:
+  # Kind's kubelets serve metrics with a self-signed certificate that the
+  # cluster CA did not issue. This is the one place the rehearsal cluster
+  # differs from EKS, where the kubelet certificates are signed properly —
+  # and it is why the flag is here in a values file rather than hidden in a
+  # script: it must NOT be carried over to AWS.
+  - --kubelet-insecure-tls
+  # Report faster than the 60 s default so the autoscaler reacts to a burst
+  # within one scaling window instead of two.
+  - --metric-resolution=15s
+resources:
+  requests:
+    cpu: 50m
+    memory: 96Mi
+  limits:
+    memory: 192Mi

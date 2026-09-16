@@ -1,0 +1,37 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: splitx-internal
+  labels:
+    app.kubernetes.io/name: splitx
+    app.kubernetes.io/part-of: splitx
+  annotations:
+    # Operational endpoints are not for the internet. nginx matches the more
+    # specific location first, so these two paths are refused (403) for every
+    # source address outside the loopback range — which nothing outside the
+    # controller can be. Prometheus scrapes the pods through the Service
+    # instead, and the kubelet probes them directly, so neither is affected.
+    #
+    # /api/metrics also checks a bearer token; this is the second lock, and it
+    # is what keeps readiness — which queries the database on every request —
+    # from being reachable from outside the cluster (B-011).
+    nginx.ingress.kubernetes.io/whitelist-source-range: "127.0.0.1/32"
+spec:
+  ingressClassName: nginx
+  rules:
+    - http:
+        paths:
+          - path: /api/metrics
+            pathType: Exact
+            backend:
+              service:
+                name: splitx
+                port:
+                  name: http
+          - path: /api/health/ready
+            pathType: Exact
+            backend:
+              service:
+                name: splitx
+                port:
+                  name: http

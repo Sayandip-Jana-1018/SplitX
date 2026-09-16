@@ -1,0 +1,51 @@
+# ═══════════════════════════════════════════════════════════════
+#   ingress-nginx on Kind.
+#
+#   The controller runs on the control-plane node and publishes 80/443 as
+#   host ports; the Kind cluster maps those out to Windows, so a browser
+#   reaches the app at http://localhost/ with no port-forward and no
+#   NodePort. On EKS the same chart asks for a load balancer instead —
+#   which is why the values live in a file per environment, not in a
+#   command line nobody can review.
+# ═══════════════════════════════════════════════════════════════
+controller:
+  # One controller, pinned to the node Kind maps the host ports from.
+  replicaCount: 1
+  nodeSelector:
+    ingress-ready: "true"
+  tolerations:
+    - key: node-role.kubernetes.io/control-plane
+      operator: Equal
+      effect: NoSchedule
+  service:
+    # No cloud load balancer exists here; the host ports are the entry point.
+    type: ClusterIP
+  hostPort:
+    enabled: true
+    ports:
+      http: 80
+      https: 443
+  # Keep the real client address in X-Forwarded-For. The rate limiter reads it
+  # with TRUSTED_PROXY_HOPS=1, so a wrong value here would bucket the whole
+  # class under the controller's own address.
+  config:
+    use-forwarded-headers: "false"
+    compute-full-forwarded-for: "true"
+    enable-real-ip: "true"
+    # Deliberately not enabling snippet annotations: they let any Ingress
+    # inject raw nginx config, which is a privilege-escalation path in a
+    # shared cluster. The metrics/readiness block uses a supported annotation.
+    allow-snippet-annotations: "false"
+  metrics:
+    # The controller's own Prometheus metrics — request rate and latency
+    # measured at the edge, to compare with what the app reports (phase 5).
+    enabled: true
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      memory: 384Mi
+  admissionWebhooks:
+    # Rejects a malformed Ingress at apply time rather than at reload time.
+    enabled: true

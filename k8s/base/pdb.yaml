@@ -1,0 +1,15 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: splitx
+  labels:
+    app.kubernetes.io/name: splitx
+    app.kubernetes.io/part-of: splitx
+spec:
+  # Keeps a node drain (or a cluster upgrade) from taking the whole deployment
+  # at once. maxUnavailable rather than minAvailable so the budget still makes
+  # sense at two replicas and at ten.
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: splitx

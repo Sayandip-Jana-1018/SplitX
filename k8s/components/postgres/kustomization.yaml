@@ -1,0 +1,22 @@
+# ═══════════════════════════════════════════════════════════════
+#   In-cluster PostgreSQL — used by the local overlay only.
+#
+#   The AWS overlay leaves this out: EKS talks to Neon, the same managed
+#   database the deployed site uses, so the demo exercises the real
+#   connection path (TLS, pooling, latency) instead of a pod next door.
+# ═══════════════════════════════════════════════════════════════
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+resources:
+  - statefulset.yaml
+  - service.yaml
+  - networkpolicy.yaml
+  - schema-job.yaml
+
+configMapGenerator:
+  # Hashed name: change schema.sql and the Job's pod spec changes with it, so
+  # a stale schema can never be silently reused.
+  - name: splitx-schema
+    files:
+      - schema.sql

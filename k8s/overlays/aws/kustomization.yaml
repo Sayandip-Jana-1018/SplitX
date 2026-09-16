@@ -1,0 +1,37 @@
+# ═══════════════════════════════════════════════════════════════
+#   AWS overlay — EKS, behind an ALB and CloudFront.
+#
+#   Differences from local, and why each one exists:
+#     • the image comes from ECR by digest-bearing tag, and is pulled
+#     • no in-cluster Postgres: EKS talks to Neon, like the deployed site
+#     • two proxies in front of a pod (CloudFront -> ALB), not one
+#     • replicas spread across availability zones, not just nodes
+#     • the ServiceAccount carries an IRSA role
+#
+#   Phase 7 fills in the account id, the hostname and the certificate, and
+#   applies it. `npm run k8s:render` renders it today so the difference
+#   between the two environments is reviewable in a pull request.
+# ═══════════════════════════════════════════════════════════════
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: splitx
+
+resources:
+  - ../../base
+
+components:
+  - ../../components/redis
+
+images:
+  - name: splitx
+    # Replaced by the pipeline with the commit being released (phase 6).
+    newName: ACCOUNT_ID.dkr.ecr.ap-south-1.amazonaws.com/splitx
+    newTag: latest
+
+patches:
+  - path: patches/configmap.yaml
+  - path: patches/serviceaccount.yaml
+  - path: patches/ingress.yaml
+  - path: patches/ingress-internal.yaml
+  - path: patches/deployment.yaml

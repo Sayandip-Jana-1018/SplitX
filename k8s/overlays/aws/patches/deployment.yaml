@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: splitx
+spec:
+  template:
+    spec:
+      topologySpreadConstraints:
+        # Across availability zones first — losing one AZ must not take the
+        # service with it — and then across nodes inside a zone.
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: splitx
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: splitx
+      containers:
+        - name: splitx
+          # ECR is a remote registry, so the tag must actually be fetched.
+          imagePullPolicy: IfNotPresent

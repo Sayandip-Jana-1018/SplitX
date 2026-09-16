@@ -1,0 +1,77 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: splitx-schema-init
+  labels:
+    app.kubernetes.io/name: schema-init
+    app.kubernetes.io/part-of: splitx
+spec:
+  backoffLimit: 6
+  # Tidies itself away ten minutes after it succeeds, so the next deploy sees a
+  # clean namespace and the Job's immutable spec never blocks an apply.
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: schema-init
+        app.kubernetes.io/part-of: splitx
+    spec:
+      restartPolicy: OnFailure
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 70
+        runAsGroup: 70
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: psql
+          # The database image, for psql — no Node, no Prisma CLI, no npm.
+          image: postgres:16-alpine@sha256:4e6e670bb069649261c9c18031f0aded7bb249a5b6664ddec29c013a89310d50
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+              echo "waiting for postgres..."
+              until pg_isready -q; do sleep 2; done
+              if [ "$(psql -tAc "SELECT to_regclass('public.\"User\"') IS NOT NULL")" = "t" ]; then
+                echo "schema already present — nothing to do"
+                exit 0
+              fi
+              psql -v ON_ERROR_STOP=1 -f /schema/schema.sql
+              echo "schema applied: $(psql -tAc "SELECT count(*) FROM information_schema.tables WHERE table_schema='public'") tables"
+          env:
+            - name: PGHOST
+              value: splitx-postgres
+            - name: PGUSER
+              value: splitx
+            - name: PGDATABASE
+              value: splitx
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: splitx-secrets
+                  key: POSTGRES_PASSWORD
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: schema
+              mountPath: /schema
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 128Mi
+      volumes:
+        - name: schema
+          configMap:
+            name: splitx-schema
+        - name: tmp
+          emptyDir: {}

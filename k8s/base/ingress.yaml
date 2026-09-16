@@ -1,13 +1,25 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: splitx-ingress
-  namespace: splitx
+  name: splitx
+  labels:
+    app.kubernetes.io/name: splitx
+    app.kubernetes.io/part-of: splitx
   annotations:
-    nginx.ingress.kubernetes.io/rewrite-target: /
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    # Avatar uploads still pass through the app (receipts go straight to
+    # storage with a signed URL), so the default 1 MB body limit is too small.
     nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    # A settlement preview for 2,000 members takes a few hundred milliseconds;
+    # 30 s is plenty and keeps a stuck upstream from holding a worker open.
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "30"
 spec:
+  # No host: the rehearsal cluster answers on http://localhost/ through the
+  # control-plane port mapping. The AWS overlay adds the real hostname.
+  #
+  # There is deliberately no rewrite-target here. With a prefix path of "/" and
+  # no capture group, `rewrite-target: /` rewrites *every* URI to "/" — the
+  # whole application would serve the landing page. It was in the old manifest.
   ingressClassName: nginx
   rules:
     - http:
@@ -16,6 +28,6 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: splitx-service
+                name: splitx
                 port:
-                  number: 80
+                  name: http
