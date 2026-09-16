@@ -16,7 +16,12 @@
     "test:coverage": "vitest run --project unit --coverage",
     "test:integration": "vitest run --project integration",
     "image:build": "node scripts/image-build.mjs",
-    "image:report": "node --env-file=.env scripts/image-report.mjs"
+    "image:report": "node --env-file=.env scripts/image-report.mjs",
+    "db:schema": "node scripts/db-schema.mjs",
+    "k8s:up": "node scripts/cluster-up.mjs",
+    "k8s:verify": "node scripts/cluster-verify.mjs",
+    "k8s:render": "kubectl kustomize k8s/overlays/aws",
+    "k8s:down": "kind delete cluster --name splitx"
   },
   "dependencies": {
     "@ducanh2912/next-pwa": "^10.2.9",
