@@ -946,6 +946,58 @@ CloudFront gets the same treatment in phase 7.
 
 ---
 
+## Phase 4 — Real traffic, and what it takes to survive it
+
+### D-044 · A host restart left the cluster answering 200 while unable to open a single new connection
+**2026-09-17** · ✅ fixed, and now detected automatically
+
+Found while preparing the load tests. Overnight, Docker Desktop's VM restarted
+(every pod in the cluster showed one restart). The control plane and a worker
+came back with their IP addresses swapped, and pods came back with recycled IPs.
+Both application pods were Running but not Ready, and the site answered 503.
+
+What the evidence showed, layer by layer:
+
+| Test | Result |
+|---|---|
+| DNS from the app pod, and from Redis (which no policy restricts) | failed |
+| TCP from a node to pods on other nodes | worked |
+| Pod to pod on the same node | worked |
+| Pod to pod across nodes, new connection | failed |
+| Packet capture on both nodes | the app's **existing** database connection flowed both ways (`SELECT 1` answered in 0.2 ms); a **new** connection's SYN entered the sending node from the pod and never left it |
+
+Kind nodes send new pod connections to the network-policy engine inside
+kindnetd (`queue flags bypass to 101` in nftables), and established flows skip
+it. Deleting every NetworkPolicy did not help, so the policies were not the
+problem; restarting the `kindnet` DaemonSet did, immediately. The engine had
+kept stale state across the restart and was rejecting every new flow.
+
+The dangerous part came next: **readiness recovered on its own**. Prisma
+reused a connection it had managed to open, the probe passed, and the site
+answered 200 — while no pod could open a new connection. The next pod the
+autoscaler started would never have become ready, and the phase 4 load tests
+would have failed in a way that looked like an autoscaling problem.
+
+It also exposed a gap in phase 3's verification: a passing readiness probe was
+treated as proof of connectivity, and it is not.
+
+- `scripts/lib/cluster-network.mjs` opens fresh connections from inside every
+  application pod — DNS, Postgres, Redis — with the busybox tools already in
+  the image.
+- `npm run k8s:up` runs it on every bring-up. When new connections fail it
+  restarts kindnet and checks again, and if that does not fix it, it stops and
+  says to rebuild the cluster rather than continuing with a broken one.
+- `npm run k8s:verify` includes it as a check.
+- EKS uses a different policy implementation (the VPC CNI's network policy
+  agent), and the same check applies there.
+
+One false lead worth recording: the first reachability test from the nodes used
+`ping`, which the Kind node image does not include, so every "unreachable" it
+printed was the missing binary. The capture, and TCP tests with `curl`, are
+what the conclusions above rest on.
+
+---
+
 ## Open problems
 
 | ID | Problem | Why it matters | Status / planned fix |
@@ -995,5 +1047,6 @@ CloudFront gets the same treatment in phase 7.
   Loki), but they are labelled only `job`, `stream` and `filename`: no container
   or service label (phase 5).
 - Loki occupies host port 3100, so ad-hoc app servers for tests use 3200.
+- After the host sleeps or restarts, the Docker VM clock can run ahead of Windows (53 s measured on 2026-09-17), which is why `kubectl` shows event ages as `<invalid>`. Everything in the cluster shares the VM clock, so the rate limiter and token expiry are unaffected.
 - **Outbound TCP 5432 is blocked on this machine’s network** (443 works; DNS resolves). Prisma cannot reach Neon from here, which is why `.env` points at the Compose Postgres. Tools that must reach Neon use its SQL-over-HTTPS endpoint instead (`scripts/migrate-avatars.mjs --https`). Not an issue for Vercel, GitHub Actions or EKS.
 - The user-level npm registry is HTTPS now.

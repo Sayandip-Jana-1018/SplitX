@@ -23,6 +23,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { checkNewConnections, describe } from './lib/cluster-network.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const CLUSTER = 'splitx';
@@ -184,6 +185,28 @@ kubectl(['-n', NAMESPACE, 'rollout', 'status', 'statefulset/splitx-postgres', '-
 kubectl(['-n', NAMESPACE, 'rollout', 'status', 'deployment/splitx-redis', '--timeout=120s']);
 kubectl(['-n', NAMESPACE, 'wait', '--for=condition=complete', 'job/splitx-schema-init', '--timeout=240s']);
 kubectl(['-n', NAMESPACE, 'rollout', 'status', 'deployment/splitx', '--timeout=300s']);
+
+heading('Can the pods open new connections?');
+// Readiness can pass on connections a pod opened before something broke, so it
+// cannot answer this. After a host restart Kind's network-policy engine can keep
+// stale state and drop every new pod connection while old ones keep working
+// (D-044); restarting kindnet rebuilds that state.
+const capture = (argv) => kubectl(argv, { capture: true, allowFailure: true });
+let network = checkNewConnections(capture);
+if (!network.every((result) => result.ok)) {
+    console.log(describe(network));
+    console.log('    new connections are being dropped; restarting kindnet to rebuild its policy state');
+    kubectl(['-n', 'kube-system', 'rollout', 'restart', 'daemonset/kindnet'], { capture: true });
+    kubectl(['-n', 'kube-system', 'rollout', 'status', 'daemonset/kindnet', '--timeout=180s'], { capture: true });
+    await new Promise((resolve) => setTimeout(resolve, 10_000));
+    network = checkNewConnections(capture);
+    if (!network.every((result) => result.ok)) {
+        console.log(describe(network));
+        fail('pods still cannot open new connections. Rebuild the cluster: npm run k8s:up -- --recreate');
+    }
+    console.log('    recovered after restarting kindnet');
+}
+console.log(describe(network).replace(/^/gm, '    '));
 
 heading('Cluster state');
 console.log(kubectl(['-n', NAMESPACE, 'get', 'pods', '-o', 'wide'], { capture: true }).stdout.trim());

@@ -15,6 +15,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { checkNewConnections, describe } from './lib/cluster-network.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const NS = 'splitx';
@@ -109,6 +110,17 @@ sections.push({
         ...placement.map((p) => '| `' + p.pod + '` | ' + p.node + ' | ' + p.ip + ' | ' + p.restarts + ' |'),
     ].join('\n'),
 });
+
+// ── 1b. New connections, which readiness cannot vouch for ─────────────────
+console.log('[1b] New connections');
+const network = checkNewConnections((argv) => kubectl(argv));
+record(
+    'Every app pod can open new connections (DNS, Postgres, Redis)',
+    network.length > 0 && network.every((result) => result.ok),
+    network.every((result) => result.ok)
+        ? network.length + ' pods checked'
+        : describe(network.filter((result) => !result.ok)).split(String.fromCharCode(10)).join('; ')
+);
 
 // ── 2. The edge: what the ingress exposes and what it refuses ─────────────
 console.log('[2] Ingress');
