@@ -25,7 +25,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v5
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
 
       - name: Install dependencies
@@ -72,7 +72,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v5
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
 
       - name: Install dependencies
@@ -106,3 +106,51 @@ jobs:
         # Findings in historical commits whose secrets were rotated are listed by
         # fingerprint in .gitleaksignore; anything new fails the build.
         run: ./gitleaks git . --config .gitleaks.toml --redact --no-banner --verbose
+
+  manifests:
+    # Kubernetes manifests are code: they get the same treatment as the rest of
+    # it. Nothing here needs a cluster, so it runs on every push in seconds.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      # kubeconform, pinned by digest like every other tool this pipeline runs.
+      KUBECONFORM: ghcr.io/yannh/kubeconform:v0.7.0@sha256:85dbef6b4b312b99133decc9c6fc9495e9fc5f92293d4ff3b7e1b30f5611823c
+      # The version the Kind cluster and the EKS module both use.
+      K8S_VERSION: "1.35.0"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: The committed SQL still matches the Prisma schema
+        # A model added to schema.prisma without regenerating would reach the
+        # cluster as a missing table, hours later, as a 500 from one endpoint.
+        run: node scripts/db-schema.mjs --check
+
+      - name: Render and validate both overlays
+        run: |
+          for overlay in local aws; do
+            echo "── $overlay ──"
+            kubectl kustomize "k8s/overlays/$overlay" > "/tmp/$overlay.yaml"
+            docker run --rm -i "$KUBECONFORM" \
+              -strict -summary -kubernetes-version "$K8S_VERSION" \
+              -schema-location default < "/tmp/$overlay.yaml"
+          done
+
+      - name: The image the manifests run is never :latest
+        # A moving tag makes a rollback meaningless: the same manifest would
+        # deploy different code tomorrow.
+        run: |
+          if kubectl kustomize k8s/overlays/local | grep -E '^\s+image: .*:latest$'; then
+            echo "the local overlay pins a moving tag" >&2
+            exit 1
+          fi
