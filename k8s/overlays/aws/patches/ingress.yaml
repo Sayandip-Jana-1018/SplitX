@@ -1,0 +1,28 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: splitx
+  annotations:
+    # The AWS Load Balancer Controller turns this into an internet-facing ALB
+    # with an ACM certificate; CloudFront sits in front of it.
+    # One ALB shared by both Ingress objects in this namespace.
+    alb.ingress.kubernetes.io/group.name: splitx
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+    alb.ingress.kubernetes.io/healthcheck-path: /api/health/live
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:ap-south-1:ACCOUNT_ID:certificate/REPLACE
+spec:
+  ingressClassName: alb
+  rules:
+    - host: REPLACE_WITH_PUBLIC_HOSTNAME
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: splitx
+                port:
+                  name: http

@@ -650,6 +650,302 @@ against the new image failed, with 18 findings:
   container.
 - The gate now passes with no fixable HIGH or CRITICAL findings.
 
+## Phase 3 — Kubernetes: a cluster that can be broken on purpose
+
+### D-033 · The rehearsal cluster runs the same Kubernetes as the demo, pinned by digest
+**2026-09-16** · ✅ done
+
+`k8s/kind/cluster.yaml` builds one control plane and two workers on
+`kindest/node:v1.35.0`, pinned by digest. Two workers, not one: pod placement
+is only meaningful if there is somewhere else to place a pod, and a spread
+constraint on a single node proves nothing.
+
+Choosing the version turned up a real problem. The Terraform EKS module was
+pinned to **1.31**, which left AWS standard support on 2025-11-26:
+
+```
+aws eks describe-cluster-versions --include-all
+1.36  STANDARD_SUPPORT     1.33  EXTENDED_SUPPORT
+1.35  STANDARD_SUPPORT     1.32  EXTENDED_SUPPORT
+1.34  STANDARD_SUPPORT     1.31  EXTENDED_SUPPORT (ends 2026-11-26)
+```
+
+A cluster on extended support keeps running, but AWS bills the control plane at
+six times the standard rate while it does — so a stale version pin is a cost
+decision as well as a security one, and this one would have expired during the
+project. The module now takes a `kubernetes_version` variable defaulting to
+**1.35**, with a validation listing the versions in standard support on the day
+it was written, so a stale pin fails `terraform plan` with a dated message
+rather than passing a regex.
+
+- 1.35 rather than 1.36: it is what Kind 0.31 ships as its default node image,
+  so the rehearsal cluster needs no extra download and cannot drift from EKS.
+- **Rejected — whatever Kind installs by default, EKS on whatever is newest:**
+  the whole point of a rehearsal is that it rehearses the same thing.
+
+### D-034 · Kustomize for our manifests, Helm for other people's
+**2026-09-16** · ✅ done
+
+There was a `helm/splitx` chart in the repository and a `k8s/` directory of raw
+manifests, describing the same application differently. Nothing installed the
+chart — the ArgoCD instance that once referenced it is gone, and its password
+died with it (D-003). Keeping both means two sources of truth that drift, and
+the drift was already there: the chart had no network policy, no disruption
+budget, no security context and a liveness probe that would have restarted every
+pod during a database outage.
+
+**The chart is deleted.** The application is described once, in
+`k8s/base`, and varied by overlay.
+
+Helm is still here, doing the job it is actually good at: installing software we
+did not write. `helm/platform/charts.json` pins ingress-nginx 4.15.1 and
+metrics-server 3.14.0 by chart version, each with its own values file, and
+`scripts/cluster-up.mjs` installs them from that file. Phase 5 adds the
+monitoring charts to the same list.
+
+- **Rejected — keep the chart for the sake of having Helm on the CV:** an
+  unused chart that contradicts the manifests is worse than no chart. The
+  honest version is that Helm packages third-party components here, and
+  `helm list -A` on the cluster shows exactly that.
+- **Rejected — Helm for everything, drop Kustomize:** templating YAML with
+  string interpolation to express "the same thing, with two proxies in front
+  instead of one" is how `values.yaml` files grow to 400 lines. The overlays
+  are patches against a rendered base, so the difference between environments
+  is reviewable as a diff.
+
+### D-035 · One base, two overlays, two optional components
+**2026-09-16** · ✅ done
+
+```
+k8s/base                 namespace, deployment, service, HPA, PDB,
+                         ingress, network policy, service account
+k8s/components/postgres  StatefulSet + schema Job   (local only)
+k8s/components/redis     rate-limit backend         (both)
+k8s/overlays/local       base + both components, image splitx:local
+k8s/overlays/aws         base + redis, ECR image, ALB, IRSA, 2 proxy hops
+```
+
+The local overlay renders 19 objects and the AWS one 14; both are validated
+against the Kubernetes 1.35 schemas in CI (`kubeconform`, pinned by digest),
+and CI also fails if any manifest ever deploys a `:latest` tag — a moving tag
+makes a rollback meaningless, because the same manifest deploys different code
+tomorrow.
+
+The differences between the two overlays are the interesting part, and each one
+is a decision, not a setting:
+
+| | Local | AWS | Why they differ |
+|---|---|---|---|
+| Database | a Postgres pod with its own PVC | Neon | The rehearsal must work with no network and no account. The demo should exercise the real connection path — TLS, pooling, latency — which a pod next door does not. |
+| `TRUSTED_PROXY_HOPS` | 1 | 2 | ingress-nginx is one proxy; CloudFront in front of an ALB is two. Get it wrong and the rate limiter buckets the load balancer instead of the visitor, or trusts an address the visitor chose. |
+| Ingress | nginx, host ports 80/443 | ALB via the AWS Load Balancer Controller | Kind has no cloud load balancer; EKS should not run a second one in a pod. |
+| Service account | no token mounted | the same, plus an IRSA role | The app never calls the Kubernetes API. On AWS it needs AWS credentials, and IRSA issues short-lived ones instead of storing a key. |
+
+### D-036 · The pod is locked down, and the namespace enforces it
+**2026-09-16** · ✅ done
+
+Every application pod runs as uid 1001 with a read-only root filesystem, all
+Linux capabilities dropped, `allowPrivilegeEscalation: false`, the
+`RuntimeDefault` seccomp profile, and no service account token mounted — the
+app never calls the Kubernetes API, so a token in the pod is only useful to
+someone who should not have one. `/tmp` and the Next.js cache are `emptyDir`
+mounts, the only writable paths.
+
+Asking for that is not the same as getting it, so the namespace carries
+`pod-security.kubernetes.io/enforce: restricted`. A pod that does not comply is
+refused at admission — including the database and Redis components, which is why
+both run as their own non-root users (70 and 999) with the same restrictions.
+
+Verified: `kubectl run --privileged --dry-run=server` in the namespace is
+rejected by PodSecurity admission rather than created.
+
+### D-037 · Readiness removes a pod; liveness restarts it. Tested by taking the database away.
+**2026-09-16** · ✅ done, B-005 closed
+
+The probes were written in phase 0 with an argument attached: readiness pings
+the database, liveness never touches it, because a database outage must take
+pods out of the Service without restarting them. That was a claim. Now it is a
+measurement — `scripts/cluster-verify.mjs` scales the Postgres StatefulSet to
+zero with the application running:
+
+| | Before | During the outage | After |
+|---|---|---|---|
+| Ready replicas | 2 | 0 | 2 |
+| Ready endpoints behind the Service | 2 | 0 | 2 |
+| Container restarts | 0 | 0 | 0 |
+| `GET /` through the ingress | 200 | 503 | 200 |
+| `GET /api/health/live` | 200 | 200 | 200 |
+
+Both replicas left the Service within one probe cycle, the ingress answered 503
+instead of a half-broken page, **no pod was restarted**, and the same two pods
+served again when the database came back. With liveness pointed at the database
+— the arrangement the deleted Helm chart had — every pod in the deployment would
+have entered a restart loop during an outage it could do nothing about, and the
+recovery would have been slower than the outage.
+
+B-005 asked whether readiness should depend on the database at all. It should:
+the cost is a 503 from the ingress during a database outage, which is honest,
+and the alternative is serving errors from pods that Kubernetes believes are
+healthy.
+
+### D-038 · A release must not drop a request, and that is now a measurement
+**2026-09-16** · ✅ done
+
+`maxSurge: 1, maxUnavailable: 0` means a new pod passes its readiness probe
+before an old one is taken away. That still leaves the classic race: a pod's
+endpoint is removed and its process is told to stop at the same moment, so the
+proxy can send one more request into a server that has already begun shutting
+down. A `preStop` sleep of 5 seconds — using Kubernetes' own sleep action, so no
+shell is needed in the image — holds the container open while ingress-nginx
+notices the endpoint is gone.
+
+Measured during `kubectl rollout restart` with four concurrent clients:
+
+```
+3090 requests in 6.9 s — 3090 OK, 0 non-200, 0 connection failures
+traffic fully on the new pods 11 ms after the rollout reported complete
+```
+
+Three distinct pods answered during the release, which is what shows the traffic
+actually moved rather than the test finishing before the rollout started.
+
+**The test earned its place on its second run.** It reported 40 non-200
+responses out of 2061, where earlier runs had reported none. The cause was not
+the release: the check that the database had recovered from the previous test
+waited for a single 200, and one pod answering is not the same as the
+deployment being available again. Prisma reconnects lazily, so the other
+replica was still failing readiness while the rollout began — a release into a
+fleet that was still recovering. The check now waits for `readyReplicas` to
+equal the desired count, and the same rollout loses nothing.
+
+That is worth more than a green tick: **do not start a release while the fleet
+is still recovering from something else**, and a deploy pipeline that only
+checks "is one instance answering" will do exactly that. Phase 6's pipeline
+gates on the same condition.
+
+A second observation from the same test: for a few seconds after Kubernetes
+reports the rollout complete, ingress-nginx still sends some requests to pods
+that are draining. Those requests are answered normally, because the `preStop`
+delay is keeping the container alive on purpose — that is the mechanism working,
+not a leak. The check measures how long traffic takes to move off them (11 ms
+here) rather than demanding an instant cutover that no proxy performs.
+
+### D-039 · The autoscaler scales on CPU only
+**2026-09-16** · ✅ done
+
+The old HPA scaled on CPU *and* memory at 80%. Node.js holds heap memory after a
+burst instead of returning it to the operating system, so a memory target
+ratchets replicas up and then keeps them there: it looks like autoscaling and
+behaves like a one-way valve. The memory metric is gone. CPU at 60% of a 250m
+request is the trigger, which suits the settlement preview — the one endpoint
+that is pure CPU with no database (D-025).
+
+Scale-up is deliberately impatient and scale-down deliberately slow: no
+stabilisation window going up, doubling or +4 pods per 15 s, whichever is more;
+five minutes of quiet and one pod a minute coming down. A classroom arrives all
+at once and leaves in waves, and a pod that is removed too eagerly has to cold
+start when the next wave hits.
+
+Verified: with metrics-server installed from its pinned chart, the HPA reports
+real utilisation (2% of the 250m request at idle) instead of `<unknown>`.
+Tuning the staircase under real load with k6 is phase 4.
+
+### D-040 · Nothing in the namespace accepts a connection unless a policy names the sender
+**2026-09-16** · ✅ done
+
+A `default-deny-ingress` policy covers every pod in the namespace, and each
+workload then opens exactly what it needs: the app accepts traffic from
+ingress-nginx, from the monitoring namespace (phase 5) and from the node network
+— the kubelet runs the probes from the node itself, and forgetting that is how a
+network policy turns into a CrashLoopBackOff. Postgres accepts connections from
+the app and the schema Job, and from nothing else. Redis accepts them from the
+app.
+
+Egress is restricted too, and by address rather than by wishful thinking: DNS to
+kube-dns, 5432 to the Postgres pods, 6379 to Redis, and 443/5432 to the public
+internet **excluding** the private ranges. A compromised pod can reach Neon,
+Supabase and the Gemini API, and cannot reach the node network, the control
+plane or another namespace's database.
+
+Policies that nothing enforces are decoration, so the verification script tests
+it from outside: a busybox pod in the `default` namespace tries the app, Postgres
+and Redis, and all three connections time out.
+
+```
+wget: download timed out
+app=1  postgres=1  redis=1      (non-zero = refused)
+```
+
+Kind's CNI (kindnetd) enforces these. On EKS the VPC CNI needs its network
+policy agent enabled — phase 7, and the check above is what will prove it.
+
+### D-041 · The schema reaches the cluster as SQL, not as a Prisma CLI in a container
+**2026-09-16** · ✅ done
+
+The runtime image has no npm and no Prisma CLI — that is what makes it 81 MB — so
+a pod cannot run `prisma db push`. Adding a second, fatter image just to create
+tables would give up the thing phase 2 bought.
+
+`scripts/db-schema.mjs` renders `prisma/schema.prisma` to plain SQL with
+`prisma migrate diff`, and the result is committed (18 tables, 24 indexes). A Job
+applies it with `psql` from the Postgres image itself — no extra image, no
+network, no CLI. The Job checks for the `User` table first, so running it again
+is free, and its ConfigMap is content-hashed, so changed SQL is never silently
+reused.
+
+`node scripts/db-schema.mjs --check` runs in CI: a model added to
+`schema.prisma` without regenerating fails the build, instead of reaching the
+cluster as a missing table and a 500 from one endpoint hours later.
+
+Neon — the managed database behind Vercel and, in phase 7, EKS — is still
+managed with Prisma directly. This path exists so the local cluster can stand up
+a database of its own with nothing but the images it already has.
+
+### D-042 · Secrets are built from `.env` and piped to kubectl; they never touch a file or a command line
+**2026-09-16** · ✅ done
+
+`scripts/cluster-up.mjs` reads `.env`, builds the Secret as JSON in memory and
+writes it to `kubectl apply -f -` on stdin. No generated YAML on disk, no
+`--from-literal` (which puts values in the process list and the shell history),
+and the script prints key names only. The manifests reference `splitx-secrets`
+by name and never contain a value; `k8s/base/secret.example.yaml` documents the
+keys.
+
+Two details that matter more than they look:
+
+- **The cluster's database URL is built, not read.** The `DATABASE_URL` in
+  `.env` points at the Compose Postgres on `localhost`, which inside a pod
+  means the pod itself — and the Neon URL is sitting one comment character above
+  it in the same file. A file edited in a hurry would otherwise aim the
+  rehearsal cluster at the deployed site's data, including the test above that
+  scales the database to zero. The script ignores whatever `DATABASE_URL`
+  holds and builds an in-cluster URL from `POSTGRES_PASSWORD`.
+- **Passwords are percent-encoded** into the connection URLs. A password
+  containing `@` or `/` would otherwise split the URL and the pods would connect
+  somewhere else entirely, or nowhere.
+
+`connection_limit=5` is set on the URL as well, which closes B-010: ten pods
+with Prisma's default pool would have exhausted a small database exactly when
+the autoscaler was doing its job.
+
+### D-043 · Operational endpoints are refused at the edge
+**2026-09-16** · ✅ done, B-011 closed for the cluster
+
+`/api/metrics` and `/api/health/ready` are matched by a second Ingress that
+answers 403 for every source address outside loopback, so neither is reachable
+from outside the cluster. Prometheus scrapes the pods through the Service and
+the kubelet probes them directly, so nothing that needs them is affected.
+Readiness queries the database on every call; published on the internet it is a
+free way to make an application's database do work. Metrics also check a bearer
+token — verified from inside a pod, where the request without the token is
+answered 401 — and this is the second lock, not the first.
+
+The AWS overlay does the same thing the way an ALB does it, with a
+fixed-response listener rule, since nginx annotations mean nothing there.
+CloudFront gets the same treatment in phase 7.
+
+---
+
 ## Open problems
 
 | ID | Problem | Why it matters | Status / planned fix |
@@ -658,13 +954,13 @@ against the new image failed, with 18 findings:
 | B-002 | The Compose `redis` service was used by nothing. | A health-checked service nobody uses is theatre. | ✅ Resolved — it is the rate-limit backend (D-022). |
 | B-003 | `POST /api/transactions` accepted `receiptUrl` but never saved it. | Receipts attached through the composer were lost. | ✅ Resolved — D-019. |
 | B-004 | `POST /api/transactions/from-receipt` had no input validation. | Floats, negatives or strings as amounts. | ✅ Resolved — endpoint removed (D-020). |
-| B-005 | Readiness depends on the shared database. | A full DB outage removes every pod from the Service. Accepted for now: nearly every page needs the DB, and 3 failures × 10 s rides out Neon cold starts. | Revisit when tuning probes in phase 3. |
+| B-005 | Readiness depends on the shared database. | A full DB outage removes every pod from the Service. Accepted for now: nearly every page needs the DB, and 3 failures × 10 s rides out Neon cold starts. | ✅ Resolved 2026-09-16 — D-037. Measured on the cluster: with the database scaled to zero both replicas left the Service within one probe cycle, the ingress answered 503, and no pod was restarted. The dependency is correct; serving errors from pods Kubernetes believes are healthy is the worse option. |
 | B-006 | Jenkins admin password is still the leaked one (user no longer knows it; it is in `jenkins/create-job.sh` history). | Jenkins becomes internet-reachable when the webhook tunnel opens. | Phase 6: Jenkins Configuration-as-Code with the admin password from `.env`. |
 | B-007 | Committed avatars may still be referenced by production profiles. | Removing them could change what real users see. | ✅ Resolved 2026-09-14 — production returned 0; the files are untracked (D-017). |
-| B-008 | Jenkinsfile stages are still theatre (`docker images` as "build", `|| echo` after Sonar). Only the secrets were removed in phase 0. | Examiner-visible. | Phase 6 rewrite. |
+| B-008 | Jenkinsfile stages are still theatre (`docker images` as "build", `|| echo` after Sonar). Only the secrets were removed in phase 0. It also deploys the Helm chart deleted in D-034. | Examiner-visible, and now pointing at a path that no longer exists. | Phase 6 rewrite. |
 | B-009 | `DEMO_GUIDE.html`, `AWS_SETUP_GUIDE.md` describe removed or wrong things (Ansible, t3.small, 23 resources). | Misleading docs. | Phase 8. |
-| B-010 | Prisma pool size across up to 12 pods is unset. | Connection exhaustion under autoscaling. | Phase 3: `connection_limit` in `DATABASE_URL`. |
-| B-011 | `/api/metrics` and `/api/health/ready` will be reachable through CloudFront. | Metrics are token-protected, but readiness pings the DB per request. | Phase 7: block at the edge; Prometheus scrapes in-cluster. |
+| B-010 | Prisma pool size across up to 12 pods is unset. | Connection exhaustion under autoscaling. | ✅ Resolved 2026-09-16 — D-042. `connection_limit=5&pool_timeout=10` is set on the URL the cluster builds, so ten pods use at most 50 connections. |
+| B-011 | `/api/metrics` and `/api/health/ready` will be reachable through CloudFront. | Metrics are token-protected, but readiness pings the DB per request. | ✅ Resolved for the cluster 2026-09-16 — D-043. Both paths answer 403 through ingress-nginx; the AWS overlay does the same with an ALB fixed-response rule. CloudFront itself is still phase 7. |
 | B-012 | Supabase access policies not reviewed. | Any anon policy on the `receipts` bucket was pure risk once the app stopped writing with the anon key. | ✅ Resolved 2026-09-16 — the user deleted every policy and set the bucket to 10 MB and image types only. Verified: an SVG is refused (HTTP 415) even through a valid signed upload URL. |
 | B-013 | `npm test` was 65 lines of source-regex assertions. | CI "passed tests" that exercised no behaviour. | ✅ Resolved — D-018. |
 | B-014 | The Supabase project URL in the local `.env` did not resolve. | Storage couldn't be exercised, and uploads on the live site were failing. | ✅ Resolved 2026-09-14 — the free-tier project had been **paused**; the user resumed it and added the secret key to `.env` and Vercel. Verified live (D-027). |
@@ -673,8 +969,10 @@ against the new image failed, with 18 findings:
 | B-017 | Deliberately shed 503s are logged at error level by the access log. | 365 error lines in one load test, all intended. Noise hides real errors. | Phase 5: alert from metrics; consider warn level for shed responses. |
 | B-019 | **Anyone could list the `receipts` bucket.** Found 2026-09-14: an anonymous request with the public key listed its contents. | Anyone could enumerate every receipt photo. | ✅ Resolved 2026-09-14 — the user deleted all three policies; anonymous listing now returns nothing (D-027). Later: consider a private bucket with signed read URLs. |
 | B-020 | The Docker image's browser code had no Supabase URL or key, so uploads could not work from a container. | Receipt uploads would have failed on Kubernetes. | ✅ Resolved 2026-09-16 — the browser now PUTs to the signed URL alone, with no key and no Supabase client (D-028). |
-| B-018 | One profile still carries an avatar that isn't a normal storage URL. | Photos kept as `data:` text sit in every API response that includes that user; email-named files keep an address in a public URL. | The first query was wrong — the old code replaced `@` with `_`, so `LIKE '%@%'` could never match those names. Corrected: ``SELECT count(*) FILTER (WHERE image LIKE 'data:%') AS in_database, count(*) FILTER (WHERE image LIKE '%/avatars/%' AND image NOT LIKE '%/avatars/%/%') AS email_named FROM "User";`` One profile matched the old query, so at most one needs migrating. |
+| B-018 | One profile still carries an avatar that isn’t a normal storage URL. | Photos kept as `data:` text sit in every API response that includes that user — group members, expense payers, settlement participants — so a 200 KB photo is carried on every page that mentions them. | Measured 2026-09-16 with the corrected query: **one** profile holds a `data:` avatar, **none** are email-named (the first query was wrong — the old code replaced `@` with `_`, so `LIKE '%@%'` could never match). `scripts/migrate-avatars.mjs` moves them into storage: it reads the bytes, takes the type from the bytes rather than the URL’s claim, uploads under `avatars/<id>/`, rewrites the row and backs up the old value first. It reports only unless given `--apply`, and names the database it is connected to before doing anything. The local `.env` points at the Compose Postgres, so the deployed site’s copy needs `MIGRATION_DATABASE_URL` set to the Neon URL — the user’s to run, since only they hold that credential. |
 | B-021 | The AWS root user still had two active access keys. | Root keys cannot be restricted by any policy. | ✅ Resolved 2026-09-16 — the user deleted both. Root keeps MFA (a security key), the CLI uses `splitx-devops`, and no repository file or GitHub Actions secret holds AWS keys. |
+| B-022 | `argocd/`, `jenkins/Jenkinsfile`, `AWS_SETUP_GUIDE.md` and `DEMO_GUIDE.html` still reference the `helm/splitx` chart deleted in D-034, and `argocd/kind-cluster.yml` is a second, stale Kind config. | Anyone following those files sets up something that no longer exists. | Phase 6 rewrites the pipeline and decides whether GitOps returns honestly; phase 8 rewrites the guides. |
+| B-023 | metrics-server runs with `--kubelet-insecure-tls` on Kind, because Kind’s kubelets serve metrics with a certificate the cluster CA did not issue. | The flag disables verification of what the autoscaler reads. It is in a values file, not hidden in a script, precisely so it cannot be copied to AWS by accident. | Phase 7: EKS signs kubelet certificates properly — install the add-on without the flag and confirm the HPA still reads CPU. |
 
 ## Environment notes (this machine)
 

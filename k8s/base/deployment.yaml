@@ -2,64 +2,138 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: splitx
-  namespace: splitx
   labels:
-    app: splitx
+    app.kubernetes.io/name: splitx
+    app.kubernetes.io/component: web
+    app.kubernetes.io/part-of: splitx
 spec:
+  # A starting point only: the HorizontalPodAutoscaler owns this field once it
+  # is running, and the overlays leave it alone so `kubectl apply` cannot undo
+  # a scale-up decision the autoscaler has already made.
   replicas: 2
+  revisionHistoryLimit: 3
   selector:
     matchLabels:
-      app: splitx
+      app.kubernetes.io/name: splitx
   strategy:
     type: RollingUpdate
     rollingUpdate:
+      # Never drop below the current count during a release: add one new pod,
+      # wait for it to pass readiness, then retire an old one.
       maxSurge: 1
       maxUnavailable: 0
   template:
     metadata:
       labels:
-        app: splitx
+        app.kubernetes.io/name: splitx
+        app.kubernetes.io/component: web
+        app.kubernetes.io/part-of: splitx
     spec:
+      serviceAccountName: splitx
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      # Spread replicas over the worker nodes so losing one node cannot take
+      # every pod with it. ScheduleAnyway, not DoNotSchedule: during a scale-up
+      # past the node count, running somewhere beats staying Pending.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: splitx
       containers:
         - name: splitx
-          image: splitx-app:latest    # Replace with ECR URL in production
+          image: splitx:local
+          imagePullPolicy: IfNotPresent
           ports:
-            - containerPort: 3000
+            - name: http
+              containerPort: 3000
               protocol: TCP
           envFrom:
             - configMapRef:
                 name: splitx-config
             - secretRef:
                 name: splitx-secrets
+          env:
+            # The logger stamps every line with the pod that produced it, so a
+            # request ID in Loki leads back to one pod and one node.
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: next-cache
+              mountPath: /app/.next/cache
           resources:
+            # The request is what the autoscaler measures against: 250m keeps a
+            # pod comfortably below one core, and the limit stops a single
+            # settlement preview from eating a whole node.
             requests:
-              memory: "128Mi"
-              cpu: "100m"
+              cpu: 250m
+              memory: 256Mi
             limits:
-              memory: "512Mi"
-              cpu: "500m"
-          # Startup gives a cold Node process up to 60s before liveness applies.
+              cpu: "1"
+              memory: 512Mi
+          # A cold Node process gets up to 60 s to answer before liveness starts.
           startupProbe:
             httpGet:
               path: /api/health/live
-              port: 3000
+              port: http
             periodSeconds: 2
             failureThreshold: 30
-          # Liveness never touches the database: a DB outage must not restart every pod.
+          # Liveness never touches the database: a database outage must not
+          # restart every pod in the deployment.
           livenessProbe:
             httpGet:
               path: /api/health/live
-              port: 3000
+              port: http
             periodSeconds: 20
             timeoutSeconds: 3
             failureThreshold: 3
-          # Readiness pings the database and takes the pod out of the Service until it recovers.
+          # Readiness pings the database and takes the pod out of the Service
+          # until it answers again. It never restarts anything.
           readinessProbe:
             httpGet:
               path: /api/health/ready
-              port: 3000
-            initialDelaySeconds: 5
+              port: http
             periodSeconds: 10
             timeoutSeconds: 3
             failureThreshold: 3
-      restartPolicy: Always
+          lifecycle:
+            preStop:
+              # Endpoint removal and SIGTERM race each other. Sleeping first
+              # lets ingress-nginx stop sending traffic before the server
+              # starts shutting down, which is what makes a release lossless.
+              sleep:
+                seconds: 5
+      volumes:
+        # The root filesystem is read-only; these are the only writable paths.
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+        - name: next-cache
+          emptyDir:
+            sizeLimit: 256Mi

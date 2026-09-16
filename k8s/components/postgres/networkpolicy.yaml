@@ -1,0 +1,26 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: splitx-postgres
+  labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/part-of: splitx
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: postgres
+  policyTypes:
+    - Ingress
+  ingress:
+    # Only the application and the schema Job may open a connection. Nothing
+    # else in the cluster can reach the database, not even from this namespace.
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: splitx
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: schema-init
+      ports:
+        - port: postgres
+          protocol: TCP

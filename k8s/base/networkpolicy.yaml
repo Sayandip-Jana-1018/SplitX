@@ -1,0 +1,93 @@
+# ═══════════════════════════════════════════════════════════════
+#   Network policy: nothing in the namespace accepts traffic unless a
+#   policy names the sender. Each workload then opens exactly the paths
+#   it needs.
+#
+#   Kind's CNI (kindnetd) enforces these; so does the EKS VPC CNI with its
+#   network-policy agent enabled. scripts/cluster-verify.mjs proves it by
+#   making a connection that should fail.
+# ═══════════════════════════════════════════════════════════════
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  labels:
+    app.kubernetes.io/part-of: splitx
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: splitx
+  labels:
+    app.kubernetes.io/name: splitx
+    app.kubernetes.io/part-of: splitx
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: splitx
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        # The ingress controller.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+        # Prometheus (phase 5) scrapes /api/metrics from its own namespace.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+        # The kubelet runs the probes from the node itself, not from a pod, so
+        # the node network has to be allowed or every pod fails its probes.
+        - ipBlock:
+            cidr: 172.16.0.0/12
+      ports:
+        - port: http
+          protocol: TCP
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: postgres
+      ports:
+        - port: 5432
+          protocol: TCP
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: redis
+      ports:
+        - port: 6379
+          protocol: TCP
+    # The internet, for Neon, Supabase Storage and the Gemini API — but not the
+    # private ranges, so a compromised pod cannot reach the node network, the
+    # control plane or another namespace's databases.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - port: 443
+          protocol: TCP
+        - port: 5432
+          protocol: TCP

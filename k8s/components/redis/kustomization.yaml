@@ -1,0 +1,14 @@
+# ═══════════════════════════════════════════════════════════════
+#   Redis for the rate limiter — one instance, no persistence.
+#
+#   Both overlays include it: the limiter's sliding window has to be shared
+#   by every pod, and an in-memory counter per pod would let ten replicas
+#   serve ten times the limit.
+# ═══════════════════════════════════════════════════════════════
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+resources:
+  - deployment.yaml
+  - service.yaml
+  - networkpolicy.yaml

@@ -3,5 +3,8 @@ kind: Namespace
 metadata:
   name: splitx
   labels:
-    app: splitx
-    managed-by: kubectl
+    app.kubernetes.io/part-of: splitx
+    # NetworkPolicies in other namespaces select this one by its automatic
+    # kubernetes.io/metadata.name label, which the API server maintains.
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest

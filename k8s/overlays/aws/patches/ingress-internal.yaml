@@ -1,0 +1,35 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: splitx-internal
+  annotations:
+    # Same load balancer as the public Ingress, so this rule is evaluated on
+    # the ALB that actually serves traffic.
+    # An ALB ignores nginx annotations, so the local one is removed rather
+    # than left behind to suggest a protection that is not in force here.
+    nginx.ingress.kubernetes.io/whitelist-source-range: null
+    alb.ingress.kubernetes.io/group.name: splitx
+    # nginx's source-range annotation means nothing to an ALB. The equivalent
+    # is a listener rule that answers by itself and never reaches a pod.
+    alb.ingress.kubernetes.io/actions.deny-internal: >-
+      {"type":"fixed-response","fixedResponseConfig":{"contentType":"text/plain","statusCode":"403","messageBody":"Not available"}}
+spec:
+  ingressClassName: alb
+  rules:
+    - host: REPLACE_WITH_PUBLIC_HOSTNAME
+      http:
+        paths:
+          - path: /api/metrics
+            pathType: Exact
+            backend:
+              service:
+                name: deny-internal
+                port:
+                  name: use-annotation
+          - path: /api/health/ready
+            pathType: Exact
+            backend:
+              service:
+                name: deny-internal
+                port:
+                  name: use-annotation

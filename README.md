@@ -68,6 +68,10 @@ the alternatives rejected, and the evidence behind each claim is recorded in
 | **Request tracing** | One request ID from the proxy to the route's log lines; JSON logs with pod and version for Loki | `X-Request-Id` on a response matches `requestId` in its log lines |
 | **Autoscaling load target** | `POST /api/settlements/preview` runs the real settle-up planner — pure CPU, no database — and sheds load (503) once a request has queued for 1 s | `scripts/load-preview.mjs`: CPU per request and the one-core ceiling of a single pod, recorded in [D-025](docs/DECISIONS.md) |
 | **Container image** | Node 24 on Alpine, pinned by digest; runtime stage is Alpine plus the `node` binary — no npm, yarn or build tools; runs as a non-root user; carries its commit as OCI labels and in `splitx_app_info` | Built and measured against a deliberately naive image: 1091 MB → 81 MB to download, 4139 → 0 vulnerabilities — [docs/evidence/image-comparison.md](docs/evidence/image-comparison.md) |
+| **Kubernetes** | Three-node cluster (Kind locally, EKS for the demo) on the same pinned version; one Kustomize base with a local and an AWS overlay; in-cluster Postgres built from the Prisma schema; pods non-root on a read-only filesystem, enforced by the namespace; default-deny networking | `npm run k8s:verify` — 23 live checks, including a database outage and a release under traffic: [docs/evidence/kubernetes.md](docs/evidence/kubernetes.md) |
+| **Zero-downtime releases** | `maxSurge: 1, maxUnavailable: 0` with a `preStop` delay so the ingress stops routing before the server shuts down | 3,090 requests during a full pod replacement: 0 lost, 0 non-200 |
+| **Autoscaling** | HPA on CPU (60% of a 250m request), 2 → 10 pods, fed by metrics-server from a pinned chart | The HPA reads real utilisation; driving it with k6 is phase 4 |
+| **Helm** | Installs the components we did not write — ingress-nginx and metrics-server — pinned by chart version in `helm/platform/charts.json`, each with its own values file | `helm list -A` on the cluster |
 | **Tests** | 675 unit tests (property-based, mutation-checked), 9 integration tests against a real Redis | CI jobs `verify` and `integration` |
 | **Commit standards** | Husky + Commitlint enforce Conventional Commits | Git history |
 
@@ -77,7 +81,8 @@ the alternatives rejected, and the evidence behind each claim is recorded in
 |---|---|
 | ✅ 1 | Backend: settlement planner and preview API, rate limiter, request tracing, signed storage uploads, real tests — [D-018 to D-027](docs/DECISIONS.md) |
 | ✅ 2 | One image for every environment, measured against a naive build — [D-028 to D-031](docs/DECISIONS.md) |
-| 3–4 | Kubernetes on Kind and EKS, autoscaling driven by real traffic, k6 load tests |
+| ✅ 3 | Kubernetes: Kind cluster, Kustomize base and overlays, probes and network policy tested by breaking things — [D-033 to D-043](docs/DECISIONS.md) |
+| 4 | k6 against the cluster: autoscaling driven by real traffic, HPA tuning, the classroom-NAT question |
 | 5 | Alertmanager, Grafana dashboards, labelled logs in Loki |
 | 6 | Jenkins pipeline that builds, scans, deploys and rolls back; GitHub Actions CD; webhooks |
 | 7 | Terraform: IRSA, EKS add-ons, Cluster Autoscaler, CloudFront with S3 + ALB origins |
@@ -97,8 +102,11 @@ the alternatives rejected, and the evidence behind each claim is recorded in
 5. Prove metrics are live: `npm run verify:metrics` (point it at a single instance).
 6. Measure the load target: `node --env-file=.env scripts/load-preview.mjs <baseUrl> --sizes 100,500,1000,2000` for CPU per request, or `--members 1000 --steps 1,4,16,64` for behaviour under load (raise `RATE_LIMIT_PREVIEW_PER_MINUTE` on that instance first).
 7. Build the image with its commit baked in: `npm run image:build` (tags `splitx:<sha>` and `splitx:local`). `npm run image:report` rebuilds it next to the naive image and rewrites the comparison; `./scripts/scan-image.sh splitx:local` runs Trivy and fails on fixable HIGH/CRITICAL findings.
-8. Scan for secrets before pushing: `npm run scan:secrets` (the pre-commit hook scans staged changes automatically).
-9. CI (`.github/workflows/ci.yml`) type-checks, tests, lints and builds; runs the integration tests against a Redis service container; and scans every commit for secrets.
+8. Run it on Kubernetes: `npm run k8s:up` creates the three-node Kind cluster, installs the pinned platform charts, loads the image into the nodes, builds the Secret from `.env` and applies `k8s/overlays/local`. The app is then on <http://localhost/>.
+   - `npm run k8s:verify` runs the evidence pass — it takes the database away and replaces every pod under load, so expect it to take about three minutes.
+   - `npm run k8s:render` prints the AWS overlay; `npm run db:schema` regenerates the SQL the in-cluster database is built from; `npm run k8s:down` deletes the cluster.
+9. Scan for secrets before pushing: `npm run scan:secrets` (the pre-commit hook scans staged changes automatically).
+10. CI (`.github/workflows/ci.yml`) type-checks, tests, lints and builds; runs the integration tests against a Redis service container; validates both Kustomize overlays against the Kubernetes 1.35 schemas and fails if the committed SQL has drifted from the Prisma schema; and scans every commit for secrets.
 
 Secrets never live in the repository: local values go in `.env`, CI values in GitHub/Jenkins credentials, cluster values in Kubernetes Secrets.
 

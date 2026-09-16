@@ -1,38 +1,45 @@
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: splitx-hpa
-  namespace: splitx
+  name: splitx
+  labels:
+    app.kubernetes.io/name: splitx
+    app.kubernetes.io/part-of: splitx
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
     name: splitx
   minReplicas: 2
-  maxReplicas: 5
+  maxReplicas: 10
   metrics:
+    # CPU only. Node holds heap memory after a burst instead of returning it to
+    # the OS, so a memory target ratchets replicas up and never lets them back
+    # down — it would look like autoscaling while being a one-way valve.
     - type: Resource
       resource:
         name: cpu
         target:
           type: Utilization
-          averageUtilization: 70
-    - type: Resource
-      resource:
-        name: memory
-        target:
-          type: Utilization
-          averageUtilization: 80
+          averageUtilization: 60
   behavior:
+    scaleUp:
+      # React to a classroom arriving all at once: no waiting window, and
+      # whichever policy adds more pods wins.
+      stabilizationWindowSeconds: 0
+      selectPolicy: Max
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 15
+        - type: Pods
+          value: 4
+          periodSeconds: 15
     scaleDown:
+      # Come back down slowly: five minutes of quiet before shrinking, one pod
+      # a minute, so a gap between demo runs doesn't cause a cold start.
       stabilizationWindowSeconds: 300
       policies:
         - type: Pods
           value: 1
-          periodSeconds: 60
-    scaleUp:
-      stabilizationWindowSeconds: 30
-      policies:
-        - type: Pods
-          value: 2
           periodSeconds: 60
