@@ -949,7 +949,7 @@ CloudFront gets the same treatment in phase 7.
 ## Phase 4 — Real traffic, and what it takes to survive it
 
 ### D-044 · A host restart left the cluster answering 200 while unable to open a single new connection
-**2026-09-17** · ✅ fixed, and now detected automatically
+**2026-09-17** · ✅ detected automatically · ⚠️ cause corrected in D-050
 
 Found while preparing the load tests. Overnight, Docker Desktop's VM restarted
 (every pod in the cluster showed one restart). The control plane and a worker
@@ -971,6 +971,12 @@ kindnetd (`queue flags bypass to 101` in nftables), and established flows skip
 it. Deleting every NetworkPolicy did not help, so the policies were not the
 problem; restarting the `kindnet` DaemonSet did, immediately. The engine had
 kept stale state across the restart and was rejecting every new flow.
+
+> **Correction, same day (D-050):** the engine was not holding stale state. It
+> was starved by the limits Kind gives it (100m CPU, 50Mi memory) and answered
+> too late for any connection to survive. Restarting it only helped until it
+> fell behind again, which the next restart of the laptop showed within
+> minutes. The detection below was right; the explanation and the fix were not.
 
 The dangerous part came next: **readiness recovered on its own**. Prisma
 reused a connection it had managed to open, the probe passed, and the site
@@ -1178,6 +1184,56 @@ payments instead of 11,682 IOUs, and the device cookie is set once and then reus
 - **Found in the harness:** the first saturation run recorded 19 rate-limit refusals
   with the limits lifted. They came from old pods still draining the previous
   configuration, so the runner now waits out that drain after every rollout.
+
+### D-050 · kindnet was starved by the limits Kind gives it
+**2026-09-17** · ✅ fixed in `k8s:up`, checked by `k8s:verify` · corrects D-044
+
+The first autoscaling run ended when the laptop restarted at 01:54 (Windows logged a
+restart started from the desktop). After the next boot, `k8s:up` passed every check,
+including fresh connections from every pod, at 16:18. By 16:23 every application pod
+was unready with `Can't reach database server`, and the load runner's own connection
+check refused to start the test (D-049). D-044 said kindnet had kept stale state across
+a restart. A fault that appears five minutes after a clean check is not stale state, so
+this time the engine itself was measured, on every node:
+
+| Node | Memory used of limit | Times the limit was hit | CPU periods throttled | New flows waiting for a verdict |
+|---|---|---|---|---|
+| `splitx-worker` | 52.1 of 52.4 MB | 1,221 | 5,773 of 5,776 | 80 of the 83 queued |
+| `splitx-worker2` | 52.1 of 52.4 MB | 7,015 | 5,791 of 5,793 | 126 of the 231 queued |
+| `splitx-control-plane` | 52.1 of 52.4 MB | 5,241 | 5,118 of 5,189 | 0 of 0 (no application pods) |
+
+Kind installs kindnet with a 100m CPU limit and 50Mi of memory. With network policies in
+place, the first packet of every new pod connection waits in netfilter queue 101 until
+kindnet has checked it against the policies. Without the limit, the kindnetd process
+uses **47 MB** resident right after it starts. Under the limit, which also has to hold
+the kernel memory charged to the container, it was held to **17 MB**. The container
+hit its memory limit thousands of times; reclaim runs on the CPU time of whoever asks
+for the memory, so it came out of the same 100m quota; the quota ran out in 99.9% of
+scheduling periods; and verdicts arrived after the connections had already given up.
+Established connections never pass through the queue, which is why readiness kept
+flickering green. Restarting kindnet helped D-044 only until it fell behind again.
+
+`k8s:up` now gives kindnet a 256Mi memory limit and no CPU limit, and keeps its requests
+(100m, 50Mi) so the scheduler still reserves them. A component in the path of every new
+connection should not have a quota: any burst of its own work becomes latency for every
+pod on the node. The memory limit stays so a leak restarts kindnet instead of starving
+the node. The step is idempotent; a second run reports the resources as already set.
+
+After the change: no throttling, memory at 36 to 39 MiB with a peak of 41, no limit
+hits, and nothing waiting in the queue. `k8s:verify` now reads the same counters on
+every node, and fails if a CPU quota returns, the memory limit is hit, a packet is
+dropped, or verdicts start piling up.
+
+- **Not separated:** whether raising memory alone would have been enough. Both limits
+  were pinned, and a quota on this component is the wrong trade on its own terms.
+- **Rejected — restarting kindnet as the fix:** that is what D-044 did, and it hides the
+  fault until the next pod the autoscaler starts, which is the worst moment. `k8s:up`
+  still restarts kindnet if the connection check fails, as a recovery step, and stops
+  if that does not help.
+- **Rejected — removing the network policies from the local overlay:** the rehearsal
+  would stop exercising the layer EKS enforces.
+- **On EKS** the VPC CNI's network policy agent does this job, with its own resource
+  settings. Phase 7 checks them, and the connection check applies unchanged.
 
 ---
 

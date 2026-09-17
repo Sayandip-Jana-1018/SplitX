@@ -10,14 +10,18 @@
  * What it does, and why each step is here rather than in a README:
  *   1. checks the tools it needs, and says which one is missing
  *   2. creates the Kind cluster from k8s/kind/cluster.yaml (1 control plane, 2 workers)
- *   3. installs the pinned platform charts listed in helm/platform/charts.json
- *   4. loads the application image into the nodes — Kind has no registry, and
+ *   3. lifts kindnet's CPU limit: it decides every new pod connection, and at
+ *      Kind's default limits it falls behind until new connections time out
+ *   4. installs the pinned platform charts listed in helm/platform/charts.json
+ *   5. loads the application image into the nodes — Kind has no registry, and
  *      the manifests never pull, so this is how a build reaches a pod
- *   5. builds the splitx-secrets Secret from .env and pipes it to kubectl.
+ *   6. builds the splitx-secrets Secret from .env and pipes it to kubectl.
  *      Values are never written to a file, never passed as an argument and
  *      never printed; only the key names appear in the output.
- *   6. applies k8s/overlays/local and waits for the database, the schema Job
+ *   7. applies k8s/overlays/local and waits for the database, the schema Job
  *      and the deployment
+ *   8. rolls the deployment if the pods run an older build than the one loaded
+ *   9. opens fresh connections from every pod, because readiness cannot prove it
  */
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
@@ -89,7 +93,29 @@ if (!alreadyThere || flag('--recreate')) {
 }
 console.log(kubectl(['get', 'nodes', '-o', 'wide'], { capture: true }).stdout.trim());
 
-// ── 3. platform charts ────────────────────────────────────────────────────
+// ── 3. pod networking ─────────────────────────────────────────────────────
+heading('kindnet resources');
+// With network policies in place, kindnet is asked for a verdict on every new
+// pod connection. Kind installs it with a 100m CPU limit and 50Mi of memory; on
+// this cluster it was throttled in 99.9% of CPU periods, sat at its memory
+// limit, and new connections timed out waiting in its queue while established
+// ones kept flowing (D-050). The CPU limit goes, the request stays for
+// scheduling, and memory keeps a ceiling with room to spare.
+const KINDNET_RESOURCES = { limits: { memory: '256Mi' }, requests: { cpu: '100m', memory: '50Mi' } };
+// The replacer lists every key once and fixes their order, so the comparison
+// does not depend on how the API server orders the object.
+const canonical = (resources) => JSON.stringify(resources, ['limits', 'requests', 'cpu', 'memory']);
+const kindnetNow = kubectl(['-n', 'kube-system', 'get', 'daemonset', 'kindnet', '-o', 'jsonpath={.spec.template.spec.containers[0].resources}'], { capture: true }).stdout;
+if (canonical(JSON.parse(kindnetNow || '{}')) === canonical(KINDNET_RESOURCES)) {
+    console.log('    already ' + canonical(KINDNET_RESOURCES));
+} else {
+    console.log('    was ' + kindnetNow + ', now ' + canonical(KINDNET_RESOURCES));
+    const patch = [{ op: 'replace', path: '/spec/template/spec/containers/0/resources', value: KINDNET_RESOURCES }];
+    kubectl(['-n', 'kube-system', 'patch', 'daemonset', 'kindnet', '--type=json', '-p', JSON.stringify(patch)], { capture: true });
+    kubectl(['-n', 'kube-system', 'rollout', 'status', 'daemonset/kindnet', '--timeout=180s']);
+}
+
+// ── 4. platform charts ────────────────────────────────────────────────────
 heading('Platform charts (pinned in helm/platform/charts.json)');
 const { charts } = JSON.parse(readFileSync(join(root, 'helm/platform/charts.json'), 'utf8'));
 for (const chart of charts) {
@@ -108,7 +134,7 @@ for (const chart of charts) {
     ], { capture: true });
 }
 
-// ── 4. image ──────────────────────────────────────────────────────────────
+// ── 5. image ──────────────────────────────────────────────────────────────
 heading('Image ' + IMAGE);
 const known = run('docker', ['image', 'inspect', IMAGE, '--format', '{{.Id}}'], { capture: true, allowFailure: true });
 if (known.code !== 0) {
@@ -121,7 +147,7 @@ if (known.code !== 0) {
 run('kind', ['load', 'docker-image', IMAGE, '--name', CLUSTER]);
 console.log('    ' + IMAGE + ' is now on every node');
 
-// ── 5. secret ─────────────────────────────────────────────────────────────
+// ── 6. secret ─────────────────────────────────────────────────────────────
 heading('Secret splitx-secrets (built from .env)');
 if (!existsSync(join(root, '.env'))) fail('.env not found. Copy .env.example and fill it in.');
 process.loadEnvFile(join(root, '.env'));
@@ -173,7 +199,7 @@ kubectl(['apply', '-f', '-'], {
 });
 console.log('    ' + Object.keys(stringData).length + ' keys: ' + Object.keys(stringData).sort().join(', '));
 
-// ── 6. manifests ──────────────────────────────────────────────────────────
+// ── 7. manifests ──────────────────────────────────────────────────────────
 heading('Applying ' + OVERLAY);
 // A Job's pod template is immutable, so a changed schema.sql would make apply
 // fail. The Job is disposable, and deleting it is how it gets updated.
@@ -211,14 +237,14 @@ if (!loadedId || runningIds.some((id) => id !== loadedId)) {
 
 heading('Can the pods open new connections?');
 // Readiness can pass on connections a pod opened before something broke, so it
-// cannot answer this. After a host restart Kind's network-policy engine can keep
-// stale state and drop every new pod connection while old ones keep working
-// (D-044); restarting kindnet rebuilds that state.
+// cannot answer this. When Kind's network-policy engine falls behind, every new
+// pod connection times out while old ones keep working (D-044, D-050).
+// Restarting kindnet clears its backlog; step 3 keeps it from building again.
 const capture = (argv) => kubectl(argv, { capture: true, allowFailure: true });
 let network = checkNewConnections(capture);
 if (!network.every((result) => result.ok)) {
     console.log(describe(network));
-    console.log('    new connections are being dropped; restarting kindnet to rebuild its policy state');
+    console.log('    new connections are being dropped; restarting kindnet');
     kubectl(['-n', 'kube-system', 'rollout', 'restart', 'daemonset/kindnet'], { capture: true });
     kubectl(['-n', 'kube-system', 'rollout', 'status', 'daemonset/kindnet', '--timeout=180s'], { capture: true });
     await new Promise((resolve) => setTimeout(resolve, 10_000));

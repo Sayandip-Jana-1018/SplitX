@@ -15,7 +15,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { checkNewConnections, describe } from './lib/cluster-network.mjs';
+import { checkNewConnections, describe, describeKindnet, kindnetHealth } from './lib/cluster-network.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const NS = 'splitx';
@@ -121,6 +121,34 @@ record(
         ? network.length + ' pods checked'
         : describe(network.filter((result) => !result.ok)).split(String.fromCharCode(10)).join('; ')
 );
+
+// ── 1c. The engine that judges those connections ──────────────────────────
+// A connection check passes the moment kindnet catches up. Its own counters
+// show whether it is about to fall behind again (D-050).
+console.log('[1c] kindnet');
+const kindnet = kindnetHealth((node, script) => sh('docker', ['exec', node, 'sh', '-c', script]).stdout, nodes.map((n) => n.name));
+record(
+    'kindnet keeps up: no CPU quota, no memory-limit hits, nothing left waiting for a verdict',
+    kindnet.length === nodes.length && kindnet.every((result) => result.ok),
+    kindnet.every((result) => result.ok)
+        ? kindnet.reduce((sum, result) => sum + result.queued, 0) + ' new flows judged since kindnet started, '
+            + kindnet.reduce((sum, result) => sum + result.dropped, 0) + ' dropped'
+        : describeKindnet(kindnet.filter((result) => !result.ok)).split(String.fromCharCode(10)).join('; ')
+);
+sections.push({
+    title: 'kindnet, the network-policy engine',
+    body: [
+        'The first packet of every new pod connection waits in netfilter queue 101 for kindnet to apply the',
+        'network policies. Kind limits kindnet to 100m CPU and 50Mi by default, and at those',
+        'limits new connections timed out in that queue (D-050). Counted since each kindnet container started.',
+        '',
+        '| Node | CPU quota | Throttled periods | Memory (peak) of limit | Limit hits | New flows judged | Waiting | Dropped |',
+        '|---|---|---|---|---|---|---|---|',
+        ...kindnet.map((r) => '| `' + r.node + '` | ' + r.cpuQuota + ' | ' + r.throttled + ' of ' + r.periods + ' | '
+            + r.memoryMiB + ' MiB (' + r.peakMiB + ') of ' + (r.limitMiB === null ? 'no limit' : r.limitMiB + ' MiB') + ' | '
+            + r.limitHits + ' | ' + r.queued + ' | ' + r.waiting + ' | ' + r.dropped + ' |'),
+    ].join('\n'),
+});
 
 // ── 2. The edge: what the ingress exposes and what it refuses ─────────────
 console.log('[2] Ingress');
