@@ -13,20 +13,22 @@ a class on campus Wi-Fi reaches the internet through one NAT. ([load/classroom.j
 
 | Run | Build | Student plans served | Students refused (429) | Greedy device served | Greedy refused (429) | Student p95 |
 |---|---|---|---|---|---|---|
-| [after](load/classroom-after.json) | `77178161f36c` | 1,912 of 1,912 | 0 (0%) | 168 of 617 | 449 (72.8%) | 28 ms |
 | [before](load/classroom-before.json) | `f4b2dc209824` | 129 of 1,907 | 1,777 (93.2%) | 66 of 623 | 557 (89.4%) | 25 ms |
+| [after](load/classroom-after.json) | `77178161f36c` | 1,912 of 1,912 | 0 (0%) | 168 of 617 | 449 (72.8%) | 28 ms |
 
 ## Saturation: more work than two pods can do
 
 The deployment is pinned at two pods and sent 2,000-person plans faster than two cores
 can compute them, with rate limits lifted. What matters is what happens to the requests
-that are served once the backlog builds. ([load/saturation.js](../../load/saturation.js))
+that are served once the backlog builds, and whether the pods survive it.
+Runs are listed in the order the fixes were made (D-046). ([load/saturation.js](../../load/saturation.js))
 
-| Run | Build | Arrival rate | Served | Shed (503) | Other | Served p50 | p95 | p99 | max | Queue clock |
-|---|---|---|---|---|---|---|---|---|---|---|
-| [after-clock](load/saturation-after-clock.json) | `77178161f36c` | 60/s | 2,984 | 4,190 (58.2%) | 26 | 1337 ms | 1888 ms | 2337 ms | 74621 ms | ingress-nginx |
-| [after-front-door](load/saturation-after-front-door.json) | `39cc320452d1` | 60/s | 3,434 | 3,705 (51.5%) | 54 | 1329 ms | 1883 ms | 2129 ms | 2564 ms | ingress-nginx |
-| [after-keepalive](load/saturation-after-keepalive.json) | `39cc320452d1` | 60/s | 3,355 | 3,846 (53.4%) | 0 | 1379 ms | 1908 ms | 2291 ms | 74257 ms | ingress-nginx |
-| [after-probes](load/saturation-after-probes.json) | `77178161f36c` | 60/s | 3,145 | 4,005 (55.6%) | 51 | 1320 ms | 1915 ms | 74467 ms | 80366 ms | ingress-nginx |
-| [before](load/saturation-before.json) | `f4b2dc209824` | 60/s | 3,065 | 2,223 (33.7%) | 1,314 | 2475 ms | 26082 ms | 30749 ms | 79409 ms | app proxy |
+| Run | Build | Served | Refused (503) | 502 / 504 | Restarts | Served p50 / p95 | Liveness checks answered |
+|---|---|---|---|---|---|---|---|
+| [before](load/saturation-before.json) | `f4b2dc209824` | 3,065 | 2,223 | 50 / 1,264 | 2 | 2475 ms / 26082 ms | not measured |
+| [after-clock](load/saturation-after-clock.json) | `77178161f36c` | 2,984 | 4,190 | 26 / 0 | 1 | 1337 ms / 1888 ms | not measured |
+| [after-probes](load/saturation-after-probes.json) | `77178161f36c` | 3,145 | 4,005 | 51 / 0 | 0 | 1320 ms / 1915 ms | 222 of 238, p95 9201 ms |
+| [after-front-door](load/saturation-after-front-door.json) | `39cc320452d1` | 3,434 | 3,705 | 54 / 0 | 0 | 1329 ms / 1883 ms | 227 of 241, p95 6288 ms |
+| [after-keepalive](load/saturation-after-keepalive.json) | `39cc320452d1` | 3,355 | 3,846 | 0 / 0 | 0 | 1379 ms / 1908 ms | 234 of 240, p95 1034 ms |
+| [after-admission](load/saturation-after-admission.json) | `570fcf134d20` | 3,506 | 3,695 | 0 / 0 | 0 | 952 ms / 1212 ms | 241 of 241, p95 2403 ms |
 

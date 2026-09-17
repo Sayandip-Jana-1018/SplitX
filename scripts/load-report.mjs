@@ -23,7 +23,9 @@ function load(root) {
     } catch {
         return [];
     }
-    return files.map((file) => ({ file, ...JSON.parse(readFileSync(join(dir, file), 'utf8')) }));
+    return files
+        .map((file) => ({ file, ...JSON.parse(readFileSync(join(dir, file), 'utf8')) }))
+        .sort((a, b) => a.ranAt.localeCompare(b.ranAt));
 }
 
 function classroom(runs) {
@@ -50,21 +52,28 @@ function classroom(runs) {
 
 function saturation(runs) {
     if (!runs.length) return [];
+    const restarts = (run) => {
+        const samples = run.cluster.filter((sample) => sample.error === undefined && sample.restarts !== undefined);
+        return samples.length ? Math.max(...samples.map((sample) => sample.restarts)) - samples[0].restarts : '-';
+    };
     return [
         '## Saturation: more work than two pods can do',
         '',
         'The deployment is pinned at two pods and sent 2,000-person plans faster than two cores',
         'can compute them, with rate limits lifted. What matters is what happens to the requests',
-        'that are served once the backlog builds. ([load/saturation.js](../../load/saturation.js))',
+        'that are served once the backlog builds, and whether the pods survive it.',
+        'Runs are listed in the order the fixes were made (D-046). ([load/saturation.js](../../load/saturation.js))',
         '',
-        '| Run | Build | Arrival rate | Served | Shed (503) | Other | Served p50 | p95 | p99 | max | Queue clock |',
-        '|---|---|---|---|---|---|---|---|---|---|---|',
+        '| Run | Build | Served | Refused (503) | 502 / 504 | Restarts | Served p50 / p95 | Liveness checks answered |',
+        '|---|---|---|---|---|---|---|---|',
         ...runs.map((run) => {
             const all = run.requests.byGroup.all ?? {};
-            const clock = run.settings.config.TRUST_UPSTREAM_REQUEST_START === 'true' ? 'ingress-nginx' : 'app proxy';
-            return '| [' + run.label + '](load/' + run.file + ') | `' + run.image.gitSha + '` | ' + (run.settings.k6?.rate ?? '-') + '/s | '
-                + n(all.ok) + ' | ' + n(all.shed) + ' (' + pct(all.shed, all.requests) + ') | ' + n(all.other) + ' | '
-                + ms(all.p50) + ' | ' + ms(all.p95) + ' | ' + ms(all.p99) + ' | ' + ms(all.max) + ' | ' + clock + ' |';
+            const statuses = all.statuses ?? {};
+            const live = run.requests.byGroup.liveness;
+            return '| [' + run.label + '](load/' + run.file + ') | `' + run.image.gitSha + '` | ' + n(all.ok) + ' | ' + n(all.shed)
+                + ' | ' + n(statuses['502'] ?? 0) + ' / ' + n(statuses['504'] ?? 0) + ' | ' + restarts(run)
+                + ' | ' + ms(all.p50) + ' / ' + ms(all.p95) + ' | '
+                + (live ? live.ok + ' of ' + live.requests + ', p95 ' + ms(live.p95) : 'not measured') + ' |';
         }),
         '',
     ];
