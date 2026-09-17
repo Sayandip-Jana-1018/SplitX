@@ -6,9 +6,11 @@
  * users would slow down with the service and hide the overload it was meant
  * to create.
  *
- * 1,000-person plans cost about 24 ms of CPU. At the HPA's target of 60% of a
- * 250m request, each pod should settle at roughly 6 requests a second, so the
- * steps below ask for about 2, 5, 10 and then more pods than the maximum.
+ * Measured on the cluster (D-051), a 1,000-person plan costs 34 to 39 ms of CPU
+ * for the whole request, 14 to 19 ms of it planning. At the HPA's target of 60%
+ * of a 250m request each pod settles at about 4 plans a second, so the steps
+ * below ask for about 3, 7, 15 and 26 pods: two within the maximum of 10, two
+ * beyond it.
  */
 import { preview, summarise } from './lib.js';
 

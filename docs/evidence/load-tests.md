@@ -32,3 +32,84 @@ Runs are listed in the order the fixes were made (D-046). ([load/saturation.js](
 | [after-keepalive](load/saturation-after-keepalive.json) | `39cc320452d1` | 3,355 | 3,846 | 0 / 0 | 0 | 1379 ms / 1908 ms | 234 of 240, p95 1034 ms |
 | [after-admission](load/saturation-after-admission.json) | `570fcf134d20` | 3,506 | 3,695 | 0 / 0 | 0 | 952 ms / 1212 ms | 241 of 241, p95 2403 ms |
 
+## Staircase: the autoscaler under rising load
+
+1,000-person plans at 10, 30, 60 and 100 requests a second, two minutes each, then
+nothing, with the cluster watched until it scales back down. Rate limits lifted.
+([load/staircase.js](../../load/staircase.js))
+
+### v1 (build `570fcf134d20`)
+
+| | |
+|---|---|
+| Requests | 30,029 over 632 s: 30,029 served, 0 shed, 0 rate limited, 0 other |
+| Served latency | p50 24 ms, p95 54 ms, p99 98 ms |
+| Autoscaler | 2 to 10 pods, CPU target 60% of the request |
+| First scale-up | 58.5 s after the load started |
+| Peak | 10 ready pods, first reached at 331.1 s |
+| Back to 2 pods | 719 s after the load stopped |
+
+```mermaid
+xychart-beta
+  title "Ready pods (line) and requests per second / 10 (bars), every 30 s"
+  x-axis "minutes" [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10, 10.5, 11, 11.5, 12, 12.5, 13, 13.5, 14, 14.5, 15, 15.5, 16, 16.5, 17, 17.5, 18, 18.5, 19, 19.5, 20, 20.5, 21, 21.5, 22, 22.5, 23, 23.5, 24, 24.5, 25, 25.5]
+  y-axis "pods" 0 --> 12
+  bar [0.6, 1, 1, 1, 1, 2, 3, 3, 3, 3, 4.5, 6, 6, 6, 6, 8, 10, 10, 10, 10, 4.9, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+  line [2, 3, 3, 3, 3, 3, 6, 6, 6, 7, 7, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 9, 8, 8, 7, 7, 7, 6, 5, 5, 4, 4, 4, 3, 3, 2, 2, 2, 2, 2, 2, 2]
+```
+
+| Elapsed | Requests/s | Worst 10 s p95 | Shed | Ready pods | Autoscaler wants | CPU vs request |
+|---|---|---|---|---|---|---|
+| 0 min | 6 | 121 ms | 0 | 2 | 2 | 21% |
+| 0.5 min | 10 | 35 ms | 0 | 3 | 3 | 71% |
+| 1 min | 10 | 34 ms | 0 | 3 | 3 | 51% |
+| 1.5 min | 10 | 29 ms | 0 | 3 | 3 | 45% |
+| 2 min | 10 | 39 ms | 0 | 3 | 3 | 43% |
+| 2.5 min | 20.1 | 36 ms | 0 | 3 | 3 | 62% |
+| 3 min | 30 | 49 ms | 0 | 6 | 6 | 116% |
+| 3.5 min | 30 | 34 ms | 0 | 6 | 6 | 65% |
+| 4 min | 30 | 43 ms | 0 | 6 | 6 | 66% |
+| 4.5 min | 30 | 34 ms | 0 | 7 | 7 | 70% |
+| 5 min | 45.1 | 73 ms | 0 | 7 | 10 | 82% |
+| 5.5 min | 60 | 71 ms | 0 | 10 | 10 | 101% |
+| 6 min | 60 | 43 ms | 0 | 10 | 10 | 96% |
+| 6.5 min | 60 | 45 ms | 0 | 10 | 10 | 90% |
+| 7 min | 60 | 34 ms | 0 | 10 | 10 | 85% |
+| 7.5 min | 80.3 | 61 ms | 0 | 10 | 10 | 102% |
+| 8 min | 100 | 74 ms | 0 | 10 | 10 | 147% |
+| 8.5 min | 100 | 67 ms | 0 | 10 | 10 | 151% |
+| 9 min | 100 | 89 ms | 0 | 10 | 10 | 159% |
+| 9.5 min | 100 | 97 ms | 0 | 10 | 10 | 171% |
+| 10 min | 49.4 | 46 ms | 0 | 10 | 10 | 114% |
+| 10.5 min | 0 | - | 0 | 10 | 10 | 4% |
+| 11 min | 0 | - | 0 | 10 | 10 | 1% |
+| 11.5 min | 0 | - | 0 | 10 | 10 | 2% |
+| 12 min | 0 | - | 0 | 10 | 10 | 1% |
+| 12.5 min | 0 | - | 0 | 10 | 10 | 2% |
+| 13 min | 0 | - | 0 | 10 | 10 | 2% |
+| 13.5 min | 0 | - | 0 | 10 | 10 | 2% |
+| 14 min | 0 | - | 0 | 10 | 10 | 2% |
+| 14.5 min | 0 | - | 0 | 10 | 10 | 1% |
+| 15 min | 0 | - | 0 | 10 | 10 | 1% |
+| 15.5 min | 0 | - | 0 | 9 | 9 | 1% |
+| 16 min | 0 | - | 0 | 8 | 8 | 1% |
+| 16.5 min | 0 | - | 0 | 8 | 8 | 1% |
+| 17 min | 0 | - | 0 | 7 | 7 | 1% |
+| 17.5 min | 0 | - | 0 | 7 | 7 | 1% |
+| 18 min | 0 | - | 0 | 7 | 7 | 2% |
+| 18.5 min | 0 | - | 0 | 6 | 6 | 2% |
+| 19 min | 0 | - | 0 | 5 | 5 | 1% |
+| 19.5 min | 0 | - | 0 | 5 | 5 | 1% |
+| 20 min | 0 | - | 0 | 4 | 4 | 2% |
+| 20.5 min | 0 | - | 0 | 4 | 4 | 2% |
+| 21 min | 0 | - | 0 | 4 | 4 | 2% |
+| 21.5 min | 0 | - | 0 | 3 | 3 | 2% |
+| 22 min | 0 | - | 0 | 3 | 3 | 2% |
+| 22.5 min | 0 | - | 0 | 2 | 2 | 2% |
+| 23 min | 0 | - | 0 | 2 | 2 | 2% |
+| 23.5 min | 0 | - | 0 | 2 | 2 | 2% |
+| 24 min | 0 | - | 0 | 2 | 2 | 2% |
+| 24.5 min | 0 | - | 0 | 2 | 2 | 2% |
+| 25 min | 0 | - | 0 | 2 | 2 | 2% |
+| 25.5 min | 0 | - | 0 | 2 | 2 | 2% |
+
