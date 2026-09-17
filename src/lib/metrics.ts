@@ -1,4 +1,5 @@
 import client from 'prom-client';
+import { previewMaxInFlight, previewsInFlight } from '@/lib/previewAdmission';
 import { CATEGORIES, PAYMENT_METHODS } from '@/lib/utils';
 
 // ═══════════════════════════════════════════════════════════════
@@ -87,6 +88,22 @@ function createMetrics() {
             labelNames: ['mode', 'algorithm'] as const,
             buckets: [0.0005, 0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1],
             registers: [register],
+        }),
+        settlementPreviewsInFlight: new client.Gauge({
+            name: 'splitx_settlement_previews_in_flight',
+            help: 'Settlement previews admitted and not yet finished in this process; the proxy refuses more than splitx_settlement_previews_max_in_flight',
+            registers: [register],
+            collect() {
+                this.set(previewsInFlight());
+            },
+        }),
+        settlementPreviewsMaxInFlight: new client.Gauge({
+            name: 'splitx_settlement_previews_max_in_flight',
+            help: 'The admission cap for settlement previews in this process (PREVIEW_MAX_IN_FLIGHT)',
+            registers: [register],
+            collect() {
+                this.set(previewMaxInFlight());
+            },
         }),
         settlementPreviewQueue: new client.Histogram({
             name: 'splitx_settlement_preview_queue_seconds',
@@ -188,10 +205,10 @@ export function httpMethodLabel(value: unknown) {
     return HTTP_METHODS.has(method) ? method : 'OTHER';
 }
 
-export type ProxyDecision = 'pass' | 'limiter_error' | 'redirect_login' | 'redirect_dashboard' | 'rate_limited';
+export type ProxyDecision = 'pass' | 'limiter_error' | 'redirect_login' | 'redirect_dashboard' | 'rate_limited' | 'shed_queue' | 'shed_capacity';
 
 /** Decisions where the proxy writes the response itself instead of forwarding. */
-const ANSWERED_BY_PROXY = new Set<ProxyDecision>(['redirect_login', 'redirect_dashboard', 'rate_limited']);
+const ANSWERED_BY_PROXY = new Set<ProxyDecision>(['redirect_login', 'redirect_dashboard', 'rate_limited', 'shed_queue', 'shed_capacity']);
 
 /**
  * Requests the proxy answers itself (redirects, 429s) never reach a route, so

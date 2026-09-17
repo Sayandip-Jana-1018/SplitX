@@ -946,6 +946,362 @@ CloudFront gets the same treatment in phase 7.
 
 ---
 
+## Phase 4 — Real traffic, and what it takes to survive it
+
+### D-044 · A host restart left the cluster answering 200 while unable to open a single new connection
+**2026-09-17** · ✅ detected automatically · ⚠️ cause corrected in D-050
+
+Found while preparing the load tests. Overnight, Docker Desktop's VM restarted
+(every pod in the cluster showed one restart). The control plane and a worker
+came back with their IP addresses swapped, and pods came back with recycled IPs.
+Both application pods were Running but not Ready, and the site answered 503.
+
+What the evidence showed, layer by layer:
+
+| Test | Result |
+|---|---|
+| DNS from the app pod, and from Redis (which no policy restricts) | failed |
+| TCP from a node to pods on other nodes | worked |
+| Pod to pod on the same node | worked |
+| Pod to pod across nodes, new connection | failed |
+| Packet capture on both nodes | the app's **existing** database connection flowed both ways (`SELECT 1` answered in 0.2 ms); a **new** connection's SYN entered the sending node from the pod and never left it |
+
+Kind nodes send new pod connections to the network-policy engine inside
+kindnetd (`queue flags bypass to 101` in nftables), and established flows skip
+it. Deleting every NetworkPolicy did not help, so the policies were not the
+problem; restarting the `kindnet` DaemonSet did, immediately. The engine had
+kept stale state across the restart and was rejecting every new flow.
+
+> **Correction, same day (D-050):** the engine was not holding stale state. It
+> was starved by the limits Kind gives it (100m CPU, 50Mi memory) and answered
+> too late for any connection to survive. Restarting it only helped until it
+> fell behind again, which the next restart of the laptop showed within
+> minutes. The detection below was right; the explanation and the fix were not.
+
+The dangerous part came next: **readiness recovered on its own**. Prisma
+reused a connection it had managed to open, the probe passed, and the site
+answered 200 — while no pod could open a new connection. The next pod the
+autoscaler started would never have become ready, and the phase 4 load tests
+would have failed in a way that looked like an autoscaling problem.
+
+It also exposed a gap in phase 3's verification: a passing readiness probe was
+treated as proof of connectivity, and it is not.
+
+- `scripts/lib/cluster-network.mjs` opens fresh connections from inside every
+  application pod — DNS, Postgres, Redis — with the busybox tools already in
+  the image.
+- `npm run k8s:up` runs it on every bring-up. When new connections fail it
+  restarts kindnet and checks again, and if that does not fix it, it stops and
+  says to rebuild the cluster rather than continuing with a broken one.
+- `npm run k8s:verify` includes it as a check.
+- EKS uses a different policy implementation (the VPC CNI's network policy
+  agent), and the same check applies there.
+
+One false lead worth recording: the first reachability test from the nodes used
+`ping`, which the Kind node image does not include, so every "unreachable" it
+printed was the missing binary. The capture, and TCP tests with `curl`, are
+what the conclusions above rest on.
+
+### D-045 · A classroom is many people: anonymous devices get their own limit, networks keep a ceiling
+**2026-09-17** · ✅ done, B-015 closed
+
+Anonymous requests were rate limited by address, and a classroom on campus Wi-Fi
+reaches the internet through one. `load/classroom.js` recreates it with production
+limits: 80 phones behind one address planning a trip every 4 to 8 seconds, plus one
+device planning as fast as it can.
+
+| Build | Student plans served | Students refused | Greedy device served | Student p95 |
+|---|---|---|---|---|
+| before (`f4b2dc2`) | 129 of 1,907 | **1,777 (93%)** | 66 of 623 | 25 ms |
+| after (`7717816`) | **1,912 of 1,912** | **0** | 168 of 617 | 28 ms |
+
+The proxy now gives an anonymous browser a device cookie: a random 128-bit identifier
+signed with an HMAC under a key derived from the auth secret, `HttpOnly`,
+`SameSite=Lax`, `Secure` over HTTPS. A request carrying a genuine cookie is limited as
+that device (60 previews a minute).
+
+Device identities cost nothing to mint, so they never replace the network limit. Once
+the device is allowed, its address is checked against a ceiling sized for a room of
+about a hundred phones (2,400 previews a minute). The order matters: a request the
+device limit refused is never charged to the network, so one greedy phone cannot use
+up everyone else's allowance. Cookie-less requests keep the per-address limit, and
+signed-in users are still limited per account.
+
+- **Found by a test:** 16 bytes in base64url leave four unused bits in the last
+  character, so several different strings decode to the same signature bytes. The
+  first version compared decoded bytes and accepted all of them. Signatures are now
+  compared as canonical text; a test flipping only those bits guards it.
+- **Verified on real Redis:** forty phones planning ten times each are all served; a
+  device over its own limit is held at 60 while its neighbour is untouched; sixty
+  freshly minted identities from one address are capped at the network ceiling.
+- **Rejected — raising the per-address limit:** it fixes the classroom by letting any
+  one person use the whole room's allowance.
+- **Rejected — requiring sign-in for the demo:** the page has to work from a QR code.
+
+### D-046 · Under sustained overload the pods were killed by their own probes
+**2026-09-17** · ✅ fixed in four steps, each measured
+
+`load/saturation.js` holds the deployment at two pods (`overlays/saturation`) and sends
+2,000-person plans at 60 a second, about 70% more than two cores can compute. Nothing
+scales, so the only question is what the pods do with work they cannot finish.
+
+What happened on the phase 3 build:
+
+1. Requests queued on the event loop, but load shedding started its clock when the
+   app's proxy ran, which a busy process also delays. Waits of many seconds were
+   measured as under one, so shedding rarely fired.
+2. The liveness probe waited in the same queue, timed out three times, and Kubernetes
+   restarted both containers. Every request they were serving failed.
+3. The restarted process was flooded before its 1-second startup probe could pass.
+
+Served p95 reached **26 seconds**, 1,264 requests timed out at the ingress, 50 more got
+502, and both containers restarted. Each fix below was deployed and measured on its
+own:
+
+| Run | Change | Served | Refused (503) | 502 / 504 | Restarts | Served p95 | Liveness checks answered |
+|---|---|---|---|---|---|---|---|
+| before | none | 3,065 | 2,223 | 50 / 1,264 | 2 | 26.1 s | not measured |
+| clock | ingress stamps arrival time | 2,984 | 4,190 | 26 / 0 | 1 | 1.9 s | not measured |
+| probes | liveness 5 s × 6 failures | 3,145 | 4,005 | 51 / 0 | 0 | 1.9 s | 222 of 238, p95 9.2 s |
+| front door | refuse overdue work in the proxy | 3,434 | 3,705 | 54 / 0 | 0 | 1.9 s | 227 of 241, p95 6.3 s |
+| keep-alive | Node outlasts nginx's idle timeout | 3,355 | 3,846 | **0 / 0** | 0 | 1.9 s | 234 of 240, p95 1.0 s (0.98 s in the pod) |
+| admission | at most 8 plans in flight per pod | **3,506** | 3,695 | **0 / 0** | **0** | **1.2 s** | **241 of 241**, p95 2.4 s (0.9 s in the pod) |
+
+Latencies are measured by k6, so they include the client side (k6 and Docker Desktop port
+forwarding on the same laptop); "in the pod" figures come from the upstream times in the
+ingress-nginx access log. The raw results are in `docs/evidence/load/saturation-*.json`.
+
+The individual fixes, and why each was needed even after the one before:
+
+- **The clock starts at the ingress.** ingress-nginx sets `X-Request-Start: t=${msec}`
+  on every request, and `proxy_set_header` overwrites any value a client sent. The app
+  believes that stamp only where the deployment says the ingress writes it
+  (`TRUST_UPSTREAM_REQUEST_START=true`, local overlay only), and never believes a stamp
+  over a minute old or more than a second in the future. **Verified:** a forged
+  "arrived 5 s ago" stamp sent through the ingress was served normally three times out
+  of three, and the same stamp sent straight to a pod was refused with 503 — so the
+  stamp is honoured, and the ingress replaces a forged one. The AWS overlay leaves the
+  flag unset, because an ALB adds no such header.
+- **Liveness tolerates a busy pod.** The endpoint is answered by the same event loop as
+  the work, so an overloaded pod answers slowly, not never. Liveness now allows 5 s and
+  six failures: a hung process is still restarted in about two minutes, and readiness
+  has taken it out of the Service long before that. The startup probe gets 3 s instead
+  of the kubelet default of 1 s.
+- **Refuse at the front door.** A new measurement, liveness checks sent alongside the
+  overload, showed the pods were still drowning. Served latency looked fine only
+  because every request that waited too long had been refused, so it no longer counted
+  as served. The nginx access log splits client time from time inside the pod: refused
+  requests spent **22 s at p95 inside the pod** before being told so, and liveness
+  checks 8.8 s. Refusal happened in the route handler, after routing, the rate
+  limiter's Redis round trip and reading the body, and under overload those steps were
+  the queue. The proxy is the first application code a request reaches and already
+  holds the arrival time, so it now refuses an overdue preview itself. Those refusals
+  are counted, not logged, so an overload cannot add a synchronous log write per
+  refused request.
+- **Keep-alive must outlast the proxy.** The remaining 502s were not restarts; nginx
+  logged `recv() failed (104: Connection reset by peer)`. Next's standalone server
+  closes idle connections after 5 s, and ingress-nginx keeps upstream connections for
+  60 s, so nginx would reuse a connection at the moment Node closed it.
+  `KEEP_ALIVE_TIMEOUT=65000` outlasts both nginx and an ALB. Changed on its own: 502s
+  went **54 → 0**, and liveness p95 went 6.3 s → 1.0 s.
+- **Cap accepted work, not just waiting time.** Refusals still spent 10.7 s at p95 inside
+  the pod. Queue-time shedding looks at how long a request has already waited. When a
+  busy loop briefly catches up, a burst of requests passes that check together, each
+  then holds the CPU for 57 ms, and the loop stalls for seconds before anything else
+  can be refused. The proxy now admits a preview only while fewer than
+  `PREVIEW_MAX_IN_FLIGHT` (8) are unfinished in the process; eight 2,000-person plans
+  are under half a second of CPU. The route releases the slot however it finishes, an
+  admission never released expires after a minute, and the proxy strips any admission
+  header a client sends. Refusals inside the pod: **10.7 s → 1.3 s at p95**.
+
+What is left: 155 of 7,442 requests in the final run spent over 3 s inside a pod, all
+between 30 and 50 seconds into the overload, split across both pods, with none after.
+That looks like freshly started pods growing their heap under sudden load. It is
+tracked as B-024 for phase 5, when in-cluster metrics can show memory and GC.
+
+- **Rejected — raising the probe timeout alone:** it stops the restarts and leaves
+  refusals taking 22 s, which is its own outage.
+- **Rejected — more replicas as the fix:** the autoscaler's maximum is exactly the point
+  where this happens, and a classroom can get there.
+
+### D-047 · A deploy that does not change the pods is not a deploy
+**2026-09-17** · ✅ done
+
+Two ways the cluster reported success while running the wrong thing, both found
+during the load tests:
+
+- **Configuration.** Pods read environment variables once, at start-up. With a plain
+  ConfigMap, changing a setting and re-applying did nothing to running pods until
+  something else restarted them. Settings now live in `k8s/base/config.env`, and
+  Kustomize generates the ConfigMap with a hash of its contents in its name, so any
+  change is a new object and a rollout. The AWS overlay merges its two differences into
+  the same generator.
+- **Images.** The local overlay deploys `splitx:local`, and every build is loaded under
+  that tag. The Deployment does not change, so no pod is replaced: a fix was "deployed"
+  and the old build kept serving, which only showed because the pods report their
+  commit. `k8s:up` now compares the image ID the node's containerd holds for the tag
+  with the IDs the running pods report (the same scheme on both sides, unlike Docker's)
+  and rolls the deployment when they differ. A second run finds nothing to do.
+
+The pipeline in phase 6 deploys an immutable commit tag, which removes the second
+problem at its source. The local overlay keeps a stable tag so rehearsals need no
+manifest edits, and `k8s:up` compensates for it.
+
+### D-048 · A page to generate real classroom traffic
+**2026-09-17** · ✅ done
+
+The graded demo is autoscaling under real classroom traffic, and nothing in the app
+generated any: the settlement preview had no page. `/scale` is public, needs no
+sign-in and is built for phones. Pick a group size and plan a trip: it shows the fewest
+payments that settle everyone, how many IOUs that replaces, and which pod did the work.
+"Keep planning" repeats it, and the list of servers that answered grows as the
+autoscaler adds pods.
+
+A page a whole room opens at once must not turn into its own load test, so the pacing
+logic lives in `lib/scaleDemo.ts` with its own tests. Plans come about every four
+seconds, with a second of random jitter either way. A busy answer (503) backs off
+exponentially, up to eight times the wait. A rate-limit answer (429) waits exactly as
+long as `Retry-After` says. Nothing runs while the page is hidden.
+
+Checked in a browser at desktop and phone width: a 1,000-person trip settles in 960
+payments instead of 11,682 IOUs, and the device cookie is set once and then reused.
+
+### D-049 · Load tests are code, with the cluster watched as they run
+**2026-09-17** · ✅ done
+
+- k6 2.2.0 runs in its official container, pinned by digest, against the ingress from
+  one address. Scenarios live in `load/`.
+- Each test declares the setup it needs: production limits for the classroom, limits
+  lifted for the others (`components/loadtest-limits`), and two fixed pods for
+  saturation (`components/fixed-replicas`). Nothing is changed by hand.
+- `scripts/load-run.mjs` applies that overlay, waits for the deployment to be at rest
+  and able to open new connections (D-044), runs k6, samples the autoscaler every 5 s
+  during the test and after it, restores the local overlay, and writes the raw result
+  to `docs/evidence/load/`. `scripts/load-report.mjs` renders
+  [docs/evidence/load-tests.md](evidence/load-tests.md) from those files.
+- Time series are aligned by elapsed time, never wall clock, because the Docker VM clock
+  can drift a minute from Windows after the laptop sleeps.
+- **Found in the harness:** the first saturation run recorded 19 rate-limit refusals
+  with the limits lifted. They came from old pods still draining the previous
+  configuration, so the runner now waits out that drain after every rollout.
+- **Found by accident, battery power:** a staircase attempt ran with the charger
+  disconnected. One minute into the 30-plans-a-second step it had ten pods at 219% of
+  their CPU request, about 5.5 cores; the run on the charger had six pods at 66%, about
+  1 core, at the same moment of the same step. A throttled laptop measures its power
+  plan, not the application. The runner now checks the power source before touching
+  the cluster, stops on battery unless given `--allow-battery`, and records the source
+  at the start and end of every result. Windows logs every change of power source: the
+  charger was connected from 23:55 to 01:52, which covers all eight earlier runs
+  (00:34 to 01:47), so no comparison in D-045 or D-046 mixes the two.
+
+### D-050 · kindnet was starved by the limits Kind gives it
+**2026-09-17** · ✅ fixed in `k8s:up`, checked by `k8s:verify` · corrects D-044
+
+The first autoscaling run ended when the laptop restarted at 01:54 (Windows logged a
+restart started from the desktop). After the next boot, `k8s:up` passed every check,
+including fresh connections from every pod, at 16:18. By 16:23 every application pod
+was unready with `Can't reach database server`, and the load runner's own connection
+check refused to start the test (D-049). D-044 said kindnet had kept stale state across
+a restart. A fault that appears five minutes after a clean check is not stale state, so
+this time the engine itself was measured, on every node:
+
+| Node | Memory used of limit | Times the limit was hit | CPU periods throttled | New flows waiting for a verdict |
+|---|---|---|---|---|
+| `splitx-worker` | 52.1 of 52.4 MB | 1,221 | 5,773 of 5,776 | 80 of the 83 queued |
+| `splitx-worker2` | 52.1 of 52.4 MB | 7,015 | 5,791 of 5,793 | 126 of the 231 queued |
+| `splitx-control-plane` | 52.1 of 52.4 MB | 5,241 | 5,118 of 5,189 | 0 of 0 (no application pods) |
+
+Kind installs kindnet with a 100m CPU limit and 50Mi of memory. With network policies in
+place, the first packet of every new pod connection waits in netfilter queue 101 until
+kindnet has checked it against the policies. Without the limit, the kindnetd process
+uses **47 MB** resident right after it starts. Under the limit, which also has to hold
+the kernel memory charged to the container, it was held to **17 MB**. The container
+hit its memory limit thousands of times; reclaim runs on the CPU time of whoever asks
+for the memory, so it came out of the same 100m quota; the quota ran out in 99.9% of
+scheduling periods; and verdicts arrived after the connections had already given up.
+Established connections never pass through the queue, which is why readiness kept
+flickering green. Restarting kindnet helped D-044 only until it fell behind again.
+
+`k8s:up` now gives kindnet a 256Mi memory limit and no CPU limit, and keeps its requests
+(100m, 50Mi) so the scheduler still reserves them. A component in the path of every new
+connection should not have a quota: any burst of its own work becomes latency for every
+pod on the node. The memory limit stays so a leak restarts kindnet instead of starving
+the node. The step is idempotent; a second run reports the resources as already set.
+
+After the change: no throttling, memory at 36 to 39 MiB with a peak of 41, no limit
+hits, and nothing waiting in the queue. `k8s:verify` now reads the same counters on
+every node, and fails if a CPU quota returns, the memory limit is hit, a packet is
+dropped, or verdicts start piling up.
+
+- **Not separated:** whether raising memory alone would have been enough. Both limits
+  were pinned, and a quota on this component is the wrong trade on its own terms.
+- **Rejected — restarting kindnet as the fix:** that is what D-044 did, and it hides the
+  fault until the next pod the autoscaler starts, which is the worst moment. `k8s:up`
+  still restarts kindnet if the connection check fails, as a recovery step, and stops
+  if that does not help.
+- **Rejected — removing the network policies from the local overlay:** the rehearsal
+  would stop exercising the layer EKS enforces.
+- **On EKS** the VPC CNI's network policy agent does this job, with its own resource
+  settings. Phase 7 checks them, and the connection check applies unchanged.
+
+### D-051 · The autoscaler, measured under a staircase of traffic: configuration kept
+**2026-09-17** · ✅ measured
+
+`load/staircase.js` sends 1,000-person plans at 10, 30, 60 and 100 a second, two
+minutes each with rate limits lifted, then the runner watches the cluster for 15
+minutes. Build `570fcf1`, on the charger at the start and the end:
+
+| Step | Pods | CPU vs request, last minute | CPU per plan | Latency p50 / p95 / p99 | Planning p95, timed by the server |
+|---|---|---|---|---|---|
+| 10 a second | 2 → 3 | 45% | 34 ms | 22 / 33 / 39 ms | 20 ms |
+| 30 a second | 3 → 7 | 67% | 35 ms | 22 / 34 / 67 ms | 20 ms |
+| 60 a second | 10, the maximum | 90% | 38 ms | 24 / 39 / 80 ms | 24 ms |
+| 100 a second | 10, the maximum | 158% | 39 ms | 26 / 74 / 113 ms | 33 ms |
+
+All **30,029 plans were answered 200**: nothing shed, nothing rate limited, no container
+restarted. CPU per plan is the autoscaler's own utilisation reading × the 250m request ×
+ready pods ÷ the arrival rate k6 achieved, over the last minute of each step.
+
+What the autoscaler did, from the samples taken every 5 s:
+
+- **Scaling up.** Each decision came within 30 s of a new rate arriving, which is
+  metrics-server's 15 s window plus the autoscaler's 15 s cycle, and the new pods were
+  serving 5 to 16 s after it. For example, 30 a second arrived at 180 s, the autoscaler
+  asked for 6 pods at 192 s, and 6 were ready at 208 s.
+- **Sizing.** Pod counts follow the arithmetic. At 35 ms of CPU a plan, the target of
+  150m per pod is about 4 plans a second per pod.
+- **Past the maximum.** Pods ran above their request, 158% or about 395m each at 100 a
+  second, inside their 1-CPU limit. The cost was p95 latency going from 39 to 74 ms.
+- **Scaling down.** Exactly as configured: ten pods through the 300 s stabilisation
+  window, then one pod a minute, back to two pods 719 s after the load stopped. The
+  pods were split five and five across the workers at the peak.
+- **Networking.** kindnet had judged 1,042 new flows by the peak, including the startup
+  connections of every pod the autoscaler added, with none waiting, none dropped and a
+  memory peak of 79 MiB (D-050).
+
+D-025 measured 24 ms of CPU per request for one process on the host, 17 ms of it
+planning. In the cluster, planning costs about the same (p50 13 to 16 ms), and the rest
+of the request costs about 20 ms instead of 7. That remainder was not broken down here;
+phase 5's in-cluster metrics can, alongside B-024.
+
+**Kept:** 2 to 10 pods, a 60% target on a 250m request, a 1-CPU limit, scale-up without
+a stabilisation window, scale-down after five minutes at one pod a minute.
+
+- A class is inside the range where the scaling shows. Eighty phones on `/scale`, each
+  planning a 1,000-person trip every four seconds, is 20 plans a second: about 5 pods.
+- **Rejected — raising the maximum on Kind:** beyond 10 pods the limit is the laptop's
+  cores, not the replica count. On EKS it is node capacity, which is the Cluster
+  Autoscaler's job in phase 7.
+- **Rejected — a lower target or a larger request:** pods already scale out at 4 plans a
+  second while one pod can compute about 25. Scaling earlier would only add idle pods.
+- **Rejected — a shorter scale-down window for a livelier demo:** a class pauses between
+  rounds, and five minutes keeps the deployment from shrinking and regrowing at every
+  pause.
+- **For phase 7:** a 1-CPU limit on burstable EC2 instances spends CPU credits, so node
+  types and limits are measured again on EKS.
+
+---
+
 ## Open problems
 
 | ID | Problem | Why it matters | Status / planned fix |
@@ -964,15 +1320,17 @@ CloudFront gets the same treatment in phase 7.
 | B-012 | Supabase access policies not reviewed. | Any anon policy on the `receipts` bucket was pure risk once the app stopped writing with the anon key. | ✅ Resolved 2026-09-16 — the user deleted every policy and set the bucket to 10 MB and image types only. Verified: an SVG is refused (HTTP 415) even through a valid signed upload URL. |
 | B-013 | `npm test` was 65 lines of source-regex assertions. | CI "passed tests" that exercised no behaviour. | ✅ Resolved — D-018. |
 | B-014 | The Supabase project URL in the local `.env` did not resolve. | Storage couldn't be exercised, and uploads on the live site were failing. | ✅ Resolved 2026-09-14 — the free-tier project had been **paused**; the user resumed it and added the secret key to `.env` and Vercel. Verified live (D-027). |
-| B-015 | Anonymous preview requests from one network share an IP bucket (60/min). | A classroom behind one NAT would be rate limited as one person during the demo. | Phase 4: a per-device guest identity or a demo-window limit, decided with measurements. |
-| B-016 | Queue-time shedding can't see the time a request waits before the proxy runs (D-026). | Accepted requests reached p99 ≈ 2.2–2.5 s at 96 concurrent 2,000-person previews on one process. | Phase 4, on the cluster: tune `PREVIEW_MAX_QUEUE_MS` with pods behind a Service; compare with load-balancer timing. |
-| B-017 | Deliberately shed 503s are logged at error level by the access log. | 365 error lines in one load test, all intended. Noise hides real errors. | Phase 5: alert from metrics; consider warn level for shed responses. |
+| B-015 | Anonymous preview requests from one network share an IP bucket (60/min). | A classroom behind one NAT would be rate limited as one person during the demo. | ✅ Resolved 2026-09-17 — D-045. Anonymous devices carry a signed identity and are limited individually; their network keeps a ceiling. Classroom test under production limits: students refused went from 1,777 of 1,907 (93%) to 0 of 1,912 |
+| B-016 | Queue-time shedding can't see the time a request waits before the proxy runs (D-026). | Accepted requests reached p99 ≈ 2.2–2.5 s at 96 concurrent 2,000-person previews on one process. | ✅ Resolved 2026-09-17 — D-046. ingress-nginx stamps the arrival time, the proxy refuses overdue work and caps accepted work at 8 plans per pod, liveness tolerates a busy pod, and Node keep-alive outlasts nginx. Two pods at 60 req/s: served p95 26 s to 1.2 s, 1,314 errors to 0, restarts 2 to 0 |
+| B-017 | Deliberately shed 503s are logged at error level by the access log. | 365 error lines in one load test, all intended. Noise hides real errors. | 🚧 Mostly resolved 2026-09-17 — refusals now happen in the proxy and are counted, not logged (D-046); the rare refusal inside the route still logs at error level. Phase 5: alert on metrics |
 | B-019 | **Anyone could list the `receipts` bucket.** Found 2026-09-14: an anonymous request with the public key listed its contents. | Anyone could enumerate every receipt photo. | ✅ Resolved 2026-09-14 — the user deleted all three policies; anonymous listing now returns nothing (D-027). Later: consider a private bucket with signed read URLs. |
 | B-020 | The Docker image's browser code had no Supabase URL or key, so uploads could not work from a container. | Receipt uploads would have failed on Kubernetes. | ✅ Resolved 2026-09-16 — the browser now PUTs to the signed URL alone, with no key and no Supabase client (D-028). |
-| B-018 | One profile still carries an avatar that isn’t a normal storage URL. | Photos kept as `data:` text sit in every API response that includes that user — group members, expense payers, settlement participants — so a 200 KB photo is carried on every page that mentions them. | Measured 2026-09-16 with the corrected query: **one** profile holds a `data:` avatar, **none** are email-named (the first query was wrong — the old code replaced `@` with `_`, so `LIKE '%@%'` could never match). `scripts/migrate-avatars.mjs` moves them into storage: it reads the bytes, takes the type from the bytes rather than the URL’s claim, uploads under `avatars/<id>/`, rewrites the row and backs up the old value first. It reports only unless given `--apply`, and names the database it is connected to before doing anything. The local `.env` points at the Compose Postgres, so the deployed site’s copy needs `MIGRATION_DATABASE_URL` set to the Neon URL — the user’s to run, since only they hold that credential. |
+| B-018 | One profile still carried an avatar that wasn’t a normal storage URL. | Photos kept as `data:` text sit in every API response that includes that user — group members, expense payers, settlement participants. | ✅ Resolved 2026-09-17. The corrected query found **one** `data:` avatar and **no** email-named files (the first query was wrong: the old code replaced `@` with `_`, so `LIKE '%@%'` could never match). It was **828 KB of text** — a 621 KB JPEG — carried in every response that mentioned that user. `scripts/migrate-avatars.mjs --apply --https` uploaded it to `avatars/<id>/`, rewrote the row only while it still held the `data:` value, and confirmed the stored copy is served as `image/jpeg` and **byte-identical** to the original. A backup of the old value was written first. Production now has 0 `data:` avatars. |
 | B-021 | The AWS root user still had two active access keys. | Root keys cannot be restricted by any policy. | ✅ Resolved 2026-09-16 — the user deleted both. Root keeps MFA (a security key), the CLI uses `splitx-devops`, and no repository file or GitHub Actions secret holds AWS keys. |
 | B-022 | `argocd/`, `jenkins/Jenkinsfile`, `AWS_SETUP_GUIDE.md` and `DEMO_GUIDE.html` still reference the `helm/splitx` chart deleted in D-034, and `argocd/kind-cluster.yml` is a second, stale Kind config. | Anyone following those files sets up something that no longer exists. | Phase 6 rewrites the pipeline and decides whether GitOps returns honestly; phase 8 rewrites the guides. |
 | B-023 | metrics-server runs with `--kubelet-insecure-tls` on Kind, because Kind’s kubelets serve metrics with a certificate the cluster CA did not issue. | The flag disables verification of what the autoscaler reads. It is in a values file, not hidden in a script, precisely so it cannot be copied to AWS by accident. | Phase 7: EKS signs kubelet certificates properly — install the add-on without the flag and confirm the HPA still reads CPU. |
+| B-024 | In the final saturation run, 155 of 7,442 requests spent over 3 s inside a pod, all 30 to 50 s into the overload, on both pods, with none after. | A transient stall right when a burst arrives is exactly when a classroom notices. | Phase 5: correlate with heap size and GC pauses from in-cluster metrics; freshly started pods growing their heap under sudden load is the working theory. |
+| B-025 | Sign-up, login and password reset are still limited to 10 a minute per address (D-022). | A room asked to register at once from one campus network would be refused after the first ten. The demo page needs no account, so it is not affected. | Before any demo asks people to sign up: count failed logins per account for brute-force protection, and give sign-up the device-plus-network treatment of D-045. |
 
 ## Environment notes (this machine)
 
@@ -995,4 +1353,6 @@ CloudFront gets the same treatment in phase 7.
   Loki), but they are labelled only `job`, `stream` and `filename`: no container
   or service label (phase 5).
 - Loki occupies host port 3100, so ad-hoc app servers for tests use 3200.
+- After the host sleeps or restarts, the Docker VM clock can run ahead of Windows (53 s measured on 2026-09-17), which is why `kubectl` shows event ages as `<invalid>`. Everything in the cluster shares the VM clock, so the rate limiter and token expiry are unaffected.
+- **Outbound TCP 5432 is blocked on this machine’s network** (443 works; DNS resolves). Prisma cannot reach Neon from here, which is why `.env` points at the Compose Postgres. Tools that must reach Neon use its SQL-over-HTTPS endpoint instead (`scripts/migrate-avatars.mjs --https`). Not an issue for Vercel, GitHub Actions or EKS.
 - The user-level npm registry is HTTPS now.

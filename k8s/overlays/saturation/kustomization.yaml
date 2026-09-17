@@ -1,0 +1,11 @@
+# The local cluster held at two pods with rate limits lifted: load/saturation.js
+# overloads it on purpose to measure load shedding.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../local
+
+components:
+  - ../../components/loadtest-limits
+  - ../../components/fixed-replicas

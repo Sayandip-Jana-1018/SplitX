@@ -4,7 +4,8 @@ import { apiError, apiSuccess } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { metrics } from '@/lib/metrics';
 import { BodyTooLargeError, InvalidJsonError, readJsonBody } from '@/lib/readJsonBody';
-import { queuedMs } from '@/lib/requestQueue';
+import { PREVIEW_ADMISSION_HEADER, releasePreview } from '@/lib/previewAdmission';
+import { previewMaxQueueMs, queuedMs } from '@/lib/requestQueue';
 import { planSettlement, type AccountBalance, type PlannedTransfer, type SettlementPlan } from '@/lib/settlementPlanner';
 import { MAX_SCENARIO_MEMBERS, MIN_SCENARIO_MEMBERS, simulateTrip } from '@/lib/settlementScenario';
 
@@ -58,6 +59,17 @@ const ScenarioRequest = z.strictObject({
 type Mode = 'balances' | 'scenario' | 'unknown';
 
 export async function POST(request: Request) {
+    // The proxy admitted this request into a limited number of slots; give the
+    // slot back however planning ends: served, refused, invalid or failed.
+    const admission = request.headers.get(PREVIEW_ADMISSION_HEADER);
+    try {
+        return await plan(request);
+    } finally {
+        releasePreview(admission);
+    }
+}
+
+async function plan(request: Request) {
     try {
         let body: unknown;
         try {
@@ -79,7 +91,7 @@ export async function POST(request: Request) {
         const waited = queuedMs(request.headers);
         if (waited !== null) {
             metrics.settlementPreviewQueue.observe(waited / 1000);
-            if (waited > maxQueueMs()) {
+            if (waited > previewMaxQueueMs()) {
                 metrics.settlementPreviews.inc({ mode, outcome: 'shed' });
                 const response = apiError('SplitX is busy right now. Please try again in a moment.', 503, 'OVERLOADED');
                 response.headers.set('Retry-After', '1');
@@ -189,7 +201,3 @@ function describeIssue(error: z.ZodError) {
     return path ? `${path}: ${issue.message}` : issue.message;
 }
 
-function maxQueueMs() {
-    const value = Number(process.env.PREVIEW_MAX_QUEUE_MS);
-    return Number.isInteger(value) && value > 0 ? value : 1_000;
-}

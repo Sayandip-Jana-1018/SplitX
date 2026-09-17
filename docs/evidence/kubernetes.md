@@ -1,6 +1,6 @@
 # Kubernetes — what the rehearsal cluster proves
 
-Written by `scripts/cluster-verify.mjs` (`npm run k8s:verify`) on 2026-09-16.
+Written by `scripts/cluster-verify.mjs` (`npm run k8s:verify`) on 2026-09-17.
 Every number here was measured against a running cluster; nothing is asserted about a YAML file.
 
 ## Result
@@ -9,16 +9,18 @@ Every number here was measured against a running cluster; nothing is asserted ab
 |---|---|---|
 | Replicas are spread across both worker nodes | pass | 2 pods on splitx-worker, splitx-worker2 |
 | No application pod runs on the control plane | pass | control plane carries ingress-nginx and the Kubernetes components only |
+| Every app pod can open new connections (DNS, Postgres, Redis) | pass | 2 pods checked |
+| kindnet keeps up: no CPU quota, no memory-limit hits, nothing left waiting for a verdict | pass | 1481 new flows judged since kindnet started, 0 dropped |
 | The application is served on http://localhost/ | pass | HTTP 200 |
 | Operational endpoints are refused at the edge | pass | /api/metrics 403, /api/health/ready 403 (B-011) |
 | Liveness stays reachable for a load balancer | pass | HTTP 200 |
-| The running pod reports the commit it was built from | pass | git_sha f4b2dc209824, version 0.1.0+f4b2dc209824 |
+| The running pod reports the commit it was built from | pass | git_sha 570fcf134d20, version 0.1.0+570fcf134d20 |
 | Metrics are readable inside the cluster, with the token | pass | 2 info series |
 | The rate limiter is using the in-cluster Redis | pass | splitx_rate_limiter_info{backend="redis"} |
 | Metrics without the token are refused even from inside the pod | pass | wget: server returned error: HTTP/1.1 401 Unauthorized |
 | The schema Job built a real database | pass | 18 tables in the public schema |
 | A write through the ingress reaches Postgres | pass | POST /api/register -> 201, row found in the User table, then removed |
-| The settlement preview runs on the cluster | pass | 400 members planned in 13.98 ms by splitx-7bc5bb6b-xrvsl (59 ms round trip) |
+| The settlement preview runs on the cluster | pass | 400 members planned in 13.19 ms by splitx-7fcc9dccd6-8pntf (31 ms round trip) |
 | The namespace refuses a privileged pod | pass | rejected by PodSecurity admission |
 | A pod in another namespace cannot reach the app, the database or Redis | pass | wget: download timed out app=1 postgres=1 redis=1 (non-zero = refused) |
 | The autoscaler is reading real CPU from metrics-server | pass | 2% of the 250m request, target 60% |
@@ -28,8 +30,8 @@ Every number here was measured against a running cluster; nothing is asserted ab
 | The same pods serve again once the database is back | pass | no pod was replaced; restart count 0 |
 | The rollout completed | pass | deployment "splitx" successfully rolled out |
 | Every pod was replaced | pass | 2 old pods gone, 2 new pods serving |
-| No request was lost while every pod was replaced | pass | 3090 requests in 6.9 s: 3090 OK, 0 non-200, 0 failed |
-| Traffic settles on the new pods | pass | within 11 ms of the rollout completing; 3 pod(s) answered during it |
+| No request was lost while every pod was replaced | pass | 2916 requests in 6.5 s: 2916 OK, 0 non-200, 0 failed |
+| Traffic settles on the new pods | pass | within 541 ms of the rollout completing; 3 pod(s) answered during it |
 
 ## The cluster
 
@@ -69,8 +71,20 @@ Render either with `kubectl kustomize k8s/overlays/<name>`.
 
 | Pod | Node | Pod IP | Restarts |
 |---|---|---|---|
-| `splitx-7bc5bb6b-47bh9` | splitx-worker | 10.244.1.18 | 0 |
-| `splitx-7bc5bb6b-xrvsl` | splitx-worker2 | 10.244.2.15 | 0 |
+| `splitx-7fcc9dccd6-8pntf` | splitx-worker2 | 10.244.2.15 | 0 |
+| `splitx-7fcc9dccd6-k48ff` | splitx-worker | 10.244.1.18 | 0 |
+
+## kindnet, the network-policy engine
+
+The first packet of every new pod connection waits in netfilter queue 101 for kindnet to apply the
+network policies. Kind limits kindnet to 100m CPU and 50Mi by default, and at those
+limits new connections timed out in that queue (D-050). Counted since each kindnet container started.
+
+| Node | CPU quota | Throttled periods | Memory (peak) of limit | Limit hits | New flows judged | Waiting | Dropped |
+|---|---|---|---|---|---|---|---|
+| `splitx-control-plane` | max | 0 of 0 | 76 MiB (79) of 256 MiB | 0 | 0 | 0 | 0 |
+| `splitx-worker` | max | 0 of 0 | 75 MiB (79) of 256 MiB | 0 | 808 | 0 | 0 |
+| `splitx-worker2` | max | 0 of 0 | 75 MiB (80) of 256 MiB | 0 | 673 | 0 | 0 |
 
 ## What the edge exposes
 
@@ -88,7 +102,7 @@ Render either with `kubectl kustomize k8s/overlays/<name>`.
 |---|---|
 | Tables created by the schema Job | 18 |
 | `POST /api/register` through ingress-nginx | HTTP 201, row written to Postgres and removed again |
-| `POST /api/settlements/preview` (400 members) | HTTP 200, planned in 13.98 ms |
+| `POST /api/settlements/preview` (400 members) | HTTP 200, planned in 13.19 ms |
 
 The preview is the endpoint phase 4 will use to drive the autoscaler: it is pure CPU with
 no database behind it, so a pod under load is doing arithmetic, not waiting on Neon.
@@ -133,20 +147,20 @@ to stop routing to a pod before its server begins shutting down.
 
 | | |
 |---|---|
-| Requests during the release | 3090 in 6.9 s |
-| HTTP 200 | 3090 |
+| Requests during the release | 2916 in 6.5 s |
+| HTTP 200 | 2916 |
 | Non-200 responses | 0 |
 | Connection failures | 0 |
 | Pods that answered | 3 |
-| Traffic fully on the new pods | 11 ms after the rollout reported complete |
+| Traffic fully on the new pods | 541 ms after the rollout reported complete |
 
 Requests answered per pod (the name comes from the pod itself, through the downward API).
 nginx reuses upstream connections, so a short rollout can be served mostly by one pod; what
 matters is that the pods serving afterwards are the new ones:
 
 ```
-splitx-7bc5bb6b-xrvsl  1546
-splitx-7bc5bb6b-47bh9  1324
-splitx-6b478db6bc-gfgjh  220
+splitx-7fcc9dccd6-k48ff  1458
+splitx-7fcc9dccd6-8pntf  1148
+splitx-64f865b845-n5jj6  310
 ```
 

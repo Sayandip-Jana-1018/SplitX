@@ -1,0 +1,20 @@
+# ═══════════════════════════════════════════════════════════════
+#   Two replicas, no autoscaling — for measuring what a saturated pod does.
+#
+#   Load shedding only matters once pods are full, and with the autoscaler
+#   running they would not stay full long enough to measure. Pinning the
+#   HorizontalPodAutoscaler at 2/2 keeps the overload constant, so two runs
+#   can be compared on everything except the change being tested.
+# ═══════════════════════════════════════════════════════════════
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+patches:
+  - patch: |-
+      apiVersion: autoscaling/v2
+      kind: HorizontalPodAutoscaler
+      metadata:
+        name: splitx
+      spec:
+        minReplicas: 2
+        maxReplicas: 2

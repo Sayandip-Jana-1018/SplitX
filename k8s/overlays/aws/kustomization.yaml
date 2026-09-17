@@ -30,8 +30,17 @@ images:
     newTag: latest
 
 patches:
-  - path: patches/configmap.yaml
   - path: patches/serviceaccount.yaml
   - path: patches/ingress.yaml
   - path: patches/ingress-internal.yaml
   - path: patches/deployment.yaml
+
+configMapGenerator:
+  - name: splitx-config
+    behavior: merge
+    literals:
+      # CloudFront -> ALB -> pod: the visitor's address is second from the right
+      # of X-Forwarded-For. Getting this wrong would rate-limit the ALB instead
+      # of the visitor, or let a visitor forge an address and dodge the limit.
+      - TRUSTED_PROXY_HOPS=2
+      - NEXTAUTH_URL=https://REPLACE_WITH_PUBLIC_HOSTNAME

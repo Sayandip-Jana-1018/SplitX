@@ -8,7 +8,6 @@ namespace: splitx
 resources:
   - namespace.yaml
   - serviceaccount.yaml
-  - configmap.yaml
   - deployment.yaml
   - service.yaml
   - hpa.yaml
@@ -16,3 +15,14 @@ resources:
   - networkpolicy.yaml
   - ingress.yaml
   - ingress-internal.yaml
+
+configMapGenerator:
+  # Hashed name: a change to config.env becomes a new ConfigMap and a rollout,
+  # instead of an edit the running pods never see.
+  - name: splitx-config
+    envs:
+      - config.env
+    options:
+      labels:
+        app.kubernetes.io/name: splitx
+        app.kubernetes.io/part-of: splitx

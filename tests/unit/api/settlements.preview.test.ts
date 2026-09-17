@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { POST } from '@/app/api/settlements/preview/route';
 import { metrics } from '@/lib/metrics';
+import { PREVIEW_ADMISSION_HEADER, previewsInFlight, resetPreviewAdmissions, tryAdmitPreview } from '@/lib/previewAdmission';
 import { REQUEST_START_HEADER, requestStartValue } from '@/lib/requestQueue';
 
 const URL = 'http://localhost/api/settlements/preview';
@@ -194,6 +195,39 @@ describe('POST /api/settlements/preview', () => {
 
         it('serves requests the proxy did not stamp', async () => {
             expect((await preview(scenario)).status).toBe(200);
+        });
+    });
+
+    describe('admission slots', () => {
+        const admitted = () => {
+            resetPreviewAdmissions();
+            tryAdmitPreview('slot-1');
+            return { [PREVIEW_ADMISSION_HEADER]: 'slot-1' };
+        };
+
+        it('gives the slot back after planning', async () => {
+            const res = await preview({ scenario: { members: 50, seed: 1 } }, admitted());
+            expect(res.status).toBe(200);
+            expect(previewsInFlight()).toBe(0);
+        });
+
+        it('gives the slot back when the request is invalid', async () => {
+            const res = await preview({ scenario: { members: 1 } }, admitted());
+            expect(res.status).toBe(400);
+            expect(previewsInFlight()).toBe(0);
+        });
+
+        it('gives the slot back when the request is refused for waiting too long', async () => {
+            vi.stubEnv('PREVIEW_MAX_QUEUE_MS', '500');
+            const res = await preview({ scenario: { members: 50 } }, { ...admitted(), [REQUEST_START_HEADER]: requestStartValue(Date.now() - 2_000) });
+            expect(res.status).toBe(503);
+            expect(previewsInFlight()).toBe(0);
+        });
+
+        it('gives the slot back when the body cannot be parsed', async () => {
+            const res = await preview('{not json', admitted());
+            expect(res.status).toBe(400);
+            expect(previewsInFlight()).toBe(0);
         });
     });
 });

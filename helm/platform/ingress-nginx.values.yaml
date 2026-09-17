@@ -36,6 +36,14 @@ controller:
     # inject raw nginx config, which is a privilege-escalation path in a
     # shared cluster. The metrics/readiness block uses a supported annotation.
     allow-snippet-annotations: "false"
+  # The moment nginx received each request, in nginx's own clock. proxy_set_header
+  # replaces anything a client sent under this name, so the app can trust it
+  # (TRUST_UPSTREAM_REQUEST_START in the local overlay) and measure queue time
+  # from here instead of from when its own busy event loop got round to the
+  # request. Without it, the cluster measured 26 s waits as under a second
+  # and the pods were restarted by their own probes (B-016).
+  proxySetHeaders:
+    X-Request-Start: "t=${msec}"
   metrics:
     # The controller's own Prometheus metrics — request rate and latency
     # measured at the edge, to compare with what the app reports (phase 5).

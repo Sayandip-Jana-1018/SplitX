@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { getToken } from 'next-auth/jwt';
 import { ipBucket } from './clientIp';
+import { DEVICE_COOKIE, readCookie, verifyDevice } from './device';
 
 /**
  * Who a request counts against.
@@ -10,12 +11,18 @@ import { ipBucket } from './clientIp';
  * not a session and falls back to the IP. That also means everyone behind one
  * NAT (a campus network, an office) is limited individually once signed in.
  *
+ * Anonymous requests that carry a genuine device cookie count against that
+ * device, and ALSO against their network, which has a higher ceiling of its
+ * own (B-015). Anything else counts against the network address.
+ *
  * Keys hold a hash of the identifier, never an email or user ID.
  */
 
 export interface RequestIdentity {
-    kind: 'user' | 'ip' | 'unknown';
+    kind: 'user' | 'device' | 'ip' | 'unknown';
     key: string;
+    /** For an anonymous device: the network it shares, which is limited too. */
+    network?: RequestIdentity;
 }
 
 const digest = (value: string) => createHash('sha256').update(value).digest('hex').slice(0, 32);
@@ -67,7 +74,11 @@ async function verifiedUserId(request: Request): Promise<string | null> {
 
 export async function resolveIdentity(request: Request, ip: string | null): Promise<RequestIdentity> {
     const userId = await verifiedUserId(request);
-    return userId ? { kind: 'user', key: `user:${digest(userId)}` } : ipIdentity(ip);
+    if (userId) return { kind: 'user', key: `user:${digest(userId)}` };
+
+    const network = ipIdentity(ip);
+    const deviceId = verifyDevice(readCookie(request.headers.get('cookie'), DEVICE_COOKIE));
+    return deviceId ? { kind: 'device', key: `device:${digest(deviceId)}`, network } : network;
 }
 
 /** Test hook: forget cached verifications. */
