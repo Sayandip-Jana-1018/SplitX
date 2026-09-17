@@ -136,7 +136,7 @@ jobs:
         # cluster as a missing table, hours later, as a 500 from one endpoint.
         run: node scripts/db-schema.mjs --check
 
-      - name: Render and validate both overlays
+      - name: Render and validate every overlay
         run: |
           for overlay in local aws loadtest saturation; do
             echo "── $overlay ──"
