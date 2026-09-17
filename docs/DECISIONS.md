@@ -1184,6 +1184,15 @@ payments instead of 11,682 IOUs, and the device cookie is set once and then reus
 - **Found in the harness:** the first saturation run recorded 19 rate-limit refusals
   with the limits lifted. They came from old pods still draining the previous
   configuration, so the runner now waits out that drain after every rollout.
+- **Found by accident, battery power:** a staircase attempt ran with the charger
+  disconnected. One minute into the 30-plans-a-second step it had ten pods at 219% of
+  their CPU request, about 5.5 cores; the run on the charger had six pods at 66%, about
+  1 core, at the same moment of the same step. A throttled laptop measures its power
+  plan, not the application. The runner now checks the power source before touching
+  the cluster, stops on battery unless given `--allow-battery`, and records the source
+  at the start and end of every result. Windows logs every change of power source: the
+  charger was connected from 23:55 to 01:52, which covers all eight earlier runs
+  (00:34 to 01:47), so no comparison in D-045 or D-046 mixes the two.
 
 ### D-050 · kindnet was starved by the limits Kind gives it
 **2026-09-17** · ✅ fixed in `k8s:up`, checked by `k8s:verify` · corrects D-044
@@ -1234,6 +1243,62 @@ dropped, or verdicts start piling up.
   would stop exercising the layer EKS enforces.
 - **On EKS** the VPC CNI's network policy agent does this job, with its own resource
   settings. Phase 7 checks them, and the connection check applies unchanged.
+
+### D-051 · The autoscaler, measured under a staircase of traffic: configuration kept
+**2026-09-17** · ✅ measured
+
+`load/staircase.js` sends 1,000-person plans at 10, 30, 60 and 100 a second, two
+minutes each with rate limits lifted, then the runner watches the cluster for 15
+minutes. Build `570fcf1`, on the charger at the start and the end:
+
+| Step | Pods | CPU vs request, last minute | CPU per plan | Latency p50 / p95 / p99 | Planning p95, timed by the server |
+|---|---|---|---|---|---|
+| 10 a second | 2 → 3 | 45% | 34 ms | 22 / 33 / 39 ms | 20 ms |
+| 30 a second | 3 → 7 | 67% | 35 ms | 22 / 34 / 67 ms | 20 ms |
+| 60 a second | 10, the maximum | 90% | 38 ms | 24 / 39 / 80 ms | 24 ms |
+| 100 a second | 10, the maximum | 158% | 39 ms | 26 / 74 / 113 ms | 33 ms |
+
+All **30,029 plans were answered 200**: nothing shed, nothing rate limited, no container
+restarted. CPU per plan is the autoscaler's own utilisation reading × the 250m request ×
+ready pods ÷ the arrival rate k6 achieved, over the last minute of each step.
+
+What the autoscaler did, from the samples taken every 5 s:
+
+- **Scaling up.** Each decision came within 30 s of a new rate arriving, which is
+  metrics-server's 15 s window plus the autoscaler's 15 s cycle, and the new pods were
+  serving 5 to 16 s after it. For example, 30 a second arrived at 180 s, the autoscaler
+  asked for 6 pods at 192 s, and 6 were ready at 208 s.
+- **Sizing.** Pod counts follow the arithmetic. At 35 ms of CPU a plan, the target of
+  150m per pod is about 4 plans a second per pod.
+- **Past the maximum.** Pods ran above their request, 158% or about 395m each at 100 a
+  second, inside their 1-CPU limit. The cost was p95 latency going from 39 to 74 ms.
+- **Scaling down.** Exactly as configured: ten pods through the 300 s stabilisation
+  window, then one pod a minute, back to two pods 719 s after the load stopped. The
+  pods were split five and five across the workers at the peak.
+- **Networking.** kindnet had judged 1,042 new flows by the peak, including the startup
+  connections of every pod the autoscaler added, with none waiting, none dropped and a
+  memory peak of 79 MiB (D-050).
+
+D-025 measured 24 ms of CPU per request for one process on the host, 17 ms of it
+planning. In the cluster, planning costs about the same (p50 13 to 16 ms), and the rest
+of the request costs about 20 ms instead of 7. That remainder was not broken down here;
+phase 5's in-cluster metrics can, alongside B-024.
+
+**Kept:** 2 to 10 pods, a 60% target on a 250m request, a 1-CPU limit, scale-up without
+a stabilisation window, scale-down after five minutes at one pod a minute.
+
+- A class is inside the range where the scaling shows. Eighty phones on `/scale`, each
+  planning a 1,000-person trip every four seconds, is 20 plans a second: about 5 pods.
+- **Rejected — raising the maximum on Kind:** beyond 10 pods the limit is the laptop's
+  cores, not the replica count. On EKS it is node capacity, which is the Cluster
+  Autoscaler's job in phase 7.
+- **Rejected — a lower target or a larger request:** pods already scale out at 4 plans a
+  second while one pod can compute about 25. Scaling earlier would only add idle pods.
+- **Rejected — a shorter scale-down window for a livelier demo:** a class pauses between
+  rounds, and five minutes keeps the deployment from shrinking and regrowing at every
+  pause.
+- **For phase 7:** a 1-CPU limit on burstable EC2 instances spends CPU credits, so node
+  types and limits are measured again on EKS.
 
 ---
 
