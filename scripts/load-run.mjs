@@ -7,6 +7,11 @@
  *   node scripts/load-run.mjs saturation --label before
  *   node scripts/load-run.mjs staircase  --label v1 [--observe 900]
  *   ... [--env KEY=VALUE]    passed to k6 (e.g. HOLD=30s, RATE=80)
+ *   ... [--allow-battery]    run on battery anyway; the result says so
+ *
+ * It refuses to start on battery power: a throttled laptop CPU makes every
+ * request cost several times more, and the autoscaler's response with it.
+ * The power source at the start and the end is recorded with the result.
  *
  * Each test declares the overlay it needs (production limits for the
  * classroom, lifted limits for the others, two fixed pods for saturation).
@@ -28,6 +33,7 @@ import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { createGunzip } from 'node:zlib';
 import { checkNewConnections, describe } from './lib/cluster-network.mjs';
+import { powerSource } from './lib/power.mjs';
 import { writeReport } from './load-report.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -49,7 +55,7 @@ const args = process.argv.slice(2);
 const testName = args[0];
 const test = TESTS[testName];
 if (!test) {
-    console.error('usage: node scripts/load-run.mjs <' + Object.keys(TESTS).join('|') + '> --label <name> [--observe seconds] [--env KEY=VALUE]');
+    console.error('usage: node scripts/load-run.mjs <' + Object.keys(TESTS).join('|') + '> --label <name> [--observe seconds] [--env KEY=VALUE] [--allow-battery]');
     process.exit(1);
 }
 const option = (name) => {
@@ -207,6 +213,12 @@ async function analyse(csvPath) {
 
 // ── run ───────────────────────────────────────────────────────────────────
 console.log('SplitX load test: ' + testName + ' (' + label + ')');
+const powerAtStart = powerSource();
+console.log('power: ' + powerAtStart.source + ' (' + powerAtStart.detail + ')');
+if (powerAtStart.source === 'battery' && !args.includes('--allow-battery')) {
+    console.error('this machine is on battery, which throttles the CPU the test is measuring. Plug in, or pass --allow-battery to record it anyway.');
+    process.exit(1);
+}
 await applyOverlay(test.overlay);
 const rest = await waitForRest();
 console.log('at rest: ' + rest.ready + ' ready replicas');
@@ -252,6 +264,10 @@ for (let waited = 0; waited < observeSeconds; waited += 60) {
 }
 polling = false;
 await poller;
+const powerAtEnd = powerSource();
+if (powerAtEnd.source !== powerAtStart.source) {
+    console.log('power changed during the test: ' + powerAtStart.source + ' at the start, ' + powerAtEnd.source + ' (' + powerAtEnd.detail + ') at the end');
+}
 
 if (test.overlay !== 'k8s/overlays/local') await applyOverlay('k8s/overlays/local');
 
@@ -270,6 +286,7 @@ const result = {
     k6ExitCode: exitCode,
     image: { gitSha, version },
     overlay: test.overlay,
+    power: { atStart: powerAtStart.source, atEnd: powerAtEnd.source },
     settings: {
         k6Env,
         k6: summary.extra,
