@@ -1397,6 +1397,13 @@ threshold.
 - **Seen after a reboot:** the Prometheus Operator crashed twice at boot, because it started
   before kube-proxy had programmed the route to the API server, and recovered on its own on
   the third start. Kubernetes restarts pods for exactly this; nothing to fix.
+- **Caught by GitGuardian on the pull request:** `scripts/test-alerts.mjs` filled the
+  Alertmanager template with a made-up 16-letter SMTP password for `amtool`, and GitGuardian
+  reported it as a hardcoded password (incident 37417914). It never was a credential, but a
+  literal shaped like one makes every later alert from the scanner easier to dismiss, so the
+  placeholder is now generated on each run. gitleaks, on commit and in CI, had not flagged it:
+  two scanners with different rules catch different things. The incident is to be marked as
+  a test credential in GitGuardian, by the account owner; history is not rewritten (D-003).
 
 ### D-053 · Fresh pods stalled because of their CPU limit, not garbage collection
 **2026-09-18** · ✅ CPU limit removed · B-024 narrowed, not closed
