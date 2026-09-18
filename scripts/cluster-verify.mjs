@@ -759,7 +759,7 @@ const report = [
     '| Setting | Value | Why |',
     '|---|---|---|',
     '| CPU request | ' + container.resources.requests.cpu + ' | what the autoscaler measures against |',
-    '| CPU limit | ' + container.resources.limits.cpu + ' | one settlement preview cannot take a whole node |',
+    '| CPU limit | ' + (container.resources.limits?.cpu ?? 'none') + ' | a 1-CPU quota made V8\'s compiler and GC threads compete with the main thread; fresh pods stalled for up to 21 s under overload (D-053) |',
     '| Memory request / limit | ' + container.resources.requests.memory + ' / ' + container.resources.limits.memory + ' | measured from a running pod, not guessed |',
     '| Root filesystem | read-only | with `/tmp` and the Next cache as the only writable paths |',
     '| User | ' + (json(['get', 'deployment', 'splitx', '-n', NS]).spec.template.spec.securityContext.runAsUser) + ' (non-root) | enforced by the namespace, not just requested |',
