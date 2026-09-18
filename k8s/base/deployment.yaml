@@ -88,14 +88,18 @@ spec:
             - name: next-cache
               mountPath: /app/.next/cache
           resources:
-            # The request is what the autoscaler measures against: 250m keeps a
-            # pod comfortably below one core, and the limit stops a single
-            # settlement preview from eating a whole node.
+            # The request is what the autoscaler measures against and what the
+            # scheduler reserves. There is no CPU limit, on measurement (D-053):
+            # Node runs JavaScript on one thread, so a limit cannot stop one
+            # plan taking a node; what a 1-CPU quota did was make V8's compiler
+            # and garbage-collection threads share that core with the main
+            # thread. Fresh pods under overload stalled for up to 21 s, and two
+            # pods served 45% fewer plans than they do without it. Memory keeps
+            # a limit, because running out of it is not a slowdown.
             requests:
               cpu: 250m
               memory: 256Mi
             limits:
-              cpu: "1"
               memory: 512Mi
           # A cold Node process gets up to 60 s to answer before liveness starts.
           startupProbe:

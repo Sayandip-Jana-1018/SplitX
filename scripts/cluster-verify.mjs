@@ -12,12 +12,16 @@
  * — because those are the claims a deployment usually makes without evidence.
  */
 import { spawn, spawnSync } from 'node:child_process';
-import { writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { request } from 'node:http';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { checkNewConnections, describe, describeKindnet, kindnetHealth } from './lib/cluster-network.mjs';
+import { dashboardDatasourceUids, dashboardQueries, metricNamesIn, withoutGrafanaVariables } from './lib/dashboards.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+// The Grafana admin password, for the dashboard checks. Read, never printed.
+if (existsSync(join(root, '.env'))) process.loadEnvFile(join(root, '.env'));
 const NS = 'splitx';
 const CONTEXT = 'kind-splitx';
 const BASE = 'http://localhost';
@@ -483,6 +487,226 @@ sections.push({
     ].join('\n'),
 });
 
+// ── 9. Monitoring: Prometheus, Alertmanager and Grafana ───────────────────
+console.log('[9] Monitoring');
+const PROMETHEUS = '/api/v1/namespaces/monitoring/services/kube-prometheus-stack-prometheus:http-web/proxy';
+const ALERTMANAGER = '/api/v1/namespaces/monitoring/services/kube-prometheus-stack-alertmanager:http-web/proxy';
+// Through the API server's service proxy: no port-forward, no exposed port.
+const raw = (path) => {
+    try {
+        return JSON.parse(kubectl(['get', '--raw', path]).stdout);
+    } catch {
+        return null;
+    }
+};
+const promQuery = (expr) => raw(PROMETHEUS + '/api/v1/query?query=' + encodeURIComponent(expr));
+
+const readTargets = () => raw(PROMETHEUS + '/api/v1/targets?state=active')?.data?.activeTargets ?? [];
+const readyPods = appPods().filter((pod) => pod.status.conditions?.some((c) => c.type === 'Ready' && c.status === 'True')).length;
+const isScrapedPod = (t) => t.labels.job === 'splitx' && t.labels.namespace === NS && t.health === 'up';
+// The release test above replaced every pod. Prometheus discovers new pods at
+// once but first scrapes them within an interval (15 s); until then their
+// health is "unknown", not down. Allow a few intervals before judging.
+const targets = (await waitFor(() => {
+    const now = readTargets();
+    return now.filter(isScrapedPod).length >= readyPods && now.every((t) => t.health === 'up') ? now : null;
+}, { timeoutMs: 90_000, everyMs: 5_000 })) ?? readTargets();
+const scrapedPods = targets.filter(isScrapedPod).length;
+record(
+    'Prometheus scrapes every ready application pod, with the metrics token',
+    scrapedPods > 0 && scrapedPods >= readyPods,
+    scrapedPods + ' of ' + readyPods + ' ready pods scraped'
+);
+const downTargets = targets.filter((t) => t.health !== 'up');
+const jobs = [...new Set(targets.map((t) => t.labels.job))].sort();
+record(
+    'Every scrape target is up',
+    targets.length > 0 && downTargets.length === 0,
+    downTargets.length
+        ? downTargets.map((t) => t.labels.job + ' ' + t.scrapeUrl + ': ' + (t.lastError || t.health)).join('; ')
+        : targets.length + ' targets in ' + jobs.length + ' jobs'
+);
+
+const ruleGroups = raw(PROMETHEUS + '/api/v1/rules')?.data?.groups ?? [];
+const committedAlerts = (readFileSync(join(root, 'k8s/base/prometheusrule.yaml'), 'utf8').match(/^\s+- alert: /gm) || []).length;
+const splitxRules = ruleGroups.filter((group) => group.name.startsWith('splitx.')).flatMap((group) => group.rules);
+const brokenRules = ruleGroups.flatMap((group) => group.rules).filter((rule) => rule.health !== 'ok');
+record(
+    'The SplitX alert rules are loaded, and every rule evaluates cleanly',
+    splitxRules.length === committedAlerts && brokenRules.length === 0,
+    splitxRules.length + ' of ' + committedAlerts + ' SplitX rules loaded; '
+        + ruleGroups.flatMap((group) => group.rules).length + ' rules in total, '
+        + (brokenRules.length ? brokenRules.map((rule) => rule.name + ': ' + rule.lastError).join('; ') : '0 with errors')
+);
+
+const alertmanagerAlerts = raw(ALERTMANAGER + '/api/v2/alerts') ?? [];
+record(
+    'Alertmanager receives what Prometheus fires',
+    alertmanagerAlerts.some((alert) => alert.labels.alertname === 'Watchdog'),
+    'Watchdog, which fires all the time by design, is in Alertmanager'
+);
+const firing = alertmanagerAlerts.filter((alert) => alert.status?.state === 'active' && alert.labels.alertname !== 'Watchdog' && alert.labels.alertname !== 'InfoInhibitor');
+record(
+    'No alert is firing apart from Watchdog',
+    firing.length === 0,
+    firing.length ? firing.map((alert) => alert.labels.alertname + (alert.labels.pod ? ' (' + alert.labels.pod + ')' : '')).join(', ') : 'nothing needs attention'
+);
+const alertmanagerConfig = raw(ALERTMANAGER + '/api/v2/status')?.config?.original ?? '';
+const emailSent = Number(promQuery('sum(alertmanager_notifications_total{integration="email"})')?.data?.result?.[0]?.value?.[1] ?? 0);
+const emailFailed = Number(promQuery('sum(alertmanager_notifications_failed_total{integration="email"})')?.data?.result?.[0]?.value?.[1] ?? 0);
+record(
+    'Alerts are routed to email, and every email was accepted',
+    alertmanagerConfig.includes('email_configs') && emailFailed === 0,
+    alertmanagerConfig.includes('email_configs')
+        ? emailSent + ' notification(s) sent through Gmail, ' + emailFailed + ' failed'
+        : 'no email receiver: .env has no ALERT_SMTP_USERNAME, ALERT_SMTP_PASSWORD and ALERT_EMAIL_TO'
+);
+
+function grafana(path) {
+    return new Promise((resolve) => {
+        const auth = 'Basic ' + Buffer.from('admin:' + (process.env.GF_ADMIN_PASSWORD ?? '')).toString('base64');
+        // Grafana's Ingress answers for grafana.localhost on the same port 80 as the app.
+        const req = request({ host: '127.0.0.1', port: 80, path, headers: { Host: 'grafana.localhost', Authorization: auth } }, (res) => {
+            let body = '';
+            res.on('data', (chunk) => { body += chunk; });
+            res.on('end', () => resolve({ status: res.statusCode, body }));
+        });
+        req.on('error', (error) => resolve({ status: 0, body: String(error) }));
+        req.end();
+    });
+}
+const dashboardFiles = JSON.parse(kubectl(['get', 'configmap', 'splitx-dashboards', '-n', 'monitoring', '-o', 'json']).stdout || '{"data":{}}').data ?? {};
+const committedDashboards = Object.values(dashboardFiles).map((text) => JSON.parse(text));
+const served = [];
+for (const dashboard of committedDashboards) {
+    const answer = await grafana('/api/dashboards/uid/' + dashboard.uid);
+    const panelCount = answer.status === 200 ? JSON.parse(answer.body).dashboard.panels.filter((p) => p.type !== 'row').length : 0;
+    served.push({ uid: dashboard.uid, title: dashboard.title, status: answer.status, panelCount });
+}
+const datasourceChecks = [];
+for (const uid of dashboardDatasourceUids(root)) {
+    datasourceChecks.push({ uid, status: (await grafana('/api/datasources/uid/' + uid)).status });
+}
+record(
+    'Grafana serves the committed dashboards, and every data source they name exists',
+    served.length > 0 && served.every((d) => d.status === 200) && datasourceChecks.every((d) => d.status === 200),
+    served.map((d) => d.title + ' (' + (d.status === 200 ? d.panelCount + ' panels' : 'HTTP ' + d.status) + ')').join(', ')
+        + '; data sources ' + datasourceChecks.map((d) => d.uid + (d.status === 200 ? '' : ' HTTP ' + d.status)).join(', ')
+);
+
+// A metric exists if Prometheus has samples of it, or if the application
+// declares it: a labelled counter has no samples until its first increment.
+const storedNames = new Set(raw(PROMETHEUS + '/api/v1/label/__name__/values')?.data ?? []);
+// A pod running now: the release test above replaced every pod it started with.
+const currentPod = appPods()[0]?.metadata.name;
+const declared = k(['exec', currentPod, '--', 'sh', '-c',
+    'wget -qO- --header="Authorization: Bearer $METRICS_TOKEN" http://127.0.0.1:3000/api/metrics | grep "^# TYPE "']).stdout;
+for (const [, name, type] of declared.matchAll(/^# TYPE (\S+) (\S+)$/gm)) {
+    storedNames.add(name);
+    if (type === 'histogram') for (const suffix of ['_bucket', '_sum', '_count']) storedNames.add(name + suffix);
+    if (type === 'summary') for (const suffix of ['_sum', '_count']) storedNames.add(name + suffix);
+}
+const queries = dashboardQueries(root);
+const queryProblems = [];
+for (const query of queries) {
+    const answer = promQuery(withoutGrafanaVariables(query.expr));
+    if (answer?.status !== 'success') queryProblems.push(query.panel + ': ' + (answer?.error ?? 'no answer'));
+    for (const name of metricNamesIn(query.expr)) {
+        if (!storedNames.has(name)) queryProblems.push(query.panel + ': no metric named ' + name);
+    }
+}
+record(
+    'Every dashboard query runs, and reads metrics that exist',
+    queries.length > 0 && queryProblems.length === 0,
+    queryProblems.length ? queryProblems.join('; ') : queries.length + ' queries on ' + new Set(queries.flatMap((q) => metricNamesIn(q.expr))).size + ' metrics'
+);
+
+// Logs: Alloy reads them through the Kubernetes API and ships them to Loki.
+const LOKI = '/api/v1/namespaces/monitoring/services/loki:http-metrics/proxy/loki/api/v1';
+const since = (minutes) => new Date(Date.now() - minutes * 60_000).toISOString();
+const logLines = (expr, minutes) => raw(LOKI + '/query_range?query=' + encodeURIComponent(expr) + '&start=' + since(minutes) + '&limit=20');
+const logCount = (expr) => raw(LOKI + '/query?query=' + encodeURIComponent(expr));
+
+const podsLogging = new Set((logCount('count by (pod) (count_over_time({namespace="' + NS + '", app="splitx"} [15m]))')?.data?.result ?? []).map((r) => r.metric.pod));
+const podsNow = appPods().map((pod) => pod.metadata.name);
+record(
+    'Every application pod is logging to Loki',
+    podsNow.length > 0 && podsNow.every((pod) => podsLogging.has(pod)),
+    podsNow.filter((pod) => podsLogging.has(pod)).length + ' of ' + podsNow.length + ' pods have lines in the last 15 minutes'
+);
+
+// One real request, then its ID in both logs, and the ingress's upstream
+// address must be the IP of the pod whose line carries the same ID.
+const traced = await fetch(BASE + '/api/settlements/preview', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ scenario: { members: 100 } }),
+}).catch(() => null);
+const tracedId = traced?.headers.get('x-request-id') ?? '';
+const trace = /^[0-9a-f]{32}$/.test(tracedId) ? await waitFor(() => {
+    const app = logLines('{namespace="' + NS + '", app="splitx"} | request_id="' + tracedId + '"', 5)?.data?.result?.[0];
+    const edge = logLines('{namespace="ingress-nginx"} | request_id="' + tracedId + '"', 5)?.data?.result?.[0];
+    return app && edge ? { pod: app.stream.pod, edge: JSON.parse(edge.values[0][1]) } : null;
+}, { timeoutMs: 45_000, everyMs: 3_000 }) : null;
+const tracedPodIp = trace ? json(['get', 'pod', trace.pod, '-n', NS]).status?.podIP : null;
+record(
+    'One request can be followed in Loki from the ingress to the pod that served it',
+    Boolean(trace) && trace.edge.upstream_addr === tracedPodIp + ':3000',
+    trace
+        ? 'X-Request-Id ' + tracedId + ': ingress-nginx sent it to ' + trace.edge.upstream_addr + ' (' + trace.edge.request_time + ' s at the edge), and '
+            + trace.pod + ' at ' + tracedPodIp + ' logged the same ID'
+        : 'request ' + (tracedId || 'without an ID') + ' not found in both logs within 45 s'
+);
+
+const logQueries = dashboardQueries(root, 'loki');
+const logProblems = logQueries
+    .map((query) => ({ query, answer: logLines(query.expr.replaceAll('$request_id', tracedId || '0'), 60) }))
+    .filter(({ answer }) => answer?.status !== 'success')
+    .map(({ query, answer }) => query.panel + ': ' + (answer?.error ?? 'no answer'));
+record(
+    'Every log dashboard query runs',
+    logQueries.length > 0 && logProblems.length === 0,
+    logProblems.length ? logProblems.join('; ') : logQueries.length + ' LogQL queries'
+);
+
+sections.push({
+    title: 'Monitoring',
+    body: [
+        'kube-prometheus-stack (Prometheus Operator, Prometheus, Alertmanager, Grafana, kube-state-metrics,',
+        'node-exporter) runs in its own namespaces. The application ships its own ServiceMonitor and',
+        'alert rules (`k8s/base`), and its dashboards come from `monitoring/dashboards`.',
+        '',
+        '| Scrape job | Namespace | Targets up |',
+        '|---|---|---|',
+        ...jobs.map((job) => {
+            const of = targets.filter((t) => t.labels.job === job);
+            return '| `' + job + '` | ' + (of[0]?.labels.namespace ?? '-') + ' | ' + of.filter((t) => t.health === 'up').length + ' of ' + of.length + ' |';
+        }),
+        '',
+        '| SplitX alert | Severity | State now |',
+        '|---|---|---|',
+        ...splitxRules.map((rule) => '| `' + rule.name + '` | ' + rule.labels.severity + ' | ' + rule.state + ' |'),
+        '',
+        'Each SplitX rule is unit-tested with promtool in CI (`npm run test:alerts`), against series',
+        'that should fire it and series that must not. ' + ruleGroups.flatMap((group) => group.rules).length
+            + ' rules are loaded in total, including the Kubernetes defaults.',
+        '',
+        '| Dashboard | Panels | Queries checked |',
+        '|---|---|---|',
+        ...served.map((d) => '| ' + d.title + ' | ' + d.panelCount + ' | '
+            + (queries.filter((q) => q.uid === d.uid).length + logQueries.filter((q) => q.uid === d.uid).length) + ' |'),
+        '',
+        'Logs: Alloy reads the application and ingress-nginx logs through the Kubernetes API and ships',
+        'them to Loki, parsing the JSON both write. One request made during this run:',
+        '',
+        '| | |',
+        '|---|---|',
+        '| X-Request-Id | `' + (tracedId || '-') + '` |',
+        '| ingress-nginx access log | ' + (trace ? 'status ' + trace.edge.status + ', ' + trace.edge.request_time + ' s, sent to `' + trace.edge.upstream_addr + '`' : 'not found') + ' |',
+        '| Application log | ' + (trace ? '`' + trace.pod + '` at `' + tracedPodIp + '`' : 'not found') + ' |',
+    ].join('\n'),
+});
+
 function spawnAsync(file, argv) {
     return new Promise((resolve) => {
         const child = spawn(file, argv, { cwd: root, shell: false });
@@ -535,7 +759,7 @@ const report = [
     '| Setting | Value | Why |',
     '|---|---|---|',
     '| CPU request | ' + container.resources.requests.cpu + ' | what the autoscaler measures against |',
-    '| CPU limit | ' + container.resources.limits.cpu + ' | one settlement preview cannot take a whole node |',
+    '| CPU limit | ' + (container.resources.limits?.cpu ?? 'none') + ' | a 1-CPU quota made V8\'s compiler and GC threads compete with the main thread; fresh pods stalled for up to 21 s under overload (D-053) |',
     '| Memory request / limit | ' + container.resources.requests.memory + ' / ' + container.resources.limits.memory + ' | measured from a running pod, not guessed |',
     '| Root filesystem | read-only | with `/tmp` and the Next cache as the only writable paths |',
     '| User | ' + (json(['get', 'deployment', 'splitx', '-n', NS]).spec.template.spec.securityContext.runAsUser) + ' (non-root) | enforced by the namespace, not just requested |',

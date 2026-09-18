@@ -1,0 +1,25 @@
+# ═══════════════════════════════════════════════════════════════
+#   Grafana dashboards, provisioned from this repository.
+#
+#   Grafana's sidecar loads every ConfigMap in the monitoring namespace
+#   labelled grafana_dashboard: "1", one dashboard per key. Dashboards are
+#   read-only in Grafana: a change is made here, reviewed, and applied by
+#   `npm run k8s:up`, and `npm run k8s:verify` runs every panel's query.
+# ═══════════════════════════════════════════════════════════════
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: monitoring
+
+configMapGenerator:
+  - name: splitx-dashboards
+    files:
+      - dashboards/splitx-service.json
+      - dashboards/splitx-logs.json
+    options:
+      # A hashed name would leave the previous ConfigMap behind on every change,
+      # and Grafana would load both copies.
+      disableNameSuffixHash: true
+      labels:
+        grafana_dashboard: "1"
+        app.kubernetes.io/part-of: splitx

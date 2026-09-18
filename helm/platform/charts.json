@@ -1,12 +1,23 @@
 {
   "_comment": [
-    "Third-party charts the platform installs, pinned to an exact version.",
-    "scripts/cluster-up.mjs reads this file; nothing is installed from an",
-    "unpinned `helm install` in a script or a README, so the rehearsal cluster",
-    "and the graded demo get identical components. Phase 5 adds the",
-    "monitoring charts here."
+    "Third-party charts the platform installs, pinned to an exact version and",
+    "installed in this order by scripts/cluster-up.mjs. Nothing is installed from",
+    "an unpinned `helm install` in a script or a README, so the rehearsal cluster",
+    "and the graded demo get identical components.",
+    "kube-prometheus-stack comes first: its CRDs (ServiceMonitor, PrometheusRule)",
+    "must exist before any other chart or manifest declares one."
   ],
   "charts": [
+    {
+      "release": "kube-prometheus-stack",
+      "repo": "https://prometheus-community.github.io/helm-charts",
+      "chart": "prometheus-community/kube-prometheus-stack",
+      "version": "91.4.1",
+      "appVersion": "v0.94.0",
+      "namespace": "monitoring",
+      "values": "helm/platform/kube-prometheus-stack.values.yaml",
+      "why": "Prometheus, Alertmanager and Grafana, run by the Prometheus Operator, with kube-state-metrics and node-exporter for what Kubernetes and the nodes are doing."
+    },
     {
       "release": "ingress-nginx",
       "repo": "https://kubernetes.github.io/ingress-nginx",
@@ -26,6 +37,26 @@
       "namespace": "kube-system",
       "values": "helm/platform/metrics-server.values.yaml",
       "why": "Supplies the CPU readings the HorizontalPodAutoscaler scales on."
+    },
+    {
+      "release": "loki",
+      "repo": "https://grafana.github.io/helm-charts",
+      "chart": "grafana/loki",
+      "version": "7.3.0",
+      "appVersion": "3.6.12",
+      "namespace": "monitoring",
+      "values": "helm/platform/loki.values.yaml",
+      "why": "Stores the logs of the pods, searchable in Grafana by label and by request ID."
+    },
+    {
+      "release": "alloy",
+      "repo": "https://grafana.github.io/helm-charts",
+      "chart": "grafana/alloy",
+      "version": "1.12.1",
+      "appVersion": "v1.19.2",
+      "namespace": "monitoring",
+      "values": "helm/platform/alloy.values.yaml",
+      "why": "Reads the application and ingress logs through the Kubernetes API, parses their JSON, and sends them to Loki."
     }
   ]
 }

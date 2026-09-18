@@ -8,6 +8,9 @@
  *   node scripts/load-run.mjs staircase  --label v1 [--observe 900]
  *   ... [--env KEY=VALUE]    passed to k6 (e.g. HOLD=30s, RATE=80)
  *   ... [--allow-battery]    run on battery anyway; the result says so
+ *   ... [--keep-overlay]     leave the test's overlay applied, so the next run starts on
+ *                            the same, already warm pods (B-024)
+ *   ... [--warm-up N]        plan N trips on every pod before the load (B-024)
  *
  * It refuses to start on battery power: a throttled laptop CPU makes every
  * request cost several times more, and the autoscaler's response with it.
@@ -55,7 +58,7 @@ const args = process.argv.slice(2);
 const testName = args[0];
 const test = TESTS[testName];
 if (!test) {
-    console.error('usage: node scripts/load-run.mjs <' + Object.keys(TESTS).join('|') + '> --label <name> [--observe seconds] [--env KEY=VALUE] [--allow-battery]');
+    console.error('usage: node scripts/load-run.mjs <' + Object.keys(TESTS).join('|') + '> --label <name> [--observe seconds] [--env KEY=VALUE] [--allow-battery] [--keep-overlay] [--warm-up N]');
     process.exit(1);
 }
 const option = (name) => {
@@ -63,6 +66,7 @@ const option = (name) => {
     return i >= 0 ? args[i + 1] : undefined;
 };
 const label = option('--label') || 'run';
+const keepOverlay = args.includes('--keep-overlay');
 const observeSeconds = Number(option('--observe') ?? test.observe);
 const k6Env = args.flatMap((arg, i) => (arg === '--env' && args[i + 1] ? [args[i + 1]] : []));
 
@@ -234,7 +238,27 @@ const deployment = getJson(['-n', NS, 'get', 'deployment', 'splitx']);
 const configName = deployment.spec.template.spec.containers[0].envFrom.find((source) => source.configMapRef)?.configMapRef.name;
 const config = getJson(['-n', NS, 'get', 'configmap', configName]).data ?? {};
 const hpaSpec = getJson(['-n', NS, 'get', 'hpa', 'splitx']).spec;
-const firstPod = getJson(['-n', NS, 'get', 'pods', '-l', 'app.kubernetes.io/name=splitx']).items[0].metadata.name;
+const podsAtStart = getJson(['-n', NS, 'get', 'pods', '-l', 'app.kubernetes.io/name=splitx']).items.filter((pod) => !pod.metadata.deletionTimestamp);
+const firstPod = podsAtStart[0].metadata.name;
+// Experiment for B-024: plan this many 2,000-person trips on every pod, from
+// inside the pod, before the load starts. Rate limits are lifted in every test
+// overlay that would use it.
+const warmUpPlans = Number(option('--warm-up') ?? 0);
+if (warmUpPlans > 0) {
+    for (const pod of podsAtStart) {
+        const began = Date.now();
+        kubectl(['-n', NS, 'exec', pod.metadata.name, '--', 'sh', '-c',
+            'for i in $(seq 1 ' + warmUpPlans + '); do wget -qO- --post-data=\'{"scenario":{"members":2000}}\' '
+                + '--header="content-type: application/json" http://127.0.0.1:3000/api/settlements/preview >/dev/null 2>&1; done']);
+        console.log('warmed ' + pod.metadata.name + ' with ' + warmUpPlans + ' plans in ' + (Date.now() - began) + ' ms');
+    }
+}
+
+// How long each pod had been running when the load began: a fresh pod has not
+// compiled its hot code yet, which is the difference B-024 is about. Measured on
+// the cluster's clock, which runs about a minute off Windows (D-052).
+const clusterNowMs = Number(kubectl(['-n', NS, 'exec', firstPod, '--', 'date', '+%s']).stdout.trim()) * 1000;
+const podAgeSeconds = podsAtStart.map((pod) => Math.round((clusterNowMs - Date.parse(pod.status.startTime)) / 1000));
 const [gitSha, version] = kubectl(['-n', NS, 'exec', firstPod, '--', 'printenv', 'GIT_SHA', 'APP_VERSION']).stdout.trim().split(/\s+/);
 
 const outDir = join(tmpdir(), 'splitx-load-' + testName + '-' + Date.now());
@@ -269,7 +293,8 @@ if (powerAtEnd.source !== powerAtStart.source) {
     console.log('power changed during the test: ' + powerAtStart.source + ' at the start, ' + powerAtEnd.source + ' (' + powerAtEnd.detail + ') at the end');
 }
 
-if (test.overlay !== 'k8s/overlays/local') await applyOverlay('k8s/overlays/local');
+if (test.overlay !== 'k8s/overlays/local' && !keepOverlay) await applyOverlay('k8s/overlays/local');
+if (keepOverlay) console.log('left ' + test.overlay + ' applied (--keep-overlay); npm run k8s:up restores the local one');
 
 const csvPath = join(outDir, 'samples.csv.gz');
 if (!existsSync(csvPath)) {
@@ -287,9 +312,14 @@ const result = {
     image: { gitSha, version },
     overlay: test.overlay,
     power: { atStart: powerAtStart.source, atEnd: powerAtEnd.source },
+    pods: podsAtStart.map((pod) => pod.metadata.name),
+    podAgeSeconds,
+    keptOverlay: keepOverlay,
+    warmUpPlans,
     settings: {
         k6Env,
         k6: summary.extra,
+        resources: deployment.spec.template.spec.containers[0].resources,
         autoscaler: { min: hpaSpec.minReplicas, max: hpaSpec.maxReplicas, cpuTarget: hpaSpec.metrics?.[0]?.resource?.target?.averageUtilization, behavior: hpaSpec.behavior },
         config: Object.fromEntries(Object.entries(config).filter(([key]) => /RATE_LIMIT|QUEUE|REQUEST_START|PROXY_HOPS/.test(key))),
     },

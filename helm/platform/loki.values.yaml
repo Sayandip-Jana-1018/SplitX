@@ -1,0 +1,84 @@
+# ═══════════════════════════════════════════════════════════════
+#   Loki on Kind: one process, logs on a persistent volume, kept 3 days.
+#
+#   The chart's default is the scalable deployment with object storage,
+#   memcached caches, a gateway and a canary. On a laptop those cost
+#   gigabytes of memory to store a few megabytes of logs, so everything
+#   except the single binary is off. Grafana reads Loki directly
+#   (helm/platform/kube-prometheus-stack.values.yaml, additionalDataSources);
+#   Alloy writes to it (helm/platform/alloy.values.yaml).
+# ═══════════════════════════════════════════════════════════════
+deploymentMode: SingleBinary
+
+loki:
+  auth_enabled: false
+  commonConfig:
+    replication_factor: 1
+  storage:
+    type: filesystem
+  schemaConfig:
+    configs:
+      - from: "2026-01-01"
+        store: tsdb
+        object_store: filesystem
+        schema: v13
+        index:
+          prefix: loki_index_
+          period: 24h
+  limits_config:
+    # A request ID is too unique to be a label, so it is stored as structured
+    # metadata next to each line, which needs schema v13.
+    allow_structured_metadata: true
+    volume_enabled: true
+    retention_period: 72h
+  compactor:
+    retention_enabled: true
+    delete_request_store: filesystem
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+    runAsGroup: 10001
+    fsGroup: 10001
+    seccompProfile:
+      type: RuntimeDefault
+
+singleBinary:
+  replicas: 1
+  persistence:
+    enabled: true
+    size: 5Gi
+  resources:
+    requests:
+      cpu: 50m
+      memory: 256Mi
+    limits:
+      memory: 1Gi
+
+# The scalable-mode components, off.
+backend:
+  replicas: 0
+read:
+  replicas: 0
+write:
+  replicas: 0
+
+chunksCache:
+  enabled: false
+resultsCache:
+  enabled: false
+gateway:
+  enabled: false
+lokiCanary:
+  enabled: false
+test:
+  enabled: false
+minio:
+  enabled: false
+sidecar:
+  rules:
+    enabled: false
+
+monitoring:
+  # Loki's own metrics, scraped by Prometheus like everything else.
+  serviceMonitor:
+    enabled: true

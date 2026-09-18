@@ -1,0 +1,136 @@
+# ═══════════════════════════════════════════════════════════════
+#   Alerts about SplitX itself. Kubernetes-level problems (crash loops,
+#   stuck rollouts, an autoscaler held at its maximum) come from the
+#   default rules of kube-prometheus-stack and are not repeated here.
+#
+#   Every rule is unit-tested against series that should and should not
+#   fire it: monitoring/tests/splitx-rules.test.yaml, run by
+#   `node scripts/test-alerts.mjs` locally and in CI.
+#
+#   The test script reads everything below `spec:` as a plain rule file,
+#   so keep `spec:` the last top-level key.
+# ═══════════════════════════════════════════════════════════════
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: splitx
+  labels:
+    app.kubernetes.io/name: splitx
+    app.kubernetes.io/part-of: splitx
+spec:
+  groups:
+    - name: splitx.availability
+      rules:
+        - alert: SplitXDown
+          # Readiness removes a pod that cannot reach the database, so this is
+          # also what a database outage looks like from outside.
+          expr: kube_deployment_status_replicas_available{namespace="splitx", deployment="splitx"} == 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: No SplitX pod is available to serve requests
+            description: >-
+              The splitx deployment has had no available replicas for a minute.
+              Check `kubectl -n splitx get pods` and whether the readiness probe
+              can reach the database.
+
+    - name: splitx.errors
+      rules:
+        - alert: SplitXServerErrors
+          # 5xx responses the application did not intend. A preview refused under
+          # overload (503 OVERLOADED, D-046) is counted once in the responses and
+          # once as outcome="shed", so subtracting the second leaves real errors.
+          # Health checks and scrapes are left out: a readiness 503 is the probe
+          # reporting a database outage, which SplitXDown already covers.
+          # At least five in the window, so one error at 3 a.m. is not 100%.
+          expr: |
+            (
+              sum(rate(splitx_http_requests_total{namespace="splitx", status_code=~"5..", route!~"/api/health/.*|/api/metrics"}[5m]))
+                - (sum(rate(splitx_settlement_previews_total{namespace="splitx", outcome="shed"}[5m])) or vector(0))
+            ) > 0.02 * sum(rate(splitx_http_requests_total{namespace="splitx", route!~"/api/health/.*|/api/metrics"}[5m]))
+            and
+            (
+              sum(increase(splitx_http_requests_total{namespace="splitx", status_code=~"5..", route!~"/api/health/.*|/api/metrics"}[5m]))
+                - (sum(increase(splitx_settlement_previews_total{namespace="splitx", outcome="shed"}[5m])) or vector(0))
+            ) >= 5
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: More than 2% of SplitX responses are unintended server errors
+            description: >-
+              Over the last 5 minutes more than 2% of responses were 5xx errors
+              that were not deliberate load shedding. Search Loki for
+              {namespace="splitx", level="error"}.
+
+    - name: splitx.capacity
+      rules:
+        - alert: SplitXSheddingLoad
+          # Refusing some previews in a burst is the design working (D-046). Ten
+          # minutes of it means capacity is short: the autoscaler is at its
+          # maximum or cannot start pods.
+          expr: |
+            sum(rate(splitx_settlement_previews_total{namespace="splitx", outcome="shed"}[5m]))
+              > 0.05 * sum(rate(splitx_settlement_previews_total{namespace="splitx"}[5m]))
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: SplitX has been refusing more than 5% of previews for 10 minutes
+            description: >-
+              The pods are shedding load to stay responsive. Check whether the
+              autoscaler is at its maximum (KubeHpaMaxedOut) or new pods cannot
+              become ready.
+
+        - alert: SplitXSlowResponses
+          # The staircase served p95 54 ms up to 100 plans a second (D-051), and
+          # overload held served p95 at 1.2 s only by refusing work (D-046).
+          # A p95 above 1 s for ten minutes is people waiting. Only their requests
+          # count: with nobody using the site, the only traffic is health checks
+          # and scrapes, and a readiness check waiting on a starting database
+          # would otherwise decide the percentile. Fewer than 60 requests in the
+          # window is too few for a percentile to mean anything.
+          expr: |
+            histogram_quantile(0.95,
+              sum by (le) (rate(splitx_http_request_duration_seconds_bucket{namespace="splitx", route!~"/api/health/.*|/api/metrics"}[5m]))
+            ) > 1
+            and
+            sum(rate(splitx_http_request_duration_seconds_count{namespace="splitx", route!~"/api/health/.*|/api/metrics"}[5m])) > 0.2
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: SplitX p95 response time has been above 1 second for 10 minutes
+            description: >-
+              Most requests are still answered, but slowly. Check CPU against the
+              autoscaler's target and event-loop lag per pod.
+
+        - alert: SplitXEventLoopBlocked
+          # Node answers every request on one thread. A blocked loop delays all of
+          # them, health checks included, which is how busy pods used to be
+          # restarted by their own probes (D-046). B-024 saw 3 s stalls.
+          expr: max by (pod) (splitx_nodejs_eventloop_lag_p99_seconds{namespace="splitx"}) > 0.5
+          for: 2m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Event loop blocked on {{ $labels.pod }}"
+            description: >-
+              The 99th percentile event-loop delay on {{ $labels.pod }} has been
+              above 500 ms for 2 minutes. Every request on that pod waits that long.
+
+    - name: splitx.dependencies
+      rules:
+        - alert: SplitXRateLimiterUnavailable
+          # Redis unreachable: the limiter fails open (D-022). Pages keep working,
+          # but nothing limits sign-in attempts or a flood of previews.
+          expr: sum(rate(splitx_rate_limit_checks_total{namespace="splitx", outcome="error"}[5m])) > 0
+          for: 2m
+          labels:
+            severity: warning
+          annotations:
+            summary: SplitX rate limiting is off because Redis cannot be reached
+            description: >-
+              Rate-limit checks have been failing for 2 minutes, so requests are
+              served without limits. Check the splitx-redis pod.

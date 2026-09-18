@@ -1,0 +1,64 @@
+# ═══════════════════════════════════════════════════════════════
+#   Alertmanager: who hears about an alert, and how often.
+#
+#   `npm run k8s:up` fills the ${ALERT_*} values from .env and stores the
+#   result as the Secret alertmanager-splitx, so no address or password is
+#   ever written to the repository or to disk. Values are inserted as quoted
+#   strings. If any of the three is missing it removes the email_configs block
+#   at the end of this file and says so: alerts still fire and show in Grafana,
+#   but nobody is emailed.
+# ═══════════════════════════════════════════════════════════════
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: email
+  # One email per alert name per namespace, however many pods it covers.
+  group_by: [alertname, namespace]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 12h
+  routes:
+    # Watchdog fires all the time by design, to prove the alerting pipeline is
+    # alive. It is meant for a dead-man's switch, not an inbox.
+    - receiver: "null"
+      matchers:
+        - alertname = "Watchdog"
+    - receiver: "null"
+      matchers:
+        - alertname = "InfoInhibitor"
+    # Informational alerts are context for dashboards, not a reason to email.
+    - receiver: "null"
+      matchers:
+        - severity = "info"
+
+inhibit_rules:
+  # While something is critical, its own warnings add nothing.
+  - source_matchers:
+      - severity = "critical"
+    target_matchers:
+      - severity =~ "warning|info"
+    equal: [namespace, alertname]
+  - source_matchers:
+      - severity = "warning"
+    target_matchers:
+      - severity = "info"
+    equal: [namespace, alertname]
+  - source_matchers:
+      - alertname = "InfoInhibitor"
+    target_matchers:
+      - severity = "info"
+    equal: [namespace]
+
+receivers:
+  - name: "null"
+  - name: email
+    # Gmail over STARTTLS with an App Password (not the account password).
+    email_configs:
+      - to: ${ALERT_EMAIL_TO}
+        from: ${ALERT_SMTP_USERNAME}
+        smarthost: smtp.gmail.com:587
+        auth_username: ${ALERT_SMTP_USERNAME}
+        auth_password: ${ALERT_SMTP_PASSWORD}
+        require_tls: true
+        send_resolved: true
