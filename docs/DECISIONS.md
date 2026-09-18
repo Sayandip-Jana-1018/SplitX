@@ -1300,6 +1300,104 @@ a stabilisation window, scale-down after five minutes at one pod a minute.
 - **For phase 7:** a 1-CPU limit on burstable EC2 instances spends CPU credits, so node
   types and limits are measured again on EKS.
 
+### D-052 · Monitoring moves into the cluster, and every part of it is checked
+**2026-09-18** · ✅ done, except the first alert email (waiting on a Gmail App Password)
+
+The demo runs on Kubernetes, so the monitoring does too. Everything is a pinned chart in
+`helm/platform/charts.json`, installed by `npm run k8s:up`:
+
+| Component | Chart | What it does here |
+|---|---|---|
+| Prometheus Operator, Prometheus 3.14, Alertmanager 0.34, Grafana 13.2, kube-state-metrics, node-exporter | kube-prometheus-stack 91.4.1 | Scrapes the app, the ingress, the nodes and Kubernetes; evaluates the rules; routes alerts; draws the dashboards |
+| Loki 3.6.12 | loki 7.3.0 | Stores logs for three days, on one process |
+| Grafana Alloy 1.19.2 | alloy 1.12.1 | Reads the app and ingress logs through the Kubernetes API and sends them to Loki |
+
+Everything runs in the namespace `monitoring`, which enforces the same `restricted` Pod
+Security level as the application: every chart workload passed a server-side dry run against
+it before installing, and the Prometheus and Alertmanager pods the operator creates were
+admitted under it. node-exporter needs the host's `/proc`, `/sys`, network and PIDs, so it
+alone gets a privileged namespace of its own instead of loosening `monitoring`.
+
+**The application brings its own monitoring.** `k8s/base` now holds a ServiceMonitor, which
+scrapes every pod with the metrics token from the app's own Secret, and a PrometheusRule. CI
+validates both against the Prometheus Operator's JSON schemas, pinned to a commit of the
+CRDs catalog, so a misspelled field fails the build.
+
+**Six SplitX alerts**, each with its reason next to it in `k8s/base/prometheusrule.yaml`:
+
+| Alert | Fires when | Why that threshold |
+|---|---|---|
+| SplitXDown (critical) | No available pod for 1 minute | Also what a database outage looks like, because readiness removes the pods |
+| SplitXServerErrors (critical) | Over 2% unintended 5xx for 5 minutes, and at least 5 | Deliberate refusals (D-046) are subtracted; health checks are left out |
+| SplitXSheddingLoad (warning) | Over 5% of previews refused for 10 minutes | A burst of refusals is the design working; ten minutes is missing capacity |
+| SplitXSlowResponses (warning) | p95 over 1 s for 10 minutes, with at least 60 requests | D-051 served p95 54 ms up to 100 plans a second |
+| SplitXEventLoopBlocked (warning) | One pod's event-loop p99 over 500 ms for 2 minutes | What made busy pods fail their probes (D-046), and the B-024 stall |
+| SplitXRateLimiterUnavailable (warning) | Rate-limit checks failing for 2 minutes | Redis is down and the limiter fails open |
+
+Kubernetes-level alerts (crash loops, stuck rollouts, an autoscaler held at its maximum) come
+from the chart's default rules. `npm run test:alerts` runs 16 promtool unit tests in CI, a
+case that must fire and cases built from normal life that must not: load shedding, a
+readiness check failing during a database outage, one error at 3 a.m., a short burst of
+refusals, a healthy pod beside a blocked one. Seven deliberate breakages of the rules were
+each caught. Four of them at first were not, and each exposed a real gap: two alerts have two
+guards and the tests only ever defeated both at once, and two tests could not fail, because
+`histogram_quantile` returns exactly the bucket bound 1 and `1 > 1` is false. The tests were
+fixed until every breakage turned them red.
+
+Two rules were wrong on first contact with the cluster, and the fix came from what it showed.
+After a reboot, with nobody using the site, the only traffic was health checks and scrapes;
+readiness waiting on a database that was still starting pushed p95 to 1.6 s and
+SplitXSlowResponses went pending. Both traffic rules now count only requests from people.
+
+**Alerts go by email.** The routing tree is committed (`monitoring/alertmanager/alertmanager.yaml`):
+one email per alert name per namespace, repeated every 12 hours, "resolved" emails on, a
+critical alert silencing its own warnings. `k8s:up` fills the Gmail address and App Password
+from `.env` into a Secret, in memory. Watchdog, which fires all the time to prove the pipeline
+is alive, goes nowhere by design. `amtool check-config` validates the template in CI.
+
+**Dashboards are code.** `monitoring/dashboards/splitx-service.json` (27 panels) and
+`splitx-logs.json` (7) reach Grafana through its sidecar as one ConfigMap and are read-only
+there. A panel that asks for a metric nobody exports draws an empty graph forever, so
+`k8s:verify` runs every query and checks every metric name against what Prometheus has, plus
+what the app declares: a labelled counter has no samples until its first increment.
+
+**Logs carry the request ID end to end.** The app already logged one JSON line per request with
+its `requestId`. ingress-nginx now writes JSON access lines too, whose `request_id` is the
+`X-Request-Id` the app put on its response, so a client cannot choose it. Alloy parses both;
+`level` becomes a label, the request ID structured metadata. `k8s:verify` makes a request and
+finds its ID in Loki twice, and the ingress's upstream address must be the IP of the pod whose
+line carries the same ID.
+
+**What the cluster revealed about the laptop.** Three default alerts fired from boot to
+shutdown: Alertmanager "crash looping", out-of-order samples, and rule evaluations "missed".
+Alertmanager had restarted exactly once, at the reboot. Measured: the Docker VM's uptime
+advanced 116.2 s while Windows advanced 120.8 s, and its wall clock is stepped back and forth
+by about 0.8 s every few seconds. `process_start_time_seconds` is derived from the kernel's boot
+time, which moves with every step, so every process in the cluster appeared to restart 17
+times in 10 minutes; one rule group was counted as missing 52 evaluations while the slowest
+group took 15 ms of its 15 s. Those three alerts and `NodeClockNotSynchronising` are disabled
+in the Kind values only, with the measurements beside them; EKS nodes keep time with chrony
+and keep all four. Crash loops are still caught, from kube-state-metrics' restart counts.
+
+The same clock means durations measured inside the VM, including k6's latencies in phase 4,
+may read a few percent low. No decision in D-045 to D-051 sits within a few percent of its
+threshold.
+
+- **Removed from Docker Compose:** Prometheus, Grafana, Loki and Promtail. Two copies drift,
+  and the old ones had real problems: Promtail ran as root with the Docker socket mounted,
+  which is root on the VM, and reached end of life in March 2026; one alert called more than
+  100 requests a second a "possible DDoS", which a class is; the error alert counted
+  deliberate refusals; nothing received the alerts; and the overview dashboard had no request,
+  error or latency panels, with an unfilled `${DS_PROMETHEUS}` data source. Compose now runs
+  the app with its database and cache, and the CI tools.
+- **Rejected — collecting logs from host paths:** it needs a privileged pod on every node.
+  Through the API one unprivileged Alloy covers the cluster.
+- **Rejected — scraping the Service address:** each pod keeps its own counters, so it would
+  read a different pod each time.
+- **Seen after a reboot:** the Prometheus Operator crashed twice at boot, because it started
+  before kube-proxy had programmed the route to the API server, and recovered on its own on
+  the third start. Kubernetes restarts pods for exactly this; nothing to fix.
+
 ---
 
 ## Open problems
@@ -1322,7 +1420,7 @@ a stabilisation window, scale-down after five minutes at one pod a minute.
 | B-014 | The Supabase project URL in the local `.env` did not resolve. | Storage couldn't be exercised, and uploads on the live site were failing. | ✅ Resolved 2026-09-14 — the free-tier project had been **paused**; the user resumed it and added the secret key to `.env` and Vercel. Verified live (D-027). |
 | B-015 | Anonymous preview requests from one network share an IP bucket (60/min). | A classroom behind one NAT would be rate limited as one person during the demo. | ✅ Resolved 2026-09-17 — D-045. Anonymous devices carry a signed identity and are limited individually; their network keeps a ceiling. Classroom test under production limits: students refused went from 1,777 of 1,907 (93%) to 0 of 1,912 |
 | B-016 | Queue-time shedding can't see the time a request waits before the proxy runs (D-026). | Accepted requests reached p99 ≈ 2.2–2.5 s at 96 concurrent 2,000-person previews on one process. | ✅ Resolved 2026-09-17 — D-046. ingress-nginx stamps the arrival time, the proxy refuses overdue work and caps accepted work at 8 plans per pod, liveness tolerates a busy pod, and Node keep-alive outlasts nginx. Two pods at 60 req/s: served p95 26 s to 1.2 s, 1,314 errors to 0, restarts 2 to 0 |
-| B-017 | Deliberately shed 503s are logged at error level by the access log. | 365 error lines in one load test, all intended. Noise hides real errors. | 🚧 Mostly resolved 2026-09-17 — refusals now happen in the proxy and are counted, not logged (D-046); the rare refusal inside the route still logs at error level. Phase 5: alert on metrics |
+| B-017 | Deliberately shed 503s are logged at error level by the access log. | 365 error lines in one load test, all intended. Noise hides real errors. | ✅ Resolved 2026-09-18 — refusals in the proxy are counted, not logged (D-046), and alerting is on metrics that subtract deliberate refusals (SplitXServerErrors, D-052). The rare refusal inside the route still logs at error level; it is visible in the logs dashboard and alerts no one. |
 | B-019 | **Anyone could list the `receipts` bucket.** Found 2026-09-14: an anonymous request with the public key listed its contents. | Anyone could enumerate every receipt photo. | ✅ Resolved 2026-09-14 — the user deleted all three policies; anonymous listing now returns nothing (D-027). Later: consider a private bucket with signed read URLs. |
 | B-020 | The Docker image's browser code had no Supabase URL or key, so uploads could not work from a container. | Receipt uploads would have failed on Kubernetes. | ✅ Resolved 2026-09-16 — the browser now PUTs to the signed URL alone, with no key and no Supabase client (D-028). |
 | B-018 | One profile still carried an avatar that wasn’t a normal storage URL. | Photos kept as `data:` text sit in every API response that includes that user — group members, expense payers, settlement participants. | ✅ Resolved 2026-09-17. The corrected query found **one** `data:` avatar and **no** email-named files (the first query was wrong: the old code replaced `@` with `_`, so `LIKE '%@%'` could never match). It was **828 KB of text** — a 621 KB JPEG — carried in every response that mentioned that user. `scripts/migrate-avatars.mjs --apply --https` uploaded it to `avatars/<id>/`, rewrote the row only while it still held the `data:` value, and confirmed the stored copy is served as `image/jpeg` and **byte-identical** to the original. A backup of the old value was written first. Production now has 0 `data:` avatars. |
@@ -1349,10 +1447,9 @@ a stabilisation window, scale-down after five minutes at one pod a minute.
   hadolint. Phases 2 and 4 run their official container images instead.
 - Image baseline before phase 2: `splitx:local` is 430 MB, and `splitx_app_info`
   reports `git_sha="unknown"` (no build provenance yet).
-- Loki receives the container logs (a response's `X-Request-Id` was found in
-  Loki), but they are labelled only `job`, `stream` and `filename`: no container
-  or service label (phase 5).
-- Loki occupies host port 3100, so ad-hoc app servers for tests use 3200.
-- After the host sleeps or restarts, the Docker VM clock can run ahead of Windows (53 s measured on 2026-09-17), which is why `kubectl` shows event ages as `<invalid>`. Everything in the cluster shares the VM clock, so the rate limiter and token expiry are unaffected.
+- Loki now runs in the cluster and labels every line with namespace, pod, container,
+  app, node and, for the application, level; request IDs are structured metadata
+  (D-052). Compose no longer runs Loki, so host port 3100 is free again.
+- After the host sleeps or restarts, the Docker VM clock can run ahead of Windows (53 s measured on 2026-09-17), which is why `kubectl` shows event ages as `<invalid>`. Everything in the cluster shares the VM clock, so the rate limiter and token expiry are unaffected. On 2026-09-18 the VM clock also ran 2 to 6% slow against Windows and was stepped about 0.8 s at a time, which set off three false alerts (D-052).
 - **Outbound TCP 5432 is blocked on this machine’s network** (443 works; DNS resolves). Prisma cannot reach Neon from here, which is why `.env` points at the Compose Postgres. Tools that must reach Neon use its SQL-over-HTTPS endpoint instead (`scripts/migrate-avatars.mjs --https`). Not an issue for Vercel, GitHub Actions or EKS.
 - The user-level npm registry is HTTPS now.
