@@ -1,0 +1,314 @@
+# ═══════════════════════════════════════════════════════════════
+#   Unit tests for the SplitX alert rules (k8s/base/prometheusrule.yaml),
+#   run with promtool by `node scripts/test-alerts.mjs`.
+#
+#   Each alert has a case that must fire and a case built from what
+#   normally happens and must not: deliberate load shedding, a single
+#   error at night, a short burst of refusals, a healthy pod beside a
+#   blocked one.
+#
+#   Notation: 'a+bxN' is a, a+b, ... (N+1 samples), one per `interval`.
+# ═══════════════════════════════════════════════════════════════
+rule_files:
+  - splitx.rules.yaml
+
+evaluation_interval: 15s
+
+tests:
+  # ── SplitXDown ────────────────────────────────────────────────
+  - name: no available replica for a minute fires, a moment does not
+    interval: 15s
+    input_series:
+      - series: 'kube_deployment_status_replicas_available{namespace="splitx", deployment="splitx"}'
+        values: '2x3 0x20'
+    alert_rule_test:
+      - eval_time: 90s
+        alertname: SplitXDown
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: SplitXDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              namespace: splitx
+              deployment: splitx
+            exp_annotations:
+              summary: No SplitX pod is available to serve requests
+              description: The splitx deployment has had no available replicas for a minute. Check `kubectl -n splitx get pods` and whether the readiness probe can reach the database.
+
+  # ── SplitXServerErrors ────────────────────────────────────────
+  - name: deliberate load shedding is not an error
+    interval: 15s
+    input_series:
+      - series: 'splitx_http_requests_total{namespace="splitx", route="/api/settlements/preview", method="POST", status_code="200"}'
+        values: '0+100x60'
+      - series: 'splitx_http_requests_total{namespace="splitx", route="(proxy)", method="POST", status_code="503"}'
+        values: '0+50x60'
+      - series: 'splitx_settlement_previews_total{namespace="splitx", mode="unknown", outcome="shed"}'
+        values: '0+50x60'
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: SplitXServerErrors
+        exp_alerts: []
+
+  - name: readiness 503s during a database outage are not server errors
+    interval: 15s
+    input_series:
+      # Per 15 s: 100 served, 1 real error (1%), and 10 readiness checks failing.
+      - series: 'splitx_http_requests_total{namespace="splitx", route="/api/groups", method="GET", status_code="200"}'
+        values: '0+100x60'
+      - series: 'splitx_http_requests_total{namespace="splitx", route="/api/groups", method="GET", status_code="500"}'
+        values: '0+1x60'
+      - series: 'splitx_http_requests_total{namespace="splitx", route="/api/health/ready", method="GET", status_code="503"}'
+        values: '0+10x60'
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: SplitXServerErrors
+        exp_alerts: []
+
+  - name: real errors under 2% do not fire while shedding pushes raw 5xx above it
+    interval: 15s
+    input_series:
+      # Per 15 s: 90 served, 1 real error (1%), 10 refused under overload.
+      - series: 'splitx_http_requests_total{namespace="splitx", route="/api/groups", method="GET", status_code="200"}'
+        values: '0+90x80'
+      - series: 'splitx_http_requests_total{namespace="splitx", route="/api/groups", method="GET", status_code="500"}'
+        values: '0+1x80'
+      - series: 'splitx_http_requests_total{namespace="splitx", route="(proxy)", method="POST", status_code="503"}'
+        values: '0+10x80'
+      - series: 'splitx_settlement_previews_total{namespace="splitx", mode="unknown", outcome="shed"}'
+        values: '0+10x80'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: SplitXServerErrors
+        exp_alerts: []
+
+  - name: real server errors above 2% fire after five minutes
+    interval: 15s
+    input_series:
+      - series: 'splitx_http_requests_total{namespace="splitx", route="/api/groups", method="GET", status_code="200"}'
+        values: '0+100x60'
+      - series: 'splitx_http_requests_total{namespace="splitx", route="/api/groups", method="GET", status_code="500"}'
+        values: '0+10x60'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: SplitXServerErrors
+        exp_alerts: []
+      - eval_time: 7m
+        alertname: SplitXServerErrors
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              summary: More than 2% of SplitX responses are unintended server errors
+              description: 'Over the last 5 minutes more than 2% of responses were 5xx errors that were not deliberate load shedding. Search Loki for {namespace="splitx", level="error"}.'
+
+  - name: an occasional error at low traffic does not fire
+    interval: 15s
+    input_series:
+      # 20 requests and 2.5 errors per 5 minutes: 11%, but fewer than five errors.
+      - series: 'splitx_http_requests_total{namespace="splitx", route="/", method="GET", status_code="200"}'
+        values: '0+1x80'
+      - series: 'splitx_http_requests_total{namespace="splitx", route="/", method="GET", status_code="500"}'
+        values: '0+0.125x80'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: SplitXServerErrors
+        exp_alerts: []
+
+  # ── SplitXSheddingLoad ────────────────────────────────────────
+  - name: shedding 10% of previews for ten minutes fires
+    interval: 15s
+    input_series:
+      - series: 'splitx_settlement_previews_total{namespace="splitx", mode="scenario", outcome="ok"}'
+        values: '0+90x80'
+      - series: 'splitx_settlement_previews_total{namespace="splitx", mode="unknown", outcome="shed"}'
+        values: '0+10x80'
+    alert_rule_test:
+      - eval_time: 9m
+        alertname: SplitXSheddingLoad
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: SplitXSheddingLoad
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: SplitX has been refusing more than 5% of previews for 10 minutes
+              description: The pods are shedding load to stay responsive. Check whether the autoscaler is at its maximum (KubeHpaMaxedOut) or new pods cannot become ready.
+
+  - name: a three-minute burst of shedding does not fire
+    interval: 15s
+    input_series:
+      - series: 'splitx_settlement_previews_total{namespace="splitx", mode="scenario", outcome="ok"}'
+        values: '0+90x80'
+      - series: 'splitx_settlement_previews_total{namespace="splitx", mode="unknown", outcome="shed"}'
+        values: '0+10x12 120x68'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: SplitXSheddingLoad
+        exp_alerts: []
+
+  # ── SplitXSlowResponses ───────────────────────────────────────
+  - name: p95 above one second for ten minutes fires
+    interval: 15s
+    input_series:
+      # Every request takes between 1 and 2.5 seconds.
+      - series: 'splitx_http_request_duration_seconds_bucket{namespace="splitx", route="/api/groups", method="GET", status_code="200", le="0.5"}'
+        values: '0x80'
+      - series: 'splitx_http_request_duration_seconds_bucket{namespace="splitx", route="/api/groups", method="GET", status_code="200", le="1"}'
+        values: '0x80'
+      - series: 'splitx_http_request_duration_seconds_bucket{namespace="splitx", route="/api/groups", method="GET", status_code="200", le="2.5"}'
+        values: '0+10x80'
+      - series: 'splitx_http_request_duration_seconds_bucket{namespace="splitx", route="/api/groups", method="GET", status_code="200", le="+Inf"}'
+        values: '0+10x80'
+      - series: 'splitx_http_request_duration_seconds_count{namespace="splitx", route="/api/groups", method="GET", status_code="200"}'
+        values: '0+10x80'
+    alert_rule_test:
+      - eval_time: 9m
+        alertname: SplitXSlowResponses
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: SplitXSlowResponses
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: SplitX p95 response time has been above 1 second for 10 minutes
+              description: Most requests are still answered, but slowly. Check CPU against the autoscaler's target and event-loop lag per pod.
+
+  - name: slow health checks and scrapes with nobody using the site do not fire
+    interval: 15s
+    input_series:
+      # After a reboot: readiness checks waiting on a database that was still
+      # starting, slow first scrapes, and no users at all.
+      - series: 'splitx_http_request_duration_seconds_bucket{namespace="splitx", route="/api/health/ready", method="GET", status_code="200", le="1"}'
+        values: '0x80'
+      - series: 'splitx_http_request_duration_seconds_bucket{namespace="splitx", route="/api/health/ready", method="GET", status_code="200", le="2.5"}'
+        values: '0+2x80'
+      - series: 'splitx_http_request_duration_seconds_bucket{namespace="splitx", route="/api/health/ready", method="GET", status_code="200", le="+Inf"}'
+        values: '0+2x80'
+      - series: 'splitx_http_request_duration_seconds_count{namespace="splitx", route="/api/health/ready", method="GET", status_code="200"}'
+        values: '0+2x80'
+      - series: 'splitx_http_request_duration_seconds_bucket{namespace="splitx", route="/api/metrics", method="GET", status_code="200", le="1"}'
+        values: '0x80'
+      - series: 'splitx_http_request_duration_seconds_bucket{namespace="splitx", route="/api/metrics", method="GET", status_code="200", le="2.5"}'
+        values: '0+2x80'
+      - series: 'splitx_http_request_duration_seconds_bucket{namespace="splitx", route="/api/metrics", method="GET", status_code="200", le="+Inf"}'
+        values: '0+2x80'
+      - series: 'splitx_http_request_duration_seconds_count{namespace="splitx", route="/api/metrics", method="GET", status_code="200"}'
+        values: '0+2x80'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: SplitXSlowResponses
+        exp_alerts: []
+
+  - name: fast user traffic beside slow health checks does not fire
+    interval: 15s
+    input_series:
+      # Users are served in under 50 ms; three times as many health checks are slow.
+      # Over all routes the p95 would be slow; over what users asked for it is not.
+      - series: 'splitx_http_request_duration_seconds_bucket{namespace="splitx", route="/api/groups", method="GET", status_code="200", le="0.05"}'
+        values: '0+10x80'
+      - series: 'splitx_http_request_duration_seconds_bucket{namespace="splitx", route="/api/groups", method="GET", status_code="200", le="1"}'
+        values: '0+10x80'
+      - series: 'splitx_http_request_duration_seconds_bucket{namespace="splitx", route="/api/groups", method="GET", status_code="200", le="2.5"}'
+        values: '0+10x80'
+      - series: 'splitx_http_request_duration_seconds_bucket{namespace="splitx", route="/api/groups", method="GET", status_code="200", le="+Inf"}'
+        values: '0+10x80'
+      - series: 'splitx_http_request_duration_seconds_count{namespace="splitx", route="/api/groups", method="GET", status_code="200"}'
+        values: '0+10x80'
+      - series: 'splitx_http_request_duration_seconds_bucket{namespace="splitx", route="/api/health/ready", method="GET", status_code="200", le="1"}'
+        values: '0x80'
+      - series: 'splitx_http_request_duration_seconds_bucket{namespace="splitx", route="/api/health/ready", method="GET", status_code="200", le="2.5"}'
+        values: '0+30x80'
+      - series: 'splitx_http_request_duration_seconds_bucket{namespace="splitx", route="/api/health/ready", method="GET", status_code="200", le="+Inf"}'
+        values: '0+30x80'
+      - series: 'splitx_http_request_duration_seconds_count{namespace="splitx", route="/api/health/ready", method="GET", status_code="200"}'
+        values: '0+30x80'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: SplitXSlowResponses
+        exp_alerts: []
+
+  - name: slow requests at a trickle are too few to judge
+    interval: 15s
+    input_series:
+      # One slow request every 15 s: 20 in five minutes, under the floor of 60.
+      - series: 'splitx_http_request_duration_seconds_bucket{namespace="splitx", route="/api/groups", method="GET", status_code="200", le="1"}'
+        values: '0x80'
+      - series: 'splitx_http_request_duration_seconds_bucket{namespace="splitx", route="/api/groups", method="GET", status_code="200", le="2.5"}'
+        values: '0+1x80'
+      - series: 'splitx_http_request_duration_seconds_bucket{namespace="splitx", route="/api/groups", method="GET", status_code="200", le="+Inf"}'
+        values: '0+1x80'
+      - series: 'splitx_http_request_duration_seconds_count{namespace="splitx", route="/api/groups", method="GET", status_code="200"}'
+        values: '0+1x80'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: SplitXSlowResponses
+        exp_alerts: []
+
+  - name: fast responses do not fire
+    interval: 15s
+    input_series:
+      - series: 'splitx_http_request_duration_seconds_bucket{namespace="splitx", route="/api/groups", method="GET", status_code="200", le="0.05"}'
+        values: '0+10x80'
+      - series: 'splitx_http_request_duration_seconds_bucket{namespace="splitx", route="/api/groups", method="GET", status_code="200", le="+Inf"}'
+        values: '0+10x80'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: SplitXSlowResponses
+        exp_alerts: []
+
+  # ── SplitXEventLoopBlocked ────────────────────────────────────
+  - name: a blocked pod fires for that pod only
+    interval: 15s
+    input_series:
+      - series: 'splitx_nodejs_eventloop_lag_p99_seconds{namespace="splitx", pod="splitx-blocked"}'
+        values: '0.8x20'
+      - series: 'splitx_nodejs_eventloop_lag_p99_seconds{namespace="splitx", pod="splitx-healthy"}'
+        values: '0.01x20'
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: SplitXEventLoopBlocked
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: SplitXEventLoopBlocked
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              pod: splitx-blocked
+            exp_annotations:
+              summary: Event loop blocked on splitx-blocked
+              description: The 99th percentile event-loop delay on splitx-blocked has been above 500 ms for 2 minutes. Every request on that pod waits that long.
+
+  # ── SplitXRateLimiterUnavailable ──────────────────────────────
+  - name: failing rate-limit checks fire after two minutes
+    interval: 15s
+    input_series:
+      - series: 'splitx_rate_limit_checks_total{namespace="splitx", policy="preview", outcome="error"}'
+        values: '0+5x40'
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: SplitXRateLimiterUnavailable
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: SplitXRateLimiterUnavailable
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: SplitX rate limiting is off because Redis cannot be reached
+              description: Rate-limit checks have been failing for 2 minutes, so requests are served without limits. Check the splitx-redis pod.
+
+  - name: working rate-limit checks do not fire
+    interval: 15s
+    input_series:
+      - series: 'splitx_rate_limit_checks_total{namespace="splitx", policy="preview", outcome="allow"}'
+        values: '0+5x40'
+      - series: 'splitx_rate_limit_checks_total{namespace="splitx", policy="preview", outcome="error"}'
+        values: '3x40'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: SplitXRateLimiterUnavailable
+        exp_alerts: []

@@ -117,6 +117,9 @@ jobs:
       KUBECONFORM: ghcr.io/yannh/kubeconform:v0.7.0@sha256:85dbef6b4b312b99133decc9c6fc9495e9fc5f92293d4ff3b7e1b30f5611823c
       # The version the Kind cluster and the EKS module both use.
       K8S_VERSION: "1.35.0"
+      # JSON schemas for CRDs such as ServiceMonitor and PrometheusRule, pinned
+      # to a commit so a change upstream cannot change what passes here.
+      CRD_SCHEMAS: https://raw.githubusercontent.com/datreeio/CRDs-catalog/ad3b08c5045129d7bb1eeffd8e61719b2c8dd1e2/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json
 
     steps:
       - name: Checkout
@@ -143,8 +146,13 @@ jobs:
             kubectl kustomize "k8s/overlays/$overlay" > "/tmp/$overlay.yaml"
             docker run --rm -i "$KUBECONFORM" \
               -strict -summary -kubernetes-version "$K8S_VERSION" \
-              -schema-location default < "/tmp/$overlay.yaml"
+              -schema-location default -schema-location "$CRD_SCHEMAS" < "/tmp/$overlay.yaml"
           done
+
+      - name: Alert rules fire when they should, and the Alertmanager config is valid
+        # promtool and amtool at the versions the cluster runs. The rules are
+        # read from the PrometheusRule that is deployed, not from a copy.
+        run: node scripts/test-alerts.mjs
 
       - name: The image the manifests run is never :latest
         # A moving tag makes a rollback meaningless: the same manifest would
