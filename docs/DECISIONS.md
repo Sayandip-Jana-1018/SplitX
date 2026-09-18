@@ -1301,7 +1301,7 @@ a stabilisation window, scale-down after five minutes at one pod a minute.
   types and limits are measured again on EKS.
 
 ### D-052 · Monitoring moves into the cluster, and every part of it is checked
-**2026-09-18** · ✅ done, except the first alert email (waiting on a Gmail App Password)
+**2026-09-18** · ✅ done, the alert email proven with a real outage
 
 The demo runs on Kubernetes, so the monitoring does too. Everything is a pinned chart in
 `helm/platform/charts.json`, installed by `npm run k8s:up`:
@@ -1355,7 +1355,13 @@ critical alert silencing its own warnings. `k8s:up` fills the Gmail address and 
 from `.env` into a Secret, in memory. Watchdog, which fires all the time to prove the pipeline
 is alive, goes nowhere by design. `amtool check-config` validates the template in CI.
 
-**Dashboards are code.** `monitoring/dashboards/splitx-service.json` (27 panels) and
+**Proven with a real outage** on 2026-09-18: Redis was stopped at 10:59:23 while a request
+arrived every 5 s. Every request was still answered, because the limiter fails open, and
+SplitXRateLimiterUnavailable went pending after about a minute, fired at +170 s, and was
+handed to Gmail at +199 s. Redis came back at 11:03:03, the app reconnected without a
+restart, and the "resolved" email left at 11:07:59. Alertmanager counted 2 sent, 0 failed.
+
+**Dashboards are code.** `monitoring/dashboards/splitx-service.json` (28 panels) and
 `splitx-logs.json` (7) reach Grafana through its sidecar as one ConfigMap and are read-only
 there. A panel that asks for a metric nobody exports draws an empty graph forever, so
 `k8s:verify` runs every query and checks every metric name against what Prometheus has, plus
@@ -1404,6 +1410,25 @@ threshold.
   placeholder is now generated on each run. gitleaks, on commit and in CI, had not flagged it:
   two scanners with different rules catch different things. The incident is to be marked as
   a test credential in GitGuardian, by the account owner; history is not rewritten (D-003).
+- **A check that looked only once:** the first full `k8s:verify` after the email test failed
+  one check, 0 of 2 pods logging to Loki. Loki does hold both pods' first lines, written about
+  20 s before the check ran. But the check asked once, straight after the release test had
+  replaced both pods, and threw away any error Loki gave. Alloy follows a new pod's log only
+  once its container is running; over a rolling restart, the first line of each new pod reached
+  Loki 3 and 8 s after its container started. What held that run up for 20 s cannot be
+  recovered, because Alloy and Loki have both restarted since. The check now waits up to 60 s,
+  as the scrape-target check already did, and reports Loki's error if a query fails. That
+  scrape check had a blind spot of the same origin: it compared how many pods were scraped
+  with how many were ready, and once reported "3 of 2". An old pod still shutting down
+  counted as scraped, and could as well have stood in for a new pod that was not. It now
+  matches pods by name.
+- **Alloy lost its place on every restart:** it records how far it has read each log in its
+  storage path, which was in the container's own filesystem. A Docker restart restarts every
+  container, and Alloy then read every log again from its first line (`start_time=0001-01-01`
+  in its own log). Nothing was lost or counted twice: Loki discarded no line, and for the
+  ingress log, sent twice, it returned and counted 62 lines where the kubelet held 62. It was
+  still work done twice. The storage path is now an `emptyDir`, which lives as long as the pod:
+  after its container was restarted in place, every log resumed from the time it had reached.
 
 ### D-053 · Fresh pods stalled because of their CPU limit, not garbage collection
 **2026-09-18** · ✅ CPU limit removed · B-024 narrowed, not closed
