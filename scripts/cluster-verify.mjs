@@ -502,20 +502,28 @@ const raw = (path) => {
 const promQuery = (expr) => raw(PROMETHEUS + '/api/v1/query?query=' + encodeURIComponent(expr));
 
 const readTargets = () => raw(PROMETHEUS + '/api/v1/targets?state=active')?.data?.activeTargets ?? [];
-const readyPods = appPods().filter((pod) => pod.status.conditions?.some((c) => c.type === 'Ready' && c.status === 'True')).length;
-const isScrapedPod = (t) => t.labels.job === 'splitx' && t.labels.namespace === NS && t.health === 'up';
+const readyPods = appPods()
+    .filter((pod) => pod.status.conditions?.some((c) => c.type === 'Ready' && c.status === 'True'))
+    .map((pod) => pod.metadata.name);
+// Matched by name, not counted: a pod the release test is still shutting down
+// stays a target for a few seconds, and would stand in for a new pod that
+// has not been scraped yet.
+const scrapedPods = (now) => new Set(now
+    .filter((t) => t.labels.job === 'splitx' && t.labels.namespace === NS && t.health === 'up')
+    .map((t) => t.labels.pod));
 // The release test above replaced every pod. Prometheus discovers new pods at
 // once but first scrapes them within an interval (15 s); until then their
 // health is "unknown", not down. Allow a few intervals before judging.
 const targets = (await waitFor(() => {
     const now = readTargets();
-    return now.filter(isScrapedPod).length >= readyPods && now.every((t) => t.health === 'up') ? now : null;
+    const scrapedNow = scrapedPods(now);
+    return readyPods.every((pod) => scrapedNow.has(pod)) && now.every((t) => t.health === 'up') ? now : null;
 }, { timeoutMs: 90_000, everyMs: 5_000 })) ?? readTargets();
-const scrapedPods = targets.filter(isScrapedPod).length;
+const scraped = scrapedPods(targets);
 record(
     'Prometheus scrapes every ready application pod, with the metrics token',
-    scrapedPods > 0 && scrapedPods >= readyPods,
-    scrapedPods + ' of ' + readyPods + ' ready pods scraped'
+    readyPods.length > 0 && readyPods.every((pod) => scraped.has(pod)),
+    readyPods.filter((pod) => scraped.has(pod)).length + ' of ' + readyPods.length + ' ready pods scraped'
 );
 const downTargets = targets.filter((t) => t.health !== 'up');
 const jobs = [...new Set(targets.map((t) => t.labels.job))].sort();
@@ -554,11 +562,15 @@ record(
 const alertmanagerConfig = raw(ALERTMANAGER + '/api/v2/status')?.config?.original ?? '';
 const emailSent = Number(promQuery('sum(alertmanager_notifications_total{integration="email"})')?.data?.result?.[0]?.value?.[1] ?? 0);
 const emailFailed = Number(promQuery('sum(alertmanager_notifications_failed_total{integration="email"})')?.data?.result?.[0]?.value?.[1] ?? 0);
+// The counts live in Alertmanager's memory and start again from 0 when it restarts.
+const alertmanagerStarted = json(['get', 'pods', '-n', 'monitoring', '-l', 'app.kubernetes.io/name=alertmanager']).items?.[0]
+    ?.status.containerStatuses?.find((c) => c.name === 'alertmanager')?.state?.running?.startedAt;
 record(
     'Alerts are routed to email, and every email was accepted',
     alertmanagerConfig.includes('email_configs') && emailFailed === 0,
     alertmanagerConfig.includes('email_configs')
-        ? emailSent + ' notification(s) sent through Gmail, ' + emailFailed + ' failed'
+        ? emailSent + ' notification(s) sent through Gmail and ' + emailFailed + ' failed since Alertmanager '
+            + (alertmanagerStarted ? 'started at ' + alertmanagerStarted.replace('T', ' ').replace(/:\d\dZ$/, ' UTC') : 'last started')
         : 'no email receiver: .env has no ALERT_SMTP_USERNAME, ALERT_SMTP_PASSWORD and ALERT_EMAIL_TO'
 );
 
@@ -627,12 +639,30 @@ const since = (minutes) => new Date(Date.now() - minutes * 60_000).toISOString()
 const logLines = (expr, minutes) => raw(LOKI + '/query_range?query=' + encodeURIComponent(expr) + '&start=' + since(minutes) + '&limit=20');
 const logCount = (expr) => raw(LOKI + '/query?query=' + encodeURIComponent(expr));
 
-const podsLogging = new Set((logCount('count by (pod) (count_over_time({namespace="' + NS + '", app="splitx"} [15m]))')?.data?.result ?? []).map((r) => r.metric.pod));
+// Alloy starts following a new pod's log once its container is running,
+// retrying with a growing pause until then, and sends lines in batches: the
+// pods the release test just started take a few seconds to appear (3 to 8 s
+// after their containers started, measured over a rolling restart).
 const podsNow = appPods().map((pod) => pod.metadata.name);
+const readLogging = () => {
+    const answer = logCount('count by (pod) (count_over_time({namespace="' + NS + '", app="splitx"} [15m]))');
+    return {
+        pods: new Set((answer?.data?.result ?? []).map((r) => r.metric.pod)),
+        error: answer?.status === 'success' ? null : answer?.error ?? 'no answer',
+    };
+};
+const loggingFrom = Date.now();
+const logging = (await waitFor(() => {
+    const now = readLogging();
+    return podsNow.length > 0 && podsNow.every((pod) => now.pods.has(pod)) ? now : null;
+}, { timeoutMs: 60_000, everyMs: 3_000 })) ?? readLogging();
+const loggingSeconds = Math.round((Date.now() - loggingFrom) / 1000);
+const everyPodLogging = podsNow.length > 0 && podsNow.every((pod) => logging.pods.has(pod));
 record(
     'Every application pod is logging to Loki',
-    podsNow.length > 0 && podsNow.every((pod) => podsLogging.has(pod)),
-    podsNow.filter((pod) => podsLogging.has(pod)).length + ' of ' + podsNow.length + ' pods have lines in the last 15 minutes'
+    everyPodLogging,
+    podsNow.filter((pod) => logging.pods.has(pod)).length + ' of ' + podsNow.length + ' pods have lines in the last 15 minutes'
+        + (logging.error ? '; Loki: ' + logging.error : everyPodLogging ? ', all found within ' + loggingSeconds + ' s' : ' after ' + loggingSeconds + ' s')
 );
 
 // One real request, then its ID in both logs, and the ingress's upstream

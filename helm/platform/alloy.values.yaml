@@ -20,6 +20,16 @@ controller:
   # would tail every pod once per node.
   type: deployment
   replicas: 1
+  # alloy.storagePath (/tmp/alloy) is where Alloy remembers how far it has
+  # read each log. Left in the container's own filesystem, it was lost on
+  # every container restart (a Docker restart restarts them all), and Alloy
+  # then read every log again from its first line. An emptyDir lives as long
+  # as the pod, so a restarted container resumes where it stopped.
+  volumes:
+    extra:
+      - name: storage
+        emptyDir:
+          sizeLimit: 256Mi
 
 global:
   podSecurityContext:
@@ -32,6 +42,10 @@ global:
       type: RuntimeDefault
 
 alloy:
+  mounts:
+    extra:
+      - name: storage
+        mountPath: /tmp/alloy
   securityContext:
     allowPrivilegeEscalation: false
     capabilities:

@@ -15,6 +15,7 @@
  * `spec:` one level less indented, so the rules tested are the rules deployed.
  */
 import { spawnSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import { chmodSync, copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -41,7 +42,10 @@ function alertmanagerConfig() {
     const example = {
         ALERT_EMAIL_TO: 'alerts@example.com',
         ALERT_SMTP_USERNAME: 'sender@example.com',
-        ALERT_SMTP_PASSWORD: 'abcdefghijklmnop',
+        // Made up for each run. A literal here looked like a committed password to
+        // GitGuardian (incident 37417914, a false positive), and a secret scanner
+        // that cries wolf is one people learn to ignore.
+        ALERT_SMTP_PASSWORD: randomBytes(8).toString('hex'),
     };
     let config = readFileSync(join(root, 'monitoring/alertmanager/alertmanager.yaml'), 'utf8');
     for (const [key, value] of Object.entries(example)) config = config.split('${' + key + '}').join(JSON.stringify(value));
