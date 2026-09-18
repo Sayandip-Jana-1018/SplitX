@@ -915,7 +915,7 @@
       "id": 17,
       "type": "timeseries",
       "title": "Previews in flight",
-      "description": "Unfinished plans per pod, against the admission limit PREVIEW_MAX_IN_FLIGHT.",
+      "description": "Unfinished plans per pod, against the admission limit PREVIEW_MAX_IN_FLIGHT. Read when Prometheus scrapes, which a busy pod answers between plans, so it usually shows 0 even while the limit refuses work: how often it does is shed_capacity under Proxy decisions.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1343,6 +1343,58 @@
     {
       "id": 26,
       "type": "timeseries",
+      "title": "CPU throttling",
+      "description": "Share of scheduling periods in which a pod used up its 1-CPU limit and was paused for the rest of the period. Everything in the pod waits, the event loop included (B-024).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 0,
+        "y": 57
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (pod) (rate(container_cpu_cfs_throttled_periods_total{namespace=\"splitx\", container=\"splitx\"}[1m])) / sum by (pod) (rate(container_cpu_cfs_periods_total{namespace=\"splitx\", container=\"splitx\"}[1m]))",
+          "legendFormat": "{{pod}}",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "showPoints": "never",
+            "spanNulls": false
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 27,
+      "type": "timeseries",
       "title": "Container restarts",
       "description": "Restarts in the last 15 minutes by pod. Liveness restarts under load were the failure in D-046.",
       "datasource": {
@@ -1351,8 +1403,8 @@
       },
       "gridPos": {
         "h": 6,
-        "w": 12,
-        "x": 0,
+        "w": 8,
+        "x": 8,
         "y": 57
       },
       "targets": [
@@ -1393,7 +1445,7 @@
       }
     },
     {
-      "id": 27,
+      "id": 28,
       "type": "table",
       "title": "Running builds",
       "description": "The commit each pod was built from (splitx_app_info).",
@@ -1403,8 +1455,8 @@
       },
       "gridPos": {
         "h": 6,
-        "w": 12,
-        "x": 12,
+        "w": 8,
+        "x": 16,
         "y": 57
       },
       "targets": [
@@ -1449,7 +1501,7 @@
       }
     },
     {
-      "id": 28,
+      "id": 29,
       "type": "row",
       "title": "Product, over the selected time range",
       "collapsed": false,
@@ -1462,7 +1514,7 @@
       "panels": []
     },
     {
-      "id": 29,
+      "id": 30,
       "type": "stat",
       "title": "Expenses added",
       "description": "Expenses created, typed in or read from a receipt.",
@@ -1523,7 +1575,7 @@
       }
     },
     {
-      "id": 30,
+      "id": 31,
       "type": "stat",
       "title": "Settlements completed",
       "description": "Payments recorded as settled.",
@@ -1584,7 +1636,7 @@
       }
     },
     {
-      "id": 31,
+      "id": 32,
       "type": "stat",
       "title": "Receipts scanned",
       "description": "Receipt photos read by OCR.",
@@ -1645,7 +1697,7 @@
       }
     },
     {
-      "id": 32,
+      "id": 33,
       "type": "stat",
       "title": "Assistant questions",
       "description": "Questions sent to the AI assistant.",
@@ -1706,7 +1758,7 @@
       }
     },
     {
-      "id": 33,
+      "id": 34,
       "type": "row",
       "title": "Alerts",
       "collapsed": false,
@@ -1719,7 +1771,7 @@
       "panels": []
     },
     {
-      "id": 34,
+      "id": 35,
       "type": "table",
       "title": "Firing alerts",
       "description": "Everything Prometheus has firing now, from the SplitX rules and the Kubernetes defaults. Watchdog always fires: it proves the alerting pipeline is alive.",
