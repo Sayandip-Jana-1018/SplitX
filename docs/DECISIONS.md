@@ -1398,6 +1398,64 @@ threshold.
   before kube-proxy had programmed the route to the API server, and recovered on its own on
   the third start. Kubernetes restarts pods for exactly this; nothing to fix.
 
+### D-053 · Fresh pods stalled because of their CPU limit, not garbage collection
+**2026-09-18** · ✅ CPU limit removed · B-024 narrowed, not closed
+
+B-024 was a stall at the start of the D-046 overload: requests spending seconds inside a pod,
+30 to 50 s in. The working theory was heap growth and garbage collection. With the monitoring of
+D-052 on, the same overload (2,000-person plans at 60 a second on two pinned pods) was run
+seven times. Prometheus refuted the theory at once: garbage collection took 0.3 to 1.2% of each
+pod's time, and the heap stayed between 41 and 56 MB. What did stand out: both pods sat at their
+1-CPU limit and were throttled in 77 to 100% of CFS scheduling periods.
+
+Every run began on pods that had just been started, except one. The time each request spent
+inside a pod comes from the ingress access log in Loki (`upstream_response_time`), the pods and
+their limits from kube-state-metrics, the rest from k6:
+
+| Run | Pods at the start | CPU limit | Over 3 s inside a pod | Longest inside a pod | Liveness over 5 s | Plans served |
+|---|---|---|---|---|---|---|
+| monitored | fresh, 16–18 s | 1 core | 214, all in the first minute | 21.5 s | 12 of 238 | 3,574 |
+| cold | fresh, 19–22 s | 1 core | 179, all in the first minute | 17.9 s | 11 of 239 | 3,618 |
+| warm | the same two pods, 189–192 s | 1 core | **0** | **1.8 s** | **0 of 240** | 3,908 |
+| cold-warmed | fresh, after 20 plans each | 1 core | 175, all in the first minute | 16.0 s | 7 of 237 | 3,446 |
+| cold-2 | fresh, 21–24 s | 1 core | 228, all in the first minute | 20.9 s | 14 of 235 | 3,400 |
+| nolimit-1 | fresh, 19–22 s | none | **0** | **2.9 s** | **0 of 241** | **5,169** |
+| nolimit-2 | fresh, 20–23 s | none | 89, all in the first minute | 6.3 s | 3 of 239 | **5,064** |
+
+- **The stall belongs to fresh pods.** Four runs on fresh pods had 175 to 228 requests stuck in a
+  pod for over 3 s, all in the first minute; the same two pods, run again once warm, had none.
+- **Warming the planner up was not enough.** Twenty plans on each pod before the load barely
+  changed it (175).
+- **The CPU limit was.** Without it, fresh pods had 0 and 89 such requests, the longest 2.9 and
+  6.3 s, answered every liveness check (three took over 5 s, in the second run), and served
+  45% more plans. Unthrottled, the
+  pods peaked at 1.4 to 1.5 cores: the extra half core is V8's compiler and garbage-collection
+  threads, which a 1-CPU quota makes compete with the one thread that runs JavaScript. A fresh
+  process has the most of that work to do, which is why it stalled first.
+
+**Decided:** the application has no CPU limit. The 250m request stays, because the scheduler
+reserves it and the autoscaler measures against it, and memory keeps its limit, because running
+out of memory is not a slowdown. The limit's original reason, that one settlement preview should
+not take a whole node, never held: JavaScript runs on one thread, so a plan cannot use more than
+one core with or without a limit.
+
+- **What stands of earlier results:** the staircase of D-051 averaged about 395m per pod at its
+  busiest step, far under the limit, so it stands. The D-046 runs all had the limit, so they compare with each
+  other, not with the runs above.
+- **Measurement note:** in every run, the warm one included, 33 to 46 requests looked held for
+  over 10 s before reaching a pod, some for 54 s while spending 0.2 s inside it. That is the
+  Docker VM's clock being stepped (D-052; the kernel logs `Time jumped backwards` every 30 s),
+  not B-024, and the analysis above counts only time inside a pod, where it does not appear.
+- **Not tried:** a higher limit, such as 2 cores, and a warm-up much larger than 20 plans.
+- **Left of B-024:** one of the two runs without a limit still had 89 slow requests on fresh pods.
+  On EKS, the ALB can ramp traffic to new targets gradually (slow start), which suits exactly the
+  pods the autoscaler adds under load; phase 7 measures it.
+- **For phase 7:** without a limit a pod bursts onto idle cores, which on burstable EC2 instances
+  spends CPU credits.
+- **The harness gained what this needed:** `--keep-overlay` runs the next test on the same pods,
+  `--warm-up N` plans N trips on each pod first, and every result records its pods, their
+  resources and their age on the cluster's own clock. The saturation table shows both.
+
 ---
 
 ## Open problems
@@ -1427,7 +1485,7 @@ threshold.
 | B-021 | The AWS root user still had two active access keys. | Root keys cannot be restricted by any policy. | ✅ Resolved 2026-09-16 — the user deleted both. Root keeps MFA (a security key), the CLI uses `splitx-devops`, and no repository file or GitHub Actions secret holds AWS keys. |
 | B-022 | `argocd/`, `jenkins/Jenkinsfile`, `AWS_SETUP_GUIDE.md` and `DEMO_GUIDE.html` still reference the `helm/splitx` chart deleted in D-034, and `argocd/kind-cluster.yml` is a second, stale Kind config. | Anyone following those files sets up something that no longer exists. | Phase 6 rewrites the pipeline and decides whether GitOps returns honestly; phase 8 rewrites the guides. |
 | B-023 | metrics-server runs with `--kubelet-insecure-tls` on Kind, because Kind’s kubelets serve metrics with a certificate the cluster CA did not issue. | The flag disables verification of what the autoscaler reads. It is in a values file, not hidden in a script, precisely so it cannot be copied to AWS by accident. | Phase 7: EKS signs kubelet certificates properly — install the add-on without the flag and confirm the HPA still reads CPU. |
-| B-024 | In the final saturation run, 155 of 7,442 requests spent over 3 s inside a pod, all 30 to 50 s into the overload, on both pods, with none after. | A transient stall right when a burst arrives is exactly when a classroom notices. | Phase 5: correlate with heap size and GC pauses from in-cluster metrics; freshly started pods growing their heap under sudden load is the working theory. |
+| B-024 | In the final saturation run, 155 of 7,442 requests spent over 3 s inside a pod, all 30 to 50 s into the overload, on both pods, with none after. | A transient stall right when a burst arrives is exactly when a classroom notices. | 🚧 Narrowed 2026-09-18 — D-053. Not garbage collection: the stall belongs to freshly started pods at their 1-CPU limit. Without the limit, fresh pods had 0 and 89 requests over 3 s in a pod (175 to 228 with it), the longest 2.9 and 6.3 s, and served 45% more. Left: the remaining cold start; phase 7 measures the ALB slow start for new targets. |
 | B-025 | Sign-up, login and password reset are still limited to 10 a minute per address (D-022). | A room asked to register at once from one campus network would be refused after the first ten. The demo page needs no account, so it is not affected. | Before any demo asks people to sign up: count failed logins per account for brute-force protection, and give sign-up the device-plus-network treatment of D-045. |
 
 ## Environment notes (this machine)
