@@ -1300,6 +1300,10 @@ a stabilisation window, scale-down after five minutes at one pod a minute.
 - **For phase 7:** a 1-CPU limit on burstable EC2 instances spends CPU credits, so node
   types and limits are measured again on EKS.
 
+---
+
+## Phase 5 — Monitoring that is checked, not assumed
+
 ### D-052 · Monitoring moves into the cluster, and every part of it is checked
 **2026-09-18** · ✅ done, the alert email proven with a real outage
 
@@ -1487,6 +1491,41 @@ one core with or without a limit.
 - **The harness gained what this needed:** `--keep-overlay` runs the next test on the same pods,
   `--warm-up N` plans N trips on each pod first, and every result records its pods, their
   resources and their age on the cluster's own clock. The saturation table shows both.
+
+---
+
+## Phase 6 — Delivery: GitHub Actions releases, Jenkins deploys
+
+### D-054 · A release is built once on main, scanned, signed, and handed over as a deployment
+**2026-09-18** · 🚧 written; first runs on the next merge to main
+
+Each tool in the pipeline gets one real job. GitHub Actions already tests every change; it now
+also turns every commit on `main` that passed those tests into a release. Jenkins, in the
+cluster, deploys releases (D-055). Nothing is built twice, and nothing unsigned is deployed.
+
+The `release` job in `.github/workflows/ci.yml` needs every other job, runs only for `main`,
+and runs one at a time in commit order:
+
+| Step | What happens | Why |
+|---|---|---|
+| Build and publish | The `release` bake target, the same one `npm run image:build -- release` builds, pushed as `ghcr.io/sayandip-jana-1018/splitx:<commit>` with a provenance attestation and an SBOM | One image per commit, with its origin attached; the tag is the commit, and nothing publishes a moving tag |
+| Scan | Trivy 0.74.0 fails the release on any critical or high vulnerability that has a fix | Measured first: the current image has 18 Alpine and 43 npm packages and no known vulnerability at any severity, so the gate starts green and means something |
+| Sign | cosign 3.1.3, keyless: Sigstore issues a short-lived certificate naming this workflow, repository and branch, and the signature goes into the public Rekor log | No signing key to store, leak or rotate, and the signature says which workflow on which branch built the image. An image that fails the scan stays published but unsigned, and is never deployed |
+| Hand over | A GitHub deployment for the environment `kind`, whose payload is the image by digest | GitHub delivers it to Jenkins as a signed `deployment` webhook, keeps a history per environment, and shows the result Jenkins reports back |
+
+- **Public image, approved by the owner:** the repository is public, and the image holds no
+  secret, because configuration arrives at runtime (D-028). Anonymous pulls mean no registry
+  credential in either cluster. GitHub creates every new package private; the owner switches
+  it to public once, which cannot be undone.
+- **Every action is pinned to a commit**, in the existing jobs too. A tag can be moved, and this
+  job can publish packages and sign in the repository's name.
+- **Rejected — building in Jenkins:** it would need a privileged image builder in the cluster,
+  the same kind of power D-052 took away from Promtail, and the image would no longer be the
+  one CI tested.
+- **Rejected — a signing key in a repository secret:** it must be rotated, and D-003 shows
+  how secrets in this repository have fared.
+- **Rejected — deploying on push events:** a push says code changed. A deployment names the
+  exact, signed image and the environment it is for, and can be answered with a status.
 
 ---
 
