@@ -21,16 +21,25 @@ a class on campus Wi-Fi reaches the internet through one NAT. ([load/classroom.j
 The deployment is pinned at two pods and sent 2,000-person plans faster than two cores
 can compute them, with rate limits lifted. What matters is what happens to the requests
 that are served once the backlog builds, and whether the pods survive it.
-Runs are listed in the order the fixes were made (D-046). ([load/saturation.js](../../load/saturation.js))
+Runs are listed in the order they were made: the fixes of D-046, then the B-024
+runs of D-053, which compare fresh pods with warm ones and a 1-CPU limit with none.
+([load/saturation.js](../../load/saturation.js))
 
-| Run | Build | Served | Refused (503) | 502 / 504 | Restarts | Served p50 / p95 | Liveness checks answered |
-|---|---|---|---|---|---|---|---|
-| [before](load/saturation-before.json) | `f4b2dc209824` | 3,065 | 2,223 | 50 / 1,264 | 2 | 2475 ms / 26082 ms | not measured |
-| [after-clock](load/saturation-after-clock.json) | `77178161f36c` | 2,984 | 4,190 | 26 / 0 | 1 | 1337 ms / 1888 ms | not measured |
-| [after-probes](load/saturation-after-probes.json) | `77178161f36c` | 3,145 | 4,005 | 51 / 0 | 0 | 1320 ms / 1915 ms | 222 of 238, p95 9201 ms |
-| [after-front-door](load/saturation-after-front-door.json) | `39cc320452d1` | 3,434 | 3,705 | 54 / 0 | 0 | 1329 ms / 1883 ms | 227 of 241, p95 6288 ms |
-| [after-keepalive](load/saturation-after-keepalive.json) | `39cc320452d1` | 3,355 | 3,846 | 0 / 0 | 0 | 1379 ms / 1908 ms | 234 of 240, p95 1034 ms |
-| [after-admission](load/saturation-after-admission.json) | `570fcf134d20` | 3,506 | 3,695 | 0 / 0 | 0 | 952 ms / 1212 ms | 241 of 241, p95 2403 ms |
+| Run | Build | Pods at the start | CPU limit | Served | Refused (503) | 502 / 504 | Restarts | Served p50 / p95 | Liveness checks answered |
+|---|---|---|---|---|---|---|---|---|---|
+| [before](load/saturation-before.json) | `f4b2dc209824` | - | - | 3,065 | 2,223 | 50 / 1,264 | 2 | 2475 ms / 26082 ms | not measured |
+| [after-clock](load/saturation-after-clock.json) | `77178161f36c` | - | - | 2,984 | 4,190 | 26 / 0 | 1 | 1337 ms / 1888 ms | not measured |
+| [after-probes](load/saturation-after-probes.json) | `77178161f36c` | - | - | 3,145 | 4,005 | 51 / 0 | 0 | 1320 ms / 1915 ms | 222 of 238, p95 9201 ms |
+| [after-front-door](load/saturation-after-front-door.json) | `39cc320452d1` | - | - | 3,434 | 3,705 | 54 / 0 | 0 | 1329 ms / 1883 ms | 227 of 241, p95 6288 ms |
+| [after-keepalive](load/saturation-after-keepalive.json) | `39cc320452d1` | - | - | 3,355 | 3,846 | 0 / 0 | 0 | 1379 ms / 1908 ms | 234 of 240, p95 1034 ms |
+| [after-admission](load/saturation-after-admission.json) | `570fcf134d20` | - | - | 3,506 | 3,695 | 0 / 0 | 0 | 952 ms / 1212 ms | 241 of 241, p95 2403 ms |
+| [monitored](load/saturation-monitored.json) | `570fcf134d20` | fresh, 16-18 s old | 1 | 3,574 | 3,627 | 0 / 0 | 0 | 913 ms / 1186 ms | 234 of 240, p95 914 ms |
+| [cold](load/saturation-cold.json) | `570fcf134d20` | fresh, 19-22 s old | 1 | 3,618 | 3,582 | 0 / 0 | 0 | 927 ms / 1177 ms | 239 of 241, p95 938 ms |
+| [warm](load/saturation-warm.json) | `570fcf134d20` | warm, 189-192 s old | 1 | 3,908 | 3,293 | 0 / 0 | 0 | 892 ms / 1157 ms | 241 of 241, p95 800 ms |
+| [cold-warmed](load/saturation-cold-warmed.json) | `570fcf134d20` | fresh, 22-25 s old | 1 | 3,446 | 3,755 | 0 / 0 | 0 | 948 ms / 1211 ms | 237 of 240, p95 868 ms |
+| [cold-2](load/saturation-cold-2.json) | `570fcf134d20` | fresh, 21-24 s old | 1 | 3,400 | 3,801 | 0 / 0 | 0 | 948 ms / 1210 ms | 234 of 240, p95 892 ms |
+| [nolimit-1](load/saturation-nolimit-1.json) | `570fcf134d20` | fresh, 19-22 s old | none | 5,169 | 2,031 | 0 / 0 | 0 | 667 ms / 1019 ms | 241 of 241, p95 576 ms |
+| [nolimit-2](load/saturation-nolimit-2.json) | `570fcf134d20` | fresh, 20-23 s old | none | 5,064 | 2,137 | 0 / 0 | 0 | 684 ms / 1032 ms | 241 of 241, p95 643 ms |
 
 ## Staircase: the autoscaler under rising load
 

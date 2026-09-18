@@ -1,0 +1,800 @@
+{
+  "test": "saturation",
+  "label": "warm",
+  "ranAt": "2026-09-18T04:47:50.014Z",
+  "k6ExitCode": 0,
+  "image": {
+    "gitSha": "570fcf134d20",
+    "version": "0.1.0+570fcf134d20"
+  },
+  "overlay": "k8s/overlays/saturation",
+  "power": {
+    "atStart": "ac",
+    "atEnd": "ac"
+  },
+  "podAgeSeconds": [
+    189,
+    192
+  ],
+  "keptOverlay": false,
+  "settings": {
+    "k6Env": [],
+    "k6": {
+      "test": "saturation",
+      "rate": 60,
+      "members": 2000,
+      "duration": "2m"
+    },
+    "autoscaler": {
+      "min": 2,
+      "max": 2,
+      "cpuTarget": 60,
+      "behavior": {
+        "scaleDown": {
+          "policies": [
+            {
+              "periodSeconds": 60,
+              "type": "Pods",
+              "value": 1
+            }
+          ],
+          "selectPolicy": "Max",
+          "stabilizationWindowSeconds": 300
+        },
+        "scaleUp": {
+          "policies": [
+            {
+              "periodSeconds": 15,
+              "type": "Percent",
+              "value": 100
+            },
+            {
+              "periodSeconds": 15,
+              "type": "Pods",
+              "value": 4
+            }
+          ],
+          "selectPolicy": "Max",
+          "stabilizationWindowSeconds": 0
+        }
+      }
+    },
+    "config": {
+      "PREVIEW_MAX_QUEUE_MS": "1000",
+      "RATE_LIMIT_PREVIEW_NETWORK_PER_MINUTE": "1000000",
+      "RATE_LIMIT_PREVIEW_PER_MINUTE": "1000000",
+      "TRUSTED_PROXY_HOPS": "1",
+      "TRUST_UPSTREAM_REQUEST_START": "true"
+    },
+    "resources": {
+      "requests": {
+        "cpu": "250m",
+        "memory": "256Mi"
+      },
+      "limits": {
+        "cpu": "1",
+        "memory": "512Mi"
+      }
+    }
+  },
+  "loadSeconds": 128,
+  "observeSeconds": 20,
+  "requests": {
+    "bucketSeconds": 10,
+    "timeline": [
+      {
+        "t": 0,
+        "requests": 28,
+        "ok": 2,
+        "limited": 0,
+        "shed": 26,
+        "other": 0,
+        "statuses": {
+          "200": 2,
+          "503": 26
+        },
+        "p50": 0.4,
+        "p95": 0.4,
+        "p99": 0.4,
+        "max": 0.4,
+        "rate": 2.8
+      },
+      {
+        "t": 30,
+        "requests": 234,
+        "ok": 151,
+        "limited": 0,
+        "shed": 83,
+        "other": 0,
+        "statuses": {
+          "200": 151,
+          "503": 83
+        },
+        "p50": 876.6,
+        "p95": 1229.7,
+        "p99": 1295.7,
+        "max": 1329,
+        "rate": 23.4
+      },
+      {
+        "t": 40,
+        "requests": 613,
+        "ok": 326,
+        "limited": 0,
+        "shed": 287,
+        "other": 0,
+        "statuses": {
+          "200": 326,
+          "503": 287
+        },
+        "p50": 974.5,
+        "p95": 1238.4,
+        "p99": 1275.2,
+        "max": 1290.1,
+        "rate": 61.3
+      },
+      {
+        "t": 50,
+        "requests": 541,
+        "ok": 310,
+        "limited": 0,
+        "shed": 231,
+        "other": 0,
+        "statuses": {
+          "200": 310,
+          "503": 231
+        },
+        "p50": 935.2,
+        "p95": 1170.4,
+        "p99": 1241,
+        "max": 1888.4,
+        "rate": 54.1
+      },
+      {
+        "t": 60,
+        "requests": 601,
+        "ok": 339,
+        "limited": 0,
+        "shed": 262,
+        "other": 0,
+        "statuses": {
+          "200": 339,
+          "503": 262
+        },
+        "p50": 881.8,
+        "p95": 1139.8,
+        "p99": 1217.1,
+        "max": 1302.6,
+        "rate": 60.1
+      },
+      {
+        "t": 70,
+        "requests": 602,
+        "ok": 336,
+        "limited": 0,
+        "shed": 266,
+        "other": 0,
+        "statuses": {
+          "200": 336,
+          "503": 266
+        },
+        "p50": 862,
+        "p95": 1105,
+        "p99": 1172.6,
+        "max": 1229.8,
+        "rate": 60.2
+      },
+      {
+        "t": 80,
+        "requests": 523,
+        "ok": 290,
+        "limited": 0,
+        "shed": 233,
+        "other": 0,
+        "statuses": {
+          "200": 290,
+          "503": 233
+        },
+        "p50": 859.4,
+        "p95": 1168.7,
+        "p99": 1337.2,
+        "max": 1363.4,
+        "rate": 52.3
+      },
+      {
+        "t": 90,
+        "requests": 652,
+        "ok": 331,
+        "limited": 0,
+        "shed": 321,
+        "other": 0,
+        "statuses": {
+          "200": 331,
+          "503": 321
+        },
+        "p50": 941.3,
+        "p95": 1158,
+        "p99": 1223.9,
+        "max": 1256.7,
+        "rate": 65.2
+      },
+      {
+        "t": 100,
+        "requests": 601,
+        "ok": 330,
+        "limited": 0,
+        "shed": 271,
+        "other": 0,
+        "statuses": {
+          "200": 330,
+          "503": 271
+        },
+        "p50": 887.8,
+        "p95": 1140,
+        "p99": 1208.4,
+        "max": 1263.5,
+        "rate": 60.1
+      },
+      {
+        "t": 110,
+        "requests": 512,
+        "ok": 265,
+        "limited": 0,
+        "shed": 247,
+        "other": 0,
+        "statuses": {
+          "200": 265,
+          "503": 247
+        },
+        "p50": 860.2,
+        "p95": 1136.4,
+        "p99": 1275.5,
+        "max": 1920.3,
+        "rate": 51.2
+      },
+      {
+        "t": 120,
+        "requests": 613,
+        "ok": 318,
+        "limited": 0,
+        "shed": 295,
+        "other": 0,
+        "statuses": {
+          "200": 318,
+          "503": 295
+        },
+        "p50": 894.1,
+        "p95": 1125.9,
+        "p99": 1226.1,
+        "max": 1309.1,
+        "rate": 61.3
+      },
+      {
+        "t": 130,
+        "requests": 575,
+        "ok": 307,
+        "limited": 0,
+        "shed": 268,
+        "other": 0,
+        "statuses": {
+          "200": 307,
+          "503": 268
+        },
+        "p50": 923.8,
+        "p95": 1161.3,
+        "p99": 1229,
+        "max": 1307.8,
+        "rate": 57.5
+      },
+      {
+        "t": 140,
+        "requests": 451,
+        "ok": 235,
+        "limited": 0,
+        "shed": 216,
+        "other": 0,
+        "statuses": {
+          "200": 235,
+          "503": 216
+        },
+        "p50": 885.2,
+        "p95": 1119.2,
+        "p99": 3469.7,
+        "max": 3503.3,
+        "rate": 45.1
+      },
+      {
+        "t": 150,
+        "requests": 578,
+        "ok": 315,
+        "limited": 0,
+        "shed": 263,
+        "other": 0,
+        "statuses": {
+          "200": 315,
+          "503": 263
+        },
+        "p50": 859.2,
+        "p95": 1126.4,
+        "p99": 1243.6,
+        "max": 1284.9,
+        "rate": 57.8
+      },
+      {
+        "t": 160,
+        "requests": 77,
+        "ok": 53,
+        "limited": 0,
+        "shed": 24,
+        "other": 0,
+        "statuses": {
+          "200": 53,
+          "503": 24
+        },
+        "p50": 856.3,
+        "p95": 1006.1,
+        "p99": 1056.8,
+        "max": 1056.8,
+        "rate": 7.7
+      }
+    ],
+    "byGroup": {
+      "liveness": {
+        "requests": 241,
+        "ok": 241,
+        "limited": 0,
+        "shed": 0,
+        "other": 0,
+        "statuses": {
+          "200": 241
+        },
+        "p50": 304.2,
+        "p95": 800.3,
+        "p99": 1004.3,
+        "max": 3027.4
+      },
+      "all": {
+        "requests": 7201,
+        "ok": 3908,
+        "limited": 0,
+        "shed": 3293,
+        "other": 0,
+        "statuses": {
+          "200": 3908,
+          "503": 3293
+        },
+        "p50": 892,
+        "p95": 1157.3,
+        "p99": 1255.7,
+        "max": 3503.3
+      }
+    }
+  },
+  "cluster": [
+    {
+      "t": 0.3,
+      "desired": 2,
+      "current": 2,
+      "cpu": 175,
+      "replicas": 2,
+      "ready": 2,
+      "pods": 2,
+      "pending": 0,
+      "restarts": 0,
+      "perNode": {
+        "splitx-worker": 1,
+        "splitx-worker2": 1
+      }
+    },
+    {
+      "t": 5.6,
+      "desired": 2,
+      "current": 2,
+      "cpu": 2,
+      "replicas": 2,
+      "ready": 2,
+      "pods": 2,
+      "pending": 0,
+      "restarts": 0,
+      "perNode": {
+        "splitx-worker": 1,
+        "splitx-worker2": 1
+      }
+    },
+    {
+      "t": 10.9,
+      "desired": 2,
+      "current": 2,
+      "cpu": 2,
+      "replicas": 2,
+      "ready": 2,
+      "pods": 2,
+      "pending": 0,
+      "restarts": 0,
+      "perNode": {
+        "splitx-worker": 1,
+        "splitx-worker2": 1
+      }
+    },
+    {
+      "t": 16.3,
+      "desired": 2,
+      "current": 2,
+      "cpu": 2,
+      "replicas": 2,
+      "ready": 2,
+      "pods": 2,
+      "pending": 0,
+      "restarts": 0,
+      "perNode": {
+        "splitx-worker": 1,
+        "splitx-worker2": 1
+      }
+    },
+    {
+      "t": 21.6,
+      "desired": 2,
+      "current": 2,
+      "cpu": 2,
+      "replicas": 2,
+      "ready": 2,
+      "pods": 2,
+      "pending": 0,
+      "restarts": 0,
+      "perNode": {
+        "splitx-worker": 1,
+        "splitx-worker2": 1
+      }
+    },
+    {
+      "t": 26.9,
+      "desired": 2,
+      "current": 2,
+      "cpu": 2,
+      "replicas": 2,
+      "ready": 2,
+      "pods": 2,
+      "pending": 0,
+      "restarts": 0,
+      "perNode": {
+        "splitx-worker": 1,
+        "splitx-worker2": 1
+      }
+    },
+    {
+      "t": 32.2,
+      "desired": 2,
+      "current": 2,
+      "cpu": 2,
+      "replicas": 2,
+      "ready": 2,
+      "pods": 2,
+      "pending": 0,
+      "restarts": 0,
+      "perNode": {
+        "splitx-worker": 1,
+        "splitx-worker2": 1
+      }
+    },
+    {
+      "t": 37.6,
+      "desired": 2,
+      "current": 2,
+      "cpu": 230,
+      "replicas": 2,
+      "ready": 2,
+      "pods": 2,
+      "pending": 0,
+      "restarts": 0,
+      "perNode": {
+        "splitx-worker": 1,
+        "splitx-worker2": 1
+      }
+    },
+    {
+      "t": 42.9,
+      "desired": 2,
+      "current": 2,
+      "cpu": 230,
+      "replicas": 2,
+      "ready": 2,
+      "pods": 2,
+      "pending": 0,
+      "restarts": 0,
+      "perNode": {
+        "splitx-worker": 1,
+        "splitx-worker2": 1
+      }
+    },
+    {
+      "t": 48.2,
+      "desired": 2,
+      "current": 2,
+      "cpu": 230,
+      "replicas": 2,
+      "ready": 2,
+      "pods": 2,
+      "pending": 0,
+      "restarts": 0,
+      "perNode": {
+        "splitx-worker": 1,
+        "splitx-worker2": 1
+      }
+    },
+    {
+      "t": 53.6,
+      "desired": 2,
+      "current": 2,
+      "cpu": 383,
+      "replicas": 2,
+      "ready": 2,
+      "pods": 2,
+      "pending": 0,
+      "restarts": 0,
+      "perNode": {
+        "splitx-worker": 1,
+        "splitx-worker2": 1
+      }
+    },
+    {
+      "t": 58.9,
+      "desired": 2,
+      "current": 2,
+      "cpu": 383,
+      "replicas": 2,
+      "ready": 2,
+      "pods": 2,
+      "pending": 0,
+      "restarts": 0,
+      "perNode": {
+        "splitx-worker": 1,
+        "splitx-worker2": 1
+      }
+    },
+    {
+      "t": 64.3,
+      "desired": 2,
+      "current": 2,
+      "cpu": 383,
+      "replicas": 2,
+      "ready": 2,
+      "pods": 2,
+      "pending": 0,
+      "restarts": 0,
+      "perNode": {
+        "splitx-worker": 1,
+        "splitx-worker2": 1
+      }
+    },
+    {
+      "t": 69.6,
+      "desired": 2,
+      "current": 2,
+      "cpu": 395,
+      "replicas": 2,
+      "ready": 2,
+      "pods": 2,
+      "pending": 0,
+      "restarts": 0,
+      "perNode": {
+        "splitx-worker": 1,
+        "splitx-worker2": 1
+      }
+    },
+    {
+      "t": 74.9,
+      "desired": 2,
+      "current": 2,
+      "cpu": 395,
+      "replicas": 2,
+      "ready": 2,
+      "pods": 2,
+      "pending": 0,
+      "restarts": 0,
+      "perNode": {
+        "splitx-worker": 1,
+        "splitx-worker2": 1
+      }
+    },
+    {
+      "t": 80.3,
+      "desired": 2,
+      "current": 2,
+      "cpu": 395,
+      "replicas": 2,
+      "ready": 2,
+      "pods": 2,
+      "pending": 0,
+      "restarts": 0,
+      "perNode": {
+        "splitx-worker": 1,
+        "splitx-worker2": 1
+      }
+    },
+    {
+      "t": 85.6,
+      "desired": 2,
+      "current": 2,
+      "cpu": 391,
+      "replicas": 2,
+      "ready": 2,
+      "pods": 2,
+      "pending": 0,
+      "restarts": 0,
+      "perNode": {
+        "splitx-worker": 1,
+        "splitx-worker2": 1
+      }
+    },
+    {
+      "t": 91,
+      "desired": 2,
+      "current": 2,
+      "cpu": 391,
+      "replicas": 2,
+      "ready": 2,
+      "pods": 2,
+      "pending": 0,
+      "restarts": 0,
+      "perNode": {
+        "splitx-worker": 1,
+        "splitx-worker2": 1
+      }
+    },
+    {
+      "t": 96.3,
+      "desired": 2,
+      "current": 2,
+      "cpu": 391,
+      "replicas": 2,
+      "ready": 2,
+      "pods": 2,
+      "pending": 0,
+      "restarts": 0,
+      "perNode": {
+        "splitx-worker": 1,
+        "splitx-worker2": 1
+      }
+    },
+    {
+      "t": 101.6,
+      "desired": 2,
+      "current": 2,
+      "cpu": 396,
+      "replicas": 2,
+      "ready": 2,
+      "pods": 2,
+      "pending": 0,
+      "restarts": 0,
+      "perNode": {
+        "splitx-worker": 1,
+        "splitx-worker2": 1
+      }
+    },
+    {
+      "t": 107,
+      "desired": 2,
+      "current": 2,
+      "cpu": 396,
+      "replicas": 2,
+      "ready": 2,
+      "pods": 2,
+      "pending": 0,
+      "restarts": 0,
+      "perNode": {
+        "splitx-worker": 1,
+        "splitx-worker2": 1
+      }
+    },
+    {
+      "t": 112.3,
+      "desired": 2,
+      "current": 2,
+      "cpu": 396,
+      "replicas": 2,
+      "ready": 2,
+      "pods": 2,
+      "pending": 0,
+      "restarts": 0,
+      "perNode": {
+        "splitx-worker": 1,
+        "splitx-worker2": 1
+      }
+    },
+    {
+      "t": 117.6,
+      "desired": 2,
+      "current": 2,
+      "cpu": 378,
+      "replicas": 2,
+      "ready": 2,
+      "pods": 2,
+      "pending": 0,
+      "restarts": 0,
+      "perNode": {
+        "splitx-worker": 1,
+        "splitx-worker2": 1
+      }
+    },
+    {
+      "t": 123,
+      "desired": 2,
+      "current": 2,
+      "cpu": 378,
+      "replicas": 2,
+      "ready": 2,
+      "pods": 2,
+      "pending": 0,
+      "restarts": 0,
+      "perNode": {
+        "splitx-worker": 1,
+        "splitx-worker2": 1
+      }
+    },
+    {
+      "t": 128.3,
+      "desired": 2,
+      "current": 2,
+      "cpu": 378,
+      "replicas": 2,
+      "ready": 2,
+      "pods": 2,
+      "pending": 0,
+      "restarts": 0,
+      "perNode": {
+        "splitx-worker": 1,
+        "splitx-worker2": 1
+      }
+    },
+    {
+      "t": 133.6,
+      "desired": 2,
+      "current": 2,
+      "cpu": 400,
+      "replicas": 2,
+      "ready": 2,
+      "pods": 2,
+      "pending": 0,
+      "restarts": 0,
+      "perNode": {
+        "splitx-worker": 1,
+        "splitx-worker2": 1
+      }
+    },
+    {
+      "t": 138.9,
+      "desired": 2,
+      "current": 2,
+      "cpu": 400,
+      "replicas": 2,
+      "ready": 2,
+      "pods": 2,
+      "pending": 0,
+      "restarts": 0,
+      "perNode": {
+        "splitx-worker": 1,
+        "splitx-worker2": 1
+      }
+    },
+    {
+      "t": 144.2,
+      "desired": 2,
+      "current": 2,
+      "cpu": 400,
+      "replicas": 2,
+      "ready": 2,
+      "pods": 2,
+      "pending": 0,
+      "restarts": 0,
+      "perNode": {
+        "splitx-worker": 1,
+        "splitx-worker2": 1
+      }
+    }
+  ],
+  "pods": [
+    "splitx-6ffc49f486-n25j4",
+    "splitx-6ffc49f486-vtg87"
+  ],
+  "backfilled": "pods and resources read afterwards from kube-state-metrics in Prometheus; podAgeSeconds is the pod start time (kube_pod_start_time) to the first request at the ingress, on the cluster clock"
+}
