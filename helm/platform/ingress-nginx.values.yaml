@@ -36,6 +36,12 @@ controller:
     # inject raw nginx config, which is a privilege-escalation path in a
     # shared cluster. The metrics/readiness block uses a supported annotation.
     allow-snippet-annotations: "false"
+    # Access logs as JSON, so Loki can filter on status and timings without a
+    # regex. request_id is the X-Request-Id the application put on its response,
+    # the same ID as in the application's own log lines; nginx's own ID is kept
+    # beside it. A client cannot choose either. $uri leaves out the query string.
+    log-format-escape-json: "true"
+    log-format-upstream: '{"time":"$time_iso8601","request_id":"$upstream_http_x_request_id","nginx_request_id":"$req_id","remote_addr":"$remote_addr","method":"$request_method","path":"$uri","status":$status,"bytes_sent":$bytes_sent,"request_time":$request_time,"upstream_addr":"$upstream_addr","upstream_status":"$upstream_status","upstream_response_time":"$upstream_response_time","ingress":"$ingress_name","service":"$service_name","user_agent":"$http_user_agent"}'
   # The moment nginx received each request, in nginx's own clock. proxy_set_header
   # replaces anything a client sent under this name, so the app can trust it
   # (TRUST_UPSTREAM_REQUEST_START in the local overlay) and measure queue time
@@ -46,8 +52,12 @@ controller:
     X-Request-Start: "t=${msec}"
   metrics:
     # The controller's own Prometheus metrics — request rate and latency
-    # measured at the edge, to compare with what the app reports (phase 5).
+    # measured at the edge, to compare with what the app reports.
     enabled: true
+    serviceMonitor:
+      # Needs the ServiceMonitor CRD, which is why kube-prometheus-stack is
+      # installed first (helm/platform/charts.json).
+      enabled: true
   resources:
     requests:
       cpu: 100m

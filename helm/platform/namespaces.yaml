@@ -1,0 +1,24 @@
+# ═══════════════════════════════════════════════════════════════
+#   Namespaces for the platform charts, created with their Pod Security
+#   level before any chart installs into them. `helm --create-namespace`
+#   would create them unlabelled, which Kubernetes treats as privileged.
+# ═══════════════════════════════════════════════════════════════
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+  labels:
+    # Prometheus, Alertmanager, Grafana, Loki and Alloy all run as non-root
+    # with no host access, so they get the same level as the application.
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/warn: restricted
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: node-exporter
+  labels:
+    # node-exporter reads the node's /proc and /sys through host paths, in the
+    # host's network and PID namespaces. Only a privileged namespace allows
+    # that, so it gets one of its own instead of loosening `monitoring`.
+    pod-security.kubernetes.io/enforce: privileged

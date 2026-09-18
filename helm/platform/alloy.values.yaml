@@ -1,0 +1,128 @@
+# ═══════════════════════════════════════════════════════════════
+#   Grafana Alloy: ships pod logs to Loki.
+#
+#   One Alloy reads the logs of the application and of ingress-nginx
+#   through the Kubernetes API (loki.source.kubernetes), so it needs no
+#   host paths, runs as a non-root user, and fits the namespace's
+#   restricted Pod Security level. Promtail, which the Compose stack used,
+#   reached end of life in March 2026.
+#
+#   What it adds to each line:
+#     labels                namespace, pod, container, app, node, and for the
+#                           application its log level. Few distinct values each.
+#     structured metadata   request_id: the X-Request-Id of the request that
+#                           wrote the line, from the application's JSON and from
+#                           the ingress's JSON access log alike. Too unique to be
+#                           a label, still searchable: | request_id="..."
+# ═══════════════════════════════════════════════════════════════
+controller:
+  # Reading through the API, one instance covers the cluster. A DaemonSet
+  # would tail every pod once per node.
+  type: deployment
+  replicas: 1
+
+global:
+  podSecurityContext:
+    runAsNonRoot: true
+    # The alloy user of the image.
+    runAsUser: 473
+    runAsGroup: 473
+    fsGroup: 473
+    seccompProfile:
+      type: RuntimeDefault
+
+alloy:
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
+  configMap:
+    create: true
+    content: |
+      discovery.kubernetes "pods" {
+        role = "pod"
+        namespaces {
+          names = ["splitx", "ingress-nginx"]
+        }
+      }
+
+      discovery.relabel "pods" {
+        targets = discovery.kubernetes.pods.targets
+
+        rule {
+          source_labels = ["__meta_kubernetes_namespace"]
+          target_label  = "namespace"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_name"]
+          target_label  = "pod"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_container_name"]
+          target_label  = "container"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_name"]
+          target_label  = "app"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_node_name"]
+          target_label  = "node"
+        }
+      }
+
+      loki.source.kubernetes "pods" {
+        targets    = discovery.relabel.pods.output
+        forward_to = [loki.process.pods.receiver]
+      }
+
+      loki.process "pods" {
+        // The application writes one JSON object per line.
+        stage.match {
+          selector = "{namespace=\"splitx\", container=\"splitx\"}"
+
+          stage.json {
+            expressions = {
+              level      = "level",
+              request_id = "requestId",
+            }
+          }
+          stage.labels {
+            values = { level = "" }
+          }
+          stage.structured_metadata {
+            values = { request_id = "" }
+          }
+        }
+
+        // ingress-nginx access logs are JSON too (helm/platform/ingress-nginx.values.yaml).
+        stage.match {
+          selector = "{namespace=\"ingress-nginx\", container=\"controller\"}"
+
+          stage.json {
+            expressions = { request_id = "request_id" }
+          }
+          stage.structured_metadata {
+            values = { request_id = "" }
+          }
+        }
+
+        forward_to = [loki.write.loki.receiver]
+      }
+
+      loki.write "loki" {
+        endpoint {
+          url = "http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push"
+        }
+      }
+
+serviceMonitor:
+  # Alloy's own metrics: lines read, dropped and sent.
+  enabled: true

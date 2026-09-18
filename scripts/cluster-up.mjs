@@ -12,16 +12,19 @@
  *   2. creates the Kind cluster from k8s/kind/cluster.yaml (1 control plane, 2 workers)
  *   3. lifts kindnet's CPU limit: it decides every new pod connection, and at
  *      Kind's default limits it falls behind until new connections time out
- *   4. installs the pinned platform charts listed in helm/platform/charts.json
- *   5. loads the application image into the nodes — Kind has no registry, and
+ *   4. creates the platform namespaces with their Pod Security levels, and the
+ *      Secrets the monitoring charts read: the Grafana admin password, and the
+ *      Alertmanager configuration filled with the ALERT_* values from .env
+ *   5. installs the pinned platform charts listed in helm/platform/charts.json
+ *   6. loads the application image into the nodes — Kind has no registry, and
  *      the manifests never pull, so this is how a build reaches a pod
- *   6. builds the splitx-secrets Secret from .env and pipes it to kubectl.
+ *   7. builds the splitx-secrets Secret from .env and pipes it to kubectl.
  *      Values are never written to a file, never passed as an argument and
  *      never printed; only the key names appear in the output.
- *   7. applies k8s/overlays/local and waits for the database, the schema Job
- *      and the deployment
- *   8. rolls the deployment if the pods run an older build than the one loaded
- *   9. opens fresh connections from every pod, because readiness cannot prove it
+ *   8. applies k8s/overlays/local and the Grafana dashboards, and waits for the
+ *      database, the schema Job and the deployment
+ *   9. rolls the deployment if the pods run an older build than the one loaded
+ *  10. opens fresh connections from every pod, because readiness cannot prove it
  */
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
@@ -115,13 +118,60 @@ if (canonical(JSON.parse(kindnetNow || '{}')) === canonical(KINDNET_RESOURCES)) 
     kubectl(['-n', 'kube-system', 'rollout', 'status', 'daemonset/kindnet', '--timeout=180s']);
 }
 
-// ── 4. platform charts ────────────────────────────────────────────────────
+// ── 4. platform namespaces and the Secrets the charts read ────────────────
+heading('Platform namespaces, and the Secrets the monitoring charts read');
+if (!existsSync(join(root, '.env'))) fail('.env not found. Copy .env.example and fill it in.');
+process.loadEnvFile(join(root, '.env'));
+// Created with their Pod Security labels before any chart installs into them.
+kubectl(['apply', '-f', 'helm/platform/namespaces.yaml'], { capture: true });
+
+// Values are piped to kubectl on stdin: never a file, an argument or output.
+const applySecret = (namespace, name, stringData) => kubectl(['apply', '-f', '-'], {
+    input: JSON.stringify({
+        apiVersion: 'v1',
+        kind: 'Secret',
+        metadata: { name, namespace, labels: { 'app.kubernetes.io/part-of': 'splitx' } },
+        type: 'Opaque',
+        stringData,
+    }),
+});
+
+if (!process.env.GF_ADMIN_PASSWORD) fail('.env is missing: GF_ADMIN_PASSWORD (the Grafana admin password)');
+applySecret('monitoring', 'grafana-admin', { 'admin-user': 'admin', 'admin-password': process.env.GF_ADMIN_PASSWORD });
+console.log('    grafana-admin: the admin password from GF_ADMIN_PASSWORD');
+
+// The routing tree is committed; the addresses and the SMTP password are not.
+const ALERT_KEYS = ['ALERT_SMTP_USERNAME', 'ALERT_SMTP_PASSWORD', 'ALERT_EMAIL_TO'];
+let alertmanagerConfig = readFileSync(join(root, 'monitoring/alertmanager/alertmanager.yaml'), 'utf8');
+const unsetAlertKeys = ALERT_KEYS.filter((key) => !process.env[key]);
+if (unsetAlertKeys.length) {
+    // The email integration is the last block in the file. Without it the
+    // receiver still exists, so routing works and alerts show in Grafana.
+    const lines = alertmanagerConfig.slice(0, alertmanagerConfig.indexOf('\n    email_configs:')).split('\n');
+    while (lines.at(-1).trim().startsWith('#')) lines.pop();
+    alertmanagerConfig = lines.join('\n') + '\n';
+    console.log('    alertmanager-splitx: alerts fire but are NOT emailed; .env is missing ' + unsetAlertKeys.join(', '));
+} else {
+    for (const key of ALERT_KEYS) {
+        // Google shows an App Password in groups of four; the spaces are not part of it.
+        const value = key === 'ALERT_SMTP_PASSWORD' ? process.env[key].replace(/\s+/g, '') : process.env[key];
+        // JSON strings are valid YAML double-quoted scalars, whatever the value holds.
+        alertmanagerConfig = alertmanagerConfig.split('${' + key + '}').join(JSON.stringify(value));
+    }
+    console.log('    alertmanager-splitx: alerts are emailed to ALERT_EMAIL_TO through Gmail');
+}
+if (/\$\{[A-Z_]+\}/.test(alertmanagerConfig)) fail('monitoring/alertmanager/alertmanager.yaml has a placeholder k8s:up does not fill');
+applySecret('monitoring', 'alertmanager-splitx', { 'alertmanager.yaml': alertmanagerConfig });
+
+// ── 5. platform charts ────────────────────────────────────────────────────
 heading('Platform charts (pinned in helm/platform/charts.json)');
 const { charts } = JSON.parse(readFileSync(join(root, 'helm/platform/charts.json'), 'utf8'));
+const repos = [...new Set(charts.map((chart) => chart.chart.split('/')[0]))];
 for (const chart of charts) {
     run('helm', ['repo', 'add', chart.chart.split('/')[0], chart.repo], { capture: true, allowFailure: true });
 }
-run('helm', ['repo', 'update'], { capture: true });
+// Only the repositories used here: updating every index on the machine is slow.
+run('helm', ['repo', 'update', ...repos], { capture: true });
 for (const chart of charts) {
     console.log('    ' + chart.release + ' ' + chart.version + ' -> ' + chart.namespace);
     run('helm', [
@@ -134,7 +184,7 @@ for (const chart of charts) {
     ], { capture: true });
 }
 
-// ── 5. image ──────────────────────────────────────────────────────────────
+// ── 6. image ──────────────────────────────────────────────────────────────
 heading('Image ' + IMAGE);
 const known = run('docker', ['image', 'inspect', IMAGE, '--format', '{{.Id}}'], { capture: true, allowFailure: true });
 if (known.code !== 0) {
@@ -147,11 +197,8 @@ if (known.code !== 0) {
 run('kind', ['load', 'docker-image', IMAGE, '--name', CLUSTER]);
 console.log('    ' + IMAGE + ' is now on every node');
 
-// ── 6. secret ─────────────────────────────────────────────────────────────
+// ── 7. secret ─────────────────────────────────────────────────────────────
 heading('Secret splitx-secrets (built from .env)');
-if (!existsSync(join(root, '.env'))) fail('.env not found. Copy .env.example and fill it in.');
-process.loadEnvFile(join(root, '.env'));
-
 const REQUIRED = ['POSTGRES_PASSWORD', 'REDIS_PASSWORD', 'METRICS_TOKEN', 'NEXTAUTH_SECRET'];
 const OPTIONAL = [
     'NEXT_PUBLIC_SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'GEMINI_API_KEY',
@@ -199,12 +246,14 @@ kubectl(['apply', '-f', '-'], {
 });
 console.log('    ' + Object.keys(stringData).length + ' keys: ' + Object.keys(stringData).sort().join(', '));
 
-// ── 7. manifests ──────────────────────────────────────────────────────────
+// ── 8. manifests ──────────────────────────────────────────────────────────
 heading('Applying ' + OVERLAY);
 // A Job's pod template is immutable, so a changed schema.sql would make apply
 // fail. The Job is disposable, and deleting it is how it gets updated.
 kubectl(['delete', 'job', 'splitx-schema-init', '-n', NAMESPACE, '--ignore-not-found'], { capture: true });
 kubectl(['apply', '-k', OVERLAY]);
+// The Grafana dashboards (monitoring/kustomization.yaml).
+kubectl(['apply', '-k', 'monitoring']);
 
 heading('Waiting for the database, the schema and the app');
 kubectl(['-n', NAMESPACE, 'rollout', 'status', 'statefulset/splitx-postgres', '--timeout=240s']);

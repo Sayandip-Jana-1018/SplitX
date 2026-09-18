@@ -15,6 +15,9 @@ resources:
   - networkpolicy.yaml
   - ingress.yaml
   - ingress-internal.yaml
+  # Monitoring: needs the Prometheus Operator CRDs (kube-prometheus-stack).
+  - servicemonitor.yaml
+  - prometheusrule.yaml
 
 configMapGenerator:
   # Hashed name: a change to config.env becomes a new ConfigMap and a rollout,

@@ -1,0 +1,161 @@
+# ═══════════════════════════════════════════════════════════════
+#   kube-prometheus-stack on Kind: the Prometheus Operator, Prometheus,
+#   Alertmanager, Grafana, kube-state-metrics and node-exporter.
+#
+#   The application's own ServiceMonitor and alert rules live with the
+#   application (k8s/base); its dashboards live in monitoring/dashboards.
+#   Nothing here is specific to SplitX except the Secrets it names.
+# ═══════════════════════════════════════════════════════════════
+
+# Kind binds etcd, the scheduler, the controller manager and kube-proxy's
+# metrics to 127.0.0.1, and EKS does not expose them at all. Scraping them
+# would produce targets that are always down and alerts that always fire,
+# so they are not scraped and their rules are not loaded.
+kubeEtcd:
+  enabled: false
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeProxy:
+  enabled: false
+
+defaultRules:
+  rules:
+    etcd: false
+    kubeControllerManager: false
+    kubeSchedulerAlerting: false
+    kubeSchedulerRecording: false
+    kubeProxy: false
+    windows: false
+  # Kind's "nodes" are containers sharing Docker Desktop's VM, and that VM's
+  # clock is not one the cluster can fix: measured on 2026-09-18, its uptime
+  # advanced 116.2 s while Windows advanced 120.8 s, and its wall clock is
+  # stepped back and forth by about 0.8 s every few seconds (D-052). These four
+  # alerts only describe that clock here, so they fired from boot to shutdown.
+  # EKS nodes keep time with chrony, and the EKS values keep all four.
+  disabled:
+    # No NTP daemon disciplines the VM's kernel clock.
+    NodeClockNotSynchronising: true
+    # process_start_time_seconds is derived from the kernel's boot time, which
+    # moves with every step: every process in the cluster appeared to restart
+    # 17 times in 10 minutes. KubePodCrashLooping still catches real crash
+    # loops, from the restart counts kube-state-metrics reports.
+    AlertmanagerClusterCrashlooping: true
+    # Samples stamped earlier than the previous one after a backward step.
+    PrometheusOutOfOrderTimestamps: true
+    # Evaluations counted as skipped after a forward step. The slowest rule
+    # group took 15 ms of its 15 s interval when 52 were counted missed.
+    PrometheusMissingRuleEvaluations: true
+
+windowsMonitoring:
+  enabled: false
+
+prometheus-node-exporter:
+  # See helm/platform/namespaces.yaml: host access needs a privileged namespace.
+  namespaceOverride: node-exporter
+
+prometheusOperator:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 256Mi
+
+prometheus:
+  prometheusSpec:
+    # The autoscaler acts on 15 s CPU readings (metrics-server); a slower scrape
+    # would hide what it reacted to.
+    scrapeInterval: 15s
+    evaluationInterval: 15s
+    retention: 3d
+    retentionSize: 4GB
+    # Select every ServiceMonitor, PodMonitor, Probe, ScrapeConfig and
+    # PrometheusRule in the cluster, not only those labelled with this release.
+    # The application's monitoring objects are deployed with the application.
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    probeSelectorNilUsesHelmValues: false
+    scrapeConfigSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        memory: 2Gi
+    # Load-test evidence should survive a Prometheus restart.
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 5Gi
+
+alertmanager:
+  alertmanagerSpec:
+    # Built by `npm run k8s:up` from monitoring/alertmanager/alertmanager.yaml
+    # and the ALERT_* values in .env, so the email addresses and the SMTP
+    # password never reach the repository.
+    configSecret: alertmanager-splitx
+    resources:
+      requests:
+        cpu: 20m
+        memory: 64Mi
+      limits:
+        memory: 128Mi
+
+grafana:
+  admin:
+    # Built by `npm run k8s:up` from GF_ADMIN_PASSWORD in .env.
+    existingSecret: grafana-admin
+    userKey: admin-user
+    passwordKey: admin-password
+  # Dashboards and data sources are provisioned from the repository, so there
+  # is nothing in Grafana's own database worth keeping across restarts.
+  persistence:
+    enabled: false
+  sidecar:
+    dashboards:
+      # Only dashboards shipped in the monitoring namespace, not whatever any
+      # namespace in the cluster labels as one.
+      searchNamespace: monitoring
+      provider:
+        allowUiUpdates: false
+  additionalDataSources:
+    - name: Loki
+      type: loki
+      uid: loki
+      access: proxy
+      url: http://loki.monitoring.svc.cluster.local:3100
+      jsonData:
+        maxLines: 1000
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    hosts:
+      - grafana.localhost
+  grafana.ini:
+    analytics:
+      check_for_updates: false
+      reporting_enabled: false
+    users:
+      allow_sign_up: false
+    auth.anonymous:
+      enabled: false
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 384Mi
+
+kube-state-metrics:
+  resources:
+    requests:
+      cpu: 20m
+      memory: 48Mi
+    limits:
+      memory: 192Mi

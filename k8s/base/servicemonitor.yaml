@@ -1,0 +1,27 @@
+# ═══════════════════════════════════════════════════════════════
+#   Prometheus scrapes every SplitX pod directly, found through the
+#   Service's endpoints. Each pod keeps its own counters, so scraping the
+#   Service address would read a different pod each time.
+# ═══════════════════════════════════════════════════════════════
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: splitx
+  labels:
+    app.kubernetes.io/name: splitx
+    app.kubernetes.io/part-of: splitx
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: splitx
+  endpoints:
+    - port: http
+      path: /api/metrics
+      interval: 15s
+      # /api/metrics refuses requests without the token, even from inside the
+      # cluster (B-011). Prometheus reads it from the application's own Secret.
+      authorization:
+        type: Bearer
+        credentials:
+          name: splitx-secrets
+          key: METRICS_TOKEN
