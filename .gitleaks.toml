@@ -39,3 +39,11 @@ regexes = [
   # UML class-diagram attribute ("password : String? «bcrypt»") in the synopsis figures
   '''password\s*:\s*String\??\s*\x{ab}bcrypt\x{bb}''',
 ]
+
+[[allowlists]]
+description = "Pinned Jenkins plugin versions: a plugin whose name ends in -api, followed by a version like 4.5.14-269.vfa_2321039a_83, reads to the generic-api-key rule as a key"
+regexTarget = "line"
+paths = ['''(^|/)helm/platform/jenkins\.values\.yaml$''']
+regexes = [
+  '''^\s+- [a-z0-9][a-z0-9-]*:[0-9][\w.+-]*$''',
+]

@@ -1,0 +1,105 @@
+# ═══════════════════════════════════════════════════════════════
+#   Unit tests for the delivery alerts (jenkins/prometheusrule.yaml), run
+#   with promtool by `node scripts/test-alerts.mjs`. The same notation as
+#   splitx-rules.test.yaml: 'a+bxN' is a, a+b, ... (N+1 samples).
+# ═══════════════════════════════════════════════════════════════
+rule_files:
+  - delivery.rules.yaml
+
+evaluation_interval: 30s
+
+tests:
+  # ── WebhookRelayDisconnected ──────────────────────────────────
+  - name: a stream lost for good fires after 5 minutes; a reconnect within a minute does not
+    interval: 30s
+    input_series:
+      # Connected for 2 minutes, lost for a minute, back for 2, then lost for good.
+      - series: 'webhook_relay_connected{namespace="jenkins", pod="webhook-relay-0"}'
+        values: '1x4 0x1 1x3 0x20'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: WebhookRelayDisconnected
+        exp_alerts: []
+      # Lost since 5m30s: pending at 10m, firing at 11m.
+      - eval_time: 10m
+        alertname: WebhookRelayDisconnected
+        exp_alerts: []
+      - eval_time: 11m
+        alertname: WebhookRelayDisconnected
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: GitHub deployments are not reaching Jenkins
+              description: The webhook relay has not held its smee.io stream open for 5 minutes. Deliveries made meanwhile are lost; once it is back, redeliver them from the repository's webhook settings (Recent Deliveries).
+
+  - name: a relay that is not running at all fires too
+    interval: 30s
+    input_series:
+      - series: 'up{job="apiserver"}'
+        values: '1x20'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: WebhookRelayDisconnected
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: WebhookRelayDisconnected
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              namespace: jenkins
+            exp_annotations:
+              summary: GitHub deployments are not reaching Jenkins
+              description: The webhook relay has not held its smee.io stream open for 5 minutes. Deliveries made meanwhile are lost; once it is back, redeliver them from the repository's webhook settings (Recent Deliveries).
+
+  - name: a connected relay does not fire
+    interval: 30s
+    input_series:
+      - series: 'webhook_relay_connected{namespace="jenkins", pod="webhook-relay-0"}'
+        values: '1x40'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: WebhookRelayDisconnected
+        exp_alerts: []
+
+  # ── WebhookDeliveryRefused ────────────────────────────────────
+  - name: the first refused delivery fires, and accepted ones never do
+    interval: 30s
+    input_series:
+      # Counters start at 0 when the relay starts (it initialises them), so
+      # the very first refusal is an increase Prometheus can see.
+      - series: 'webhook_relay_deliveries_total{namespace="jenkins", result="accepted"}'
+        values: '0x10 1x10 2x20'
+      - series: 'webhook_relay_deliveries_total{namespace="jenkins", result="refused"}'
+        values: '0x10 1x30'
+      - series: 'webhook_relay_deliveries_total{namespace="jenkins", result="unreachable"}'
+        values: '0x40'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: WebhookDeliveryRefused
+        exp_alerts: []
+      - eval_time: 7m
+        alertname: WebhookDeliveryRefused
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              result: refused
+            exp_annotations:
+              summary: A webhook delivery did not reach a Jenkins job
+              description: 'A delivery in the last 15 minutes ended "refused". Refused: Jenkins answered with an error, 403 when the signature did not verify. Unreachable: Jenkins did not answer. The relay''s log has the event and status.'
+
+  - name: an unreachable Jenkins fires with its own result
+    interval: 30s
+    input_series:
+      - series: 'webhook_relay_deliveries_total{namespace="jenkins", result="unreachable"}'
+        values: '0x10 1x30'
+    alert_rule_test:
+      - eval_time: 7m
+        alertname: WebhookDeliveryRefused
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              result: unreachable
+            exp_annotations:
+              summary: A webhook delivery did not reach a Jenkins job
+              description: 'A delivery in the last 15 minutes ended "unreachable". Refused: Jenkins answered with an error, 403 when the signature did not verify. Unreachable: Jenkins did not answer. The relay''s log has the event and status.'

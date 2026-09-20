@@ -1,0 +1,227 @@
+# ═══════════════════════════════════════════════════════════════
+#   Network policy for the jenkins namespace, in the style of the
+#   application's (k8s/base/networkpolicy.yaml): nothing accepts traffic
+#   unless a policy names the sender, and each workload reaches only what
+#   it needs. Jenkins holds the power to deploy; a compromised build should
+#   not also reach the databases or the node network.
+#
+#   On Kind the API server answers at 10.96.0.1:443, forwarded to the
+#   control-plane node on 6443; both are allowed, since whether a policy
+#   sees the address before or after that forwarding depends on the network
+#   plugin. EKS serves the API elsewhere; phase 7 adjusts these rules.
+# ═══════════════════════════════════════════════════════════════
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: jenkins
+  labels:
+    app.kubernetes.io/part-of: splitx
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: jenkins-controller
+  namespace: jenkins
+  labels:
+    app.kubernetes.io/part-of: splitx
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: jenkins-controller
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        # The web UI, through the ingress controller.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+        # Deliveries from the relay.
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: webhook-relay
+        # Build agents, over WebSocket on this same port.
+        - podSelector:
+            matchLabels:
+              jenkins/jenkins-jenkins-agent: "true"
+        # Prometheus reads /prometheus.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+        # The kubelet's probes come from the node.
+        - ipBlock:
+            cidr: 172.16.0.0/12
+      ports:
+        - port: 8080
+          protocol: TCP
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # The API server: agent pods are created through it.
+    - to:
+        - ipBlock:
+            cidr: 10.96.0.1/32
+      ports:
+        - port: 443
+          protocol: TCP
+    - to:
+        - ipBlock:
+            cidr: 172.16.0.0/12
+      ports:
+        - port: 6443
+          protocol: TCP
+    # The internet: plugin downloads at start, and the Jenkinsfile from GitHub.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - port: 443
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: jenkins-agents
+  namespace: jenkins
+  labels:
+    app.kubernetes.io/part-of: splitx
+spec:
+  podSelector:
+    matchLabels:
+      jenkins/jenkins-jenkins-agent: "true"
+  policyTypes:
+    - Ingress
+    - Egress
+  # Nothing connects to an agent; it connects out.
+  ingress: []
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # The controller.
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: jenkins-controller
+      ports:
+        - port: 8080
+          protocol: TCP
+    # The API server: kubectl apply, rollout status, rollout undo.
+    - to:
+        - ipBlock:
+            cidr: 10.96.0.1/32
+      ports:
+        - port: 443
+          protocol: TCP
+    - to:
+        - ipBlock:
+            cidr: 172.16.0.0/12
+      ports:
+        - port: 6443
+          protocol: TCP
+    # The smoke test goes through the ingress controller, the way users arrive.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - port: 80
+          protocol: TCP
+    # The internet: the release's source on GitHub, its image and signature
+    # on ghcr.io, Sigstore's trust root and log, and GitHub's API for statuses.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - port: 443
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: webhook-relay
+  namespace: jenkins
+  labels:
+    app.kubernetes.io/part-of: splitx
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: webhook-relay
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+        - ipBlock:
+            cidr: 172.16.0.0/12
+      ports:
+        - port: 9090
+          protocol: TCP
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # smee.io.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - port: 443
+          protocol: TCP
+    # Jenkins, and nothing else inside the cluster.
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: jenkins-controller
+      ports:
+        - port: 8080
+          protocol: TCP

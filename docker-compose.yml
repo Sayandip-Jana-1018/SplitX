@@ -6,9 +6,12 @@
 #   Required in .env: POSTGRES_PASSWORD, REDIS_PASSWORD, METRICS_TOKEN (see .env.example).
 #   Monitoring (Prometheus, Grafana, Loki) runs in the Kubernetes cluster, not
 #   here: `npm run k8s:up`, then http://grafana.localhost (D-052).
-#   Images are pinned by digest, and every service has a memory limit so the
-#   whole stack fits the 10 GB Docker VM. Build the app image with provenance
-#   using `npm run image:build`; Compose then just runs `splitx:local`.
+#   So does Jenkins, which deploys releases to it: http://jenkins.localhost
+#   (D-055). The old Compose Jenkins mounted the Docker socket, root on the VM.
+#   The app's images are pinned by digest (the ci profile's only by version),
+#   and every service has a memory limit so the whole stack fits the 10 GB
+#   Docker VM. Build the app image with provenance using `npm run image:build`;
+#   Compose then just runs `splitx:local`.
 #   Every port except the app binds to 127.0.0.1 — admin UIs with known
 #   defaults must not be reachable from a shared network (e.g. campus wifi).
 #   Postgres/Redis use host ports 5433/6380 so they can't be shadowed by a
@@ -126,29 +129,6 @@ services:
     networks:
       - splitx-network
 
-  # ── Jenkins (CI/CD Pipeline) ──
-  jenkins:
-    build:
-      context: ./jenkins
-      dockerfile: Dockerfile.jenkins
-    container_name: splitx-jenkins
-    deploy:
-      resources:
-        limits:
-          memory: 2g
-    profiles: ["ci"]
-    ports:
-      - "127.0.0.1:8080:8080"
-      - "127.0.0.1:50000:50000"
-    volumes:
-      - jenkins_data:/var/jenkins_home
-      - /var/run/docker.sock:/var/run/docker.sock
-    environment:
-      JAVA_OPTS: "-Djava.awt.headless=true -Xmx512m"
-    restart: unless-stopped
-    networks:
-      - splitx-network
-
   # ── SonarQube (Code Quality Analysis) ──
   sonarqube:
     image: sonarqube:10.7.0-community
@@ -190,7 +170,6 @@ services:
 
 volumes:
   postgres_data:
-  jenkins_data:
   sonarqube_data:
   sonarqube_logs:
   sonarqube_extensions:

@@ -1,11 +1,11 @@
 # ═══════════════════════════════════════════════════════════════
 #   Grafana Alloy: ships pod logs to Loki.
 #
-#   One Alloy reads the logs of the application and of ingress-nginx
-#   through the Kubernetes API (loki.source.kubernetes), so it needs no
-#   host paths, runs as a non-root user, and fits the namespace's
-#   restricted Pod Security level. Promtail, which the Compose stack used,
-#   reached end of life in March 2026.
+#   One Alloy reads the logs of the application, of ingress-nginx, and of
+#   Jenkins and its webhook relay through the Kubernetes API
+#   (loki.source.kubernetes), so it needs no host paths, runs as a non-root
+#   user, and fits the namespace's restricted Pod Security level. Promtail,
+#   which the Compose stack used, reached end of life in March 2026.
 #
 #   What it adds to each line:
 #     labels                namespace, pod, container, app, node, and for the
@@ -63,7 +63,7 @@ alloy:
       discovery.kubernetes "pods" {
         role = "pod"
         namespaces {
-          names = ["splitx", "ingress-nginx"]
+          names = ["splitx", "ingress-nginx", "jenkins"]
         }
       }
 
@@ -125,6 +125,18 @@ alloy:
           }
           stage.structured_metadata {
             values = { request_id = "" }
+          }
+        }
+
+        // The webhook relay writes JSON lines with a level (jenkins/relay/relay.mjs).
+        stage.match {
+          selector = "{namespace=\"jenkins\", container=\"relay\"}"
+
+          stage.json {
+            expressions = { level = "level" }
+          }
+          stage.labels {
+            values = { level = "" }
           }
         }
 

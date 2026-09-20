@@ -29,6 +29,12 @@ controller:
   # with TRUSTED_PROXY_HOPS=1, so a wrong value here would bucket the whole
   # class under the controller's own address.
   config:
+    # nginx starts one worker per CPU it can see, and the Docker VM shows all
+    # 24 of the host's. 24 workers held about 300 MiB, a reload runs the old
+    # ones beside the new until they drain, and the controller was OOM-killed
+    # at its 384Mi limit when Ingresses changed (D-057). One worker serves
+    # thousands of requests a second; the heaviest test sends 100.
+    worker-processes: "4"
     use-forwarded-headers: "false"
     compute-full-forwarded-for: "true"
     enable-real-ip: "true"
