@@ -23,9 +23,9 @@
  *   7. builds the splitx-secrets Secret from .env and pipes it to kubectl.
  *      Values are never written to a file, never passed as an argument and
  *      never printed; only the key names appear in the output.
- *   8. applies k8s/overlays/local, the Grafana dashboards and what Jenkins needs
- *      beyond its chart (jenkins/), and waits for the database, the schema Job
- *      and the deployment
+ *   8. applies k8s/overlays/local, the Grafana dashboards, the admission policy
+ *      (policy/) and what Jenkins needs beyond its chart (jenkins/), and waits
+ *      for the database, the schema Job and the deployment
  *   9. rolls the deployment if the pods run an older build than the one loaded
  *  10. opens fresh connections from every pod, because readiness cannot prove it
  */
@@ -305,6 +305,9 @@ kubectl(['delete', 'job', 'splitx-schema-init', '-n', NAMESPACE, '--ignore-not-f
 kubectl(['apply', '-k', OVERLAY]);
 // The Grafana dashboards (monitoring/kustomization.yaml).
 kubectl(['apply', '-k', 'monitoring']);
+// What the cluster refuses: an image from our registry that the release
+// workflow did not sign (policy/verify-release.yaml, D-060).
+kubectl(['apply', '-k', 'policy']);
 // Jenkins' permissions, network policy, webhook relay and alerts (jenkins/kustomization.yaml).
 kubectl(['apply', '-k', 'jenkins']);
 if (relaySecretChanged) kubectl(['-n', 'jenkins', 'rollout', 'restart', 'deployment/webhook-relay'], { capture: true });

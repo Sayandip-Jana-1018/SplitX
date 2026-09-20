@@ -1629,6 +1629,45 @@ cannot deploy anything that GitHub Actions did not build from main.
 - **On AWS:** Jenkins is behind the ALB, GitHub calls it directly, and the relay is not deployed.
   The gate above does not change.
 
+### D-060 · The cluster refuses an image our workflow did not sign
+**2026-09-20** · ✅ done, proved by three attempts
+
+D-055 left a hole and said so: Jenkins verifies the signature before it deploys, but that is one
+path in. A `kubectl apply`, a Job, a controller with permission to create pods — each goes around
+it. The check now happens at admission, where nothing can skip it.
+
+Kyverno 1.19 (chart 3.9.1) runs in its own `restricted` namespace with two admission replicas and
+the reports controller; no background or cleanup controller, because nothing here generates or
+mutates existing resources. `policy/verify-release.yaml` is an **ImageValidatingPolicy** — the
+older `kyverno.io/v1 ClusterPolicy` still works but is deprecated in 1.19 and warns on every
+apply, which is not a thing to ship new.
+
+The rule: any image from `ghcr.io/sayandip-jana-1018/*`, in the `splitx` namespace, must carry a
+cosign signature whose certificate names **this repository's CI workflow on main**, issued by
+GitHub's OIDC provider. Three attempts, each a pod that satisfies the namespace's Pod Security
+level so the only thing left to refuse it is the policy:
+
+| Asked to run | Answer |
+|---|---|
+| The release GitHub Actions signed | admitted |
+| A tag under our name that was never published | refused |
+| The same signed image, judged against a workflow that did not sign it | refused |
+
+The third is the one that matters: the policy checks *whose* signature it is, not that a signature
+exists. Jenkins then deployed that release again through the whole pipeline, and the policy
+admitted it — enforcement that breaks delivery would not survive its first day.
+
+- **Scoped to `splitx`, and `failurePolicy: Fail`:** the engine refuses what it cannot check, but
+  only for the namespace the application runs in, so an outage of the policy engine cannot stop
+  the rest of the cluster from starting pods. It does mean a release cannot start while Kyverno
+  is down, which is the trade a security control makes.
+- **Images from elsewhere are untouched:** Postgres, Redis and the locally built `splitx:local`
+  are not ours to sign, and the rule does not pretend otherwise. On EKS every pod runs a signed
+  release, so the same policy covers everything there.
+- **Rejected — signing keys in a Secret:** the signature is keyless (D-054); an admission policy
+  holding a public key would only move the trust problem.
+- **Cost:** three pods, about 320Mi requested.
+
 ### D-059 · One registry for both clusters, and a rule that actually looks at all of them
 **2026-09-20** · ✅ done · ⚠️ leaves the ECR module unused
 

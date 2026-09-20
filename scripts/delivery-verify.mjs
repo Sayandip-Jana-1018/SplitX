@@ -411,10 +411,96 @@ sections.push({
     ].join('\n'),
 });
 
-// ── 6. A release that cannot come up (--rollback) ─────────────────────────
+// ── 6. what the cluster itself refuses ────────────────────────────────────
+heading('[6] What the cluster itself refuses');
+// Jenkins verifies before it deploys, but that is one path in. The admission
+// policy (policy/verify-release.yaml) is asked about every pod, whoever
+// creates it. Each probe satisfies the namespace's restricted Pod Security
+// level, so the only thing left that can refuse it is the image policy.
+const probe = (name, image) => JSON.stringify({
+    apiVersion: 'v1',
+    kind: 'Pod',
+    metadata: { name, namespace: NS, labels: { 'app.kubernetes.io/part-of': 'splitx' } },
+    spec: {
+        restartPolicy: 'Never',
+        securityContext: { runAsNonRoot: true, runAsUser: 1001, runAsGroup: 1001, seccompProfile: { type: 'RuntimeDefault' } },
+        containers: [{
+            name: 'probe',
+            image,
+            command: ['sleep', '20'],
+            securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: ['ALL'] } },
+        }],
+    },
+});
+function tryToRun(name, image) {
+    const result = spawnSync('kubectl', ['--context', CONTEXT, 'apply', '-f', '-'], { input: probe(name, image), encoding: 'utf8' });
+    if (result.status === 0) {
+        kubectl(['-n', NS, 'delete', 'pod', name, '--wait=false']);
+        return { admitted: true, why: '' };
+    }
+    return {
+        admitted: false,
+        why: (result.stderr ?? '').replace(/\s+/g, ' ').replace(/.*denied the request: /, '').slice(0, 170),
+    };
+}
+
+const signedImage = deployment?.payload?.image;
+const admitted = signedImage ? tryToRun('probe-signed-release', signedImage) : { admitted: false, why: 'no release to try' };
+record(
+    'The signed release is admitted',
+    admitted.admitted,
+    signedImage ? (admitted.admitted ? 'a pod running ' + digest.slice(0, 19) + '… was created' : 'refused: ' + admitted.why) : admitted.why
+);
+
+const unpublished = tryToRun('probe-unpublished', IMAGE_REPOSITORY + ':never-published');
+// The same image the cluster just accepted, judged against a workflow that did
+// not sign it: this separates "has a signature" from "has our signature".
+const OTHER_IDENTITY = 'probe-other-identity';
+let otherIdentity = { admitted: true, why: 'not tried' };
+try {
+    const policy = readFileSync(join(root, 'policy/verify-release.yaml'), 'utf8')
+        .replace('name: splitx-release-must-be-signed', 'name: ' + OTHER_IDENTITY)
+        .replace('ci.yml@refs/heads/main', 'release.yml@refs/heads/main')
+        .replace('- name: release', '- name: other')
+        .replace('[attestors.release]', '[attestors.other]');
+    spawnSync('kubectl', ['--context', CONTEXT, 'apply', '-f', '-'], { input: policy, encoding: 'utf8' });
+    await sleep(10_000);
+    if (signedImage) otherIdentity = tryToRun('probe-other-identity', signedImage);
+} finally {
+    kubectl(['delete', 'imagevalidatingpolicy', OTHER_IDENTITY, '--ignore-not-found']);
+}
+record(
+    'An image our workflow did not sign is refused, whoever asks',
+    !unpublished.admitted && !otherIdentity.admitted,
+    'a tag we never published: ' + (unpublished.admitted ? 'ADMITTED' : 'refused') + '; the same signed image judged against another workflow: '
+        + (otherIdentity.admitted ? 'ADMITTED' : 'refused — ' + otherIdentity.why)
+);
+
+sections.push({
+    title: 'What the cluster itself refuses',
+    body: [
+        'Jenkins checks the signature before it deploys, but a `kubectl apply`, a Job or a controller with the',
+        'right permissions would go around it. `policy/verify-release.yaml` makes the check part of admission:',
+        'any image from `ghcr.io/sayandip-jana-1018` must carry a cosign signature from this repository\'s',
+        'release workflow, on main. Images from anywhere else — Postgres, Redis, the locally built',
+        '`splitx:local` — are not claimed to be signed and are not touched.',
+        '',
+        '| Asked to run | Answer |',
+        '|---|---|',
+        '| The release GitHub Actions signed | ' + (admitted.admitted ? 'admitted' : 'refused: ' + admitted.why) + ' |',
+        '| A tag under our name that was never published | ' + (unpublished.admitted ? '**admitted**' : 'refused') + ' |',
+        '| The same signed image, judged against another workflow | ' + (otherIdentity.admitted ? '**admitted**' : 'refused') + ' |',
+        '',
+        'The last one is the point: the policy checks *whose* signature it is, not that a signature exists.',
+        'The engine refuses what it cannot check (`failurePolicy: Fail`), and the rule covers the `splitx`',
+        'namespace only, so an outage of the policy engine cannot stop the rest of the cluster.',
+    ].join('\n'),
+});
+
+// ── 7. A release that cannot come up (--rollback) ─────────────────────────
 let rollback = null;
 if (withRollback) {
-    heading('[6] A release that cannot come up');
+    heading('[7] A release that cannot come up');
     const power = await powerSource();
     if (power.source === 'battery') {
         record('The laptop is on mains power for the measurement', false, power.detail + '; plug it in and run again');

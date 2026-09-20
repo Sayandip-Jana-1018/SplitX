@@ -59,6 +59,16 @@
       "why": "Reads the application and ingress logs through the Kubernetes API, parses their JSON, and sends them to Loki."
     },
     {
+      "release": "kyverno",
+      "repo": "https://kyverno.github.io/kyverno/",
+      "chart": "kyverno/kyverno",
+      "version": "3.9.1",
+      "appVersion": "v1.19.1",
+      "namespace": "kyverno",
+      "values": "helm/platform/kyverno.values.yaml",
+      "why": "Refuses, at admission, any image from our registry that the release workflow did not sign. Installed before Jenkins so the policy is in force before anything can deploy."
+    },
+    {
       "release": "jenkins",
       "repo": "https://charts.jenkins.io",
       "chart": "jenkins/jenkins",

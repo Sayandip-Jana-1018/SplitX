@@ -1,0 +1,9 @@
+# ═══════════════════════════════════════════════════════════════
+#   Cluster policy, applied by `npm run k8s:up` after the charts that
+#   provide the engine (helm/platform/kyverno.values.yaml).
+# ═══════════════════════════════════════════════════════════════
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - verify-release.yaml

@@ -1,0 +1,76 @@
+# ═══════════════════════════════════════════════════════════════
+#   An image from our registry runs here only if our release workflow
+#   signed it (D-060).
+#
+#   Jenkins already checks this before it deploys (D-055), but that is one
+#   path in. A `kubectl apply`, a Job, a controller with the right
+#   permissions — each one goes around it. This makes the check part of
+#   admission, so there is no way in that skips it.
+#
+#   What it does not touch: images from anywhere else. Postgres, Redis and
+#   the locally built `splitx:local` of the rehearsal cluster do not come
+#   from our registry and are not claimed to be signed. The rule is about
+#   what we publish: if it carries our name, our workflow signed it.
+#
+#   ImageValidatingPolicy, not the older ClusterPolicy: Kyverno 1.19
+#   deprecates `kyverno.io/v1` policies in favour of these, and warns on
+#   every apply.
+# ═══════════════════════════════════════════════════════════════
+apiVersion: policies.kyverno.io/v1
+kind: ImageValidatingPolicy
+metadata:
+  name: splitx-release-must-be-signed
+  labels:
+    app.kubernetes.io/part-of: splitx
+  annotations:
+    policies.kyverno.io/title: SplitX releases must be signed
+    policies.kyverno.io/category: Supply chain
+    policies.kyverno.io/severity: high
+    policies.kyverno.io/description: >-
+      Every image from ghcr.io/sayandip-jana-1018 must carry a cosign signature made by
+      this repository's release workflow running on main (.github/workflows/ci.yml), with
+      GitHub's OIDC issuer. An unsigned image, one signed by another workflow, and one
+      signed from a branch are all refused.
+spec:
+  # Refuse, do not merely record.
+  validationActions:
+    - Deny
+  webhookConfiguration:
+    timeoutSeconds: 30
+  # Refuse what cannot be checked. The rule covers the splitx namespace
+  # only, so a Kyverno outage cannot stop the rest of the cluster from
+  # starting pods.
+  failurePolicy: Fail
+  evaluation:
+    # Admission only: nothing to re-check in the background.
+    background:
+      enabled: false
+  matchConstraints:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: splitx
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        resources: ["pods"]
+        operations: ["CREATE", "UPDATE"]
+  matchImageReferences:
+    - glob: "ghcr.io/sayandip-jana-1018/*"
+  attestors:
+    - name: release
+      cosign:
+        keyless:
+          identities:
+            # The certificate Sigstore issued to the workflow run: this
+            # repository's CI, on main, and nothing else.
+            - subject: https://github.com/Sayandip-Jana-1018/SplitX/.github/workflows/ci.yml@refs/heads/main
+              issuer: https://token.actions.githubusercontent.com
+        ctlog:
+          url: https://rekor.sigstore.dev
+  validations:
+    - expression: >-
+        images.containers.map(image, verifyImageSignatures(image, [attestors.release])).all(e, e > 0)
+      message: >-
+        This image comes from ghcr.io/sayandip-jana-1018 but carries no signature from
+        the release workflow on main. Releases are built and signed by GitHub Actions
+        (D-054); deploy one of those, or build locally as splitx:local.
