@@ -89,6 +89,34 @@ controller:
   # Agents connect over WebSocket on the HTTP port, so no second port is open.
   agentListenerEnabled: false
 
+  # The chart's init container ends by copying the plugins it installed into
+  # the volume the controller reads, with `yes n | cp -i`, which exits 1 when
+  # those files are already there. Its script runs under `set -e`, so the
+  # second start of the same pod failed — and a Docker restart restarts
+  # containers in place, so Jenkins never came back after one (D-055).
+  # Clearing that volume first makes every start copy the pinned set again.
+  customInitContainers:
+    - name: clear-plugin-volume
+      image: node:24.21.0-alpine3.24@sha256:be80f76cf40ec8e42b9bec49f60a55e0660f30af58d3e5a25530785b30ea67e2
+      command: ["sh", "-c", "rm -rf /var/jenkins_plugins/* /var/jenkins_plugins/.[!.]*; exit 0"]
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+        limits:
+          memory: 64Mi
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        readOnlyRootFilesystem: true
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop:
+            - ALL
+      volumeMounts:
+        - name: plugin-dir
+          mountPath: /var/jenkins_plugins
+
   # Every plugin at an exact version, dependencies included, so every install
   # is the same install. Resolving dependencies at start picked the lowest
   # versions they allow, and those did not fit together: JUnit, and with it
