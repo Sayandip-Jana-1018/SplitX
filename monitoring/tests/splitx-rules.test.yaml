@@ -312,3 +312,61 @@ tests:
       - eval_time: 10m
         alertname: SplitXRateLimiterUnavailable
         exp_alerts: []
+
+  # ── SplitXReleaseVulnerable ───────────────────────────────────
+  - name: today's failed scan fires, yesterday's does not, a clean scan never does
+    interval: 15s
+    input_series:
+      # A scan that started at t=0 and failed: the Job's pod count of failures.
+      - series: 'kube_job_status_failed{namespace="splitx", job_name="release-scan-29014380"}'
+        values: '1x40'
+      - series: 'kube_job_status_start_time{namespace="splitx", job_name="release-scan-29014380"}'
+        values: '0x40'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: SplitXReleaseVulnerable
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: SplitXReleaseVulnerable
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: The release this cluster runs has a fixable vulnerability
+              description: 'Today''s scan of the running image found a critical or high vulnerability that has a fix. Its logs name it: kubectl -n splitx logs job/<the failed job>. The answer is a new release with an updated base image or dependency, not a change in the cluster.'
+
+  - name: a failed scan from an earlier day has already been answered by the next one
+    # Samples every five minutes for 26 hours, so "yesterday" is a real
+    # distance on the timeline rather than a negative timestamp, and the series
+    # never goes stale between samples.
+    interval: 5m
+    input_series:
+      - series: 'kube_job_status_failed{namespace="splitx", job_name="release-scan-29000000"}'
+        values: '1x312'
+      - series: 'kube_job_status_start_time{namespace="splitx", job_name="release-scan-29000000"}'
+        values: '0x312'
+    alert_rule_test:
+      # Within the day it fires; 25 hours after that scan started, it does not.
+      - eval_time: 2h
+        alertname: SplitXReleaseVulnerable
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: The release this cluster runs has a fixable vulnerability
+              description: 'Today''s scan of the running image found a critical or high vulnerability that has a fix. Its logs name it: kubectl -n splitx logs job/<the failed job>. The answer is a new release with an updated base image or dependency, not a change in the cluster.'
+      - eval_time: 25h
+        alertname: SplitXReleaseVulnerable
+        exp_alerts: []
+
+  - name: a scan that found nothing does not fire
+    interval: 15s
+    input_series:
+      - series: 'kube_job_status_failed{namespace="splitx", job_name="release-scan-29014380"}'
+        values: '0x40'
+      - series: 'kube_job_status_start_time{namespace="splitx", job_name="release-scan-29014380"}'
+        values: '0x40'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: SplitXReleaseVulnerable
+        exp_alerts: []

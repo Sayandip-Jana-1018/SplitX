@@ -1629,6 +1629,35 @@ cannot deploy anything that GitHub Actions did not build from main.
 - **On AWS:** Jenkins is behind the ALB, GitHub calls it directly, and the relay is not deployed.
   The gate above does not change.
 
+### D-061 · The scan at build time answers a question that ages
+**2026-09-20** · ✅ done, proved against the running release
+
+Every release is scanned before it is signed (D-054), and that answer is true for one day. A
+vulnerability published tomorrow is one nobody has looked for, and the release most likely to be
+running for weeks is the one that passed.
+
+`k8s/base/release-scan.yaml` is a CronJob that asks the same question of what is *running*, daily.
+It reads the image from the Deployment rather than being handed one — so it scans what the cluster
+actually has, including after a rollback — and fails the Job when Trivy finds a critical or high
+vulnerability that has a fix. `SplitXReleaseVulnerable` alerts on that failed Job through
+kube-state-metrics: no new exporter, no pushgateway, and the alert's four unit tests each catch a
+deliberate break of the rule.
+
+- **Only the last day's scan counts.** Failed Jobs are kept for their logs, so an alert keyed on
+  "a failed scan exists" would keep firing after the next release fixed it. The rule ignores scans
+  that started more than a day ago; the test that proves it samples 26 hours at five-minute
+  intervals, because an hourly series goes stale between samples and never satisfies `for: 5m`.
+- **The first run failed honestly:** the rehearsal cluster was running `splitx:local`, which
+  exists only in the nodes' containerd. Trivy cannot fetch it, and a scanner is not given the
+  container runtime's socket to work around that. The job now says "not a published release:
+  nothing to scan" and stops, instead of alerting about the absence of a registry.
+- **Measured:** against the running release, the scan found no fixable critical or high
+  vulnerability, in 61 packages, and the Job completed.
+- **kubectl and Trivy are mounted, not installed:** their projects' own images as read-only image
+  volumes, the same pattern as the deploy agent (D-055), so there is no hand-built tools image to
+  maintain and nothing is downloaded at run time except the vulnerability database.
+- **What it may read:** one Deployment, by name. Nothing else.
+
 ### D-060 · The cluster refuses an image our workflow did not sign
 **2026-09-20** · ✅ done, proved by three attempts
 
