@@ -1629,6 +1629,28 @@ cannot deploy anything that GitHub Actions did not build from main.
 - **On AWS:** Jenkins is behind the ALB, GitHub calls it directly, and the relay is not deployed.
   The gate above does not change.
 
+### D-059 · One registry for both clusters, and a rule that actually looks at all of them
+**2026-09-20** · ✅ done · ⚠️ leaves the ECR module unused
+
+The AWS overlay still pulled `ACCOUNT_ID.dkr.ecr.ap-south-1.amazonaws.com/splitx:latest`, written
+before there was a pipeline. Two things were wrong with it. A moving tag makes a rollback
+meaningless — the rule that says so has been in CI since phase 3, but it only ever rendered the
+*local* overlay, so it never saw this one. And the registry no longer matched reality: releases
+are published to ghcr.io, signed there, and deployed from there by digest (D-054, D-055).
+
+Both clusters now pull the same image from the same place. The tag in the overlay is the last
+real release, so `npm run k8s:render` shows an image that exists; Jenkins replaces it with the
+digest it verified. The CI rule now renders every overlay and rejects `:latest`, `:main` and
+`:stable` in any of them.
+
+- **Why not ECR:** it would need a second publish from CI with AWS credentials, a second digest
+  for the same commit, and a second identity for the signature to name. The image is public and
+  pulls from EKS without a credential, and one digest keeps the signature check meaningful.
+- **What this leaves:** `terraform/modules/ecr` and the node role's ECR read policy are now
+  unused. They stay until phase 7 decides whether anything needs them (a private mirror for rate
+  limits is the only argument left), and this note is here so nobody assumes they are load-bearing.
+- **The lesson worth keeping:** a rule that checks one of four things passes for the wrong reason.
+
 ### D-058 · Both replicas moved onto one node once Jenkins took the other
 **2026-09-20** · ✅ fixed and measured
 
