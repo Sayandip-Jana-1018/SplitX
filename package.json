@@ -23,6 +23,7 @@
     "avatars:migrate": "node --env-file=.env scripts/migrate-avatars.mjs --apply",
     "k8s:up": "node scripts/cluster-up.mjs",
     "k8s:verify": "node scripts/cluster-verify.mjs",
+    "cd:verify": "node scripts/delivery-verify.mjs",
     "k8s:render": "kubectl kustomize k8s/overlays/aws",
     "k8s:down": "kind delete cluster --name splitx"
   },

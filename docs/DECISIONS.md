@@ -1527,6 +1527,105 @@ and runs one at a time in commit order:
 - **Rejected — deploying on push events:** a push says code changed. A deployment names the
   exact, signed image and the environment it is for, and can be answered with a status.
 
+### D-055 · Jenkins deploys what GitHub Actions signed, and takes back what does not come up
+**2026-09-20** · ✅ done, a signed release deployed and a broken one rolled back
+
+Jenkins moved out of Docker Compose, where it mounted the Docker socket — root on the VM, the
+same power D-052 took away from Promtail — and into the cluster, as a pinned chart in a namespace
+at the application's own `restricted` Pod Security level. It builds nothing. Building there would
+need a privileged image builder, and would produce a second image for a commit CI had already
+built and tested.
+
+**Everything is configuration as code** (`helm/platform/jenkins.values.yaml`): the security realm,
+the credentials (read from Secrets `npm run k8s:up` builds from `.env`), the webhook gate, and the
+job itself in Job DSL. Nothing is set by clicking, and a rebuilt cluster is the same cluster.
+
+| Step of `splitx-deploy` | What it does | What it refuses |
+|---|---|---|
+| Request | Checks the parameters, then asks GitHub whether this is still the newest deployment for this environment, and whether its commit and image match what the webhook said | A replayed or superseded delivery is skipped, not deployed; a malformed one fails |
+| Verify | `cosign verify`: the signature must carry this repository's CI workflow **on main**, and the same commit the deployment names | An image built from a branch, or for another commit |
+| Deploy | Checks out the release commit and applies **its own** manifests, with only the image replaced by the verified digest | — |
+| Roll out | Waits for Postgres, the schema Job and the deployment (150 s) | — |
+| Check | Every ready pod runs that digest, and the edge answers ten times in a row from those pods, plus a real settlement preview | — |
+| On failure | Rolls the deployment back to the revision recorded before applying, and waits for it to serve again | — |
+| Always | Reports the outcome on the GitHub deployment | — |
+
+The procedure comes from main; the manifests come from the release commit, so pods get the
+configuration their code was written for. Builds run in an agent pod as `jenkins-deployer`, whose
+Role (`jenkins/rbac.yaml`) covers the application's objects in `splitx` and nothing else: the API
+server confirms it cannot read a Secret, exec into a pod, or touch another namespace. Creating a
+workload always implies mounting that workload's secrets — that is what deploying is — and the
+image it may deploy is limited by the signature check above.
+
+**Measured** (`npm run cd:verify`, [docs/evidence/delivery.md](evidence/delivery.md), 13 checks):
+
+- The signed release of `52137218e1d4` was deployed in **177 s**, and both pods ran the digest
+  GitHub Actions signed.
+- The same release, deployed with a fault that keeps new pods unready, failed after **210 s**,
+  was rolled back automatically, and **717 of 717 requests were answered 200** while it happened:
+  `maxUnavailable: 0` means a release that never becomes ready never takes traffic.
+- A delivery naming an older deployment was skipped as superseded, not deployed.
+
+- **Pinned, all 81 of them:** the chart resolves dependencies to the *lowest* version each plugin
+  allows, and that set did not fit together — JUnit, and with it the Prometheus plugin, failed to
+  load. The values file now lists every plugin and dependency at the version that actually
+  resolved, and a restart re-downloads exactly those.
+- **It could not restart:** the chart's init container ends with `yes n | cp -i`, which answers
+  "no" to every overwrite and exits 1 when there was anything to decline, under `set -e`. The
+  first in-place restart of the pod — every Docker restart — left Jenkins in CrashLoopBackOff.
+  A small init container now empties that volume first; proven by the next Docker restart.
+- **No kubectl or cosign in an image we build:** the agent mounts the official `kubectl` and
+  `cosign` images as read-only image volumes (Kubernetes 1.35), so builds run exactly what those
+  projects published, with nothing downloaded at build time.
+- **Rejected — Argo CD:** it would be a second deployer for the same objects, fighting Jenkins
+  over them, and phase 6 is graded on Jenkins. `argocd/` is deleted (B-022); it pointed at a Helm
+  chart removed in D-034.
+- **Rejected — `kubectl set image` only:** it would leave the cluster's manifests behind the
+  commit that was deployed.
+- **Known limit:** a rollback returns the application's pods to the previous revision. Other
+  objects the release changed (a Service, a NetworkPolicy) stay as the release left them, and the
+  next release corrects them.
+
+### D-056 · How GitHub's webhook reaches a Jenkins that has no address
+**2026-09-20** · ✅ the path works; the first real GitHub delivery is the webhook's own ping
+
+GitHub cannot reach a laptop. The owner chose a [smee.io](https://smee.io) channel: GitHub posts
+there, and a relay inside the cluster (`jenkins/relay/relay.mjs`, no dependencies, ~150 lines)
+holds that channel's event stream open and replays each delivery to Jenkins with GitHub's own
+headers. The alternative, a tunnel, would put Jenkins itself on the public internet.
+
+**The relay is a courier, not a guard.** It never holds the webhook secret. Jenkins verifies
+GitHub's `X-Hub-Signature-256` before any job sees a delivery, and refuses what does not verify:
+
+| Delivery | Answer |
+|---|---|
+| Not signed, signed with another secret, or changed after signing | HTTP 403, no build |
+| Signed but with the wrong endpoint token | HTTP 404, no build |
+| Signed `ping`, or a deployment for another environment | HTTP 200, no build |
+
+**What smee.io does to a body, measured:** it parses the JSON and hands the relay an object, so
+the body is rebuilt with `JSON.stringify`. A signature survives when GitHub's bytes are what
+`JSON.stringify` writes — compact, characters unescaped, no number that changes when reparsed.
+Probed with six shapes: compact JSON and literal Unicode survived; `<`-escaped characters,
+spaces between tokens, a number beyond 2^53, and a form-encoded body did not. GitHub sends
+compact JSON, and a signed ping of that shape went out to the channel and was accepted by
+Jenkins. If a real delivery ever fails this check it fails loudly, with HTTP 403 and an alert,
+never silently accepted.
+
+Three things must be true before anything is deployed, and the webhook is only the first:
+the signature, then GitHub's own record (the deployment must still be the newest, with the same
+commit and image), then the image's signature (D-055). A forged or replayed delivery therefore
+cannot deploy anything that GitHub Actions did not build from main.
+
+- **What it costs:** smee.io keeps nothing for a listener that is away, so deliveries made while
+  the relay is down are lost. `WebhookRelayDisconnected` fires after five minutes without the
+  stream, `WebhookDeliveryRefused` on anything Jenkins did not accept, and GitHub's own
+  "Recent Deliveries" page can redeliver them. Both alerts are unit-tested (`npm run test:alerts`).
+- **Proven by an outage:** when the Docker VM restarted, the relay lost its stream, logged it,
+  and reconnected on its own once DNS came back.
+- **On AWS:** Jenkins is behind the ALB, GitHub calls it directly, and the relay is not deployed.
+  The gate above does not change.
+
 ### D-057 · The edge was being killed by its own worker count
 **2026-09-18** · ✅ fixed and measured
 
@@ -1562,9 +1661,9 @@ of requests a second; the heaviest test in this project sends 100.
 | B-003 | `POST /api/transactions` accepted `receiptUrl` but never saved it. | Receipts attached through the composer were lost. | ✅ Resolved — D-019. |
 | B-004 | `POST /api/transactions/from-receipt` had no input validation. | Floats, negatives or strings as amounts. | ✅ Resolved — endpoint removed (D-020). |
 | B-005 | Readiness depends on the shared database. | A full DB outage removes every pod from the Service. Accepted for now: nearly every page needs the DB, and 3 failures × 10 s rides out Neon cold starts. | ✅ Resolved 2026-09-16 — D-037. Measured on the cluster: with the database scaled to zero both replicas left the Service within one probe cycle, the ingress answered 503, and no pod was restarted. The dependency is correct; serving errors from pods Kubernetes believes are healthy is the worse option. |
-| B-006 | Jenkins admin password is still the leaked one (user no longer knows it; it is in `jenkins/create-job.sh` history). | Jenkins becomes internet-reachable when the webhook tunnel opens. | Phase 6: Jenkins Configuration-as-Code with the admin password from `.env`. |
+| B-006 | Jenkins admin password is still the leaked one (user no longer knows it; it is in `jenkins/create-job.sh` history). | Jenkins becomes internet-reachable when the webhook tunnel opens. | ✅ Resolved 2026-09-20 — the Compose Jenkins is gone, and with it the image built from `jenkins/Dockerfile.jenkins`. The Jenkins in the cluster has no legacy home directory: its admin user is created by Configuration as Code from a Secret `k8s:up` builds from `.env`, generated on the first run (D-055). The leaked password now unlocks nothing that exists. |
 | B-007 | Committed avatars may still be referenced by production profiles. | Removing them could change what real users see. | ✅ Resolved 2026-09-14 — production returned 0; the files are untracked (D-017). |
-| B-008 | Jenkinsfile stages are still theatre (`docker images` as "build", `|| echo` after Sonar). Only the secrets were removed in phase 0. It also deploys the Helm chart deleted in D-034. | Examiner-visible, and now pointing at a path that no longer exists. | Phase 6 rewrite. |
+| B-008 | Jenkinsfile stages are still theatre (`docker images` as "build", `|| echo` after Sonar). Only the secrets were removed in phase 0. It also deploys the Helm chart deleted in D-034. | Examiner-visible, and now pointing at a path that no longer exists. | ✅ Resolved 2026-09-20 — rewritten (D-055). Every stage does something whose failure fails the build: cosign verification, `kubectl apply -k` of the release commit, a rollout wait, a check through the ingress, and an automatic rollback. Proven by a real release and a deliberately broken one (`npm run cd:verify`). |
 | B-009 | `DEMO_GUIDE.html`, `AWS_SETUP_GUIDE.md` describe removed or wrong things (Ansible, t3.small, 23 resources). | Misleading docs. | Phase 8. |
 | B-010 | Prisma pool size across up to 12 pods is unset. | Connection exhaustion under autoscaling. | ✅ Resolved 2026-09-16 — D-042. `connection_limit=5&pool_timeout=10` is set on the URL the cluster builds, so ten pods use at most 50 connections. |
 | B-011 | `/api/metrics` and `/api/health/ready` will be reachable through CloudFront. | Metrics are token-protected, but readiness pings the DB per request. | ✅ Resolved for the cluster 2026-09-16 — D-043. Both paths answer 403 through ingress-nginx; the AWS overlay does the same with an ALB fixed-response rule. CloudFront itself is still phase 7. |
@@ -1578,7 +1677,7 @@ of requests a second; the heaviest test in this project sends 100.
 | B-020 | The Docker image's browser code had no Supabase URL or key, so uploads could not work from a container. | Receipt uploads would have failed on Kubernetes. | ✅ Resolved 2026-09-16 — the browser now PUTs to the signed URL alone, with no key and no Supabase client (D-028). |
 | B-018 | One profile still carried an avatar that wasn’t a normal storage URL. | Photos kept as `data:` text sit in every API response that includes that user — group members, expense payers, settlement participants. | ✅ Resolved 2026-09-17. The corrected query found **one** `data:` avatar and **no** email-named files (the first query was wrong: the old code replaced `@` with `_`, so `LIKE '%@%'` could never match). It was **828 KB of text** — a 621 KB JPEG — carried in every response that mentioned that user. `scripts/migrate-avatars.mjs --apply --https` uploaded it to `avatars/<id>/`, rewrote the row only while it still held the `data:` value, and confirmed the stored copy is served as `image/jpeg` and **byte-identical** to the original. A backup of the old value was written first. Production now has 0 `data:` avatars. |
 | B-021 | The AWS root user still had two active access keys. | Root keys cannot be restricted by any policy. | ✅ Resolved 2026-09-16 — the user deleted both. Root keeps MFA (a security key), the CLI uses `splitx-devops`, and no repository file or GitHub Actions secret holds AWS keys. |
-| B-022 | `argocd/`, `jenkins/Jenkinsfile`, `AWS_SETUP_GUIDE.md` and `DEMO_GUIDE.html` still reference the `helm/splitx` chart deleted in D-034, and `argocd/kind-cluster.yml` is a second, stale Kind config. | Anyone following those files sets up something that no longer exists. | Phase 6 rewrites the pipeline and decides whether GitOps returns honestly; phase 8 rewrites the guides. |
+| B-022 | `argocd/`, `jenkins/Jenkinsfile`, `AWS_SETUP_GUIDE.md` and `DEMO_GUIDE.html` still reference the `helm/splitx` chart deleted in D-034, and `argocd/kind-cluster.yml` is a second, stale Kind config. | Anyone following those files sets up something that no longer exists. | 🚧 Narrowed 2026-09-20 — `argocd/` and the old Jenkins files are deleted, and the Jenkinsfile is the one that runs (D-055): GitOps does not return, because Jenkins is the deployer. `AWS_SETUP_GUIDE.md` and `DEMO_GUIDE.html` still describe the deleted chart; phase 8 rewrites the guides. |
 | B-023 | metrics-server runs with `--kubelet-insecure-tls` on Kind, because Kind’s kubelets serve metrics with a certificate the cluster CA did not issue. | The flag disables verification of what the autoscaler reads. It is in a values file, not hidden in a script, precisely so it cannot be copied to AWS by accident. | Phase 7: EKS signs kubelet certificates properly — install the add-on without the flag and confirm the HPA still reads CPU. |
 | B-024 | In the final saturation run, 155 of 7,442 requests spent over 3 s inside a pod, all 30 to 50 s into the overload, on both pods, with none after. | A transient stall right when a burst arrives is exactly when a classroom notices. | 🚧 Narrowed 2026-09-18 — D-053. Not garbage collection: the stall belongs to freshly started pods at their 1-CPU limit. Without the limit, fresh pods had 0 and 89 requests over 3 s in a pod (175 to 228 with it), the longest 2.9 and 6.3 s, and served 45% more. Left: the remaining cold start; phase 7 measures the ALB slow start for new targets. |
 | B-025 | Sign-up, login and password reset are still limited to 10 a minute per address (D-022). | A room asked to register at once from one campus network would be refused after the first ten. The demo page needs no account, so it is not affected. | Before any demo asks people to sign up: count failed logins per account for brute-force protection, and give sign-up the device-plus-network treatment of D-045. |
