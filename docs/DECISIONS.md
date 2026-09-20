@@ -1527,6 +1527,30 @@ and runs one at a time in commit order:
 - **Rejected — deploying on push events:** a push says code changed. A deployment names the
   exact, signed image and the environment it is for, and can be answered with a status.
 
+### D-057 · The edge was being killed by its own worker count
+**2026-09-18** · ✅ fixed and measured
+
+Adding the Jenkins Ingress made the ingress-nginx controller exit 137, twice, and the site went
+with it: a helm upgrade was refused mid-flight because the admission webhook it serves would not
+answer. Its last state was `OOMKilled` at the 384Mi limit, and Prometheus had it holding 361 MiB
+the day before, so it had been running at the edge of that limit for days.
+
+nginx starts one worker per CPU it can see, and the Docker VM shows all 24 of this laptop's:
+`worker_processes 24`, and 24 worker processes at roughly 12 MiB each. A configuration change
+reloads nginx, and a reload runs the new workers beside the old ones until the old ones finish
+their connections, so the moment an Ingress changes is exactly when it needs twice its memory.
+
+`worker-processes: "4"`, applied as a live reload with no restart: **82 MiB where it had been
+about 300**, and the controller now survives Ingress changes. One nginx worker serves thousands
+of requests a second; the heaviest test in this project sends 100.
+
+- **Why it never showed before:** Ingresses rarely change. Phase 6 adds one, and each helm
+  upgrade of the chart reloads the controller.
+- **Kind only:** this values file is the rehearsal cluster's. On EKS the entry point is an ALB
+  (phase 7), and node sizes there make the CPU count meaningful.
+- **Still true of the limit:** 384Mi stays. With 4 workers it is roughly four times the
+  steady-state need, which is the room a reload wants.
+
 ---
 
 ## Open problems
