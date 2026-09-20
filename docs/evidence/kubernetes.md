@@ -10,39 +10,39 @@ Every number here was measured against a running cluster; nothing is asserted ab
 | Replicas are spread across both worker nodes | pass | 2 pods on splitx-worker, splitx-worker2 |
 | No application pod runs on the control plane | pass | control plane carries ingress-nginx and the Kubernetes components only |
 | Every app pod can open new connections (DNS, Postgres, Redis) | pass | 2 pods checked |
-| kindnet keeps up: no CPU quota, no memory-limit hits, nothing left waiting for a verdict | pass | 1895 new flows judged since kindnet started, 0 dropped |
+| kindnet keeps up: no CPU quota, no memory-limit hits, nothing left waiting for a verdict | pass | 2321 new flows judged since kindnet started, 0 dropped |
 | The application is served on http://localhost/ | pass | HTTP 200 |
 | Operational endpoints are refused at the edge | pass | /api/metrics 403, /api/health/ready 403 (B-011) |
 | Liveness stays reachable for a load balancer | pass | HTTP 200 |
-| The running pod reports the commit it was built from | pass | git_sha 52137218e1d4, version 0.1.0+52137218e1d4 |
+| The running pod reports the commit it was built from | pass | git_sha 570fcf134d20, version 0.1.0+570fcf134d20 |
 | Metrics are readable inside the cluster, with the token | pass | 2 info series |
 | The rate limiter is using the in-cluster Redis | pass | splitx_rate_limiter_info{backend="redis"} |
 | Metrics without the token are refused even from inside the pod | pass | wget: server returned error: HTTP/1.1 401 Unauthorized |
 | The schema Job built a real database | pass | 18 tables in the public schema |
 | A write through the ingress reaches Postgres | pass | POST /api/register -> 201, row found in the User table, then removed |
-| The settlement preview runs on the cluster | pass | 400 members planned in 13.69 ms by splitx-7f9b784459-sm8qs (54 ms round trip) |
+| The settlement preview runs on the cluster | pass | 400 members planned in 12.23 ms by splitx-5b5bfb97c-j74ph (76 ms round trip) |
 | The namespace refuses a privileged pod | pass | rejected by PodSecurity admission |
 | A pod in another namespace cannot reach the app, the database or Redis | pass | wget: download timed out app=1 postgres=1 redis=1 (non-zero = refused) |
-| The autoscaler is reading real CPU from metrics-server | pass | 3% of the 250m request, target 60% |
+| The autoscaler is reading real CPU from metrics-server | pass | 2% of the 250m request, target 60% |
 | A disruption budget protects the deployment | pass | 2 healthy, 1 disruption allowed at a time |
 | Readiness fails when the database is gone | pass | every replica left the Service; 0 ready endpoints remain |
 | Liveness does NOT restart the pods during a database outage | pass | restart count stayed at 0 (B-005) |
 | The same pods serve again once the database is back | pass | no pod was replaced; restart count 0 |
 | The rollout completed | pass | deployment "splitx" successfully rolled out |
 | Every pod was replaced | pass | 2 old pods gone, 2 new pods serving |
-| No request was lost while every pod was replaced | pass | 2264 requests in 7.4 s: 2264 OK, 0 non-200, 0 failed |
-| Traffic settles on the new pods | pass | within 538 ms of the rollout completing; 3 pod(s) answered during it |
+| No request was lost while every pod was replaced | pass | 12950 requests in 22.1 s: 12950 OK, 0 non-200, 0 failed |
+| Traffic settles on the new pods | pass | within 15 ms of the rollout completing; 3 pod(s) answered during it |
 | Prometheus scrapes every ready application pod, with the metrics token | pass | 2 of 2 ready pods scraped |
 | Every scrape target is up | pass | 29 targets in 15 jobs |
 | The SplitX alert rules are loaded, and every rule evaluates cleanly | pass | 6 of 6 SplitX rules loaded; 223 rules in total, 0 with errors |
 | Alertmanager receives what Prometheus fires | pass | Watchdog, which fires all the time by design, is in Alertmanager |
 | No alert is firing apart from Watchdog | pass | nothing needs attention |
 | Alerts are routed to email, and every email was accepted | pass | 0 notification(s) sent through Gmail and 0 failed since Alertmanager started at 2026-09-20 08:01 UTC |
-| Grafana serves the committed dashboards, and every data source they name exists | pass | SplitX · Logs (7 panels), SplitX · Service (28 panels); data sources loki, prometheus |
-| Every dashboard query runs, and reads metrics that exist | pass | 39 queries on 30 metrics |
-| Every application pod is logging to Loki | pass | 2 of 2 pods have lines in the last 15 minutes, all found within 1 s |
-| One request can be followed in Loki from the ingress to the pod that served it | pass | X-Request-Id b519e68fb15087fe98cd3773fb025f96: ingress-nginx sent it to 10.244.2.24:3000 (0.038 s at the edge), and splitx-578fd984db-qwz4q at 10.244.2.24 logged the same ID |
-| Every log dashboard query runs | pass | 6 LogQL queries |
+| Grafana serves the committed dashboards, and every data source they name exists | pass | SplitX · Delivery (12 panels), SplitX · Logs (7 panels), SplitX · Service (28 panels); data sources loki, prometheus |
+| Every dashboard query runs, and reads metrics that exist | pass | 49 queries on 37 metrics |
+| Every application pod is logging to Loki | pass | 2 of 2 pods have lines in the last 15 minutes, all found within 0 s |
+| One request can be followed in Loki from the ingress to the pod that served it | pass | X-Request-Id 3e650f1bb7739c6ac58b59542033dae1: ingress-nginx sent it to 10.244.1.25:3000 (0.04 s at the edge), and splitx-788cc547d5-znnsr at 10.244.1.25 logged the same ID |
+| Every log dashboard query runs | pass | 8 LogQL queries |
 
 ## The cluster
 
@@ -86,8 +86,8 @@ Render either with `kubectl kustomize k8s/overlays/<name>`.
 
 | Pod | Node | Pod IP | Restarts |
 |---|---|---|---|
-| `splitx-7f9b784459-sm8qs` | splitx-worker | 10.244.1.22 | 0 |
-| `splitx-7f9b784459-tzc54` | splitx-worker2 | 10.244.2.20 | 0 |
+| `splitx-5b5bfb97c-j74ph` | splitx-worker2 | 10.244.2.28 | 0 |
+| `splitx-5b5bfb97c-mqhnt` | splitx-worker | 10.244.1.24 | 0 |
 
 ## kindnet, the network-policy engine
 
@@ -97,9 +97,9 @@ limits new connections timed out in that queue (D-050). Counted since each kindn
 
 | Node | CPU quota | Throttled periods | Memory (peak) of limit | Limit hits | New flows judged | Waiting | Dropped |
 |---|---|---|---|---|---|---|---|
-| `splitx-control-plane` | max | 0 of 0 | 48 MiB (77) of 256 MiB | 0 | 0 | 0 | 0 |
-| `splitx-worker` | max | 0 of 0 | 64 MiB (76) of 256 MiB | 0 | 849 | 0 | 0 |
-| `splitx-worker2` | max | 0 of 0 | 51 MiB (77) of 256 MiB | 0 | 1046 | 0 | 0 |
+| `splitx-control-plane` | max | 0 of 0 | 46 MiB (77) of 256 MiB | 0 | 0 | 0 | 0 |
+| `splitx-worker` | max | 0 of 0 | 60 MiB (76) of 256 MiB | 0 | 969 | 0 | 0 |
+| `splitx-worker2` | max | 0 of 0 | 59 MiB (77) of 256 MiB | 0 | 1352 | 0 | 0 |
 
 ## What the edge exposes
 
@@ -117,7 +117,7 @@ limits new connections timed out in that queue (D-050). Counted since each kindn
 |---|---|
 | Tables created by the schema Job | 18 |
 | `POST /api/register` through ingress-nginx | HTTP 201, row written to Postgres and removed again |
-| `POST /api/settlements/preview` (400 members) | HTTP 200, planned in 13.69 ms |
+| `POST /api/settlements/preview` (400 members) | HTTP 200, planned in 12.23 ms |
 
 The preview is the endpoint phase 4 will use to drive the autoscaler: it is pure CPU with
 no database behind it, so a pod under load is doing arithmetic, not waiting on Neon.
@@ -162,21 +162,21 @@ to stop routing to a pod before its server begins shutting down.
 
 | | |
 |---|---|
-| Requests during the release | 2264 in 7.4 s |
-| HTTP 200 | 2264 |
+| Requests during the release | 12950 in 22.1 s |
+| HTTP 200 | 12950 |
 | Non-200 responses | 0 |
 | Connection failures | 0 |
 | Pods that answered | 3 |
-| Traffic fully on the new pods | 538 ms after the rollout reported complete |
+| Traffic fully on the new pods | 15 ms after the rollout reported complete |
 
 Requests answered per pod (the name comes from the pod itself, through the downward API).
 nginx reuses upstream connections, so a short rollout can be served mostly by one pod; what
 matters is that the pods serving afterwards are the new ones:
 
 ```
-splitx-7f9b784459-sm8qs  1131
-splitx-7f9b784459-tzc54  982
-splitx-578fd984db-rh4hr  151
+splitx-5b5bfb97c-mqhnt  6179
+splitx-5b5bfb97c-j74ph  6179
+splitx-788cc547d5-k7dvj  592
 ```
 
 ## Monitoring
@@ -205,7 +205,7 @@ alert rules (`k8s/base`), and its dashboards come from `monitoring/dashboards`.
 
 | SplitX alert | Severity | State now |
 |---|---|---|
-| `SplitXDown` | critical | pending |
+| `SplitXDown` | critical | inactive |
 | `SplitXSheddingLoad` | warning | inactive |
 | `SplitXSlowResponses` | warning | inactive |
 | `SplitXEventLoopBlocked` | warning | inactive |
@@ -217,6 +217,7 @@ that should fire it and series that must not. 223 rules are loaded in total, inc
 
 | Dashboard | Panels | Queries checked |
 |---|---|---|
+| SplitX · Delivery | 12 | 12 |
 | SplitX · Logs | 7 | 6 |
 | SplitX · Service | 28 | 39 |
 
@@ -225,7 +226,7 @@ them to Loki, parsing the JSON both write. One request made during this run:
 
 | | |
 |---|---|
-| X-Request-Id | `b519e68fb15087fe98cd3773fb025f96` |
-| ingress-nginx access log | status 200, 0.038 s, sent to `10.244.2.24:3000` |
-| Application log | `splitx-578fd984db-qwz4q` at `10.244.2.24` |
+| X-Request-Id | `3e650f1bb7739c6ac58b59542033dae1` |
+| ingress-nginx access log | status 200, 0.04 s, sent to `10.244.1.25:3000` |
+| Application log | `splitx-788cc547d5-znnsr` at `10.244.1.25` |
 
