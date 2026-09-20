@@ -1566,6 +1566,9 @@ image it may deploy is limited by the signature check above.
   `maxUnavailable: 0` means a release that never becomes ready never takes traffic.
 - A delivery naming an older deployment was skipped as superseded, not deployed.
 
+- **It is on the wall too:** `monitoring/dashboards/splitx-delivery.json` (12 panels) shows the last
+  deploy and how long it took, the webhook stream, deliveries by what Jenkins answered, and the relay
+  and deploy logs beside the requests the application was serving at the time.
 - **Pinned, all 81 of them:** the chart resolves dependencies to the *lowest* version each plugin
   allows, and that set did not fit together — JUnit, and with it the Prometheus plugin, failed to
   load. The values file now lists every plugin and dependency at the version that actually

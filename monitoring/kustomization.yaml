@@ -16,6 +16,7 @@ configMapGenerator:
     files:
       - dashboards/splitx-service.json
       - dashboards/splitx-logs.json
+      - dashboards/splitx-delivery.json
     options:
       # A hashed name would leave the previous ConfigMap behind on every change,
       # and Grafana would load both copies.
