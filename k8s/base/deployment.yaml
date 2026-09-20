@@ -41,7 +41,8 @@ spec:
           type: RuntimeDefault
       # Spread replicas over the worker nodes so losing one node cannot take
       # every pod with it. ScheduleAnyway, not DoNotSchedule: during a scale-up
-      # past the node count, running somewhere beats staying Pending.
+      # past the node count, and while a node is away, running somewhere beats
+      # staying Pending.
       topologySpreadConstraints:
         - maxSkew: 1
           topologyKey: kubernetes.io/hostname
@@ -49,6 +50,20 @@ spec:
           labelSelector:
             matchLabels:
               app.kubernetes.io/name: splitx
+      # The constraint above is one score among several, and it lost: once
+      # Jenkins took 768Mi on one worker, the scheduler put both replicas on
+      # the emptier one, twice in a row (D-058). This says the same thing with
+      # the heaviest weight a preference can carry, and still yields when there
+      # is nowhere else to go.
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: splitx
       containers:
         - name: splitx
           image: splitx:local

@@ -1629,6 +1629,27 @@ cannot deploy anything that GitHub Actions did not build from main.
 - **On AWS:** Jenkins is behind the ALB, GitHub calls it directly, and the relay is not deployed.
   The gate above does not change.
 
+### D-058 · Both replicas moved onto one node once Jenkins took the other
+**2026-09-20** · ✅ fixed and measured
+
+`k8s:verify` started failing its first check: both application pods on `splitx-worker2`. Nothing
+about the application had changed — Jenkins had moved into the cluster and asked for 768Mi on
+`splitx-worker`, and the scheduler began putting both replicas on the emptier worker. It is
+allowed to: the spread constraint is `whenUnsatisfiable: ScheduleAnyway`, which makes spreading
+one score among several, and node-resource scoring outweighed it. It happened on two runs in a
+row, so it was not a moment during a rollout.
+
+The constraint stays soft — a hard one would leave a replica `Pending` while a node is away, and
+two nodes went away today — but the deployment now also says it in the strongest form a
+preference has: `podAntiAffinity.preferredDuringSchedulingIgnoredDuringExecution` at weight 100,
+keyed on the hostname. After applying it, the rollout put one pod on each worker again.
+
+- **Why not raise Jenkins' request, or pin the application to a node:** both trade a real
+  resource decision for a scheduling symptom. The deployment should say what it wants; it now does.
+- **What it costs:** nothing while both workers are healthy. With one worker gone the preference
+  yields and both replicas run on the survivor, which is the behaviour that was wanted.
+- **Caught because a check measures placement**, not because a manifest declares an intention.
+
 ### D-057 · The edge was being killed by its own worker count
 **2026-09-18** · ✅ fixed and measured
 
