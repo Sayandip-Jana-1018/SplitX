@@ -5,20 +5,21 @@
  *
  *   npm run test:alerts
  *
- *   1. promtool check rules   the SplitX rules parse, and every expression is valid PromQL
- *   2. promtool test rules    monitoring/tests/splitx-rules.test.yaml: each alert fires on
- *                             what it should and stays silent on what it should not
+ *   1. promtool check rules   the rules parse, and every expression is valid PromQL
+ *   2. promtool test rules    monitoring/tests/*.test.yaml: each alert fires on what it
+ *                             should and stays silent on what it should not
  *   3. amtool check-config    monitoring/alertmanager/alertmanager.yaml, filled with example
  *                             values the way `npm run k8s:up` fills it from .env
  *
- * The rules are read out of k8s/base/prometheusrule.yaml, everything below
- * `spec:` one level less indented, so the rules tested are the rules deployed.
+ * The rules are read out of the PrometheusRules that are deployed, everything
+ * below `spec:` one level less indented, so the rules tested are the rules
+ * deployed: the application's (k8s/base) and the delivery path's (jenkins).
  */
 import { spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { chmodSync, copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -27,13 +28,19 @@ const ALERTMANAGER_IMAGE = 'quay.io/prometheus/alertmanager:v0.34.0@sha256:690c7
 // Docker wants forward slashes in -v paths on Windows.
 const BACKSLASH = String.fromCharCode(92);
 
-function ruleFile() {
-    const lines = readFileSync(join(root, 'k8s/base/prometheusrule.yaml'), 'utf8').split(/\r?\n/);
+// Each PrometheusRule manifest, the rule file promtool reads, and its tests.
+const RULES = [
+    { source: 'k8s/base/prometheusrule.yaml', file: 'splitx.rules.yaml', tests: 'monitoring/tests/splitx-rules.test.yaml' },
+    { source: 'jenkins/prometheusrule.yaml', file: 'delivery.rules.yaml', tests: 'monitoring/tests/delivery-rules.test.yaml' },
+];
+
+function ruleFile(source) {
+    const lines = readFileSync(join(root, source), 'utf8').split(/\r?\n/);
     const spec = lines.indexOf('spec:');
-    if (spec < 0) throw new Error('k8s/base/prometheusrule.yaml has no top-level spec:');
+    if (spec < 0) throw new Error(source + ' has no top-level spec:');
     return lines.slice(spec + 1).map((line) => {
         if (line.trim() === '') return '';
-        if (!line.startsWith('  ')) throw new Error('prometheusrule.yaml: keep spec: the last top-level key, found: ' + line);
+        if (!line.startsWith('  ')) throw new Error(source + ': keep spec: the last top-level key, found: ' + line);
         return line.slice(2);
     }).join('\n');
 }
@@ -59,8 +66,10 @@ const work = mkdtempSync(join(tmpdir(), 'splitx-alerts-'));
 chmodSync(work, 0o755);
 let failed = 0;
 try {
-    writeFileSync(join(work, 'splitx.rules.yaml'), ruleFile());
-    copyFileSync(join(root, 'monitoring/tests/splitx-rules.test.yaml'), join(work, 'splitx-rules.test.yaml'));
+    for (const rules of RULES) {
+        writeFileSync(join(work, rules.file), ruleFile(rules.source));
+        copyFileSync(join(root, rules.tests), join(work, basename(rules.tests)));
+    }
     writeFileSync(join(work, 'alertmanager.yaml'), alertmanagerConfig());
 
     const mount = work.split(BACKSLASH).join('/') + ':/work:ro';
@@ -71,8 +80,8 @@ try {
     ).status;
 
     const steps = [
-        ['promtool check rules', () => tool(PROMETHEUS_IMAGE, 'promtool', ['check', 'rules', 'splitx.rules.yaml'])],
-        ['promtool test rules', () => tool(PROMETHEUS_IMAGE, 'promtool', ['test', 'rules', 'splitx-rules.test.yaml'])],
+        ['promtool check rules', () => tool(PROMETHEUS_IMAGE, 'promtool', ['check', 'rules', ...RULES.map((rules) => rules.file)])],
+        ['promtool test rules', () => tool(PROMETHEUS_IMAGE, 'promtool', ['test', 'rules', ...RULES.map((rules) => basename(rules.tests))])],
         ['amtool check-config', () => tool(ALERTMANAGER_IMAGE, 'amtool', ['check-config', 'alertmanager.yaml'])],
     ];
     for (const [name, step] of steps) {

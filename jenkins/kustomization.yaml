@@ -1,0 +1,30 @@
+# ═══════════════════════════════════════════════════════════════
+#   What Jenkins needs beyond its chart (helm/platform/jenkins.values.yaml),
+#   applied by `npm run k8s:up` after the chart:
+#
+#     rbac.yaml            the deploy builds' permissions, in splitx only
+#     networkpolicy.yaml   who may talk to what in the jenkins namespace
+#     relay.yaml           the smee.io webhook relay (relay/relay.mjs)
+#     prometheusrule.yaml  alerts when deliveries stop or are refused
+#
+#   The deploy steps themselves are Jenkinsfile, beside this file.
+# ═══════════════════════════════════════════════════════════════
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - rbac.yaml
+  - networkpolicy.yaml
+  - relay.yaml
+  - prometheusrule.yaml
+
+configMapGenerator:
+  # Hashed name: a change to the script is a new ConfigMap and a new relay pod.
+  - name: webhook-relay
+    namespace: jenkins
+    files:
+      - relay/relay.mjs
+    options:
+      labels:
+        app.kubernetes.io/name: webhook-relay
+        app.kubernetes.io/part-of: splitx

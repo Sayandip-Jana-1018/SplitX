@@ -1,0 +1,120 @@
+# ═══════════════════════════════════════════════════════════════
+#   The webhook relay: smee.io → Jenkins (D-056). jenkins/relay/relay.mjs
+#   explains what it does and why it adds no trust of its own.
+# ═══════════════════════════════════════════════════════════════
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webhook-relay
+  namespace: jenkins
+  labels:
+    app.kubernetes.io/name: webhook-relay
+    app.kubernetes.io/part-of: splitx
+spec:
+  # Exactly one, never two even during a rollout: two would replay every
+  # delivery twice.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: webhook-relay
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: webhook-relay
+        app.kubernetes.io/part-of: splitx
+    spec:
+      # It talks to smee.io and Jenkins, never to the Kubernetes API.
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: relay
+          # The Node image the application is built on (Dockerfile), by digest.
+          image: node:24.21.0-alpine3.24@sha256:be80f76cf40ec8e42b9bec49f60a55e0660f30af58d3e5a25530785b30ea67e2
+          command: ["node", "/relay/relay.mjs"]
+          env:
+            - name: SMEE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: webhook-relay
+                  key: smee-url
+            - name: TRIGGER_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: webhook-relay
+                  key: trigger-token
+            - name: TARGET_URL
+              value: http://jenkins.jenkins.svc.cluster.local:8080/generic-webhook-trigger/invoke
+          ports:
+            - name: metrics
+              containerPort: 9090
+          # Alive, not "connected": a lost stream is reconnected by the relay
+          # itself, and shows as webhook_relay_connected 0 (and an alert).
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: metrics
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: metrics
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 10m
+              memory: 48Mi
+            limits:
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: script
+              mountPath: /relay
+              readOnly: true
+      volumes:
+        - name: script
+          configMap:
+            name: webhook-relay
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: webhook-relay
+  namespace: jenkins
+  labels:
+    app.kubernetes.io/name: webhook-relay
+    app.kubernetes.io/part-of: splitx
+spec:
+  selector:
+    app.kubernetes.io/name: webhook-relay
+  ports:
+    - name: metrics
+      port: 9090
+      targetPort: metrics
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: webhook-relay
+  namespace: jenkins
+  labels:
+    app.kubernetes.io/name: webhook-relay
+    app.kubernetes.io/part-of: splitx
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: webhook-relay
+  endpoints:
+    - port: metrics
+      interval: 30s

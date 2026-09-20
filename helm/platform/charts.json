@@ -57,6 +57,17 @@
       "namespace": "monitoring",
       "values": "helm/platform/alloy.values.yaml",
       "why": "Reads the application and ingress logs through the Kubernetes API, parses their JSON, and sends them to Loki."
+    },
+    {
+      "release": "jenkins",
+      "repo": "https://charts.jenkins.io",
+      "chart": "jenkins/jenkins",
+      "version": "5.9.63",
+      "appVersion": "2.568.3",
+      "namespace": "jenkins",
+      "values": "helm/platform/jenkins.values.yaml",
+      "timeout": "10m",
+      "why": "Deploys releases GitHub Actions signed, when GitHub announces them, and rolls back what does not come up healthy. Its first start downloads its pinned plugins, hence the longer wait."
     }
   ]
 }

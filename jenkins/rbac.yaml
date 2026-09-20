@@ -1,0 +1,95 @@
+# ═══════════════════════════════════════════════════════════════
+#   What a deploy build may do, and nothing more (D-055).
+#
+#   Deploy builds run as the ServiceAccount jenkins/jenkins-deployer, which
+#   the chart creates without permissions. Here it gets exactly what
+#   `kubectl apply -k k8s/overlays/local`, `rollout status` and
+#   `rollout undo` need, in the splitx namespace only: the kinds that
+#   overlay contains, and read access to the pods and ReplicaSets a rollout
+#   is made of. It cannot read a Secret, exec into a pod, or touch another
+#   namespace; scripts/delivery-verify.mjs asks the API server to prove it.
+# ═══════════════════════════════════════════════════════════════
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: jenkins-deployer
+  namespace: splitx
+  labels:
+    app.kubernetes.io/part-of: splitx
+rules:
+  # The release's manifests.
+  - apiGroups: [""]
+    resources: [configmaps, services, serviceaccounts]
+    verbs: [get, list, watch, create, patch, update]
+  - apiGroups: [apps]
+    resources: [deployments, statefulsets]
+    verbs: [get, list, watch, create, patch, update]
+  - apiGroups: [autoscaling]
+    resources: [horizontalpodautoscalers]
+    verbs: [get, list, watch, create, patch, update]
+  - apiGroups: [policy]
+    resources: [poddisruptionbudgets]
+    verbs: [get, list, watch, create, patch, update]
+  - apiGroups: [networking.k8s.io]
+    resources: [ingresses, networkpolicies]
+    verbs: [get, list, watch, create, patch, update]
+  - apiGroups: [monitoring.coreos.com]
+    resources: [servicemonitors, prometheusrules]
+    verbs: [get, list, watch, create, patch, update]
+  # The schema Job's pod template cannot change, so each release replaces it.
+  - apiGroups: [batch]
+    resources: [jobs]
+    verbs: [get, list, watch, create, patch, update, delete]
+  # Watching a rollout, and knowing which pods run which image.
+  - apiGroups: [apps]
+    resources: [replicasets]
+    verbs: [get, list, watch]
+  - apiGroups: [""]
+    resources: [pods, events]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: jenkins-deployer
+  namespace: splitx
+  labels:
+    app.kubernetes.io/part-of: splitx
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: jenkins-deployer
+subjects:
+  - kind: ServiceAccount
+    name: jenkins-deployer
+    namespace: jenkins
+---
+# The overlay also declares the splitx Namespace itself, with its Pod Security
+# labels. A Namespace is not inside any namespace, so this one permission needs
+# a ClusterRole, limited by name to that one namespace.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: jenkins-deployer-namespace
+  labels:
+    app.kubernetes.io/part-of: splitx
+rules:
+  - apiGroups: [""]
+    resources: [namespaces]
+    resourceNames: [splitx]
+    verbs: [get, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: jenkins-deployer-namespace
+  labels:
+    app.kubernetes.io/part-of: splitx
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: jenkins-deployer-namespace
+subjects:
+  - kind: ServiceAccount
+    name: jenkins-deployer
+    namespace: jenkins

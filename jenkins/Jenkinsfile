@@ -1,150 +1,177 @@
 // ═══════════════════════════════════════════════════════════════
-//   SplitX — Jenkins CI/CD Pipeline (Demo)
-//   Stages: Checkout → Install → Lint → SonarQube → Docker Build → Security Scan → Nexus → Deploy → GitOps Sync
+//   splitx-deploy: deploys one signed release to this cluster, and rolls
+//   it back if it does not come up healthy (D-055).
+//
+//   GitHub starts it. The release job in .github/workflows/ci.yml creates
+//   a GitHub deployment (D-054), GitHub sends the "deployment" webhook, the
+//   relay passes it on (D-056), and Jenkins accepts it only with GitHub's
+//   signature. The job, its trigger and its parameters are defined in
+//   helm/platform/jenkins.values.yaml, and so are the DEPLOY_* settings.
+//
+//   The procedure (this file and jenkins/deploy.mjs) comes from main. The
+//   manifests come from the commit being deployed, so the pods get the
+//   configuration their code was written for.
+//
+//     Request    well formed, for this cluster, and still the newest deployment
+//     Verify     cosign: signed by this repository's CI on main, for that commit
+//     Deploy     the commit's manifests, with the image replaced by the verified digest
+//     Roll out   the database, the schema Job and the application
+//     Check      every ready pod runs the digest; the edge serves only them
+//     failed?    roll the application back to the revision it had before
+//     always     report the outcome on the GitHub deployment
 // ═══════════════════════════════════════════════════════════════
-
 pipeline {
-    agent any
-
-    environment {
-        APP_NAME     = 'splitx'
-        DOCKER_IMAGE = 'splitx:local'
-        SONAR_HOST   = 'http://splitx-sonarqube:9000'
-        SONAR_TOKEN  = credentials('sonar-token')     // Jenkins → Credentials → Secret text
-        NEXUS_HOST   = 'splitx-nexus:8082'
-        NEXUS        = credentials('nexus-admin')     // Username/password → exposes NEXUS_USR / NEXUS_PSW
+    agent {
+        kubernetes {
+            // The chart's agent template: the pinned inbound agent over
+            // WebSocket, the restricted security context, the deployer account.
+            inheritFrom 'default'
+            defaultContainer 'tools'
+            yaml '''
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    app.kubernetes.io/name: splitx-deployer
+spec:
+  serviceAccountName: jenkins-deployer
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: tools
+      # Node, pinned as in the Dockerfile. kubectl and cosign are not
+      # installed into it: their projects' own images are mounted read-only
+      # (image volumes), so what runs is exactly what they published.
+      image: node:24.21.0-alpine3.24@sha256:be80f76cf40ec8e42b9bec49f60a55e0660f30af58d3e5a25530785b30ea67e2
+      command: ["sleep"]
+      args: ["infinity"]
+      env:
+        - name: PATH
+          value: /tools/kubectl/bin:/tools/cosign/ko-app:/usr/local/bin:/usr/bin:/bin
+        - name: HOME
+          value: /home/jenkins/agent
+      resources:
+        requests:
+          cpu: 100m
+          memory: 256Mi
+        limits:
+          memory: 512Mi
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop: ["ALL"]
+      volumeMounts:
+        - name: kubectl
+          mountPath: /tools/kubectl
+          readOnly: true
+        - name: cosign
+          mountPath: /tools/cosign
+          readOnly: true
+        - name: tmp
+          mountPath: /tmp
+  volumes:
+    - name: kubectl
+      image:
+        reference: registry.k8s.io/kubectl:v1.35.0@sha256:0bb95b2a450875fc8ceaea2f9987a99fe27c228846e2e00b93b65ebb0d59034e
+        pullPolicy: IfNotPresent
+    - name: cosign
+      image:
+        reference: ghcr.io/sigstore/cosign/cosign:v3.1.3@sha256:9e5c2f2edc34351160407ca3416c61855bdf9403c3c5936e0f0be7fc261611b8
+        pullPolicy: IfNotPresent
+    - name: tmp
+      emptyDir: {}
+'''
+        }
     }
 
     options {
-        timeout(time: 20, unit: 'MINUTES')
-        disableConcurrentBuilds()
-        buildDiscarder(logRotator(numToKeepStr: '10'))
+        timeout(time: 25, unit: 'MINUTES')
+        // The procedure and the release are checked out below, each where it belongs.
+        skipDefaultCheckout()
     }
 
     stages {
-
-        // ── Stage 1: Checkout ──
-        stage('Checkout') {
+        stage('Request') {
             steps {
-                echo "✅ Checking out SplitX from GitHub..."
-                echo "Repository: https://github.com/Sayandip-Jana-1018/SplitX"
-                echo "Branch: main"
-                sh 'git --version'
-                sh 'git log --oneline -5'
+                // This file's own revision of main: the procedure.
+                container('jnlp') {
+                    dir('pipeline') { checkout scm }
+                }
+                withCredentials([string(credentialsId: 'github-deployments-token', variable: 'GITHUB_TOKEN')]) {
+                    script {
+                        def status = sh(script: 'node pipeline/jenkins/deploy.mjs request', returnStatus: true)
+                        if (status == 3) {
+                            env.SUPERSEDED = 'true'
+                            currentBuild.description = 'superseded'
+                        } else if (status != 0) {
+                            error('the request was refused')
+                        } else {
+                            currentBuild.description = "${params.deployment_sha.substring(0, 12)} to ${params.deployment_environment}"
+                        }
+                    }
+                }
             }
         }
-
-        // ── Stage 2: Install Dependencies ──
-        stage('Install Dependencies') {
+        stage('Verify') {
+            when { expression { env.SUPERSEDED != 'true' } }
             steps {
-                echo "📦 Installing npm dependencies..."
-                sh 'node --version'
-                sh 'npm --version'
-                sh 'npm ci --no-audit --no-fund --prefer-offline || npm install --no-audit --no-fund'
-                echo "✅ Dependencies installed"
+                sh 'node pipeline/jenkins/deploy.mjs verify'
             }
         }
-
-        // ── Stage 3: Lint ──
-        stage('Lint & Type Check') {
-            steps {
-                echo "🔍 Running ESLint checks..."
-                sh 'npm run lint || true'
-                echo "✅ Lint complete"
-            }
-        }
-
-        // ── Stage 4: SonarQube Analysis ──
-        stage('SonarQube Analysis') {
-            steps {
-                echo "📊 Running SonarQube static analysis..."
-                sh '''
-                    npx --yes sonar-scanner \
-                        -Dsonar.projectKey=splitx \
-                        -Dsonar.projectName="SplitX" \
-                        -Dsonar.sources=src \
-                        -Dsonar.host.url=http://splitx-sonarqube:9000 \
-                        -Dsonar.token=$SONAR_TOKEN \
-                        -Dsonar.exclusions="**/node_modules/**,**/.next/**" \
-                        || echo "SonarQube analysis submitted"
-                '''
-                echo "✅ Code quality analysis complete"
-            }
-        }
-
-        // ── Stage 5: Docker Build ──
-        stage('Docker Build') {
-            steps {
-                echo "🐳 Verifying Docker image: ${DOCKER_IMAGE}..."
-                sh 'docker images splitx:local'
-                echo "✅ Docker image verified: ${DOCKER_IMAGE}"
-            }
-        }
-
-        // ── Stage 6: Security Scan ──
-        stage('Security Scan') {
-            steps {
-                echo "🔒 Running Trivy security scan..."
-                sh 'trivy image --exit-code 0 --severity HIGH,CRITICAL --no-progress splitx:local || echo "Scan complete"'
-                echo "✅ Security scan complete"
-            }
-        }
-
-        // ── Stage 7: Artifact Registry ──
-        stage('Artifact Registry') {
-            steps {
-                echo "📦 Pushing image to Nexus artifact registry..."
-                sh '''
-                    echo "$NEXUS_PSW" | docker login $NEXUS_HOST -u "$NEXUS_USR" --password-stdin
-                    docker tag splitx:local $NEXUS_HOST/splitx:latest
-                    docker tag splitx:local $NEXUS_HOST/splitx:${BUILD_NUMBER}
-                    docker push $NEXUS_HOST/splitx:latest
-                    docker push $NEXUS_HOST/splitx:${BUILD_NUMBER}
-                    echo "✅ Pushed splitx:latest and splitx:${BUILD_NUMBER} to Nexus"
-                '''
-            }
-        }
-
-        // ── Stage 8: Deploy ──
         stage('Deploy') {
+            when { expression { env.SUPERSEDED != 'true' } }
             steps {
-                echo "🚀 Verifying deployment..."
-                sh 'docker inspect splitx-app --format "Container: {{.Name}} | Status: {{.State.Status}}" || echo "App container: splitx-app"'
-                sh 'curl -sf --max-time 5 http://splitx:3000/ > /dev/null && echo "✅ App UP at localhost:3000" || echo "✅ App running at localhost:3000"'
-                echo "✅ SplitX is live!"
+                // The commit being deployed: its manifests.
+                container('jnlp') {
+                    dir('release') {
+                        checkout scmGit(
+                            branches: [[name: params.deployment_sha]],
+                            userRemoteConfigs: [[url: 'https://github.com/Sayandip-Jana-1018/SplitX.git']]
+                        )
+                    }
+                }
+                sh 'node pipeline/jenkins/deploy.mjs deploy'
             }
         }
-
-        // ── Stage 9: GitOps Sync (ArgoCD) ──
-        stage('GitOps Sync') {
+        stage('Roll out') {
+            when { expression { env.SUPERSEDED != 'true' } }
             steps {
-                echo "🔄 Triggering ArgoCD GitOps sync..."
-                sh '''
-                    # Bump the image tag in values-dev.yaml to the current build number
-                    # This commit to GitHub will trigger ArgoCD auto-sync
-                    sed -i "s/tag: .*/tag: \"${BUILD_NUMBER}\"/" helm/splitx/values-dev.yaml || true
-                    git config user.email "jenkins@splitx.local" || true
-                    git config user.name "Jenkins CI" || true
-                    git diff --quiet || (
-                        git add helm/splitx/values-dev.yaml &&
-                        git commit -m "chore(deploy): bump image tag to build-${BUILD_NUMBER} [skip ci]" &&
-                        git push origin HEAD:main || echo "GitOps commit skipped (no remote configured)"
-                    )
-                    echo "✅ ArgoCD will detect this change and auto-deploy within 3 minutes"
-                '''
+                sh 'node pipeline/jenkins/deploy.mjs wait'
+            }
+        }
+        stage('Check') {
+            when { expression { env.SUPERSEDED != 'true' } }
+            steps {
+                sh 'node pipeline/jenkins/deploy.mjs check'
             }
         }
     }
 
     post {
-        success {
-            echo '✅ Pipeline completed successfully! SplitX is live.'
+        // Failed or aborted: put back what ran before. Runs before cleanup.
+        unsuccessful {
+            script {
+                if (fileExists('pipeline/jenkins/deploy.mjs')) {
+                    sh 'node pipeline/jenkins/deploy.mjs rollback'
+                }
+            }
         }
-        failure {
-            echo '❌ Pipeline failed. Check stage logs above.'
-        }
-        always {
-            echo '📋 Build summary complete.'
+        // Last of all, with the final result: tell GitHub.
+        cleanup {
+            script {
+                if (fileExists('pipeline/jenkins/deploy.mjs')) {
+                    withCredentials([string(credentialsId: 'github-deployments-token', variable: 'GITHUB_TOKEN')]) {
+                        withEnv(["BUILD_RESULT=${currentBuild.currentResult}"]) {
+                            sh 'node pipeline/jenkins/deploy.mjs report'
+                        }
+                    }
+                }
+            }
         }
     }
 }

@@ -1,0 +1,43 @@
+# ═══════════════════════════════════════════════════════════════
+#   Alerts on the delivery path (D-056). Unit-tested with promtool
+#   (monitoring/tests/delivery-rules.test.yaml, `npm run test:alerts`).
+#   Keep `spec:` the last top-level key: the test reads what follows it.
+# ═══════════════════════════════════════════════════════════════
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: delivery
+  namespace: jenkins
+  labels:
+    app.kubernetes.io/part-of: splitx
+spec:
+  groups:
+    - name: delivery.relay
+      rules:
+        - alert: WebhookRelayDisconnected
+          # smee.io keeps nothing for a listener that is away: a deployment
+          # announced while the relay is disconnected never reaches Jenkins.
+          expr: max(webhook_relay_connected{namespace="jenkins"}) == 0 or absent(webhook_relay_connected{namespace="jenkins"})
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: GitHub deployments are not reaching Jenkins
+            description: >-
+              The webhook relay has not held its smee.io stream open for 5 minutes.
+              Deliveries made meanwhile are lost; once it is back, redeliver them from
+              the repository's webhook settings (Recent Deliveries).
+        - alert: WebhookDeliveryRefused
+          # Refused with 403: the signature did not verify, so the delivery was
+          # forged or GitHub's secret differs from GITHUB_WEBHOOK_SECRET.
+          # Unreachable: Jenkins did not answer. Either way a release may not
+          # have been deployed. The relay's log line has the status and event.
+          expr: sum by (result) (increase(webhook_relay_deliveries_total{namespace="jenkins", result!="accepted"}[15m])) > 0
+          labels:
+            severity: warning
+          annotations:
+            summary: A webhook delivery did not reach a Jenkins job
+            description: >-
+              A delivery in the last 15 minutes ended "{{ $labels.result }}". Refused: Jenkins
+              answered with an error, 403 when the signature did not verify. Unreachable:
+              Jenkins did not answer. The relay's log has the event and status.

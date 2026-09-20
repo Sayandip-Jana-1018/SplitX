@@ -139,14 +139,16 @@ jobs:
         # cluster as a missing table, hours later, as a 500 from one endpoint.
         run: node scripts/db-schema.mjs --check
 
-      - name: Render and validate every overlay
+      - name: Render and validate every overlay, and the platform's own manifests
+        # The platform's: Jenkins' permissions, network policy, relay and alerts
+        # (jenkins/), and the Grafana dashboards (monitoring/).
         run: |
-          for overlay in local aws loadtest saturation; do
-            echo "── $overlay ──"
-            kubectl kustomize "k8s/overlays/$overlay" > "/tmp/$overlay.yaml"
+          for kustomization in k8s/overlays/local k8s/overlays/aws k8s/overlays/loadtest k8s/overlays/saturation jenkins monitoring; do
+            echo "── $kustomization ──"
+            kubectl kustomize "$kustomization" > /tmp/rendered.yaml
             docker run --rm -i "$KUBECONFORM" \
               -strict -summary -kubernetes-version "$K8S_VERSION" \
-              -schema-location default -schema-location "$CRD_SCHEMAS" < "/tmp/$overlay.yaml"
+              -schema-location default -schema-location "$CRD_SCHEMAS" < /tmp/rendered.yaml
           done
 
       - name: Alert rules fire when they should, and the Alertmanager config is valid

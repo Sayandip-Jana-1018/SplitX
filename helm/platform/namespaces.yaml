@@ -22,3 +22,14 @@ metadata:
     # host's network and PID namespaces. Only a privileged namespace allows
     # that, so it gets one of its own instead of loosening `monitoring`.
     pod-security.kubernetes.io/enforce: privileged
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: jenkins
+  labels:
+    # The Jenkins controller, its build agents and the webhook relay. Jenkins
+    # builds no images (D-054), so nothing here needs root or host access, and
+    # an agent pod that asked for it would be refused.
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/warn: restricted
