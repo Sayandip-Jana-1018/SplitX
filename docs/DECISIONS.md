@@ -1695,6 +1695,21 @@ Load tests recorded before this (D-046, D-051, D-053) ran on nodes without a bud
 this laptop now meets the budget before anything else, so rerun them before quoting their numbers for
 the Kind cluster. The demo itself runs on EKS (phase 7).
 
+**Later the same day: the cluster ran unnoticed, and did not fit.** After the WSL cap went to 6 GB,
+`k8s:up` woke the cluster, and it kept running with Docker Desktop in the tray while the user
+believed Docker was off. An hour later its VM had about 4 GB in memory and all 8 GB of swap full. The control
+plane was crash-looping (controller-manager 26 restarts, scheduler 25), the application was unready
+(503 at the edge), and the API server stopped answering (TLS handshake timeouts). On Windows the
+disk queue stood at 100–245 with reads taking 61 ms, and the CPU sat at 98 °C at 37% busy. Once the
+nodes were stopped and Docker Desktop quit: 3–5% busy, 61–65 °C, 8.2 GB free, disk queue 0,
+about 1 ms per read.
+- **Decided:** `k8s:up` also gives the nodes the restart policy `no`. A cluster runs only after
+  `k8s:up` or `k8s:resume` start it, never because Docker did. Docker Desktop itself should not start
+  at sign-in, which is the user's setting.
+- **Not understood yet (B-027):** the VM needed about 12 GB (4 in memory, 8 in swap) when, the day
+  before, the same cluster used about 4.6 GB. Until that is measured, the full cluster does not fit
+  in a 6 GB VM.
+
 ### D-061 · The scan at build time answers a question that ages
 **2026-09-20** · ✅ done, proved against the running release
 
@@ -1861,7 +1876,8 @@ of requests a second; the heaviest test in this project sends 100.
 | B-023 | metrics-server runs with `--kubelet-insecure-tls` on Kind, because Kind’s kubelets serve metrics with a certificate the cluster CA did not issue. | The flag disables verification of what the autoscaler reads. It is in a values file, not hidden in a script, precisely so it cannot be copied to AWS by accident. | Phase 7: EKS signs kubelet certificates properly — install the add-on without the flag and confirm the HPA still reads CPU. |
 | B-024 | In the final saturation run, 155 of 7,442 requests spent over 3 s inside a pod, all 30 to 50 s into the overload, on both pods, with none after. | A transient stall right when a burst arrives is exactly when a classroom notices. | 🚧 Narrowed 2026-09-18 — D-053. Not garbage collection: the stall belongs to freshly started pods at their 1-CPU limit. Without the limit, fresh pods had 0 and 89 requests over 3 s in a pod (175 to 228 with it), the longest 2.9 and 6.3 s, and served 45% more. Left: the remaining cold start; phase 7 measures the ALB slow start for new targets. |
 | B-025 | Sign-up, login and password reset are still limited to 10 a minute per address (D-022). | A room asked to register at once from one campus network would be refused after the first ten. The demo page needs no account, so it is not affected. | Before any demo asks people to sign up: count failed logins per account for brute-force protection, and give sign-up the device-plus-network treatment of D-045. |
-| B-026 | Jenkins' deploy builds and `cd:verify` read GitHub's deployments without a token, and this network's public address shares GitHub's anonymous allowance (60 an hour) with other devices. | A deploy would fail at its first step whenever someone else on the network had spent the allowance: on 2026-09-21 its hour began eleven minutes before this laptop booted, and it was spent when `cd:verify` ran, which failed 2 of its 15 checks on it. | Open — the user creates a fine-grained token (this repository only, Deployments read and write) and puts it in `.env` as `JENKINS_GITHUB_TOKEN`; `k8s:up` hands it to Jenkins. Both scripts now say when the allowance is spent and until when, instead of a bare 403, and the build log no longer repeats GitHub's message, which names the address. |
+| B-026 | Jenkins' deploy builds and `cd:verify` read GitHub's deployments without a token, and this network's public address shares GitHub's anonymous allowance (60 an hour) with other devices. | A deploy would fail at its first step whenever someone else on the network had spent the allowance: on 2026-09-21 its hour began eleven minutes before this laptop booted, and it was spent when `cd:verify` ran, which failed 2 of its 15 checks on it. | Open — the user creates a fine-grained token (this repository only, Deployments read and write) and puts it in `.env` as `JENKINS_GITHUB_TOKEN`; `k8s:up` hands it to Jenkins. Both scripts now say when the allowance is spent and until when, instead of a bare 403, and the build log no longer repeats GitHub's message, which names the address. **2026-09-21:** the token is in `.env` and works (5,000 an hour). |
+| B-027 | With the cluster running, the 6 GB WSL VM held about 4 GB in memory and all 8 GB of its swap (2026-09-21), about 12 GB against the 4.6 GB the same cluster used the day before. | The control plane crash-looped and the app answered 503. On Windows, the swap file held the SSD at a queue of 100–245 and 61 ms reads, which froze the laptop. Release `7e3509e` (deployment 6572256500, 15:45 UTC) reached no relay and was never deployed: no delivery was logged after 15:30 UTC. | Open. Next time the cluster runs, watch the VM's anonymous, shared and swapped memory from `k8s:up` on (node-exporter already exports all three), find what grew, and fit the local cluster into 6 GB. Then redeliver 6572256500 from GitHub's webhook page and read Jenkins' statuses on GitHub. |
 
 ## Environment notes (this machine)
 
@@ -1873,13 +1889,21 @@ of requests a second; the heaviest test in this project sends 100.
 - 15.7 GB of physical RAM. Docker Desktop runs on WSL 2. The phase 0 plan, `memory=10GB` and
   `swap=8GB` in `%UserProfile%\.wslconfig`, starved Windows, which uses about 9 GB with an editor,
   a browser and this assistant: on 2026-09-21 it had 0.3 GB available and paged 1,600 times a
-  second (D-062). **Set `memory=6GB`** (swap can stay), run `wsl --shutdown`, and start Docker
-  Desktop again. The cluster uses about 4.5 GB. The CI stack (SonarQube, Nexus) must not run next
-  to it.
-- **Heat (2026-09-21).** After one of the two fans had been opened, the ACPI thermal zone read
-  81–92 °C at 10–14% CPU with the cluster up, 67 °C with it asleep, and 87–99 °C through the 90 s
-  of a cluster start at 20–40% CPU. The i7-13700HX throttles at 100 °C. Until PredatorSense shows
-  both fans spinning, keep the cluster asleep when it is not in use, and run no load tests.
+  second (D-062). `memory=6GB` is set now: it keeps Windows responsive, but the full cluster did
+  not fit in it (B-027). The CI stack (SonarQube, Nexus) must not run next to it.
+- **Docker Desktop keeps running after its window is closed.** Only **Quit Docker Desktop** from the
+  tray icon, `docker desktop stop` or a restart stops it, and with it the VM. Closing the window
+  left the whole cluster running in the background on 2026-09-21.
+- **Heat (2026-09-21).** One of the laptop's two fans has been removed; this is not a sensor fault.
+  The ACPI thermal zone read 81–92 °C at 10–14% CPU with the cluster up, 67 °C with it asleep,
+  87–99 °C through the 90 s of a cluster start at 20–40% CPU, and 61–65 °C at 3–5% with Docker
+  quit. The i7-13700HX throttles at 100 °C. Windows logged 104 "processor speed limited by system
+  firmware" events (Kernel-Processor-Power 37) in two days, a blue screen on 2026-09-20 (0x3B,
+  SYSTEM_SERVICE_EXCEPTION, in the graphics kernel `dxgkrnl.sys`, NVIDIA driver 551.76), and a
+  forced power-off that evening. Until the fan is replaced: no load tests, no rollback rehearsals,
+  and the cluster runs only while it is being used.
+- An external monitor on DisplayPort is driven by the NVIDIA GPU, so that GPU never sleeps while it
+  is connected.
 - **This network shares its public address.** On 2026-09-21 GitHub's anonymous API allowance (60 an
   hour per address) was counted in an hour that began at 14:22 UTC, eleven minutes before this
   laptop booted, so something else behind the same address started it; it was spent within that hour.

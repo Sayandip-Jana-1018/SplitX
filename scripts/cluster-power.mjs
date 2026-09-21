@@ -11,9 +11,10 @@
  * policy on-failure, and Docker Desktop's shutdown counts as a failure, so the
  * whole cluster cold-started every time Docker did — about 4.5 GB in a VM that
  * Windows then had to page, and every controller starting at once (D-062).
- * A node stopped with `docker stop` stays stopped, across Docker and Windows
- * restarts, until it is started here. Volumes, images, the database and
- * Jenkins' history are kept; nothing is re-created.
+ * k8s:up now gives the nodes the restart policy `no`, so a node stays stopped,
+ * across Docker and Windows restarts and even after a crash, until it is
+ * started here or by k8s:up. Volumes, images, the database and Jenkins'
+ * history are kept; nothing is re-created.
  *
  * While it sleeps, GitHub's deliveries to the smee.io channel are lost (smee.io
  * keeps nothing for a listener that is away), so a release merged meanwhile is

@@ -117,11 +117,18 @@ console.log(kubectl(['get', 'nodes', '-o', 'wide'], { capture: true }).stdout.tr
 // and the desktop stalled with it. The budget goes on the node containers
 // instead: inside, pods still share by their requests; outside, the desktop
 // keeps the rest (D-062). Docker keeps the setting when a node restarts.
+// Kind creates the nodes with the restart policy on-failure, and Docker Desktop's
+// shutdown counts as a failure, so the whole cluster came back every time Docker
+// started, whether anyone wanted it or not. On 2026-09-21 it ran unnoticed in the
+// background until its VM had filled its swap. The nodes start only when asked:
+// k8s:up or k8s:resume.
 const NODE_CPUS = { [CLUSTER + '-control-plane']: 2, [CLUSTER + '-worker']: 4, [CLUSTER + '-worker2']: 4 };
 for (const [node, cpus] of Object.entries(NODE_CPUS)) {
-    const now = Number(run('docker', ['inspect', node, '--format', '{{.HostConfig.NanoCpus}}'], { capture: true }).stdout.trim()) / 1e9;
-    if (now !== cpus) run('docker', ['update', '--cpus', String(cpus), node], { capture: true });
-    console.log('    ' + node + ': ' + cpus + ' CPUs' + (now === cpus ? '' : ' (was ' + (now || 'unlimited') + ')'));
+    const [nanoCpus, restart] = run('docker', ['inspect', node, '--format', '{{.HostConfig.NanoCpus}} {{.HostConfig.RestartPolicy.Name}}'], { capture: true }).stdout.trim().split(' ');
+    const now = Number(nanoCpus) / 1e9;
+    if (now !== cpus || restart !== 'no') run('docker', ['update', '--cpus', String(cpus), '--restart', 'no', node], { capture: true });
+    console.log('    ' + node + ': ' + cpus + ' CPUs' + (now === cpus ? '' : ' (was ' + (now || 'unlimited') + ')')
+        + ', starts only when asked' + (restart === 'no' ? '' : ' (was restart ' + restart + ')'));
 }
 
 // ── 3. pod networking ─────────────────────────────────────────────────────
