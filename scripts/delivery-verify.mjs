@@ -127,7 +127,18 @@ async function github(path) {
     const headers = { Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'splitx-delivery-verify' };
     if (process.env.JENKINS_GITHUB_TOKEN) headers.Authorization = 'Bearer ' + process.env.JENKINS_GITHUB_TOKEN;
     const res = await fetch('https://api.github.com' + path, { headers, signal: AbortSignal.timeout(20_000) });
-    if (!res.ok) throw new Error('GitHub answered ' + res.status + ' to ' + path);
+    if (!res.ok) {
+        // Without a token GitHub allows 60 calls an hour per address, and a
+        // couple of verification runs and deploy builds spend that between
+        // them. Say which it is, rather than reporting a spent quota as if
+        // the release record itself were wrong.
+        if (res.headers.get('x-ratelimit-remaining') === '0') {
+            const reset = new Date(Number(res.headers.get('x-ratelimit-reset') ?? 0) * 1000);
+            throw new Error('GitHub\'s API allowance for this address is spent until ' + reset.toISOString().slice(11, 16) + ' UTC'
+                + (headers.Authorization ? '' : ' — 60 an hour, because .env holds no JENKINS_GITHUB_TOKEN'));
+        }
+        throw new Error('GitHub answered ' + res.status + ' to ' + path);
+    }
     return res.json();
 }
 
@@ -255,22 +266,34 @@ sections.push({
 
 // ── 3. The relay ──────────────────────────────────────────────────────────
 heading('[3] The relay');
-const relayConnected = Number(promQuery('max(webhook_relay_connected{namespace="jenkins"})')?.data?.result?.[0]?.value?.[1] ?? 0);
-const relayPod = json(['get', 'pods', '-n', 'jenkins', '-l', 'app.kubernetes.io/name=webhook-relay']).items?.[0];
-const relayReady = relayPod?.status?.conditions?.some((c) => c.type === 'Ready' && c.status === 'True');
-record(
-    'The relay is holding the smee.io channel open',
-    relayConnected === 1 && Boolean(relayReady),
-    'webhook_relay_connected = ' + relayConnected + ', pod ' + (relayReady ? 'ready' : 'not ready')
-);
-
-// Its own counters, read from the pod: Prometheus scrapes them every 30 s,
-// which is slower than this check wants to wait.
-const relayCounter = (result) => {
+// Read from the relay itself: Prometheus scrapes every 30 s, so a sample
+// taken while the stream was being re-opened would say "lost" about a relay
+// that is already back. The alert has the 5 minutes it needs for that; this
+// check does not.
+const relayMetric = (name) => {
     const metrics = kubectl(['exec', '-n', 'jenkins', 'deploy/webhook-relay', '--', 'wget', '-qO-', 'http://127.0.0.1:9090/metrics']).stdout;
-    const line = metrics.split('\n').find((l) => l.startsWith('webhook_relay_deliveries_total{result="' + result + '"}'));
+    const line = metrics.split('\n').find((l) => l.startsWith(name + ' ') || l.startsWith(name + '{'));
     return Number(line?.split(' ').pop() ?? NaN);
 };
+const relayCounter = (result) => relayMetric('webhook_relay_deliveries_total{result="' + result + '"}');
+
+let relayConnected = relayMetric('webhook_relay_connected');
+// It reconnects on its own within seconds; only a stream that stays lost matters.
+for (let i = 0; i < 10 && relayConnected !== 1; i += 1) {
+    await sleep(3000);
+    relayConnected = relayMetric('webhook_relay_connected');
+}
+const relayPod = json(['get', 'pods', '-n', 'jenkins', '-l', 'app.kubernetes.io/name=webhook-relay']).items?.[0];
+const relayReady = relayPod?.status?.conditions?.some((c) => c.type === 'Ready' && c.status === 'True');
+// Prometheus must also have the series, or the alert that watches it never fires.
+const relayScraped = (promQuery('webhook_relay_connected{namespace="jenkins"}')?.data?.result ?? []).length > 0;
+record(
+    'The relay is holding the smee.io channel open',
+    relayConnected === 1 && Boolean(relayReady) && relayScraped,
+    'the relay reports connected, its pod is ' + (relayReady ? 'ready' : 'not ready')
+        + ', and Prometheus ' + (relayScraped ? 'scrapes it' : 'has no sample of it')
+        + '; it has re-opened the stream ' + relayMetric('webhook_relay_reconnects_total') + ' time(s) since it started'
+);
 const acceptedBefore = relayCounter('accepted');
 let delivered = false;
 if (process.env.SMEE_URL) {
@@ -313,6 +336,7 @@ sections.push({
         '| | |',
         '|---|---|',
         '| Stream | ' + (relayConnected === 1 ? 'connected' : 'not connected') + ' |',
+        '| Times the stream was re-opened | ' + relayMetric('webhook_relay_reconnects_total') + ' |',
         '| Deliveries accepted by Jenkins | ' + relayCounter('accepted') + ' |',
         '| Refused by Jenkins | ' + refusedTotal + ' |',
         '| Jenkins unreachable | ' + unreachableTotal + ' |',
@@ -444,19 +468,29 @@ function tryToRun(name, image) {
     };
 }
 
-const signedImage = deployment?.payload?.image;
-const admitted = signedImage ? tryToRun('probe-signed-release', signedImage) : { admitted: false, why: 'no release to try' };
+// GitHub's newest deployment names an image, but this section is about what
+// admission does with a signature, not about which release is the newest: the
+// release the cluster is already running is the same kind of subject, and asking
+// it keeps this section answerable when GitHub cannot be read.
+const runningImage = json(['get', 'deployment', 'splitx', '-n', NS]).spec?.template?.spec?.containers?.find((c) => c.name === 'splitx')?.image ?? '';
+const signedImage = deployment?.payload?.image ?? (runningImage.startsWith(IMAGE_REPOSITORY + '@') ? runningImage : null);
+const signedDigest = signedImage?.split('@')[1] ?? '';
+const admitted = signedImage
+    ? tryToRun('probe-signed-release', signedImage)
+    : { admitted: false, why: 'no published release to try: GitHub could not be read and the cluster is running ' + (runningImage || 'nothing') };
 record(
     'The signed release is admitted',
     admitted.admitted,
-    signedImage ? (admitted.admitted ? 'a pod running ' + digest.slice(0, 19) + '… was created' : 'refused: ' + admitted.why) : admitted.why
+    signedImage ? (admitted.admitted ? 'a pod running ' + signedDigest.slice(0, 19) + '… was created' : 'refused: ' + admitted.why) : admitted.why
 );
 
 const unpublished = tryToRun('probe-unpublished', IMAGE_REPOSITORY + ':never-published');
 // The same image the cluster just accepted, judged against a workflow that did
 // not sign it: this separates "has a signature" from "has our signature".
 const OTHER_IDENTITY = 'probe-other-identity';
-let otherIdentity = { admitted: true, why: 'not tried' };
+// null until it has actually been asked: a probe that never ran is not an
+// image the cluster admitted, and must not be reported as one.
+let otherIdentity = { admitted: null, why: 'not tried: there was no signed release to judge' };
 try {
     const policy = readFileSync(join(root, 'policy/verify-release.yaml'), 'utf8')
         .replace('name: splitx-release-must-be-signed', 'name: ' + OTHER_IDENTITY)
@@ -471,9 +505,9 @@ try {
 }
 record(
     'An image our workflow did not sign is refused, whoever asks',
-    !unpublished.admitted && !otherIdentity.admitted,
+    !unpublished.admitted && otherIdentity.admitted === false,
     'a tag we never published: ' + (unpublished.admitted ? 'ADMITTED' : 'refused') + '; the same signed image judged against another workflow: '
-        + (otherIdentity.admitted ? 'ADMITTED' : 'refused — ' + otherIdentity.why)
+        + (otherIdentity.admitted === null ? otherIdentity.why : otherIdentity.admitted ? 'ADMITTED' : 'refused — ' + otherIdentity.why)
 );
 
 sections.push({
@@ -489,7 +523,7 @@ sections.push({
         '|---|---|',
         '| The release GitHub Actions signed | ' + (admitted.admitted ? 'admitted' : 'refused: ' + admitted.why) + ' |',
         '| A tag under our name that was never published | ' + (unpublished.admitted ? '**admitted**' : 'refused') + ' |',
-        '| The same signed image, judged against another workflow | ' + (otherIdentity.admitted ? '**admitted**' : 'refused') + ' |',
+        '| The same signed image, judged against another workflow | ' + (otherIdentity.admitted === null ? 'not tried' : otherIdentity.admitted ? '**admitted**' : 'refused') + ' |',
         '',
         'The last one is the point: the policy checks *whose* signature it is, not that a signature exists.',
         'The engine refuses what it cannot check (`failurePolicy: Fail`), and the rule covers the `splitx`',
@@ -505,7 +539,7 @@ if (withRollback) {
     if (power.source === 'battery') {
         record('The laptop is on mains power for the measurement', false, power.detail + '; plug it in and run again');
     } else if (!deployment) {
-        record('A release to redeploy with a fault', false, 'GitHub\'s deployments could not be read');
+        record('A release to redeploy with a fault', false, 'GitHub\'s deployments could not be read: ' + deploymentError);
     } else {
         // The same release, with an environment variable that makes readiness
         // fail: the pods start and never become ready, which is what a bad

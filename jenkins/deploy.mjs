@@ -73,7 +73,17 @@ async function github(method, path, body) {
         signal: AbortSignal.timeout(20_000),
     });
     const text = await res.text();
-    if (!res.ok) throw new Error('GitHub answered ' + res.status + ' to ' + method + ' ' + path + ': ' + text.slice(0, 200));
+    if (!res.ok) {
+        // A spent allowance is not a broken release, and GitHub's own words for
+        // it name the address it counted — which does not belong in a build log
+        // that is read out loud. Say what happened in ours.
+        if (res.headers.get('x-ratelimit-remaining') === '0') {
+            const reset = new Date(Number(res.headers.get('x-ratelimit-reset') ?? 0) * 1000);
+            throw new Error('GitHub\'s API allowance is spent until ' + reset.toISOString().slice(11, 16) + ' UTC'
+                + (headers.Authorization ? '' : ' — 60 an hour, because this Jenkins has no GitHub token'));
+        }
+        throw new Error('GitHub answered ' + res.status + ' to ' + method + ' ' + path + ': ' + text.slice(0, 200));
+    }
     return text ? JSON.parse(text) : null;
 }
 
