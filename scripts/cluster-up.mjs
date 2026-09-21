@@ -221,16 +221,20 @@ const jenkinsSecretsChanged = [
     applySecret('jenkins', 'jenkins-secrets', {
         'webhook-secret': process.env.GITHUB_WEBHOOK_SECRET,
         'trigger-token': process.env.JENKINS_TRIGGER_TOKEN,
-        // Optional: a fine-grained token that may write deployment statuses on this
-        // repository. Without it Jenkins deploys, but GitHub never hears the outcome.
+        // A fine-grained token for this repository's deployments. Every deploy build
+        // first asks GitHub which deployment is the newest; without a token that
+        // comes out of the anonymous allowance this network shares (B-026). With
+        // it Jenkins also reports each outcome back to GitHub.
         'github-token': process.env.JENKINS_GITHUB_TOKEN ?? '',
     }),
 ].some((result) => result.stdout.includes('configured'));
 // Read as environment variables, so a change needs a new relay pod (step 8).
 const relaySecretChanged = applySecret('jenkins', 'webhook-relay', { 'smee-url': process.env.SMEE_URL, 'trigger-token': process.env.JENKINS_TRIGGER_TOKEN })
     .stdout.includes('configured');
-console.log('    jenkins-admin, jenkins-secrets, webhook-relay: deployment statuses '
-    + (process.env.JENKINS_GITHUB_TOKEN ? 'are reported to GitHub' : 'are NOT reported to GitHub; .env has no JENKINS_GITHUB_TOKEN'));
+console.log('    jenkins-admin, jenkins-secrets, webhook-relay: '
+    + (process.env.JENKINS_GITHUB_TOKEN
+        ? 'Jenkins reads GitHub with a token and reports each deployment back'
+        : 'NO JENKINS_GITHUB_TOKEN in .env: deploys depend on GitHub\'s shared anonymous allowance and report nothing (B-026)'));
 
 // ── 5. platform charts ────────────────────────────────────────────────────
 heading('Platform charts (pinned in helm/platform/charts.json)');
