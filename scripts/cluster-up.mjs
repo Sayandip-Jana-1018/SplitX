@@ -10,7 +10,8 @@
  * What it does, and why each step is here rather than in a README:
  *   1. checks the tools it needs, and says which one is missing
  *   2. creates the Kind cluster from k8s/kind/cluster.yaml (1 control plane, 2 workers),
- *      and caps the CPU its nodes may take from the laptop (2 + 4 + 4)
+ *      or wakes it if k8s:pause put it to sleep, and caps the CPU its nodes may
+ *      take from the laptop (2 + 4 + 4)
  *   3. lifts kindnet's CPU limit: it decides every new pod connection, and at
  *      Kind's default limits it falls behind until new connections time out
  *   4. creates the platform namespaces with their Pod Security levels, and the
@@ -98,6 +99,14 @@ if (!alreadyThere || flag('--recreate')) {
     run('kind', ['create', 'cluster', '--config', 'k8s/kind/cluster.yaml', '--wait', '180s']);
 } else {
     console.log('    already exists, leaving it alone');
+    // One put to sleep with k8s:pause is woken first; nothing below can reach
+    // an API server whose node is stopped (D-062).
+    const states = ['control-plane', 'worker', 'worker2'].map((name) =>
+        run('docker', ['inspect', CLUSTER + '-' + name, '--format', '{{.State.Status}}'], { capture: true, allowFailure: true }).stdout.trim());
+    if (states.some((state) => state !== 'running')) {
+        console.log('    asleep (' + states.join(', ') + '): waking it');
+        run(process.execPath, ['scripts/cluster-power.mjs', 'resume']);
+    }
 }
 console.log(kubectl(['get', 'nodes', '-o', 'wide'], { capture: true }).stdout.trim());
 
