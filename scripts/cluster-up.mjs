@@ -9,7 +9,8 @@
  *
  * What it does, and why each step is here rather than in a README:
  *   1. checks the tools it needs, and says which one is missing
- *   2. creates the Kind cluster from k8s/kind/cluster.yaml (1 control plane, 2 workers)
+ *   2. creates the Kind cluster from k8s/kind/cluster.yaml (1 control plane, 2 workers),
+ *      and caps the CPU its nodes may take from the laptop (2 + 4 + 4)
  *   3. lifts kindnet's CPU limit: it decides every new pod connection, and at
  *      Kind's default limits it falls behind until new connections time out
  *   4. creates the platform namespaces with their Pod Security levels, and the
@@ -99,6 +100,20 @@ if (!alreadyThere || flag('--recreate')) {
     console.log('    already exists, leaving it alone');
 }
 console.log(kubectl(['get', 'nodes', '-o', 'wide'], { capture: true }).stdout.trim());
+
+// The nodes are containers on a laptop that also runs the desktop, an editor
+// and a browser. Nothing inside has a CPU limit, on purpose (D-050, D-053), so a
+// cold start — Grafana migrating its database, Jenkins loading 81 plugins, every
+// controller re-listing at once — took 9 of the machine's 24 threads on one node
+// and the desktop stalled with it. The budget goes on the node containers
+// instead: inside, pods still share by their requests; outside, the desktop
+// keeps the rest (D-062). Docker keeps the setting when a node restarts.
+const NODE_CPUS = { [CLUSTER + '-control-plane']: 2, [CLUSTER + '-worker']: 4, [CLUSTER + '-worker2']: 4 };
+for (const [node, cpus] of Object.entries(NODE_CPUS)) {
+    const now = Number(run('docker', ['inspect', node, '--format', '{{.HostConfig.NanoCpus}}'], { capture: true }).stdout.trim()) / 1e9;
+    if (now !== cpus) run('docker', ['update', '--cpus', String(cpus), node], { capture: true });
+    console.log('    ' + node + ': ' + cpus + ' CPUs' + (now === cpus ? '' : ' (was ' + (now || 'unlimited') + ')'));
+}
 
 // ── 3. pod networking ─────────────────────────────────────────────────────
 heading('kindnet resources');

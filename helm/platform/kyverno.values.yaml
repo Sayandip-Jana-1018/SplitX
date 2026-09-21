@@ -30,13 +30,15 @@ admissionController:
 # cluster satisfy the policy, not just that new ones would.
 reportsController:
   enabled: true
-  container:
-    resources:
-      requests:
-        cpu: 50m
-        memory: 128Mi
-      limits:
-        memory: 384Mi
+  # Here, not under `container:` as for the admission controller: this is
+  # where the chart reads them for this controller. Under `container:` they
+  # were ignored, and it ran on the chart's 64Mi request and 128Mi limit.
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 384Mi
 
 # Nothing here generates or mutates existing resources, and nothing cleans
 # up on a schedule.

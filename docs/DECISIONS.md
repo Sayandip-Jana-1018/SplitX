@@ -1628,6 +1628,72 @@ cannot deploy anything that GitHub Actions did not build from main.
   and reconnected on its own once DNS came back.
 - **On AWS:** Jenkins is behind the ALB, GitHub calls it directly, and the relay is not deployed.
   The gate above does not change.
+- **The first real delivery was refused, for the reason the relay gave:** GitHub's ping when the
+  webhook was created (2026-09-20) arrived form-encoded, GitHub's default content type. Its body
+  could not be rebuilt byte for byte, the relay logged `the webhook must send application/json`,
+  and Jenkins answered 403. Found in Loki the next day. The fix is in the webhook's settings
+  (content type `application/json`, the Deployments event), not in the gate.
+
+### D-062 · The cluster gets a fixed share of the laptop, and sleeps when it is not being shown
+**2026-09-21** · ✅ CPU budget and pause/resume, measured · the WSL memory cap is the user's to set
+
+The laptop had become hard to use whenever Docker Desktop was running. Measured twenty minutes
+after Docker started, with the cluster and the Compose stack up:
+
+| Where | What |
+|---|---|
+| Windows | 15.7 GB of memory, about 0.3 GB available, 25.5 GB committed, 1,600 pages a second going to and from disk |
+| The WSL VM | at its 10 GB cap, 3.5 GB of it paged out by Windows; inside, 4.6 GB used by processes and 5.2 GB by file cache |
+| Inside the VM | tasks stalled on memory 24% of the last 10 s and 45% of the last 5 minutes (PSI `full`); load average 51 on 24 threads |
+| The cold start | every pod started together when Docker did: one node at 9.2 cores, Grafana alone at 8.3 cores for minutes |
+| Controllers | kube-controller-manager had restarted 17 times, kube-scheduler 16, each Kyverno admission controller 10: API calls timed out, they lost their leader lease and exited to start again. The Kyverno reports controller crash-looped on its cache sync |
+
+Three causes:
+
+1. **Memory.** The 10 GB cap from the phase 0 notes leaves Windows 5.7 GB, and Windows with an editor,
+   a browser and this assistant uses about 9. So Windows pages the VM out, and work in the VM waits on
+   Windows' disk; inside, that shows as memory stalls, API timeouts and lost leases. File cache counts
+   against the cap too, and WSL 2.7 hands cache back only when the VM is idle
+   (`autoMemoryReclaim=dropCache`), which a cluster never is. Dropping the cache by hand freed 2.6 GB
+   inside the VM and returned under 1 GB to Windows.
+2. **Every Docker start was a cluster cold start.** Kind gives its nodes the restart policy
+   `on-failure`, and Docker Desktop's shutdown counts as a failure, so the cluster started with
+   Docker every time, whether it was needed or not.
+3. **Nothing bounded the burst.** No pod has a CPU limit, on measurement (D-050, D-053), and the
+   nodes had none either.
+
+**Decided:**
+- **A CPU budget on the nodes, not the pods:** 2 CPUs for the control plane and 4 for each worker,
+  10 of the laptop's 24 threads, set with `docker update --cpus` by `k8s:up` and kept by Docker
+  across restarts. Inside, D-053 still holds: pods share a node by their requests, and none is
+  throttled against a quota of its own. On EKS each node is a machine of its own, and this does not
+  apply.
+- **`npm run k8s:pause` and `npm run k8s:resume`** (`scripts/cluster-power.mjs`). Pause stops the three
+  nodes. They stop on SIGRTMIN+3, so systemd stops every pod's scope rather than the pods being
+  killed, and a stopped node stays stopped across Docker and Windows restarts until resume starts it.
+  Resume waits for application pods whose container started *after* the resume and has passed
+  readiness since, because a pod's status can still say Ready from before the stop. Then it waits for the edge.
+- **The Compose copy of the app is stopped.** The cluster runs the app. The Compose Postgres and Redis
+  are what `npm run dev` uses (outbound 5432 is blocked here), so they start with
+  `docker compose start postgres redis` when needed.
+- **WSL's memory cap should be 6 GB**, not 10. It is a setting of the machine, so the user makes it,
+  not a script (Environment notes).
+- Found on the way: the Kyverno reports controller's resources were set under `container:`, where the
+  chart does not read them for that controller, so it ran on the chart's 64Mi request and 128Mi limit.
+  They are now where the chart reads them; the pod has 128Mi and 384Mi.
+
+**Measured after:**
+
+| | Result |
+|---|---|
+| `k8s:pause` | 61–62 s. The workers stop in order in 6 to 23 s. The control plane reaches the 60 s ceiling in systemd's last step, after its pods, etcd included, have stopped within 9 s; Docker ends what is left, and the script says which |
+| Windows, two minutes after pausing | available memory 0.5 → 2.4 GB, the VM 8.9 → 5.7 GB, committed 26.1 → 23.3 GB |
+| `k8s:resume`, budget on | the application answering at the edge in 36 s and every pod Ready in 82 s, with no crash loop; both Kyverno admission controllers back in 74 s. The laptop's CPU was 11–55% busy throughout |
+| What the budget does not fix | during the resume, available memory on Windows fell to 98 MB within 25 s, because the VM grows back into its 10 GB cap. That is what the 6 GB cap is for |
+
+Load tests recorded before this (D-046, D-051, D-053) ran on nodes without a budget. A load test on
+this laptop now meets the budget before anything else, so rerun them before quoting their numbers for
+the Kind cluster. The demo itself runs on EKS (phase 7).
 
 ### D-061 · The scan at build time answers a question that ages
 **2026-09-20** · ✅ done, proved against the running release
@@ -1795,6 +1861,7 @@ of requests a second; the heaviest test in this project sends 100.
 | B-023 | metrics-server runs with `--kubelet-insecure-tls` on Kind, because Kind’s kubelets serve metrics with a certificate the cluster CA did not issue. | The flag disables verification of what the autoscaler reads. It is in a values file, not hidden in a script, precisely so it cannot be copied to AWS by accident. | Phase 7: EKS signs kubelet certificates properly — install the add-on without the flag and confirm the HPA still reads CPU. |
 | B-024 | In the final saturation run, 155 of 7,442 requests spent over 3 s inside a pod, all 30 to 50 s into the overload, on both pods, with none after. | A transient stall right when a burst arrives is exactly when a classroom notices. | 🚧 Narrowed 2026-09-18 — D-053. Not garbage collection: the stall belongs to freshly started pods at their 1-CPU limit. Without the limit, fresh pods had 0 and 89 requests over 3 s in a pod (175 to 228 with it), the longest 2.9 and 6.3 s, and served 45% more. Left: the remaining cold start; phase 7 measures the ALB slow start for new targets. |
 | B-025 | Sign-up, login and password reset are still limited to 10 a minute per address (D-022). | A room asked to register at once from one campus network would be refused after the first ten. The demo page needs no account, so it is not affected. | Before any demo asks people to sign up: count failed logins per account for brute-force protection, and give sign-up the device-plus-network treatment of D-045. |
+| B-026 | Jenkins' deploy builds and `cd:verify` read GitHub's deployments without a token, and this network's public address shares GitHub's anonymous allowance (60 an hour) with other devices. | A deploy would fail at its first step whenever someone else on the network had spent the allowance: on 2026-09-21 its hour began eleven minutes before this laptop booted, and it was spent when `cd:verify` ran, which failed 2 of its 15 checks on it. | Open — the user creates a fine-grained token (this repository only, Deployments read and write) and puts it in `.env` as `JENKINS_GITHUB_TOKEN`; `k8s:up` hands it to Jenkins. Both scripts now say when the allowance is spent and until when, instead of a bare 403, and the build log no longer repeats GitHub's message, which names the address. |
 
 ## Environment notes (this machine)
 
@@ -1803,11 +1870,20 @@ of requests a second; the heaviest test in this project sends 100.
 - The user-level npm config uses plain HTTP with an auth token configured. Fix
   with `npm config set registry https://registry.npmjs.org/` and consider
   rotating that npm token.
-- 15.7 GB of physical RAM. Docker Desktop runs on WSL 2, which by default takes half
-  (about 7.8 GB). The planned 12–16 GB is not possible on this machine: 16 GB is all
-  of it, and 12 GB would starve Windows. Plan: `memory=10GB` and `swap=8GB` in
-  `%UserProfile%.wslconfig`. The Kind cluster and the CI stack (Jenkins,
-  SonarQube, Nexus) should not run at full size at the same time.
+- 15.7 GB of physical RAM. Docker Desktop runs on WSL 2. The phase 0 plan, `memory=10GB` and
+  `swap=8GB` in `%UserProfile%\.wslconfig`, starved Windows, which uses about 9 GB with an editor,
+  a browser and this assistant: on 2026-09-21 it had 0.3 GB available and paged 1,600 times a
+  second (D-062). **Set `memory=6GB`** (swap can stay), run `wsl --shutdown`, and start Docker
+  Desktop again. The cluster uses about 4.5 GB. The CI stack (SonarQube, Nexus) must not run next
+  to it.
+- **Heat (2026-09-21).** After one of the two fans had been opened, the ACPI thermal zone read
+  81–92 °C at 10–14% CPU with the cluster up, 67 °C with it asleep, and 87–99 °C through the 90 s
+  of a cluster start at 20–40% CPU. The i7-13700HX throttles at 100 °C. Until PredatorSense shows
+  both fans spinning, keep the cluster asleep when it is not in use, and run no load tests.
+- **This network shares its public address.** On 2026-09-21 GitHub's anonymous API allowance (60 an
+  hour per address) was counted in an hour that began at 14:22 UTC, eleven minutes before this
+  laptop booted, so something else behind the same address started it; it was spent within that hour.
+  Anything here that reads GitHub's API without a token fails once others have used it (B-026).
 - Installed: kind 0.31.0, kubectl 1.34.1 (Kustomize 5.7.1 built in), Helm 4.1.4,
   Terraform 1.14.9, AWS CLI 2.34, Docker Buildx 0.33. Not installed: Trivy, k6,
   hadolint. Phases 2 and 4 run their official container images instead.
