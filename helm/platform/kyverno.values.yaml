@@ -1,0 +1,48 @@
+# ═══════════════════════════════════════════════════════════════
+#   Kyverno: the cluster itself refuses an image from our registry that
+#   our release workflow did not sign (D-060).
+#
+#   Jenkins already verifies the signature before it deploys (D-055), but
+#   that is one path. Anything that can create a pod — a kubectl apply, a
+#   Job, a compromised controller — goes around it. This makes the check
+#   part of admission, so there is no way in that skips it.
+#
+#   Only what is needed for that: the admission controller, and the
+#   reports controller so `kubectl get policyreport` shows what passed.
+#   No generate or mutate-existing policies, so no background controller;
+#   no cleanup policies, so no cleanup controller.
+# ═══════════════════════════════════════════════════════════════
+admissionController:
+  # Two, because the webhook refuses what it cannot check (failurePolicy
+  # Fail in policy/verify-release.yaml): one replica would turn a restart
+  # into a few seconds where no pod can be created in splitx.
+  replicas: 2
+  container:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 192Mi
+      # No CPU limit, as elsewhere (D-053).
+      limits:
+        memory: 512Mi
+
+# PolicyReports for what is already running: evidence that the pods in the
+# cluster satisfy the policy, not just that new ones would.
+reportsController:
+  enabled: true
+  # Here, not under `container:` as for the admission controller: this is
+  # where the chart reads them for this controller. Under `container:` they
+  # were ignored, and it ran on the chart's 64Mi request and 128Mi limit.
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 384Mi
+
+# Nothing here generates or mutates existing resources, and nothing cleans
+# up on a schedule.
+backgroundController:
+  enabled: false
+cleanupController:
+  enabled: false

@@ -9,7 +9,9 @@
  *
  * What it does, and why each step is here rather than in a README:
  *   1. checks the tools it needs, and says which one is missing
- *   2. creates the Kind cluster from k8s/kind/cluster.yaml (1 control plane, 2 workers)
+ *   2. creates the Kind cluster from k8s/kind/cluster.yaml (1 control plane, 2 workers),
+ *      or wakes it if k8s:pause put it to sleep, and caps the CPU its nodes may
+ *      take from the laptop (2 + 4 + 4)
  *   3. lifts kindnet's CPU limit: it decides every new pod connection, and at
  *      Kind's default limits it falls behind until new connections time out
  *   4. creates the platform namespaces with their Pod Security levels, and the
@@ -23,9 +25,9 @@
  *   7. builds the splitx-secrets Secret from .env and pipes it to kubectl.
  *      Values are never written to a file, never passed as an argument and
  *      never printed; only the key names appear in the output.
- *   8. applies k8s/overlays/local, the Grafana dashboards and what Jenkins needs
- *      beyond its chart (jenkins/), and waits for the database, the schema Job
- *      and the deployment
+ *   8. applies k8s/overlays/local, the Grafana dashboards, the admission policy
+ *      (policy/) and what Jenkins needs beyond its chart (jenkins/), and waits
+ *      for the database, the schema Job and the deployment
  *   9. rolls the deployment if the pods run an older build than the one loaded
  *  10. opens fresh connections from every pod, because readiness cannot prove it
  */
@@ -97,8 +99,30 @@ if (!alreadyThere || flag('--recreate')) {
     run('kind', ['create', 'cluster', '--config', 'k8s/kind/cluster.yaml', '--wait', '180s']);
 } else {
     console.log('    already exists, leaving it alone');
+    // One put to sleep with k8s:pause is woken first; nothing below can reach
+    // an API server whose node is stopped (D-062).
+    const states = ['control-plane', 'worker', 'worker2'].map((name) =>
+        run('docker', ['inspect', CLUSTER + '-' + name, '--format', '{{.State.Status}}'], { capture: true, allowFailure: true }).stdout.trim());
+    if (states.some((state) => state !== 'running')) {
+        console.log('    asleep (' + states.join(', ') + '): waking it');
+        run(process.execPath, ['scripts/cluster-power.mjs', 'resume']);
+    }
 }
 console.log(kubectl(['get', 'nodes', '-o', 'wide'], { capture: true }).stdout.trim());
+
+// The nodes are containers on a laptop that also runs the desktop, an editor
+// and a browser. Nothing inside has a CPU limit, on purpose (D-050, D-053), so a
+// cold start — Grafana migrating its database, Jenkins loading 81 plugins, every
+// controller re-listing at once — took 9 of the machine's 24 threads on one node
+// and the desktop stalled with it. The budget goes on the node containers
+// instead: inside, pods still share by their requests; outside, the desktop
+// keeps the rest (D-062). Docker keeps the setting when a node restarts.
+const NODE_CPUS = { [CLUSTER + '-control-plane']: 2, [CLUSTER + '-worker']: 4, [CLUSTER + '-worker2']: 4 };
+for (const [node, cpus] of Object.entries(NODE_CPUS)) {
+    const now = Number(run('docker', ['inspect', node, '--format', '{{.HostConfig.NanoCpus}}'], { capture: true }).stdout.trim()) / 1e9;
+    if (now !== cpus) run('docker', ['update', '--cpus', String(cpus), node], { capture: true });
+    console.log('    ' + node + ': ' + cpus + ' CPUs' + (now === cpus ? '' : ' (was ' + (now || 'unlimited') + ')'));
+}
 
 // ── 3. pod networking ─────────────────────────────────────────────────────
 heading('kindnet resources');
@@ -197,16 +221,20 @@ const jenkinsSecretsChanged = [
     applySecret('jenkins', 'jenkins-secrets', {
         'webhook-secret': process.env.GITHUB_WEBHOOK_SECRET,
         'trigger-token': process.env.JENKINS_TRIGGER_TOKEN,
-        // Optional: a fine-grained token that may write deployment statuses on this
-        // repository. Without it Jenkins deploys, but GitHub never hears the outcome.
+        // A fine-grained token for this repository's deployments. Every deploy build
+        // first asks GitHub which deployment is the newest; without a token that
+        // comes out of the anonymous allowance this network shares (B-026). With
+        // it Jenkins also reports each outcome back to GitHub.
         'github-token': process.env.JENKINS_GITHUB_TOKEN ?? '',
     }),
 ].some((result) => result.stdout.includes('configured'));
 // Read as environment variables, so a change needs a new relay pod (step 8).
 const relaySecretChanged = applySecret('jenkins', 'webhook-relay', { 'smee-url': process.env.SMEE_URL, 'trigger-token': process.env.JENKINS_TRIGGER_TOKEN })
     .stdout.includes('configured');
-console.log('    jenkins-admin, jenkins-secrets, webhook-relay: deployment statuses '
-    + (process.env.JENKINS_GITHUB_TOKEN ? 'are reported to GitHub' : 'are NOT reported to GitHub; .env has no JENKINS_GITHUB_TOKEN'));
+console.log('    jenkins-admin, jenkins-secrets, webhook-relay: '
+    + (process.env.JENKINS_GITHUB_TOKEN
+        ? 'Jenkins reads GitHub with a token and reports each deployment back'
+        : 'NO JENKINS_GITHUB_TOKEN in .env: deploys depend on GitHub\'s shared anonymous allowance and report nothing (B-026)'));
 
 // ── 5. platform charts ────────────────────────────────────────────────────
 heading('Platform charts (pinned in helm/platform/charts.json)');
@@ -305,6 +333,9 @@ kubectl(['delete', 'job', 'splitx-schema-init', '-n', NAMESPACE, '--ignore-not-f
 kubectl(['apply', '-k', OVERLAY]);
 // The Grafana dashboards (monitoring/kustomization.yaml).
 kubectl(['apply', '-k', 'monitoring']);
+// What the cluster refuses: an image from our registry that the release
+// workflow did not sign (policy/verify-release.yaml, D-060).
+kubectl(['apply', '-k', 'policy']);
 // Jenkins' permissions, network policy, webhook relay and alerts (jenkins/kustomization.yaml).
 kubectl(['apply', '-k', 'jenkins']);
 if (relaySecretChanged) kubectl(['-n', 'jenkins', 'rollout', 'restart', 'deployment/webhook-relay'], { capture: true });

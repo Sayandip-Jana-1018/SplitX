@@ -2,7 +2,8 @@
 #   AWS overlay — EKS, behind an ALB and CloudFront.
 #
 #   Differences from local, and why each one exists:
-#     • the image comes from ECR by digest-bearing tag, and is pulled
+#     • the image is pulled from ghcr.io — the one GitHub Actions built,
+#       scanned and signed (D-054), the same digest Jenkins deploys here
 #     • no in-cluster Postgres: EKS talks to Neon, like the deployed site
 #     • two proxies in front of a pod (CloudFront -> ALB), not one
 #     • replicas spread across availability zones, not just nodes
@@ -25,9 +26,13 @@ components:
 
 images:
   - name: splitx
-    # Replaced by the pipeline with the commit being released (phase 6).
-    newName: ACCOUNT_ID.dkr.ecr.ap-south-1.amazonaws.com/splitx
-    newTag: latest
+    # The public package GitHub Actions publishes and signs. Jenkins replaces
+    # this with the digest of the release it is deploying (D-055); the tag
+    # here is the last release, so what this renders today is a real image
+    # that exists — never a moving tag, which would make a rollback
+    # meaningless (D-059).
+    newName: ghcr.io/sayandip-jana-1018/splitx
+    newTag: 52137218e1d4
 
 patches:
   - path: patches/serviceaccount.yaml

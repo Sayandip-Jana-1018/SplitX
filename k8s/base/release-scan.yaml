@@ -1,0 +1,146 @@
+# ═══════════════════════════════════════════════════════════════
+#   A release is scanned when it is built (D-054), and that answer ages:
+#   a vulnerability published tomorrow is one nobody looked for. This asks
+#   the same question of what is *running*, once a day (D-061).
+#
+#   It reads the image from the Deployment rather than being told one, so
+#   it always scans what the cluster actually has, and it fails the Job
+#   when it finds something fixable. A failed Job is visible in Prometheus
+#   through kube-state-metrics, which is what SplitXReleaseVulnerable
+#   alerts on — no new exporter, no pushgateway.
+#
+#   kubectl and Trivy come from their projects' own images, mounted
+#   read-only, so nothing here is a hand-built tools image (as in the
+#   deploy agent, D-055).
+# ═══════════════════════════════════════════════════════════════
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: release-scan
+  labels:
+    app.kubernetes.io/name: release-scan
+    app.kubernetes.io/part-of: splitx
+automountServiceAccountToken: true
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: release-scan
+  labels:
+    app.kubernetes.io/part-of: splitx
+rules:
+  # One question, about one object: which image is the application running?
+  - apiGroups: [apps]
+    resources: [deployments]
+    resourceNames: [splitx]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: release-scan
+  labels:
+    app.kubernetes.io/part-of: splitx
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: release-scan
+subjects:
+  - kind: ServiceAccount
+    name: release-scan
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: release-scan
+  labels:
+    app.kubernetes.io/name: release-scan
+    app.kubernetes.io/part-of: splitx
+spec:
+  # Daily, off the hour so it does not join every other cron in the world.
+  schedule: "17 3 * * *"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 1
+  # Keep the failures: their logs name the vulnerability.
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      ttlSecondsAfterFinished: 172800
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: release-scan
+            app.kubernetes.io/part-of: splitx
+        spec:
+          serviceAccountName: release-scan
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1001
+            runAsGroup: 1001
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: scan
+              # The same Node image the application is built on; the tools
+              # are mounted, not installed.
+              image: node:24.21.0-alpine3.24@sha256:be80f76cf40ec8e42b9bec49f60a55e0660f30af58d3e5a25530785b30ea67e2
+              command: ["sh", "-c"]
+              args:
+                - |
+                  set -eu
+                  image=$(kubectl get deployment splitx -o jsonpath='{.spec.template.spec.containers[0].image}')
+                  echo "the cluster is running $image"
+                  # A rehearsal cluster may be running a locally built image
+                  # that exists only in the nodes' containerd. There is
+                  # nothing to fetch and nothing to say about it; a scanner
+                  # is not given the container runtime's socket to find out.
+                  case "$image" in
+                    ghcr.io/*) ;;
+                    *) echo "not a published release: nothing to scan"; exit 0 ;;
+                  esac
+                  trivy image --scanners vuln --severity CRITICAL,HIGH --ignore-unfixed \
+                    --exit-code 1 --no-progress --cache-dir /tmp/trivy "$image"
+                  echo "no fixable critical or high vulnerability in what is running"
+              env:
+                - name: PATH
+                  value: /tools/kubectl/bin:/tools/trivy/usr/local/bin:/usr/local/bin:/usr/bin:/bin
+                # Trivy keeps its vulnerability database here, and the root
+                # filesystem is read-only.
+                - name: HOME
+                  value: /tmp
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 256Mi
+                limits:
+                  memory: 768Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop:
+                    - ALL
+              volumeMounts:
+                - name: kubectl
+                  mountPath: /tools/kubectl
+                  readOnly: true
+                - name: trivy
+                  mountPath: /tools/trivy
+                  readOnly: true
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: kubectl
+              image:
+                reference: registry.k8s.io/kubectl:v1.35.0@sha256:0bb95b2a450875fc8ceaea2f9987a99fe27c228846e2e00b93b65ebb0d59034e
+                pullPolicy: IfNotPresent
+            - name: trivy
+              image:
+                reference: aquasec/trivy:0.74.0@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969
+                pullPolicy: IfNotPresent
+            - name: tmp
+              emptyDir:
+                sizeLimit: 2Gi

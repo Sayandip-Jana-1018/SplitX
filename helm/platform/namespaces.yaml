@@ -33,3 +33,12 @@ metadata:
     # an agent pod that asked for it would be refused.
     pod-security.kubernetes.io/enforce: restricted
     pod-security.kubernetes.io/warn: restricted
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kyverno
+  labels:
+    # The policy engine runs as a non-root web server with no host access.
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/warn: restricted

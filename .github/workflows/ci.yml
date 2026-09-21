@@ -156,14 +156,19 @@ jobs:
         # read from the PrometheusRule that is deployed, not from a copy.
         run: node scripts/test-alerts.mjs
 
-      - name: The image the manifests run is never :latest
+      - name: No overlay runs a moving tag
         # A moving tag makes a rollback meaningless: the same manifest would
-        # deploy different code tomorrow.
+        # deploy different code tomorrow. This checked only the local overlay
+        # until the AWS one was found pinning ECR :latest (D-059).
         run: |
-          if kubectl kustomize k8s/overlays/local | grep -E '^\s+image: .*:latest$'; then
-            echo "the local overlay pins a moving tag" >&2
-            exit 1
-          fi
+          failed=0
+          for overlay in local aws loadtest saturation; do
+            if kubectl kustomize "k8s/overlays/$overlay" | grep -E '^\s+image: .*:(latest|main|stable)$'; then
+              echo "k8s/overlays/$overlay pins a moving tag" >&2
+              failed=1
+            fi
+          done
+          exit "$failed"
 
   release:
     # A commit on main that passed every job above becomes a release: built

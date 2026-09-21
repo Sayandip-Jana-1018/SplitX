@@ -134,3 +134,27 @@ spec:
             description: >-
               Rate-limit checks have been failing for 2 minutes, so requests are
               served without limits. Check the splitx-redis pod.
+
+    - name: splitx.supplychain
+      rules:
+        - alert: SplitXReleaseVulnerable
+          # The daily scan of the image the cluster is running fails the Job
+          # when Trivy finds something fixable (k8s/base/release-scan.yaml).
+          # Only the last day's scan counts: an older failure has already been
+          # answered by the scan that came after it.
+          expr: |
+            max(
+              kube_job_status_failed{namespace="splitx", job_name=~"release-scan.*"}
+              and on (job_name)
+              (time() - kube_job_status_start_time{namespace="splitx", job_name=~"release-scan.*"} < 86400)
+            ) > 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: The release this cluster runs has a fixable vulnerability
+            description: >-
+              Today's scan of the running image found a critical or high vulnerability
+              that has a fix. Its logs name it: kubectl -n splitx logs job/<the failed job>.
+              The answer is a new release with an updated base image or dependency, not a
+              change in the cluster.
