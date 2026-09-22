@@ -75,7 +75,7 @@ export async function GET(
         const tripIds = group.trips.map((trip) => trip.id);
         const tripTitleMap = new Map(group.trips.map((trip) => [trip.id, trip.title]));
 
-        const [transactions, settlements, auditLogs] = await Promise.all([
+        const [transactions, settlements] = await Promise.all([
             prisma.transaction.findMany({
                 where: { tripId: { in: tripIds } },
                 include: {
@@ -95,14 +95,20 @@ export async function GET(
                 },
                 orderBy: { updatedAt: 'asc' },
             }),
-            prisma.auditLog.findMany({
+        ]);
+
+        // The edit history of this group's own expenses. This used to read every
+        // expense's audit log in the database since the group was created, for
+        // every group, and filter them here.
+        const auditLogs = transactions.length === 0
+            ? []
+            : await prisma.auditLog.findMany({
                 where: {
                     entityType: 'transaction',
-                    createdAt: { gte: group.createdAt },
+                    entityId: { in: transactions.map((transaction) => transaction.id) },
                 },
                 orderBy: { createdAt: 'asc' },
-            }),
-        ]);
+            });
 
         const members: FinanceMember[] = group.members.map((member) => ({
             id: member.user.id,
@@ -148,20 +154,12 @@ export async function GET(
             deletedAt: settlement.deletedAt,
         }));
 
-        const scopedAuditLogs = auditLogs.filter((log) => {
-            const details = log.details;
-            if (!details || typeof details !== 'object' || Array.isArray(details)) {
-                return false;
-            }
-            return (details as Record<string, unknown>).groupId === groupId;
-        });
-
         const history = buildBalanceHistory({
             userId: effectiveUserId,
             members,
             transactions: transactionSnapshots,
             settlements: settlementSnapshots,
-            auditLogs: scopedAuditLogs,
+            auditLogs,
             limit,
             beforeCreatedAt,
             beforeId,

@@ -665,7 +665,7 @@ Theme preference is persisted in `localStorage` and applied via CSS class on `<h
 
 - **Fluid responsive design** — `clamp(14px, 3.6vw, 16px)` base font scales across all phone sizes (6.5" to 7.0"+)
 - **viewport-fit: cover** — proper notch/safe-area handling on all devices
-- **Auto-generated service worker** — `@ducanh2912/next-pwa` with cache-busting (no stale assets)
+- **A small, hand-written service worker** (`public/sw.js`) — installable, with an offline page; it caches no API response or page, so nothing outlives signing out
 - **Responsive layout** with mobile-first bottom navigation + FAB
 - **Pull-to-refresh** touch gesture on dashboard
 - **Haptic feedback** via Vibration API

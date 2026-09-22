@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { signOut } from 'next-auth/react';
+import { signOutAndForget } from '@/lib/signOut';
 import {
     AlertTriangle,
     AtSign,
@@ -195,7 +195,7 @@ export default function SettingsPage() {
             const res = await fetch('/api/me', { method: 'DELETE' });
             if (res.ok) {
                 toast('Your account was deleted', 'success');
-                await signOut({ callbackUrl: '/login' });
+                await signOutAndForget('/login');
             } else {
                 toast(errorMessage(await res.json().catch(() => null), 'Could not delete your account'), 'error');
                 setDeleting(false);
@@ -208,7 +208,7 @@ export default function SettingsPage() {
 
     const handleSignOut = async () => {
         try {
-            await signOut({ callbackUrl: '/login' });
+            await signOutAndForget('/login');
         } catch {
             window.location.href = '/login';
         }

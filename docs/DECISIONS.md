@@ -1996,6 +1996,38 @@ Four ways a signed-in person could reach past their own groups:
 reminder's text and link are the server's whatever the request says, and a chat message can't be a
 system message or carry another group's records.
 
+### D-066 · Nothing a signed-in person sees outlives signing out, and history reads only its own group
+**2026-09-22** · ✅ written and unit-tested (924 → 931 tests) · production check after merge: `/sw.js` answers 200
+
+**The service worker.** The audit found the PWA configured to keep `/api/*` responses for 24 hours
+(`next-pwa`'s default `apis` rule, NetworkFirst), which on a shared phone outlive signing out. Checking
+production showed something else: `https://splitsj.vercel.app/sw.js` answers **404**, and always has.
+`@ducanh2912/next-pwa` is a webpack plugin; it was added on 2026-02-20 together with `turbopack: {}`,
+which tells Next.js 16 to build with Turbopack and ignore webpack plugins. So the 24-hour cache never
+ran in production, and neither did the PWA: there was no worker to install or to show anything
+offline. A `next build --webpack` would have switched both on.
+
+**Decided:**
+- `next-pwa` goes; `public/sw.js` is written by hand, 40 lines. It makes the app installable, shows
+  `public/offline.html` when there is no connection, and caches nothing else. If a browser holds a
+  worker from any other build at the same URL and scope, installing this one deletes every cache that
+  worker left, `apis` included.
+- It is registered with `updateViaCache: 'none'`, and `/sw.js` is served `no-store`, so a fix to it
+  reaches installed apps on their next launch.
+- Signing out also deletes every cache but the offline page (`signOutAndForget`).
+- **Rejected:** `next build --webpack` to keep `next-pwa`. It would bring back a generated worker
+  whose rules are defaults we would have to keep overriding, for offline copies of a money app that
+  would be out of date anyway.
+
+**Balance history** (high finding 8) read every expense audit log in the database created since the
+group, for every group, and filtered them in JavaScript. It now asks only for the audit logs of this
+group's own expenses (`entityId IN` the group's expense IDs). `AuditLog` has no index yet; one on
+`(entityType, entityId)` comes with the migration baseline (fix 8 of the plan).
+
+**Tests:** `public/sw.js` itself, run against an in-memory Cache Storage: it deletes an earlier
+worker's caches, never answers an API call, and shows the offline page only when the network is gone. The
+history route asks the audit log for its own expenses only, and not at all for a group without any.
+
 ---
 
 ## Open problems

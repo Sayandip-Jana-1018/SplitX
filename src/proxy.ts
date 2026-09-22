@@ -220,8 +220,8 @@ export const config = {
          * Match all paths except:
          * - _next/static (static files)
          * - _next/image (image optimization)
-         * - favicon.ico, icons, manifest, sw.js (PWA assets)
+         * - favicon.ico, icons, manifest, sw.js, offline.html (PWA assets)
          */
-        '/((?!_next/static|_next/image|favicon\\.ico|icons|manifest\\.json|sw\\.js|workbox-.*\\.js).*)',
+        '/((?!_next/static|_next/image|favicon\\.ico|icons|manifest\\.json|sw\\.js|offline\\.html).*)',
     ],
 };

@@ -4,6 +4,7 @@ import './globals.css';
 import { ThemeProvider } from '@/components/providers/ThemeProvider';
 import { ToastProvider } from '@/components/ui/Toast';
 import AuthProvider from '@/components/providers/AuthProvider';
+import ServiceWorker from '@/components/providers/ServiceWorker';
 
 const geist = Geist({ subsets: ['latin'], variable: '--font-geist', display: 'swap' });
 
@@ -77,6 +78,7 @@ export default function RootLayout({
             <ToastProvider>
               {children}
             </ToastProvider>
+            <ServiceWorker />
           </ThemeProvider>
         </AuthProvider>
       </body>
