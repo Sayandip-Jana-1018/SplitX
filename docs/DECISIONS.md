@@ -2152,7 +2152,7 @@ deleted group, and one account per address whatever its case.
 holds. No production data was affected by the old member removal (B-029 closed).
 
 ### D-070 · Email that reaches anyone, addresses that are confirmed, and an auth library without critical holes
-**2026-09-22** · ✅ written and unit-tested (987 → 1,006 tests; 1,017 with the later changes) · live once the user puts the SMTP settings in `.env` and Vercel
+**2026-09-22** · ✅ written and unit-tested (987 → 1,006 tests; 1,017 with the later changes) · ✅ live: SMTP settings in `.env` and Vercel; a test through Gmail on 587 was accepted, and production's forgot-password answers as configured
 
 **Email.** SplitX sent mail through Resend's shared `onboarding@resend.dev`, which delivers only to
 the Resend account's owner: every reset link for anyone else was reported sent and never arrived.
@@ -2211,7 +2211,7 @@ resend route answering the same for every address.
   domain Vercel sets on every deployment, instead of every email failing to send.
 
 ### D-071 · Every page says what it may load and use
-**2026-09-22** · ✅ written and unit-tested (1,006 → 1,015 tests) · report-only; enforce after production shows the app itself breaks no rule
+**2026-09-22** · ✅ written and unit-tested (1,006 → 1,015 tests) · ✅ live since PR #18 (all four headers checked on production) · report-only; enforce after production shows the app itself breaks no rule
 
 Production already sent HSTS (Vercel's, with preload), `nosniff`, `X-Frame-Options: DENY` and a
 referrer policy. It sent no Content-Security-Policy, and no Permissions-Policy on pages.
@@ -2332,6 +2332,39 @@ afterwards.
 - The cluster's own Postgres stays at 16 for now, because moving it to 17 would strand an existing
   cluster's data directory. The Kind end-to-end runs on GitHub's runners start fresh (phase 7), so
   that is where it moves to 17.
+
+### D-073 · Months in India's time, exports a spreadsheet can't run, one database pool
+**2026-09-22** · ✅ written and unit-tested (1,017 → 1,027 tests)
+
+**Months.** Analytics read months off the server's clock, and servers run in UTC (Vercel's do). So a
+month began at 05:30 in India: an expense added at 1 a.m. on the 1st was charted in the month
+before, and for the first 5½ hours of every month "this month" was empty. Budgets defaulted to the
+UTC month the same way.
+- `src/lib/indiaTime.ts` counts days and months in IST, which is UTC+5:30 all year, since India
+  keeps no daylight saving.
+- Analytics now reads the six calendar months it charts, from midnight IST. Before, it read a rolling
+  six months, so member totals covered days the chart didn't show. This month's settlements count
+  from midnight IST on the 1st.
+- The tests run the process in UTC, as on Vercel. This laptop runs in India, where the old code
+  passed by accident.
+
+**Budgets** (`/api/budgets`) took anything: bad JSON, fractional or out-of-range amounts, and months
+like "October" ended in a 500 or a junk row. The input is now validated. No page calls this API, so it
+is on the cleanup list (phase 1c).
+
+**The balance-history CSV.** Titles and names are typed by group members, and a spreadsheet runs any
+cell that starts with `=`, `+`, `-` or `@` as a formula, quoted or not. A member could title an
+expense `=HYPERLINK(...)` and have it run for whoever exported the group's history.
+- Text cells that start like a formula now start with an apostrophe.
+- Amounts stay numbers, negative ones included.
+- Header values are quoted, so a name with a comma can't start a cell of its own.
+
+The other CSV export (`generateCSV`, `exportAsCSV`) is called by nothing; it goes on the phase 1c
+list.
+
+**One database pool per process.** `src/lib/db.ts` kept its client on `globalThis` only outside
+production. A production server that evaluates the module twice (a separate bundle or module graph)
+would open a second connection pool. The client is now kept there in every environment.
 
 ---
 

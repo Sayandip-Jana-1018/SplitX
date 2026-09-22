@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { logger } from '@/lib/logger';
+import { istMonthKey, istMonthStart } from '@/lib/indiaTime';
 
 const CATEGORY_LABELS: Record<string, string> = {
     food: 'Food',
@@ -20,10 +21,6 @@ const CATEGORY_LABELS: Record<string, string> = {
     education: 'Education',
     other: 'Other',
 };
-
-function monthKey(date: Date) {
-    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-}
 
 export async function GET(req: Request) {
     try {
@@ -86,7 +83,7 @@ export async function GET(req: Request) {
                     categoryBreakdown: [],
                     memberSpending: [],
                     insights: [],
-                    currentMonth: monthKey(new Date()),
+                    currentMonth: istMonthKey(new Date()),
                     totalThisMonth: 0,
                     transactionCount: 0,
                     memberCount: 0,
@@ -105,15 +102,17 @@ export async function GET(req: Request) {
         }
 
         const tripIds = selectedGroup.trips.map((trip) => trip.id);
-        const sixMonthsAgo = new Date();
-        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+        // Months as India counts them (lib/indiaTime.ts): the chart's six months,
+        // this month's settlements, and every total below start at midnight IST.
+        const now = new Date();
+        const chartStart = istMonthStart(now, -5);
 
         const [transactions, currentMonthSettlements] = await Promise.all([
             prisma.transaction.findMany({
                 where: {
                     tripId: { in: tripIds },
                     deletedAt: null,
-                    date: { gte: sixMonthsAgo },
+                    date: { gte: chartStart },
                 },
                 include: {
                     splits: true,
@@ -126,16 +125,14 @@ export async function GET(req: Request) {
                     tripId: { in: tripIds },
                     status: { in: ['completed', 'confirmed'] },
                     deletedAt: null,
-                    createdAt: { gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1) },
+                    createdAt: { gte: istMonthStart(now) },
                 },
                 select: { amount: true },
             }),
         ]);
 
-        const now = new Date();
-        const currentMonth = monthKey(now);
-        const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-        const lastMonth = monthKey(lastMonthDate);
+        const currentMonth = istMonthKey(now);
+        const lastMonth = istMonthKey(istMonthStart(now, -1));
 
         const monthlyMap = new Map<string, number>();
         const categoryMap = new Map<string, number>();
@@ -157,7 +154,7 @@ export async function GET(req: Request) {
         }
 
         for (const transaction of transactions) {
-            const key = monthKey(new Date(transaction.date));
+            const key = istMonthKey(new Date(transaction.date));
             monthlyMap.set(key, (monthlyMap.get(key) || 0) + transaction.amount);
 
             if (!memberSpendMap.has(transaction.payerId)) {
@@ -184,8 +181,7 @@ export async function GET(req: Request) {
 
         const monthlyTrend = [];
         for (let i = 5; i >= 0; i -= 1) {
-            const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
-            const key = monthKey(date);
+            const key = istMonthKey(istMonthStart(now, -i));
             monthlyTrend.push({ month: key, total: monthlyMap.get(key) || 0 });
         }
 
@@ -270,7 +266,7 @@ export async function GET(req: Request) {
                 insights,
                 currentMonth,
                 totalThisMonth: currentMonthTotal,
-                transactionCount: transactions.filter((transaction) => monthKey(new Date(transaction.date)) === currentMonth).length,
+                transactionCount: transactions.filter((transaction) => istMonthKey(new Date(transaction.date)) === currentMonth).length,
                 memberCount: new Set([selectedGroup.ownerId, ...selectedGroup.members.map((member) => member.userId)]).size,
                 groupName: selectedGroup.name,
                 groupEmoji: selectedGroup.emoji,

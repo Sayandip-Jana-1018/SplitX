@@ -117,6 +117,18 @@ export function generateCSV(data: ExportData): string {
     ].join('\n');
 }
 
+/**
+ * One CSV cell of text someone typed (a title, a name): quoted, its quotes
+ * doubled, and, when it starts the way a formula does (= + - @, a tab or a
+ * carriage return), led by an apostrophe so a spreadsheet shows it rather than
+ * running it. A group member could otherwise title an expense =HYPERLINK(...)
+ * and have it run for whoever exports the group's history.
+ */
+export function csvText(value: string): string {
+    const shown = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
+    return `"${shown.replace(/"/g, '""')}"`;
+}
+
 export function generateBalanceHistoryCSV(data: BalanceHistoryExportData): string {
     const headers = [
         'Date',
@@ -137,21 +149,21 @@ export function generateBalanceHistoryCSV(data: BalanceHistoryExportData): strin
 
         return [
             date,
-            `"${entry.eventType}"`,
-            `"${entry.sourceLabel.replace(/"/g, '""')}"`,
+            csvText(entry.eventType),
+            csvText(entry.sourceLabel),
             (entry.beforeBalance / 100).toFixed(2),
             (entry.delta / 100).toFixed(2),
             (entry.afterBalance / 100).toFixed(2),
-            `"${entry.counterparties.join(', ').replace(/"/g, '""')}"`,
-            `"${entry.explanation.replace(/"/g, '""')}"`,
+            csvText(entry.counterparties.join(', ')),
+            csvText(entry.explanation),
         ];
     });
 
     return [
-        `# Balance Journey for ${data.userName}`,
-        `# Group,${data.groupEmoji ? `${data.groupEmoji} ` : ''}${data.groupName}`,
+        csvText(`# Balance Journey for ${data.userName}`),
+        `# Group,${csvText(`${data.groupEmoji ? `${data.groupEmoji} ` : ''}${data.groupName}`)}`,
         `# Current Balance,${(data.currentBalance / 100).toFixed(2)}`,
-        `# Current Route,"${data.routeSummary.replace(/"/g, '""')}"`,
+        `# Current Route,${csvText(data.routeSummary)}`,
         `# Exported At,${data.exportDate.toISOString()}`,
         '',
         headers.join(','),
