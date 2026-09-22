@@ -2028,6 +2028,53 @@ group's own expenses (`entityId IN` the group's expense IDs). `AuditLog` has no 
 worker's caches, never answers an API call, and shows the offline page only when the network is gone. The
 history route asks the audit log for its own expenses only, and not at all for a group without any.
 
+### D-067 · AI that can't run up a bill, answers from the ledger, and works again
+**2026-09-22** · ✅ written and unit-tested (931 → 961 tests) · measured against Gemini's live API
+
+The three features that cost money per call (AI chat and voice entry on Gemini, receipt scanning on
+OpenAI) had no limit per person or overall, took input of any size (a receipt photo of any size at
+"high" detail; a transcript or member list of any length), and waited on the provider without a
+deadline (security finding H3). Checking them against the live API found two more things:
+
+- **The AI chat has been broken in production.** Google retired `gemini-2.0-flash`, the model both
+  Gemini features named: generation answers 404, "no longer available … use gemini-3.6-flash".
+  The chat replied "Sorry, I couldn't process that right now"; voice entry fell back, unnoticed, to
+  its simple parser.
+- **Gemini is slow when busy.** On 2026-09-22 a one-word reply from `gemini-3.6-flash` took 14–153 s
+  depending on the thinking setting and the moment; the lighter models answered 503, "high demand".
+  With 64 output tokens and default thinking, the reply was empty: thinking counts against the limit.
+
+**Decided:**
+- **Allowances** (`src/lib/aiQuota.ts`): per person per day, 30 chat questions, 40 voice entries and
+  10 receipt scans, plus 400 AI calls a day for all of SplitX, each overridable (`AI_DAILY_*`).
+  `AI_DISABLED=true` switches all of it off. They count in the rate limiter's Redis
+  (`consumeAllowance`), and **fail closed**: if the counter can't be reached, no paid call is made.
+- **Past a limit, the help doesn't stop, only the cost.** The chat answers from the same data
+  without AI (the local answer that already existed), saying the allowance is used; voice entry uses
+  the simple parser. Receipt scans, which have no server-side substitute, say so and point to
+  on-device scanning, with `Retry-After`.
+- **One Gemini client** (`src/lib/gemini.ts`): the key in the `x-goog-api-key` header instead of the
+  URL; instructions and SplitX's data in `systemInstruction`, the person's words as their own turn,
+  and a line telling the model that names and titles in the data are data, not instructions; a
+  deadline on every call (25 s chat, 15 s voice), after which the local answer is used; thinking set
+  to `low` for the chat and `minimal` for voice; the model is `GEMINI_MODEL`, by default
+  `gemini-3.6-flash`, the replacement Google names.
+- **Input caps:** a chat question up to 1,000 characters; a transcript up to 500, with at most 50
+  members of 60 characters each (the name matcher's work grows with both); a receipt photo up to 4 MB
+  as JPEG, PNG or WebP. The scan page now shrinks photos to 2,048 pixels on the long side before
+  sending: the vision model reads no more than that at high detail, and Vercel refuses request
+  bodies over 4.5 MB, so large phone photos used to fail there. The OpenAI call has a 45 s deadline.
+- **The chat answers from the ledger** (B-028): balances per group over live expenses, and "who owes
+  whom" from each group's settle-up plan, the same as Settle Up. It used to net every expense pair
+  by pair, deleted expenses and deleted groups included, and its instructions told the model that
+  SplitX nets debts across groups, which it doesn't.
+
+**Tests:** the allowance rules (per person, overall, unreachable counter, kill switch, overrides);
+the Gemini client (key only in a header, instructions apart from the message, deadline, busy and
+empty answers, thinking dropped from the text); and each route: the chat's context is the plan,
+past the allowance it answers without calling Gemini, a busy Gemini gets the local answer, and
+oversized input is refused before anything is counted or spent.
+
 ---
 
 ## Open problems
@@ -2061,7 +2108,7 @@ history route asks the audit log for its own expenses only, and not at all for a
 | B-025 | Sign-up, login and password reset are still limited to 10 a minute per address (D-022). | A room asked to register at once from one campus network would be refused after the first ten. The demo page needs no account, so it is not affected. | Before any demo asks people to sign up: count failed logins per account for brute-force protection, and give sign-up the device-plus-network treatment of D-045. |
 | B-026 | Jenkins' deploy builds and `cd:verify` read GitHub's deployments without a token, and this network's public address shares GitHub's anonymous allowance (60 an hour) with other devices. | A deploy would fail at its first step whenever someone else on the network had spent the allowance: on 2026-09-21 its hour began eleven minutes before this laptop booted, and it was spent when `cd:verify` ran, which failed 2 of its 15 checks on it. | Open — the user creates a fine-grained token (this repository only, Deployments read and write) and puts it in `.env` as `JENKINS_GITHUB_TOKEN`; `k8s:up` hands it to Jenkins. Both scripts now say when the allowance is spent and until when, instead of a bare 403, and the build log no longer repeats GitHub's message, which names the address. **2026-09-21:** the token is in `.env` and works (5,000 an hour). |
 | B-027 | With the cluster running, the 6 GB WSL VM held about 4 GB in memory and all 8 GB of its swap (2026-09-21), about 12 GB against the 4.6 GB the same cluster used the day before. | The control plane crash-looped and the app answered 503. On Windows, the swap file held the SSD at a queue of 100–245 and 61 ms reads, which froze the laptop. Release `7e3509e` (deployment 6572256500, 15:45 UTC) reached no relay and was never deployed: no delivery was logged after 15:30 UTC. | Open. Next time the cluster runs, watch the VM's anonymous, shared and swapped memory from `k8s:up` on (node-exporter already exports all three), find what grew, and fit the local cluster into 6 GB. Then redeliver 6572256500 from GitHub's webhook page and read Jenkins' statuses on GitHub. |
-| B-028 | The AI chat builds its own balances: pairwise instead of the group plan, over every expense including deleted ones, in deleted groups too, with ±1 paisa counted as settled. | Its answers to "who owes me?" can disagree with Settle Up, and count expenses that were deleted. | Open — fix 6 of the plan moves its context onto the ledger (D-063), with its quotas, input caps and prompt handling. |
+| B-028 | The AI chat builds its own balances: pairwise instead of the group plan, over every expense including deleted ones, in deleted groups too, with ±1 paisa counted as settled. | Its answers to "who owes me?" can disagree with Settle Up, and count expenses that were deleted. | ✅ Resolved 2026-09-22 — D-067. The chat's context is the ledger: balances per group over live expenses, and each group's settle-up plan. |
 | B-029 | Removing a member used to re-split their shares among the others (D-063). Groups that had a member removed may hold shares that were moved between people, and former members may still owe or be owed. | Balances in those groups reflect the old re-split, not what people agreed to. | Open — fix 9 of the plan: a read-only check of production (`scripts/ledger-audit.mjs`) counts groups with former members holding a balance, and shares that don't add up. Any repair is approved one by one. |
 
 ## Environment notes (this machine)

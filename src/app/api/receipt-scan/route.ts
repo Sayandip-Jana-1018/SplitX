@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
+import { prisma } from '@/lib/db';
+import { takeAiQuota } from '@/lib/aiQuota';
 import { recordReceiptScan } from '@/lib/metrics';
 import { logger } from '@/lib/logger';
 
@@ -71,6 +73,14 @@ GENERAL:
 15. "notes" should be null if everything is consistent, or a brief string describing any pricing discrepancies found.
 Always return raw JSON.`;
 
+/**
+ * The scan page shrinks photos to about 2,048 pixels before sending, which is
+ * all the vision model reads at high detail, so a real receipt is well under
+ * this. It also keeps under Vercel's 4.5 MB limit on a request.
+ */
+const MAX_IMAGE_CHARS = 4_000_000;
+const IMAGE_DATA_URL = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/;
+
 export async function POST(req: Request) {
     try {
         const session = await auth();
@@ -86,42 +96,73 @@ export async function POST(req: Request) {
             );
         }
 
-        const body = await req.json();
-        const { image } = body as { image: string };
-
-        if (!image || !image.startsWith('data:image/')) {
+        if (Number(req.headers.get('content-length') || 0) > MAX_IMAGE_CHARS + 1_000) {
+            return NextResponse.json({ error: 'That photo is too large to scan. Try again from the camera, or use on-device mode.' }, { status: 413 });
+        }
+        const body = await req.json().catch(() => null) as { image?: unknown } | null;
+        const image = typeof body?.image === 'string' ? body.image : '';
+        if (image.length > MAX_IMAGE_CHARS) {
+            return NextResponse.json({ error: 'That photo is too large to scan. Try again from the camera, or use on-device mode.' }, { status: 413 });
+        }
+        if (!IMAGE_DATA_URL.test(image)) {
             return NextResponse.json(
-                { error: 'Invalid image. Send a base64 data URL (data:image/jpeg;base64,...)' },
+                { error: 'Send a JPEG, PNG or WebP photo of the receipt.' },
                 { status: 400 }
             );
         }
 
+        const user = await prisma.user.findUnique({ where: { email: session.user.email }, select: { id: true } });
+        if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
+
+        const quota = await takeAiQuota('receipt', user.id);
+        if (!quota.ok) {
+            return NextResponse.json(
+                { error: `${quota.error} On-device scanning still works.` },
+                { status: quota.status, headers: quota.retryAfterSeconds ? { 'Retry-After': String(quota.retryAfterSeconds) } : undefined }
+            );
+        }
+
         // Call OpenAI Vision API
-        const openaiRes = await fetch('https://api.openai.com/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}`,
-            },
-            body: JSON.stringify({
-                model: 'gpt-4o-mini',
-                messages: [
-                    { role: 'system', content: SYSTEM_PROMPT },
-                    {
-                        role: 'user',
-                        content: [
-                            { type: 'text', text: 'Parse this receipt. IMPORTANT: Read the final Payment/Grand Total amount directly from the receipt — do NOT compute it from items. Return structured JSON:' },
-                            {
-                                type: 'image_url',
-                                image_url: { url: image, detail: 'high' },
-                            },
-                        ],
-                    },
-                ],
-                max_tokens: 2000,
-                temperature: 0.1,
-            }),
-        });
+        let openaiRes: Response;
+        try {
+            openaiRes = await fetch('https://api.openai.com/v1/chat/completions', {
+                signal: AbortSignal.timeout(45_000),
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`,
+                },
+                body: JSON.stringify({
+                    model: 'gpt-4o-mini',
+                    messages: [
+                        { role: 'system', content: SYSTEM_PROMPT },
+                        {
+                            role: 'user',
+                            content: [
+                                { type: 'text', text: 'Parse this receipt. IMPORTANT: Read the final Payment/Grand Total amount directly from the receipt — do NOT compute it from items. Return structured JSON:' },
+                                {
+                                    type: 'image_url',
+                                    image_url: { url: image, detail: 'high' },
+                                },
+                            ],
+                        },
+                    ],
+                    max_tokens: 2000,
+                    temperature: 0.1,
+                }),
+            });
+        } catch (error) {
+            const name = (error as { name?: string })?.name;
+            recordReceiptScan('upstream_error');
+            return NextResponse.json(
+                {
+                    error: name === 'TimeoutError' || name === 'AbortError'
+                        ? 'The AI scan took too long. Try again, or use on-device mode.'
+                        : 'Couldn’t reach the AI service. Try again, or use on-device mode.',
+                },
+                { status: 504 }
+            );
+        }
 
         if (!openaiRes.ok) {
             const err = await openaiRes.text();
