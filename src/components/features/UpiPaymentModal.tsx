@@ -108,9 +108,15 @@ function UpiFlow({ amount, payeeName, settlementId, payeeUpiId: knownUpiId, onCl
             const res = await fetch(`/api/settlements/${settlementId}/pay`, { method: 'POST' });
             const data = await res.json().catch(() => null);
             if (!res.ok || !data?.upiUrl) {
-                // Most often the payee hasn't saved a UPI ID — let the payer type it in.
-                setError(data?.message || data?.error || `${payeeName} hasn’t added a UPI ID yet. Enter it to continue.`);
-                setManualMode(true);
+                // Only a payee without a UPI ID is worked around, by typing theirs in.
+                // Any other refusal (balances changed, already paid) stops here:
+                // paying by hand would move money the app then can't record.
+                if (data?.code === 'no_upi_id') {
+                    setError(`${payeeName} hasn’t added a UPI ID yet. Enter it to continue.`);
+                    setManualMode(true);
+                } else {
+                    setError(data?.error || 'This payment can’t be started right now. Refresh and try again.');
+                }
                 return;
             }
             openPayment(data.upiUrl, data.payeeUpiId || '');

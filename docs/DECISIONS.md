@@ -1917,8 +1917,56 @@ pin permission checks that were already right. The planner's randomized test now
 balance to clear exactly, not to within a paisa.
 
 **Left:** approving and confirming a payment don't re-check the balance yet, and the settlement state
-machine still allows cancelled → completed (fix 4, next). The AI chat computes its own pairwise
+machine still allows cancelled → completed. Both are D-064. The AI chat computes its own pairwise
 balances (B-028). Data written by the old removal may hold shares moved between people (B-029).
+
+### D-064 · A settlement moves by one table, one step at a time
+**2026-09-22** · ✅ written and unit-tested (844 → 915 tests)
+
+A payment's state lived in `if`s spread over four routes, and they disagreed:
+- "Got cash" completed a settlement from any state that wasn't already complete, so a request the
+  receiver had marked as not paid could still be completed, and counted.
+- Every route read the status, checked it, then wrote the new one unconditionally: two taps on
+  Approve both landed, and the completion was counted twice in the metrics.
+- Only some moves were audited: "Got cash", "Not paid" and opening UPI left no record.
+- Nothing re-checked balances once a request existed, so a request made before an expense changed
+  could be paid at its old amount.
+- The UPI screen treated every refusal as "the receiver has no UPI ID" and offered to take one by hand,
+  so money could leave the payer's account for a payment the app would then refuse to record.
+
+**Decided** (`src/lib/settlementTransitions.ts`):
+
+| Move | Who | From | To |
+|---|---|---|---|
+| `open_upi` | payer | pending, initiated | initiated |
+| `mark_paid` | payer | pending, initiated | paid_pending |
+| `approve` | receiver | paid_pending | completed |
+| `send_back` | receiver | paid_pending | initiated |
+| `mark_received` | receiver | pending, initiated | paid_pending |
+| `accept_cash` | receiver | pending, initiated, paid_pending | completed |
+| `decline` | receiver | pending, initiated, paid_pending | cancelled |
+
+- A move lands only on the state that was read: `updateMany` on `id` and that `status`, checked for
+  one row. Of two taps at once, exactly one wins; the other is a 409. Completed and cancelled
+  settlements never move again.
+- **The payer's moves re-check the group's balances** (`settlementRoom`, D-063), leaving out the
+  request itself, in a serializable transaction. They come before money leaves the payer's account,
+  so this is where a stale amount is caught (`balance_changed`).
+- **The receiver's moves record what happened.** Approving or accepting cash says the money has
+  arrived; refusing to record it would make the app disagree with the bank. If a receiver approves
+  more than was owed, the difference shows as owed back, which is true.
+- Every move is written to the audit log with its name and the settlement before and after.
+- The four routes keep their URLs and bodies, and map the page's buttons onto the table; an unknown
+  action is a 400, where "confirm by receiver" used to fall back to a default. Responses no longer
+  carry either person's UPI ID. The UPI screen offers manual entry only for `no_upi_id`, and "Paid
+  cash" reports a refusal instead of success.
+
+**Tests:** every move from every state (42 cases), each move by the wrong person, two approvals at
+once, the audit record, the balance re-check (and the request not counted against itself), a
+deleted group, and a serializable conflict; plus the routes' wiring.
+
+**Left:** a payer can't withdraw their own request; the receiver's "Not paid" is the way out, and
+the refusal says so. The frontend review (phase 1b of the plan) adds the button.
 
 ---
 

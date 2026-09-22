@@ -257,13 +257,13 @@ export default function SettlementsPage() {
             headers: JSON_HEADERS,
             body: JSON.stringify({ action: 'paid', method: 'cash' }),
         });
-        toast(
-            res.ok
-                ? `Marked as paid — ${firstName(item.to.name)} will confirm receipt`
-                : `Request created — ask ${firstName(item.to.name)} to confirm receipt`,
-            'success'
-        );
         setCashConfirm(null);
+        if (!res.ok) {
+            const body = await res.json().catch(() => ({}));
+            toast(typeof body.error === 'string' ? body.error : 'Could not mark this as paid', 'error');
+            return true;
+        }
+        toast(`Marked as paid — ${firstName(item.to.name)} will confirm receipt`, 'success');
         return true;
     });
 

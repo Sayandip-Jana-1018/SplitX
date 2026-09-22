@@ -1,27 +1,29 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
-import { z } from 'zod';
 import { createNotification } from '@/lib/notifications';
 import { recordSettlementCompleted } from '@/lib/metrics';
-import {
-    canInitiateSettlementPayment,
-    isCompletedSettlementStatus,
-    isAwaitingReceiverApproval,
-} from '@/lib/settlementStatus';
+import { refusalResponse, transitionSettlement, TransitionRefused, type SettlementAction } from '@/lib/settlementTransitions';
 import { logger } from '@/lib/logger';
 
 const ActionSchema = z.object({
     action: z.enum(['confirm', 'accept_cash', 'reject']).default('confirm'),
 });
 
+const MOVES: Record<z.infer<typeof ActionSchema>['action'], SettlementAction> = {
+    confirm: 'mark_received',
+    accept_cash: 'accept_cash',
+    reject: 'decline',
+};
+
 const formatRupees = (paise: number) => `₹${(paise / 100).toLocaleString('en-IN')}`;
 
-// POST /api/settlements/:id/confirm-by-receiver
-// Allows the receiver to move a pending/initiated settlement to paid_pending
-// so that the /approve endpoint can then finalize it.
+// POST /api/settlements/:id/confirm-by-receiver — the receiver records what
+// happened: they were handed cash (completed), it was never paid (cancelled),
+// or the payer has paid and it only needs approving (lib/settlementTransitions.ts).
 export async function POST(
-    _req: Request,
+    req: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
     try {
@@ -31,47 +33,29 @@ export async function POST(
         }
 
         const { id } = await params;
+        const parsed = ActionSchema.safeParse(await req.json().catch(() => ({})));
+        if (!parsed.success) {
+            return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
+        }
+        const { action } = parsed.data;
 
         const user = await prisma.user.findUnique({ where: { email: session.user.email } });
         if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
-        const settlement = await prisma.settlement.findFirst({
-            where: { id, deletedAt: null },
-            include: {
-                from: { select: { id: true, name: true } },
-                to: { select: { id: true, name: true } },
-            },
-        });
-
-        if (!settlement) {
-            return NextResponse.json({ error: 'Settlement not found' }, { status: 404 });
+        let settlement;
+        try {
+            ({ after: settlement } = await transitionSettlement({
+                settlementId: id,
+                actorId: user.id,
+                action: MOVES[action],
+                ...(action === 'accept_cash' ? { data: { method: 'cash' } } : {}),
+            }));
+        } catch (error) {
+            if (error instanceof TransitionRefused) return refusalResponse(error);
+            throw error;
         }
 
-        // Only the receiver (to) can use this endpoint
-        if (settlement.toId !== user.id) {
-            return NextResponse.json(
-                { error: 'Only the receiver can use this endpoint' },
-                { status: 403 }
-            );
-        }
-
-        if (isCompletedSettlementStatus(settlement.status)) {
-            return NextResponse.json(
-                { error: 'This settlement has already been completed' },
-                { status: 400 }
-            );
-        }
-
-        const body = await _req.json().catch(() => ({}));
-        const parsed = ActionSchema.safeParse(body);
-        const action = parsed.success ? parsed.data.action : 'confirm';
-
-        // ── REJECT: Cancel the settlement and notify sender ──
         if (action === 'reject') {
-            await prisma.settlement.update({
-                where: { id },
-                data: { status: 'cancelled' },
-            });
             try {
                 await createNotification({
                     userId: settlement.fromId,
@@ -84,12 +68,7 @@ export async function POST(
             return NextResponse.json({ message: 'Settlement rejected and sender notified' });
         }
 
-        // ── ACCEPT CASH: Directly complete (offline payment confirmed) ──
         if (action === 'accept_cash') {
-            await prisma.settlement.update({
-                where: { id },
-                data: { status: 'completed', method: 'cash' },
-            });
             recordSettlementCompleted('cash', settlement.amount);
             try {
                 await createNotification({
@@ -102,23 +81,6 @@ export async function POST(
             } catch { /* notification failures are non-critical */ }
             return NextResponse.json({ message: 'Cash payment confirmed — settlement completed' });
         }
-
-        // ── CONFIRM: Move to paid_pending (original flow) ──
-        if (isAwaitingReceiverApproval(settlement.status)) {
-            return NextResponse.json({ message: 'Already awaiting approval' });
-        }
-
-        if (!canInitiateSettlementPayment(settlement.status)) {
-            return NextResponse.json(
-                { error: 'Settlement cannot be transitioned from this state' },
-                { status: 400 }
-            );
-        }
-
-        await prisma.settlement.update({
-            where: { id },
-            data: { status: 'paid_pending' },
-        });
 
         return NextResponse.json({ message: 'Settlement moved to paid_pending for approval' });
     } catch (error) {

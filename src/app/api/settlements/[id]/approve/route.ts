@@ -1,11 +1,9 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
-import { z } from 'zod';
-import { createAuditLog } from '@/lib/auditLog';
-import { serializeSettlementAuditSnapshot } from '@/lib/auditPayloads';
 import { createBulkNotifications, createNotification } from '@/lib/notifications';
-import { isAwaitingReceiverApproval, isCompletedSettlementStatus } from '@/lib/settlementStatus';
+import { refusalResponse, settlementRow, transitionSettlement, TransitionRefused } from '@/lib/settlementTransitions';
 import { recordSettlementCompleted } from '@/lib/metrics';
 import { logger } from '@/lib/logger';
 
@@ -13,6 +11,9 @@ const ApprovalSchema = z.object({
     action: z.enum(['approve', 'reject']).default('approve'),
 });
 
+// POST /api/settlements/:id/approve — the receiver approves a payment the payer
+// marked as paid, or sends it back if the money hasn't arrived
+// (lib/settlementTransitions.ts).
 export async function POST(
     req: Request,
     { params }: { params: Promise<{ id: string }> }
@@ -24,131 +25,58 @@ export async function POST(
         }
 
         const { id } = await params;
-        const body = await req.json().catch(() => ({}));
-        const parsed = ApprovalSchema.safeParse(body);
+        const parsed = ApprovalSchema.safeParse(await req.json().catch(() => ({})));
         if (!parsed.success) {
             return NextResponse.json({ error: 'Invalid approval action' }, { status: 400 });
         }
+        const approving = parsed.data.action === 'approve';
 
         const user = await prisma.user.findUnique({ where: { email: session.user.email } });
         if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
-        const settlement = await prisma.settlement.findFirst({
-            where: { id, deletedAt: null },
-            include: {
-                from: { select: { id: true, name: true } },
-                to: { select: { id: true, name: true } },
-                trip: { select: { id: true, title: true, groupId: true } },
-            },
-        });
-
-        if (!settlement) {
-            return NextResponse.json({ error: 'Settlement not found' }, { status: 404 });
+        let settlement;
+        try {
+            ({ after: settlement } = await transitionSettlement({
+                settlementId: id,
+                actorId: user.id,
+                action: approving ? 'approve' : 'send_back',
+            }));
+        } catch (error) {
+            if (error instanceof TransitionRefused) return refusalResponse(error);
+            throw error;
         }
 
-        if (settlement.toId !== user.id) {
-            return NextResponse.json(
-                { error: 'Only the receiver can approve this payment' },
-                { status: 403 }
-            );
-        }
+        const amount = `₹${(settlement.amount / 100).toLocaleString('en-IN')}`;
 
-        if (isCompletedSettlementStatus(settlement.status)) {
-            return NextResponse.json(
-                { error: 'This settlement has already been completed' },
-                { status: 400 }
-            );
-        }
+        if (approving) {
+            recordSettlementCompleted(settlement.method, settlement.amount);
 
-        if (!isAwaitingReceiverApproval(settlement.status)) {
-            return NextResponse.json(
-                { error: 'This settlement is not waiting for receiver approval yet' },
-                { status: 400 }
-            );
-        }
-
-        const nextStatus = parsed.data.action === 'approve' ? 'completed' : 'initiated';
-        const updated = await prisma.settlement.update({
-            where: { id },
-            data: { status: nextStatus },
-        });
-        if (nextStatus === 'completed') {
-            recordSettlementCompleted(updated.method, updated.amount);
-        }
-
-        await createAuditLog({
-            userId: user.id,
-            action: 'update',
-            entityType: 'settlement',
-            entityId: settlement.id,
-            details: {
-                groupId: settlement.trip.groupId,
-                tripId: settlement.tripId,
-                before: serializeSettlementAuditSnapshot({
-                    id: settlement.id,
-                    tripId: settlement.tripId,
-                    tripTitle: settlement.trip.title,
-                    fromId: settlement.fromId,
-                    fromName: settlement.from.name,
-                    toId: settlement.toId,
-                    toName: settlement.to.name,
-                    amount: settlement.amount,
-                    status: settlement.status,
-                    method: settlement.method,
-                    note: settlement.note,
-                    createdAt: settlement.createdAt,
-                    updatedAt: settlement.updatedAt,
-                    deletedAt: settlement.deletedAt,
-                }),
-                after: serializeSettlementAuditSnapshot({
-                    id: updated.id,
-                    tripId: updated.tripId,
-                    tripTitle: settlement.trip.title,
-                    fromId: settlement.fromId,
-                    fromName: settlement.from.name,
-                    toId: settlement.toId,
-                    toName: settlement.to.name,
-                    amount: updated.amount,
-                    status: updated.status,
-                    method: updated.method,
-                    note: updated.note,
-                    createdAt: updated.createdAt,
-                    updatedAt: updated.updatedAt,
-                    deletedAt: updated.deletedAt,
-                }),
-            },
-        });
-
-        if (parsed.data.action === 'approve') {
             await createNotification({
                 userId: settlement.fromId,
                 actorId: user.id,
                 type: 'settlement_completed',
                 title: 'Payment approved',
-                body: `${settlement.to.name || 'Someone'} confirmed receiving ₹${(settlement.amount / 100).toLocaleString('en-IN')} from you.`,
+                body: `${settlement.to.name || 'Someone'} confirmed receiving ${amount} from you.`,
                 link: '/settlements',
             });
 
             try {
-                const groupWithMembers = await prisma.group.findUnique({
+                const group = await prisma.group.findUnique({
                     where: { id: settlement.trip.groupId },
                     include: { members: { select: { userId: true } } },
                 });
+                const otherMemberIds = (group?.members ?? [])
+                    .map((member) => member.userId)
+                    .filter((memberId) => memberId !== settlement.fromId && memberId !== settlement.toId);
 
-                if (groupWithMembers) {
-                    const otherMemberIds = groupWithMembers.members
-                        .map((member) => member.userId)
-                        .filter((memberId) => memberId !== settlement.fromId && memberId !== settlement.toId);
-
-                    if (otherMemberIds.length > 0) {
-                        await createBulkNotifications(otherMemberIds, {
-                            actorId: user.id,
-                            type: 'settlement_completed',
-                            title: 'Settlement completed',
-                            body: `${settlement.to.name || 'Someone'} approved ₹${(settlement.amount / 100).toLocaleString('en-IN')} from ${settlement.from.name || 'someone'}.`,
-                            link: '/settlements',
-                        });
-                    }
+                if (otherMemberIds.length > 0) {
+                    await createBulkNotifications(otherMemberIds, {
+                        actorId: user.id,
+                        type: 'settlement_completed',
+                        title: 'Settlement completed',
+                        body: `${settlement.to.name || 'Someone'} approved ${amount} from ${settlement.from.name || 'someone'}.`,
+                        link: '/settlements',
+                    });
                 }
             } catch {
                 // non-fatal
@@ -165,7 +93,7 @@ export async function POST(
             });
 
             return NextResponse.json({
-                settlement: updated,
+                settlement: settlementRow(settlement),
                 message: 'Payment approved and settlement completed.',
             });
         }
@@ -175,12 +103,12 @@ export async function POST(
             actorId: user.id,
             type: 'settlement_rejected',
             title: 'Payment still needs approval',
-            body: `${settlement.to.name || 'The receiver'} has not approved your ₹${(settlement.amount / 100).toLocaleString('en-IN')} payment yet. Please verify and try again.`,
+            body: `${settlement.to.name || 'The receiver'} has not approved your ${amount} payment yet. Please verify and try again.`,
             link: '/settlements',
         });
 
         return NextResponse.json({
-            settlement: updated,
+            settlement: settlementRow(settlement),
             message: 'Approval request sent back to the payer for follow-up.',
         });
     } catch (error) {
