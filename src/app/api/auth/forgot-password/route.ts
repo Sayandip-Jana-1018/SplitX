@@ -1,54 +1,47 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { sendPasswordResetEmail } from '@/lib/email';
-import crypto from 'crypto';
+import { normalizeEmail } from '@/lib/password';
+import { hashResetToken, newResetToken } from '@/lib/resetTokens';
 import { logger } from '@/lib/logger';
 
+const RESET_LINK_MS = 60 * 60 * 1000;
+
+// POST /api/auth/forgot-password — emails a reset link to an account that has a
+// password. The answer is the same whether or not the account exists.
 export async function POST(req: Request) {
     try {
-        const { email } = await req.json();
-
-        if (!email || typeof email !== 'string') {
+        const body = await req.json().catch(() => null) as { email?: unknown } | null;
+        const email = typeof body?.email === 'string' ? normalizeEmail(body.email) : '';
+        if (!email || email.length > 254) {
             return NextResponse.json({ error: 'Email is required' }, { status: 400 });
         }
 
-        const normalizedEmail = email.toLowerCase().trim();
-
-        // Always return success to prevent user enumeration
         const successResponse = NextResponse.json({
             message: 'If an account exists with that email, we sent a reset link.',
         });
 
-        // Check if user exists with a password (credentials user)
-        const user = await prisma.user.findUnique({
-            where: { email: normalizedEmail },
-            select: { id: true, password: true },
+        const user = await prisma.user.findFirst({
+            where: { email: { equals: email, mode: 'insensitive' } },
+            select: { id: true, email: true, password: true },
         });
 
-        // If user doesn't exist or is OAuth-only (no password), silently return success
-        if (!user || !user.password) {
+        // No account, or one that signs in with Google or GitHub only.
+        if (!user?.email || !user.password) {
             return successResponse;
         }
 
-        // Delete any existing reset tokens for this email
-        await prisma.passwordResetToken.deleteMany({
-            where: { email: normalizedEmail },
-        });
+        // One live link per account: a new request replaces the old one. The
+        // database keeps the token's hash; the email carries the token.
+        const token = newResetToken();
+        await prisma.$transaction([
+            prisma.passwordResetToken.deleteMany({ where: { email: user.email } }),
+            prisma.passwordResetToken.create({
+                data: { email: user.email, token: hashResetToken(token), expires: new Date(Date.now() + RESET_LINK_MS) },
+            }),
+        ]);
 
-        // Generate a secure token
-        const token = crypto.randomUUID();
-
-        // Store token with 1hr expiry
-        await prisma.passwordResetToken.create({
-            data: {
-                email: normalizedEmail,
-                token,
-                expires: new Date(Date.now() + 3600 * 1000), // 1 hour
-            },
-        });
-
-        // Send the reset email
-        await sendPasswordResetEmail(normalizedEmail, token);
+        await sendPasswordResetEmail(user.email, token);
 
         return successResponse;
     } catch (error) {

@@ -2,12 +2,12 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 import { registerSchema } from '@/lib/validators';
+import { normalizeEmail } from '@/lib/password';
 import { logger } from '@/lib/logger';
 
 export async function POST(req: Request) {
     try {
-        const body = await req.json();
-        const result = registerSchema.safeParse(body);
+        const result = registerSchema.safeParse(await req.json().catch(() => null));
 
         if (!result.success) {
             return NextResponse.json(
@@ -17,11 +17,13 @@ export async function POST(req: Request) {
         }
 
         const { name, password } = result.data;
-        const email = result.data.email.toLowerCase();
+        const email = normalizeEmail(result.data.email);
 
-        // Check if user already exists
-        const existingUser = await prisma.user.findUnique({
-            where: { email },
+        // Compared without case: accounts made by Google or GitHub may carry
+        // the address in the case the provider gave it.
+        const existingUser = await prisma.user.findFirst({
+            where: { email: { equals: email, mode: 'insensitive' } },
+            select: { id: true },
         });
 
         if (existingUser) {

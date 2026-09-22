@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#0a0a0e">
+    <title>Offline · SplitX</title>
+    <style>
+        :root { color-scheme: dark; }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: grid;
+            place-items: center;
+            padding: 24px 16px;
+            background: #0a0a0e;
+            color: #ececf1;
+            font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+            text-align: center;
+        }
+        main { max-width: 360px; }
+        .mark {
+            width: 56px;
+            height: 56px;
+            margin: 0 auto 20px;
+            border-radius: 16px;
+            display: grid;
+            place-items: center;
+            background: linear-gradient(135deg, #7c5cff, #b36bff);
+            font-weight: 700;
+            font-size: 24px;
+        }
+        h1 { margin: 0 0 8px; font-size: 22px; }
+        p { margin: 0 0 24px; color: #a5a6b4; }
+        button {
+            border: 0;
+            border-radius: 12px;
+            padding: 12px 20px;
+            font: inherit;
+            font-weight: 600;
+            color: #fff;
+            background: #7c5cff;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <div class="mark" aria-hidden="true">S</div>
+        <h1>You're offline</h1>
+        <p>SplitX needs a connection to show balances, so it never shows you numbers that might be out of date.</p>
+        <button type="button" onclick="location.reload()">Try again</button>
+    </main>
+</body>
+</html>

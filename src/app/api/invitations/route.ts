@@ -31,9 +31,9 @@ export async function POST(req: Request) {
 
         const { groupId, inviteeId } = parsed.data;
 
-        // Check the inviter is a member of the group
-        const membership = await prisma.groupMember.findUnique({
-            where: { groupId_userId: { groupId, userId: user.id } },
+        // Check the inviter is a member of the group, and the group still exists
+        const membership = await prisma.groupMember.findFirst({
+            where: { groupId, userId: user.id, group: { deletedAt: null } },
         });
         if (!membership) {
             return NextResponse.json({ error: 'You are not a member of this group' }, { status: 403 });

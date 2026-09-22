@@ -11,6 +11,7 @@ import { Notice } from '@/components/ui/kit';
 import { AuthCard, PasswordStrength, PasswordToggle, apiErrorMessage } from '@/components/auth/AuthKit';
 import { cn } from '@/lib/utils';
 import styles from '@/components/auth/auth.module.css';
+import { PASSWORD_MIN_CHARS, passwordProblem } from '@/lib/password';
 
 export default function ResetPasswordPage() {
     return (
@@ -35,8 +36,9 @@ function ResetPasswordForm() {
     const handleSubmit = async (event: FormEvent) => {
         event.preventDefault();
         setError('');
-        if (password.length < 6) {
-            setError('Use at least 6 characters for your password.');
+        const problem = passwordProblem(password);
+        if (problem) {
+            setError(problem);
             return;
         }
         if (password !== confirm) {
@@ -118,12 +120,12 @@ function ResetPasswordForm() {
                     label="New password"
                     type={showPassword ? 'text' : 'password'}
                     autoComplete="new-password"
-                    placeholder="At least 6 characters"
+                    placeholder="At least 8 characters"
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
                     leftIcon={<Lock size={17} />}
                     rightSlot={<PasswordToggle visible={showPassword} onToggle={() => setShowPassword((value) => !value)} />}
-                    minLength={6}
+                    minLength={PASSWORD_MIN_CHARS}
                     autoFocus
                     required
                 />
@@ -137,7 +139,7 @@ function ResetPasswordForm() {
                     onChange={(event) => setConfirm(event.target.value)}
                     leftIcon={<ShieldCheck size={17} />}
                     error={mismatch ? 'Passwords don’t match yet' : undefined}
-                    minLength={6}
+                    minLength={PASSWORD_MIN_CHARS}
                     required
                 />
                 <Button type="submit" size="lg" fullWidth loading={loading} leftIcon={<ShieldCheck size={18} />}>

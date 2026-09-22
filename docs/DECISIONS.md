@@ -1917,8 +1917,236 @@ pin permission checks that were already right. The planner's randomized test now
 balance to clear exactly, not to within a paisa.
 
 **Left:** approving and confirming a payment don't re-check the balance yet, and the settlement state
-machine still allows cancelled → completed (fix 4, next). The AI chat computes its own pairwise
+machine still allows cancelled → completed. Both are D-064. The AI chat computes its own pairwise
 balances (B-028). Data written by the old removal may hold shares moved between people (B-029).
+
+### D-064 · A settlement moves by one table, one step at a time
+**2026-09-22** · ✅ written and unit-tested (844 → 915 tests)
+
+A payment's state lived in `if`s spread over four routes, and they disagreed:
+- "Got cash" completed a settlement from any state that wasn't already complete, so a request the
+  receiver had marked as not paid could still be completed, and counted.
+- Every route read the status, checked it, then wrote the new one unconditionally: two taps on
+  Approve both landed, and the completion was counted twice in the metrics.
+- Only some moves were audited: "Got cash", "Not paid" and opening UPI left no record.
+- Nothing re-checked balances once a request existed, so a request made before an expense changed
+  could be paid at its old amount.
+- The UPI screen treated every refusal as "the receiver has no UPI ID" and offered to take one by hand,
+  so money could leave the payer's account for a payment the app would then refuse to record.
+
+**Decided** (`src/lib/settlementTransitions.ts`):
+
+| Move | Who | From | To |
+|---|---|---|---|
+| `open_upi` | payer | pending, initiated | initiated |
+| `mark_paid` | payer | pending, initiated | paid_pending |
+| `approve` | receiver | paid_pending | completed |
+| `send_back` | receiver | paid_pending | initiated |
+| `mark_received` | receiver | pending, initiated | paid_pending |
+| `accept_cash` | receiver | pending, initiated, paid_pending | completed |
+| `decline` | receiver | pending, initiated, paid_pending | cancelled |
+
+- A move lands only on the state that was read: `updateMany` on `id` and that `status`, checked for
+  one row. Of two taps at once, exactly one wins; the other is a 409. Completed and cancelled
+  settlements never move again.
+- **The payer's moves re-check the group's balances** (`settlementRoom`, D-063), leaving out the
+  request itself, in a serializable transaction. They come before money leaves the payer's account,
+  so this is where a stale amount is caught (`balance_changed`).
+- **The receiver's moves record what happened.** Approving or accepting cash says the money has
+  arrived; refusing to record it would make the app disagree with the bank. If a receiver approves
+  more than was owed, the difference shows as owed back, which is true.
+- Every move is written to the audit log with its name and the settlement before and after.
+- The four routes keep their URLs and bodies, and map the page's buttons onto the table; an unknown
+  action is a 400, where "confirm by receiver" used to fall back to a default. Responses no longer
+  carry either person's UPI ID. The UPI screen offers manual entry only for `no_upi_id`, and "Paid
+  cash" reports a refusal instead of success.
+
+**Tests:** every move from every state (42 cases), each move by the wrong person, two approvals at
+once, the audit record, the balance re-check (and the request not counted against itself), a
+deleted group, and a serializable conflict; plus the routes' wiring.
+
+**Left:** a payer can't withdraw their own request; the receiver's "Not paid" is the way out, and
+the refusal says so. The frontend review (phase 1b of the plan) adds the button.
+
+### D-065 · Only a group's members reach it, and the server writes what it says
+**2026-09-22** · ✅ written and unit-tested (915 → 924 tests)
+
+Four ways a signed-in person could reach past their own groups:
+
+| Where | What was possible |
+|---|---|
+| `POST /api/contacts/invite` | Anyone who knew a group's ID got its invite code, and with it could join (security finding H1) |
+| `POST /api/notifications` | Any member could send anyone in a shared group a notification with any title, text, type and link: a phishing channel inside the app |
+| `POST /api/groups/:id/messages` | A message could claim `type: system` (a fake "✅ confirmed receiving ₹5,000"), attach a settlement or an expense from any other group by ID, and be of any length |
+| Settlement moves | A person removed from a group could still approve or decline payments in it (high finding 6); editing and deleting expenses was closed in D-063 |
+
+**Decided:**
+- A group's invite link goes only to its own members; any other group ID is a 404.
+- **The only notification a person can send is a payment reminder, and the server writes it:** the
+  request names the person and the group; both must be members, the amount comes from the group's
+  settle-up plan (a reminder to someone who owes the sender nothing is refused), and the title,
+  text and link are fixed. One a minute per pair, as before.
+- **Chat takes text and payment reminders, up to 1,000 characters.** System messages, and messages
+  carrying a settlement or an expense, are written by the server alone (approving a payment writes
+  one).
+- **Moving a payment needs current membership** of its group, like editing an expense.
+- An invitation needs a group that still exists. Malformed JSON on these routes is a 400.
+
+**Tests:** each hole above, from the outside: the invite code never appears for a non-member, a
+reminder's text and link are the server's whatever the request says, and a chat message can't be a
+system message or carry another group's records.
+
+### D-066 · Nothing a signed-in person sees outlives signing out, and history reads only its own group
+**2026-09-22** · ✅ written and unit-tested (924 → 931 tests) · production check after merge: `/sw.js` answers 200
+
+**The service worker.** The audit found the PWA configured to keep `/api/*` responses for 24 hours
+(`next-pwa`'s default `apis` rule, NetworkFirst), which on a shared phone outlive signing out. Checking
+production showed something else: `https://splitsj.vercel.app/sw.js` answers **404**, and always has.
+`@ducanh2912/next-pwa` is a webpack plugin; it was added on 2026-02-20 together with `turbopack: {}`,
+which tells Next.js 16 to build with Turbopack and ignore webpack plugins. So the 24-hour cache never
+ran in production, and neither did the PWA: there was no worker to install or to show anything
+offline. A `next build --webpack` would have switched both on.
+
+**Decided:**
+- `next-pwa` goes; `public/sw.js` is written by hand, 40 lines. It makes the app installable, shows
+  `public/offline.html` when there is no connection, and caches nothing else. If a browser holds a
+  worker from any other build at the same URL and scope, installing this one deletes every cache that
+  worker left, `apis` included.
+- It is registered with `updateViaCache: 'none'`, and `/sw.js` is served `no-store`, so a fix to it
+  reaches installed apps on their next launch.
+- Signing out also deletes every cache but the offline page (`signOutAndForget`).
+- **Rejected:** `next build --webpack` to keep `next-pwa`. It would bring back a generated worker
+  whose rules are defaults we would have to keep overriding, for offline copies of a money app that
+  would be out of date anyway.
+
+**Balance history** (high finding 8) read every expense audit log in the database created since the
+group, for every group, and filtered them in JavaScript. It now asks only for the audit logs of this
+group's own expenses (`entityId IN` the group's expense IDs). `AuditLog` has no index yet; one on
+`(entityType, entityId)` comes with the migration baseline (fix 8 of the plan).
+
+**Tests:** `public/sw.js` itself, run against an in-memory Cache Storage: it deletes an earlier
+worker's caches, never answers an API call, and shows the offline page only when the network is gone. The
+history route asks the audit log for its own expenses only, and not at all for a group without any.
+
+### D-067 · AI that can't run up a bill, answers from the ledger, and works again
+**2026-09-22** · ✅ written and unit-tested (931 → 961 tests) · measured against Gemini's live API
+
+The three features that cost money per call (AI chat and voice entry on Gemini, receipt scanning on
+OpenAI) had no limit per person or overall, took input of any size (a receipt photo of any size at
+"high" detail; a transcript or member list of any length), and waited on the provider without a
+deadline (security finding H3). Checking them against the live API found two more things:
+
+- **The AI chat has been broken in production.** Google retired `gemini-2.0-flash`, the model both
+  Gemini features named: generation answers 404, "no longer available … use gemini-3.6-flash".
+  The chat replied "Sorry, I couldn't process that right now"; voice entry fell back, unnoticed, to
+  its simple parser.
+- **Gemini is slow when busy.** On 2026-09-22 a one-word reply from `gemini-3.6-flash` took 14–153 s
+  depending on the thinking setting and the moment; the lighter models answered 503, "high demand".
+  With 64 output tokens and default thinking, the reply was empty: thinking counts against the limit.
+
+**Decided:**
+- **Allowances** (`src/lib/aiQuota.ts`): per person per day, 30 chat questions, 40 voice entries and
+  10 receipt scans, plus 400 AI calls a day for all of SplitX, each overridable (`AI_DAILY_*`).
+  `AI_DISABLED=true` switches all of it off. They count in the rate limiter's Redis
+  (`consumeAllowance`), and **fail closed**: if the counter can't be reached, no paid call is made.
+- **Past a limit, the help doesn't stop, only the cost.** The chat answers from the same data
+  without AI (the local answer that already existed), saying the allowance is used; voice entry uses
+  the simple parser. Receipt scans, which have no server-side substitute, say so and point to
+  on-device scanning, with `Retry-After`.
+- **One Gemini client** (`src/lib/gemini.ts`): the key in the `x-goog-api-key` header instead of the
+  URL; instructions and SplitX's data in `systemInstruction`, the person's words as their own turn,
+  and a line telling the model that names and titles in the data are data, not instructions; a
+  deadline on every call (25 s chat, 15 s voice), after which the local answer is used; thinking set
+  to `low` for the chat and `minimal` for voice; the model is `GEMINI_MODEL`, by default
+  `gemini-3.6-flash`, the replacement Google names.
+- **Input caps:** a chat question up to 1,000 characters; a transcript up to 500, with at most 50
+  members of 60 characters each (the name matcher's work grows with both); a receipt photo up to 4 MB
+  as JPEG, PNG or WebP. The scan page now shrinks photos to 2,048 pixels on the long side before
+  sending: the vision model reads no more than that at high detail, and Vercel refuses request
+  bodies over 4.5 MB, so large phone photos used to fail there. The OpenAI call has a 45 s deadline.
+- **The chat answers from the ledger** (B-028): balances per group over live expenses, and "who owes
+  whom" from each group's settle-up plan, the same as Settle Up. It used to net every expense pair
+  by pair, deleted expenses and deleted groups included, and its instructions told the model that
+  SplitX nets debts across groups, which it doesn't.
+
+**Tests:** the allowance rules (per person, overall, unreachable counter, kill switch, overrides);
+the Gemini client (key only in a header, instructions apart from the message, deadline, busy and
+empty answers, thinking dropped from the text); and each route: the chat's context is the plan,
+past the allowance it answers without calling Gemini, a busy Gemini gets the local answer, and
+oversized input is refused before anything is counted or spent.
+
+### D-068 · An account belongs to whoever proves the address, and sign-in can't be guessed at
+**2026-09-22** · ✅ written and unit-tested (961 → 987 tests) · email verification waits on an email sender
+
+What the audit (H2 and the low findings) and a reading of `src/lib/auth.ts` found:
+
+| What | Why it mattered |
+|---|---|
+| GitHub sign-in fell back to `emails[0]`, verified or not | Someone could add another person's address to their GitHub account unverified and sign in as that person |
+| Google and GitHub sign-in attached to any account with the same address | Someone who registered first with another person's address kept their password on the account after the real owner signed in with Google |
+| Sign-in looked up the address exactly as typed, though registration stores it in lower case | "Alice@…" could not sign in to the account created as "alice@…" |
+| Passwords of 6 characters, and no upper bound | bcrypt reads only 72 bytes, so a longer password matched anything sharing its first 72 |
+| Reset tokens stored as sent, and used by read-then-update | Whoever could read the table could reset any password; one link could be used twice at once |
+| Sign-in, registration and reset limits failed open with the rest | A Redis outage let password guessing run unlimited |
+| No limit per account | The per-address limit let a password be guessed from many addresses |
+
+**Decided:**
+- **A provider's address counts only if the provider verified it:** Google's `email_verified`, and
+  for GitHub the primary address if verified, otherwise another verified one, never an unverified
+  one. Without one, the sign-in is refused.
+- **A verified identity removes a password nobody proved.** When Google or GitHub signs in to an
+  account whose password was set while its address was unverified (every password account, today),
+  the password is removed and the address marked verified. The owner keeps signing in with the
+  provider, or resets the password by email. A name or photo the person chose is no longer
+  overwritten by the provider's.
+- Addresses are compared without case everywhere (sign-in, registration, reset) and stored in lower
+  case.
+- **Passwords are 8 characters to 72 bytes**, one rule (`src/lib/password.ts`) in the browser and on
+  the server.
+- **Reset links:** 32 random bytes; the database keeps their SHA-256; using one deletes it in the
+  same transaction that sets the password, so a link works once.
+- **Ten sign-in attempts per account per 15 minutes**, counted in Redis, successful ones included
+  (so an automated test should use a fresh account). The per-address limit for sign-in,
+  registration and reset **fails closed**: without Redis each server counts on its own
+  (`src/lib/rateLimit/local.ts`); everything else still fails open.
+
+**Left, and why:**
+- **Email verification at sign-up** needs an email sender that reaches anyone. Resend's
+  `onboarding@resend.dev` delivers only to the Resend account's owner, so reset emails reach nobody
+  else today either. The user chooses: a verified domain in Resend, or Gmail SMTP.
+- **Ending sessions** (after a reset, or "sign out everywhere") needs `User.tokenVersion`, a schema
+  change, and schema changes wait for the migration baseline (fix 8). Until then a session lasts
+  its 30 days, including one opened with a password that was later removed.
+- Registration still answers "already exists": uniform answers come with verification emails.
+
+**Tests:** sign-in by any case, the per-account limit (and signing in when its counter is
+unreachable), a verified-only address from each provider, the password removal and what is kept,
+password rules at 7/8/72/73 bytes and in emoji, the local limiter's windows, reset tokens stored as
+hashes, one use per link, and the same answer for accounts that exist and don't.
+
+### D-069 · Production's money is checked against the rules, read only
+**2026-09-22** · ✅ run against production: 13 rules, none broken (`docs/evidence/ledger-audit.json`)
+
+D-063 and D-064 changed what the app allows. What was already in the database was written under the
+old rules, so it could break the new ones: shares moved by the old member removal (B-029), balances
+of people no longer in a group, settlements in states the transition table doesn't know.
+
+**Decided:** `scripts/ledger-audit.mjs` (`npm run ledger:audit`, `--https` where port 5432 is blocked)
+checks 13 rules with SQL and reports how many records break each: shares adding up to their
+expense, shares only of current members, nobody gone with a balance, every group netting to zero,
+amounts in range, settlements positive, never to oneself, in known states, none waiting in a
+deleted group, and one account per address whatever its case.
+- **Read only, twice over:** it sends SELECTs only, and each runs in a read-only transaction
+  (`Neon-Batch-Read-Only` over HTTPS, `SET TRANSACTION READ ONLY` over the Postgres protocol), so
+  the database itself refuses a write.
+- **Counts only:** no names, addresses or record IDs, nor the database host; the report can be
+  committed. It first says how much it looked at, so a report of zeros can't come from an empty
+  database.
+- Exit code 1 when a rule is broken, so it can gate a pipeline. Repairs are separate and approved
+  one at a time.
+
+**Result, 2026-09-22:** 1 live group, 37 expenses, 62 shares, 0 settlements and 9 accounts; every rule
+holds. No production data was affected by the old member removal (B-029 closed).
 
 ---
 
@@ -1953,8 +2181,8 @@ balances (B-028). Data written by the old removal may hold shares moved between 
 | B-025 | Sign-up, login and password reset are still limited to 10 a minute per address (D-022). | A room asked to register at once from one campus network would be refused after the first ten. The demo page needs no account, so it is not affected. | Before any demo asks people to sign up: count failed logins per account for brute-force protection, and give sign-up the device-plus-network treatment of D-045. |
 | B-026 | Jenkins' deploy builds and `cd:verify` read GitHub's deployments without a token, and this network's public address shares GitHub's anonymous allowance (60 an hour) with other devices. | A deploy would fail at its first step whenever someone else on the network had spent the allowance: on 2026-09-21 its hour began eleven minutes before this laptop booted, and it was spent when `cd:verify` ran, which failed 2 of its 15 checks on it. | Open — the user creates a fine-grained token (this repository only, Deployments read and write) and puts it in `.env` as `JENKINS_GITHUB_TOKEN`; `k8s:up` hands it to Jenkins. Both scripts now say when the allowance is spent and until when, instead of a bare 403, and the build log no longer repeats GitHub's message, which names the address. **2026-09-21:** the token is in `.env` and works (5,000 an hour). |
 | B-027 | With the cluster running, the 6 GB WSL VM held about 4 GB in memory and all 8 GB of its swap (2026-09-21), about 12 GB against the 4.6 GB the same cluster used the day before. | The control plane crash-looped and the app answered 503. On Windows, the swap file held the SSD at a queue of 100–245 and 61 ms reads, which froze the laptop. Release `7e3509e` (deployment 6572256500, 15:45 UTC) reached no relay and was never deployed: no delivery was logged after 15:30 UTC. | Open. Next time the cluster runs, watch the VM's anonymous, shared and swapped memory from `k8s:up` on (node-exporter already exports all three), find what grew, and fit the local cluster into 6 GB. Then redeliver 6572256500 from GitHub's webhook page and read Jenkins' statuses on GitHub. |
-| B-028 | The AI chat builds its own balances: pairwise instead of the group plan, over every expense including deleted ones, in deleted groups too, with ±1 paisa counted as settled. | Its answers to "who owes me?" can disagree with Settle Up, and count expenses that were deleted. | Open — fix 6 of the plan moves its context onto the ledger (D-063), with its quotas, input caps and prompt handling. |
-| B-029 | Removing a member used to re-split their shares among the others (D-063). Groups that had a member removed may hold shares that were moved between people, and former members may still owe or be owed. | Balances in those groups reflect the old re-split, not what people agreed to. | Open — fix 9 of the plan: a read-only check of production (`scripts/ledger-audit.mjs`) counts groups with former members holding a balance, and shares that don't add up. Any repair is approved one by one. |
+| B-028 | The AI chat builds its own balances: pairwise instead of the group plan, over every expense including deleted ones, in deleted groups too, with ±1 paisa counted as settled. | Its answers to "who owes me?" can disagree with Settle Up, and count expenses that were deleted. | ✅ Resolved 2026-09-22 — D-067. The chat's context is the ledger: balances per group over live expenses, and each group's settle-up plan. |
+| B-029 | Removing a member used to re-split their shares among the others (D-063). Groups that had a member removed may hold shares that were moved between people, and former members may still owe or be owed. | Balances in those groups reflect the old re-split, not what people agreed to. | ✅ Checked 2026-09-22 — D-069. `npm run ledger:audit -- --https` read production (1 group, 37 expenses, 62 shares, 0 settlements, 9 accounts) in a read-only transaction: no share of a former member, no former member with a balance, every expense adding up, every group netting to zero. Nothing to repair. |
 
 ## Environment notes (this machine)
 

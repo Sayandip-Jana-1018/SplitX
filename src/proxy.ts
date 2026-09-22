@@ -5,6 +5,8 @@ import { logger } from '@/lib/logger';
 import { metrics, recordProxyDecision, type ProxyDecision } from '@/lib/metrics';
 import { newTraceContext, REQUEST_ID_HEADER, type TraceContext } from '@/lib/observability/trace';
 import { checkRateLimit } from '@/lib/rateLimit';
+import { clientIp } from '@/lib/rateLimit/clientIp';
+import { hitLocally } from '@/lib/rateLimit/local';
 import { DEVICE_COOKIE, deviceCookieOptions, mintDevice, verifyDevice } from '@/lib/rateLimit/device';
 import { PREVIEW_ADMISSION_HEADER, tryAdmitPreview } from '@/lib/previewAdmission';
 import { arrivalTime, previewMaxQueueMs, REQUEST_START_HEADER, requestStartValue } from '@/lib/requestQueue';
@@ -165,7 +167,20 @@ export async function proxy(request: NextRequest) {
     }
 
     if (limit.outcome === 'disabled' || limit.outcome === 'error') {
-        // Fail open: a missing or unavailable limiter must not take the API down.
+        // Sign-in, registration and password reset fail closed: without the
+        // shared limiter, this process counts them itself (lib/rateLimit/local.ts).
+        if (limit.policy.name === 'auth') {
+            const local = hitLocally(`auth:${clientIp(request.headers) ?? 'unknown'}`, limit.policy.limit, limit.policy.windowMs);
+            if (!local.allowed) {
+                const response = NextResponse.json(
+                    { success: false, error: 'Too many requests. Please wait a moment.', code: 'RATE_LIMITED', requestId: trace.traceId },
+                    { status: 429, headers: { 'Retry-After': String(Math.max(1, Math.ceil(local.resetMs / 1000))) } }
+                );
+                applySecurityHeaders(response);
+                return decide(request, trace, response, 'rate_limited');
+            }
+        }
+        // Everything else fails open: a missing or unavailable limiter must not take the API down.
         const response = forward(request, trace, receivedAt, admission);
         applySecurityHeaders(response);
         return decide(request, trace, response, limit.outcome === 'error' ? 'limiter_error' : 'pass');
@@ -220,8 +235,8 @@ export const config = {
          * Match all paths except:
          * - _next/static (static files)
          * - _next/image (image optimization)
-         * - favicon.ico, icons, manifest, sw.js (PWA assets)
+         * - favicon.ico, icons, manifest, sw.js, offline.html (PWA assets)
          */
-        '/((?!_next/static|_next/image|favicon\\.ico|icons|manifest\\.json|sw\\.js|workbox-.*\\.js).*)',
+        '/((?!_next/static|_next/image|favicon\\.ico|icons|manifest\\.json|sw\\.js|offline\\.html).*)',
     ],
 };

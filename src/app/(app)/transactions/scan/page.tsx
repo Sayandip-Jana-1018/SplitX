@@ -67,6 +67,27 @@ function readAsDataUrl(file: File) {
     });
 }
 
+/**
+ * The photo the AI scan sends: at most 2,048 pixels on the long side, as a
+ * JPEG. The vision model scales anything larger down to that anyway, so a
+ * phone's 12-megapixel photo only cost upload time and hit the server's 4 MB
+ * limit. Falls back to the original when the browser can't decode it.
+ */
+async function photoForAiScan(file: File, original: string) {
+    try {
+        const bitmap = await createImageBitmap(file);
+        const scale = Math.min(1, 2048 / Math.max(bitmap.width, bitmap.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(bitmap.width * scale);
+        canvas.height = Math.round(bitmap.height * scale);
+        canvas.getContext('2d')?.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+        bitmap.close();
+        return canvas.toDataURL('image/jpeg', 0.85);
+    } catch {
+        return original;
+    }
+}
+
 function errorMessage(data: unknown, fallback: string) {
     const error = (data as { error?: unknown } | null)?.error;
     return typeof error === 'string' && error ? error : fallback;
@@ -204,7 +225,7 @@ function ScanReceipt() {
             return;
         }
         setPreview(base64);
-        if (mode === 'advanced') await runAdvanced(base64);
+        if (mode === 'advanced') await runAdvanced(await photoForAiScan(file, base64));
         else await runBasic(file);
     };
 

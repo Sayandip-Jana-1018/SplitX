@@ -257,13 +257,13 @@ export default function SettlementsPage() {
             headers: JSON_HEADERS,
             body: JSON.stringify({ action: 'paid', method: 'cash' }),
         });
-        toast(
-            res.ok
-                ? `Marked as paid — ${firstName(item.to.name)} will confirm receipt`
-                : `Request created — ask ${firstName(item.to.name)} to confirm receipt`,
-            'success'
-        );
         setCashConfirm(null);
+        if (!res.ok) {
+            const body = await res.json().catch(() => ({}));
+            toast(typeof body.error === 'string' ? body.error : 'Could not mark this as paid', 'error');
+            return true;
+        }
+        toast(`Marked as paid — ${firstName(item.to.name)} will confirm receipt`, 'success');
         return true;
     });
 
@@ -322,15 +322,13 @@ export default function SettlementsPage() {
         const res = await fetch('/api/notifications', {
             method: 'POST',
             headers: JSON_HEADERS,
-            body: JSON.stringify({
-                userId: item.from.id,
-                type: 'payment_reminder',
-                title: 'Payment reminder',
-                body: `${item.to.name} is reminding you to pay ${formatCurrency(item.amount)}`,
-                link: '/settlements',
-            }),
+            body: JSON.stringify({ userId: item.from.id, groupId: item.groupId }),
         });
-        toast(res.ok ? `Reminder sent to ${firstName(item.from.name)}` : 'Could not send the reminder', res.ok ? 'success' : 'error');
+        const body = res.ok ? null : await res.json().catch(() => ({}));
+        toast(
+            res.ok ? `Reminder sent to ${firstName(item.from.name)}` : (typeof body?.error === 'string' ? body.error : 'Could not send the reminder'),
+            res.ok ? 'success' : 'error'
+        );
         return false;
     });
 

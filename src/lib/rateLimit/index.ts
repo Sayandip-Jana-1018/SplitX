@@ -144,6 +144,27 @@ export async function checkRateLimit(request: NextRequest): Promise<RateLimitRes
     }
 }
 
+export type AllowanceOutcome =
+    | { outcome: 'allow' | 'deny'; resetMs: number }
+    | { outcome: 'unavailable' };
+
+/**
+ * Counts one use of an allowance, such as a daily AI quota, in the same store
+ * as the request limits. Unlike them it fails closed: an allowance protects
+ * spending, so without its counter the answer is 'unavailable', never 'allow'.
+ */
+export async function consumeAllowance(key: string, limit: number, windowMs: number): Promise<AllowanceOutcome> {
+    const backend = getStore();
+    if (!backend) return { outcome: 'unavailable' };
+    try {
+        const hit = await withTimeout(backend.hit(`allowance:${key}`, limit, windowMs, Date.now()), timeoutMs());
+        return { outcome: hit.allowed ? 'allow' : 'deny', resetMs: hit.resetMs };
+    } catch (error) {
+        reportBackendError(error);
+        return { outcome: 'unavailable' };
+    }
+}
+
 /** Test hook: use a specific store (null = disabled) or reset to environment configuration. */
 export async function setRateLimitStore(next: RateLimitStore | null | undefined) {
     const current = globalForLimiter.__splitxRateLimitStore;

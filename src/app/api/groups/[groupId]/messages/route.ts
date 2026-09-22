@@ -1,7 +1,14 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { logger } from '@/lib/logger';
+
+const SendMessageSchema = z.object({
+    content: z.string().trim().min(1).max(1_000),
+    type: z.enum(['text', 'payment_reminder']).default('text'),
+    targetUserId: z.string().min(1).max(64).optional(),
+});
 
 // GET /api/groups/:groupId/messages — Fetch paginated group messages
 export async function GET(
@@ -92,18 +99,19 @@ export async function POST(
         }
 
         const { groupId } = await params;
-        const body = await req.json();
-        const { content, type = 'text', settlementId, transactionId, targetUserId } = body as {
-            content: string;
-            type?: string;
-            settlementId?: string;
-            transactionId?: string;
-            targetUserId?: string;
-        };
-
-        if (!content?.trim()) {
-            return NextResponse.json({ error: 'Message content is required' }, { status: 400 });
+        // People send text and payment reminders. System messages, and messages
+        // carrying a settlement or an expense, are written by the server alone:
+        // a client could otherwise post a fake "✅ confirmed" or attach another
+        // group's money.
+        const parsed = SendMessageSchema.safeParse(await req.json().catch(() => null));
+        if (!parsed.success) {
+            const issue = parsed.error.issues[0];
+            return NextResponse.json(
+                { error: issue?.path[0] === 'content' ? 'Message content is required, up to 1,000 characters' : 'Invalid message' },
+                { status: 400 }
+            );
         }
+        const { content, type, targetUserId } = parsed.data;
 
         const user = await prisma.user.findUnique({ where: { email: session.user.email } });
         if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
@@ -166,10 +174,8 @@ export async function POST(
             data: {
                 groupId,
                 senderId: user.id,
-                content: content.trim(),
+                content,
                 type,
-                ...(settlementId ? { settlementId } : {}),
-                ...(transactionId ? { transactionId } : {}),
             },
             include: {
                 sender: { select: { id: true, name: true, image: true } },

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { usePathname, useRouter } from 'next/navigation';
 import { AnimatePresence, motion, type PanInfo } from 'framer-motion';
-import { signOut } from 'next-auth/react';
+import { signOutAndForget } from '@/lib/signOut';
 import {
     ArrowLeft,
     ArrowRightLeft,
@@ -512,7 +512,7 @@ function NavPanel({
             </nav>
 
             <div className={styles.navFooter}>
-                <button type="button" className={styles.signOut} onClick={() => signOut({ callbackUrl: '/login' })}>
+                <button type="button" className={styles.signOut} onClick={() => signOutAndForget('/login')}>
                     <LogOut size={17} />
                     Sign out
                 </button>

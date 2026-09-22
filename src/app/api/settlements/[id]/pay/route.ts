@@ -2,10 +2,11 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { generateUpiLink } from '@/lib/upi';
-import { canInitiateSettlementPayment, isAwaitingReceiverApproval, isCompletedSettlementStatus } from '@/lib/settlementStatus';
+import { refusalResponse, transitionSettlement, TransitionRefused } from '@/lib/settlementTransitions';
 import { logger } from '@/lib/logger';
 
-// POST /api/settlements/:id/pay — Generate UPI deep link and mark settlement as initiated
+// POST /api/settlements/:id/pay — the payer opens their UPI app: returns the
+// UPI link and marks the settlement as initiated (lib/settlementTransitions.ts).
 export async function POST(
     _req: Request,
     { params }: { params: Promise<{ id: string }> }
@@ -21,73 +22,34 @@ export async function POST(
         const user = await prisma.user.findUnique({ where: { email: session.user.email } });
         if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
-        // Fetch settlement with creditor's UPI ID
-        const settlement = await prisma.settlement.findUnique({
-            where: { id },
-            include: {
-                from: { select: { id: true, name: true, upiId: true } },
-                to: { select: { id: true, name: true, upiId: true } },
-            },
-        });
-
-        if (!settlement) {
-            return NextResponse.json({ error: 'Settlement not found' }, { status: 404 });
-        }
-
-        // Only the debtor (from) can initiate payment
-        if (settlement.fromId !== user.id) {
-            return NextResponse.json(
-                { error: 'Only the person who owes can initiate payment' },
-                { status: 403 }
-            );
-        }
-
-        if (isCompletedSettlementStatus(settlement.status)) {
-            return NextResponse.json(
-                { error: 'This settlement has already been completed' },
-                { status: 400 }
-            );
-        }
-
-        if (isAwaitingReceiverApproval(settlement.status)) {
-            return NextResponse.json(
-                { error: 'This payment is already waiting for the receiver to approve it.' },
-                { status: 400 }
-            );
-        }
-
-        if (!canInitiateSettlementPayment(settlement.status)) {
-            return NextResponse.json(
-                { error: 'This settlement cannot be initiated right now.' },
-                { status: 400 }
-            );
-        }
-
-        // Check creditor has UPI ID
-        if (!settlement.to.upiId) {
-            return NextResponse.json(
-                {
-                    error: 'no_upi_id',
-                    message: `${settlement.to.name || 'The recipient'} hasn't added their UPI ID yet. Ask them to add it in Settings → Payment.`,
+        let settlement;
+        try {
+            ({ after: settlement } = await transitionSettlement({
+                settlementId: id,
+                actorId: user.id,
+                action: 'open_upi',
+                data: { method: 'upi' },
+                guard: (current) => {
+                    if (!current.to.upiId) {
+                        throw new TransitionRefused(
+                            `${current.to.name || 'The recipient'} hasn't added their UPI ID yet. Ask them to add it in Settings → Payment.`,
+                            400,
+                            'no_upi_id'
+                        );
+                    }
                 },
-                { status: 400 }
-            );
+            }));
+        } catch (error) {
+            if (error instanceof TransitionRefused) return refusalResponse(error);
+            throw error;
         }
 
-        // Generate UPI deep link using shared utility
+        const upiId = settlement.to.upiId as string;
         const upiUrl = generateUpiLink({
-            upiId: settlement.to.upiId,
+            upiId,
             payeeName: settlement.to.name || 'SplitX User',
             amount: settlement.amount / 100,
             note: 'SplitX settlement',
-        });
-
-        await prisma.settlement.update({
-            where: { id },
-            data: {
-                status: 'initiated',
-                method: settlement.method || 'upi',
-            },
         });
 
         return NextResponse.json({
@@ -95,7 +57,7 @@ export async function POST(
             qrData: upiUrl, // Same URL is used for QR code generation
             amount: settlement.amount,
             payeeName: settlement.to.name,
-            payeeUpiId: settlement.to.upiId,
+            payeeUpiId: upiId,
         });
     } catch (error) {
         logger.error('Settlement pay error', { err: error });

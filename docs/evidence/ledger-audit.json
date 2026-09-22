@@ -1,0 +1,96 @@
+{
+  "database": "neondb",
+  "via": "SQL over HTTPS",
+  "checkedAt": "2026-09-22T15:09:05.906Z",
+  "scope": {
+    "groups": 1,
+    "expenses": 37,
+    "shares": 62,
+    "settlements": 0,
+    "accounts": 9
+  },
+  "results": [
+    {
+      "key": "shares_not_adding_up",
+      "rule": "An expense’s shares add up to its amount, to the paisa",
+      "informational": false,
+      "count": 0,
+      "paise": 0
+    },
+    {
+      "key": "expenses_without_shares",
+      "rule": "Every expense is shared by someone",
+      "informational": false,
+      "count": 0
+    },
+    {
+      "key": "shares_of_non_members",
+      "rule": "Shares of live expenses belong to current members (the old member removal moved them)",
+      "informational": false,
+      "count": 0,
+      "groups": 0
+    },
+    {
+      "key": "former_members_with_balance",
+      "rule": "Nobody leaves a group while they owe or are owed money",
+      "informational": false,
+      "count": 0,
+      "groups": 0,
+      "paise": 0
+    },
+    {
+      "key": "groups_not_netting_to_zero",
+      "rule": "Every group’s balances add up to zero",
+      "informational": false,
+      "count": 0
+    },
+    {
+      "key": "expense_amounts_out_of_range",
+      "rule": "An expense is between ₹0.01 and ₹10,00,000",
+      "informational": false,
+      "count": 0
+    },
+    {
+      "key": "negative_shares",
+      "rule": "No share is negative",
+      "informational": false,
+      "count": 0
+    },
+    {
+      "key": "settlements_not_positive",
+      "rule": "A settlement moves a positive amount",
+      "informational": false,
+      "count": 0
+    },
+    {
+      "key": "settlements_to_self",
+      "rule": "Nobody settles with themselves",
+      "informational": false,
+      "count": 0
+    },
+    {
+      "key": "settlements_unknown_status",
+      "rule": "A settlement is in a state the transition table knows",
+      "informational": false,
+      "count": 0
+    },
+    {
+      "key": "settlements_waiting_in_deleted_groups",
+      "rule": "A deleted group has no payment still waiting",
+      "informational": false,
+      "count": 0
+    },
+    {
+      "key": "settlements_waiting_over_30_days",
+      "rule": "Payments don’t sit waiting for more than 30 days (informational)",
+      "informational": true,
+      "count": 0
+    },
+    {
+      "key": "emails_differing_only_by_case",
+      "rule": "One account per address, whatever its case",
+      "informational": false,
+      "count": 0
+    }
+  ]
+}

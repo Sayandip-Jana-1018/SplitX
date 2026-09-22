@@ -18,6 +18,7 @@ import {
     safeCallbackUrl,
 } from '@/components/auth/AuthKit';
 import styles from '@/components/auth/auth.module.css';
+import { PASSWORD_MIN_CHARS, passwordProblem } from '@/lib/password';
 
 export default function RegisterPage() {
     return (
@@ -44,8 +45,9 @@ function RegisterForm() {
 
     const handleSubmit = async (event: FormEvent) => {
         event.preventDefault();
-        if (password.length < 6) {
-            setError('Use at least 6 characters for your password.');
+        const problem = passwordProblem(password);
+        if (problem) {
+            setError(problem);
             return;
         }
         setLoading(true);
@@ -113,12 +115,12 @@ function RegisterForm() {
                     label="Password"
                     type={showPassword ? 'text' : 'password'}
                     autoComplete="new-password"
-                    placeholder="At least 6 characters"
+                    placeholder="At least 8 characters"
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
                     leftIcon={<Lock size={17} />}
                     rightSlot={<PasswordToggle visible={showPassword} onToggle={() => setShowPassword((value) => !value)} />}
-                    minLength={6}
+                    minLength={PASSWORD_MIN_CHARS}
                     required
                 />
                 <PasswordStrength value={password} />

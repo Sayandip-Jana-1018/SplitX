@@ -5,8 +5,8 @@ import { z } from 'zod';
 import { logger } from '@/lib/logger';
 
 const InviteSchema = z.object({
-    contactId: z.string().min(1),
-    groupId: z.string().optional(),
+    contactId: z.string().min(1).max(64),
+    groupId: z.string().min(1).max(64).optional(),
 });
 
 // POST /api/contacts/invite — send an invite to a contact
@@ -20,8 +20,7 @@ export async function POST(req: Request) {
         const user = await prisma.user.findUnique({ where: { email: session.user.email } });
         if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
-        const body = await req.json();
-        const parsed = InviteSchema.safeParse(body);
+        const parsed = InviteSchema.safeParse(await req.json().catch(() => null));
         if (!parsed.success) {
             return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
         }
@@ -37,15 +36,21 @@ export async function POST(req: Request) {
         // Build the invite URL
         let inviteUrl = `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/register`;
 
-        // If a group is specified, include the group invite link
+        // A group's invite link goes only to its own members: anyone holding the
+        // code can join. This used to answer for any group ID it was given.
         if (parsed.data.groupId) {
             const group = await prisma.group.findFirst({
-                where: { id: parsed.data.groupId },
-                select: { inviteCode: true, name: true },
+                where: {
+                    id: parsed.data.groupId,
+                    deletedAt: null,
+                    OR: [{ ownerId: user.id }, { members: { some: { userId: user.id } } }],
+                },
+                select: { inviteCode: true },
             });
-            if (group) {
-                inviteUrl = `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/join/${group.inviteCode}`;
+            if (!group) {
+                return NextResponse.json({ error: 'Group not found' }, { status: 404 });
             }
+            inviteUrl = `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/join/${group.inviteCode}`;
         }
 
         // For now, return the invite URL — in production you'd use SendGrid/Resend/etc.

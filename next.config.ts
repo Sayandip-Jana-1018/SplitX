@@ -1,34 +1,4 @@
 import type { NextConfig } from 'next';
-import withPWAInit from '@ducanh2912/next-pwa';
-
-const withPWA = withPWAInit({
-  dest: 'public',
-  cacheOnFrontEndNav: false,
-  aggressiveFrontEndNavCaching: false,
-  reloadOnOnline: true,
-  disable: process.env.NODE_ENV === 'development',
-  extendDefaultRuntimeCaching: true,
-  workboxOptions: {
-    // A new deploy must take over immediately — otherwise the old worker keeps
-    // serving chunks that no longer exist and the app throws on navigation.
-    skipWaiting: true,
-    clientsClaim: true,
-    cleanupOutdatedCaches: true,
-    navigateFallbackDenylist: [/^\/api\//],
-    runtimeCaching: [
-      {
-        // Never cache auth-related API calls
-        urlPattern: /\/api\/auth\/.*/i,
-        handler: 'NetworkOnly' as const,
-      },
-      {
-        // Always go to network for user session check
-        urlPattern: /\/api\/me/i,
-        handler: 'NetworkOnly' as const,
-      },
-    ],
-  },
-});
 
 const nextConfig: NextConfig = {
   output: 'standalone',
@@ -55,6 +25,12 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
+        // The browser checks the service worker for updates; never let a CDN
+        // or the browser's HTTP cache answer that check with an old copy.
+        source: '/sw.js',
+        headers: [{ key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' }],
+      },
+      {
         source: '/(.*)',
         headers: [
           {
@@ -76,4 +52,4 @@ const nextConfig: NextConfig = {
   turbopack: {},
 };
 
-export default withPWA(nextConfig);
+export default nextConfig;
