@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
+import { siteUrl } from '@/lib/siteUrl';
 
 const InviteSchema = z.object({
     contactId: z.string().min(1).max(64),
@@ -33,8 +34,9 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'Contact not found' }, { status: 404 });
         }
 
-        // Build the invite URL
-        let inviteUrl = `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/register`;
+        // Build the invite URL: the site's public address, never a localhost fallback.
+        const site = siteUrl(req);
+        let inviteUrl = `${site}/register`;
 
         // A group's invite link goes only to its own members: anyone holding the
         // code can join. This used to answer for any group ID it was given.
@@ -50,7 +52,7 @@ export async function POST(req: Request) {
             if (!group) {
                 return NextResponse.json({ error: 'Group not found' }, { status: 404 });
             }
-            inviteUrl = `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/join/${group.inviteCode}`;
+            inviteUrl = `${site}/join/${group.inviteCode}`;
         }
 
         // For now, return the invite URL — in production you'd use SendGrid/Resend/etc.

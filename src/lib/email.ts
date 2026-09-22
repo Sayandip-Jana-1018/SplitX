@@ -1,5 +1,6 @@
 import nodemailer, { type Transporter } from 'nodemailer';
 import { Resend } from 'resend';
+import { siteUrl } from '@/lib/siteUrl';
 
 /**
  * How SplitX sends email: password resets and address verification.
@@ -79,16 +80,11 @@ export async function sendEmail(mail: OutgoingEmail) {
     throw new EmailNotConfigured();
 }
 
-/**
- * The site's own address, for links in emails: NEXTAUTH_URL (or AUTH_URL), else
- * on Vercel the production domain Vercel sets for every deployment, since
- * next-auth itself runs there without either.
- */
+/** The site's own address, for links in emails (lib/siteUrl.ts); there is no request to fall back on. */
 export function appUrl() {
-    const vercelDomain = process.env.VERCEL_PROJECT_PRODUCTION_URL;
-    const url = process.env.NEXTAUTH_URL || process.env.AUTH_URL || (vercelDomain ? `https://${vercelDomain}` : '');
+    const url = siteUrl();
     if (!url) throw new Error('NEXTAUTH_URL is not set, so emails cannot link back to the site');
-    return url.replace(/\/+$/, '');
+    return url;
 }
 
 /** One layout for every SplitX email: a heading, a sentence, a button, and a plain-text copy. */

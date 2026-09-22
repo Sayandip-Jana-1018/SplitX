@@ -85,6 +85,17 @@ describe('POST /api/contacts/invite', () => {
 
         expect((await res.json()).inviteUrl).toBe('https://splitx.example/join/abc123');
     });
+
+    it('without a configured address, links to where the request came in, never to localhost', async () => {
+        vi.stubEnv('NEXTAUTH_URL', '');
+        vi.stubEnv('AUTH_URL', '');
+        vi.stubEnv('VERCEL_PROJECT_PRODUCTION_URL', '');
+        prisma.group.findFirst.mockResolvedValue({ inviteCode: 'abc123' });
+
+        const res = await invite.POST(jsonRequest('https://splitx-app.vercel.app/api/contacts/invite', { contactId: 'ccontact0000001', groupId: ids.group }));
+
+        expect((await res.json()).inviteUrl).toBe('https://splitx-app.vercel.app/join/abc123');
+    });
 });
 
 describe('POST /api/notifications', () => {
