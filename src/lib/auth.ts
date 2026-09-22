@@ -1,5 +1,6 @@
 import NextAuth, { CredentialsSignin } from 'next-auth';
 import type { Account, Profile, User } from 'next-auth';
+import type { JWT } from 'next-auth/jwt';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import Google from 'next-auth/providers/google';
 import GitHub from 'next-auth/providers/github';
@@ -9,6 +10,7 @@ import { normalizeEmail } from '@/lib/password';
 import { consumeAllowance } from '@/lib/rateLimit';
 import { sendVerificationLink, verificationRequired } from '@/lib/emailVerification';
 import { logger } from '@/lib/logger';
+import { currentTokenVersion } from '@/lib/sessionVersion';
 
 const LOGIN_ATTEMPTS = 10;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
@@ -194,6 +196,44 @@ export async function syncOAuthSignIn({ user, account, profile }: { user: User; 
     return true;
 }
 
+/**
+ * The session's token: stamped at sign-in with the account's tokenVersion, and
+ * checked every time the session is read after that. A session whose account
+ * has since reset its password or signed out of all devices is refused, and
+ * null makes next-auth clear its cookie (src/lib/sessionVersion.ts).
+ */
+export async function sessionToken({ token, user }: { token: JWT; user?: { id?: string | null; email?: string | null } }): Promise<JWT | null> {
+    if (user) {
+        token.id = user.id;
+        token.email = user.email;
+        token.tokenVersion = user.id ? await versionToIssue(user.id) : 0;
+        return token;
+    }
+    if (typeof token.id !== 'string') return token;
+
+    try {
+        const version = await currentTokenVersion(token.id);
+        // The account is gone, or its sessions were ended after this one began.
+        if (version === null) return null;
+        const carried = typeof token.tokenVersion === 'number' ? token.tokenVersion : 0;
+        return carried === version ? token : null;
+    } catch (error) {
+        // The database can't be reached: the session stands. Nothing it could
+        // be used for works without the database anyway.
+        logger.warn('Could not check whether a session was ended', { err: error });
+        return token;
+    }
+}
+
+async function versionToIssue(userId: string) {
+    try {
+        return (await currentTokenVersion(userId, { fresh: true })) ?? 0;
+    } catch (error) {
+        logger.warn('Could not read the account version while signing in', { err: error });
+        return 0;
+    }
+}
+
 const oauthProviders = [];
 
 if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
@@ -256,13 +296,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     callbacks: {
         signIn: ({ user, account, profile }) => syncOAuthSignIn({ user, account, profile }),
 
-        async jwt({ token, user }) {
-            if (user) {
-                token.id = user.id;
-                token.email = user.email;
-            }
-            return token;
-        },
+        jwt: ({ token, user }) => sessionToken({ token, user }),
 
         async session({ session, token }) {
             if (session.user && token.id) {

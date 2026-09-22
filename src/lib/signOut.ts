@@ -21,3 +21,22 @@ export async function signOutAndForget(callbackUrl = '/login') {
     }
     await signOut({ callbackUrl });
 }
+
+let endingSession = false;
+
+/**
+ * For a 401: this browser's session is over (it expired, or the account signed
+ * out of all devices), but its cookie is still here, and the page gate sends
+ * anyone carrying one from the sign-in page to the dashboard, which answers 401
+ * again: a loop. Signing out removes the cookie, then sign-in shows, with
+ * `returnTo` as where to come back to. When several requests fail at once, only
+ * the first acts.
+ */
+export function sessionEnded(returnTo?: string) {
+    if (endingSession) return;
+    endingSession = true;
+    const target = returnTo ? `/login?callbackUrl=${encodeURIComponent(returnTo)}` : '/login';
+    signOutAndForget(target).catch(() => {
+        window.location.href = target;
+    });
+}

@@ -71,6 +71,10 @@ model User {
   password      String?
   phone         String?
   upiId         String?
+  /// Raised to end every session of this account at once: a password reset,
+  /// "sign out of all devices". Each session carries the version it was issued
+  /// with, and one carrying an older version is refused (src/lib/auth.ts).
+  tokenVersion  Int       @default(0)
 
   accounts    Account[]
   sessions    Session[]
@@ -163,6 +167,10 @@ model Transaction {
   method      String  @default("cash") // "cash" | "gpay" | "phonepe" | "paytm" | "upi_other"
   receiptUrl  String?
   splitType   String  @default("equal") // "equal" | "percentage" | "custom" | "items"
+  /// "<userId>:<key>" from the Idempotency-Key header of the request that
+  /// created it: a retried or repeated save finds this expense instead of
+  /// creating a second one (POST /api/transactions).
+  idempotencyKey String? @unique
 
   trip   Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
   payer  User @relation("Payer", fields: [payerId], references: [id])

@@ -4,7 +4,7 @@ import { clearLocalLimits, hitLocally } from '@/lib/rateLimit/local';
 import { hashSecretToken } from '@/lib/secretTokens';
 import { jsonRequest } from '../helpers/http';
 
-const { prisma, tx, sendPasswordResetEmail, emailTransport } = vi.hoisted(() => ({
+const { prisma, tx, sendPasswordResetEmail, emailTransport, forgetTokenVersion } = vi.hoisted(() => ({
     prisma: {
         user: { findFirst: vi.fn() },
         passwordResetToken: { deleteMany: vi.fn(), create: vi.fn() },
@@ -12,14 +12,16 @@ const { prisma, tx, sendPasswordResetEmail, emailTransport } = vi.hoisted(() => 
     },
     tx: {
         passwordResetToken: { findUnique: vi.fn(), deleteMany: vi.fn() },
-        user: { updateMany: vi.fn() },
+        user: { findUnique: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
     },
     sendPasswordResetEmail: vi.fn(),
     emailTransport: vi.fn(),
+    forgetTokenVersion: vi.fn(),
 }));
 
 vi.mock('@/lib/db', () => ({ prisma }));
 vi.mock('@/lib/email', () => ({ sendPasswordResetEmail, emailTransport }));
+vi.mock('@/lib/sessionVersion', () => ({ forgetTokenVersion }));
 
 const forgot = await import('@/app/api/auth/forgot-password/route');
 const reset = await import('@/app/api/auth/reset-password/route');
@@ -60,6 +62,8 @@ describe('password reset links', () => {
         prisma.passwordResetToken.create.mockResolvedValue({});
         tx.passwordResetToken.findUnique.mockResolvedValue({ id: 't1', email: 'alice@example.com' });
         tx.passwordResetToken.deleteMany.mockResolvedValue({ count: 1 });
+        tx.user.findUnique.mockResolvedValue({ id: 'u1' });
+        tx.user.update.mockResolvedValue({ id: 'u1' });
         tx.user.updateMany.mockResolvedValue({ count: 1 });
         emailTransport.mockReturnValue('smtp');
     });
@@ -101,7 +105,8 @@ describe('password reset links', () => {
         const res = await reset.POST(jsonRequest('http://localhost/api/auth/reset-password', { token: 'abc', password: 'a new password' }));
 
         expect(res.status).toBe(400);
-        expect(tx.user.updateMany).not.toHaveBeenCalled();
+        expect(tx.user.update).not.toHaveBeenCalled();
+        expect(forgetTokenVersion).not.toHaveBeenCalled();
     });
 
     it('sets the password with a valid link, looking it up by hash', async () => {
@@ -109,7 +114,16 @@ describe('password reset links', () => {
 
         expect(res.status).toBe(200);
         expect(tx.passwordResetToken.findUnique).toHaveBeenCalledWith({ where: { token: hashSecretToken('abc') } });
-        expect(tx.user.updateMany.mock.calls[0][0].where).toEqual({ email: 'alice@example.com' });
+        expect(tx.user.findUnique).toHaveBeenCalledWith({ where: { email: 'alice@example.com' }, select: { id: true } });
+        expect(tx.user.update.mock.calls[0][0].where).toEqual({ id: 'u1' });
+    });
+
+    it('ends every session the account had, and counts the emailed link as confirming the address', async () => {
+        await reset.POST(jsonRequest('http://localhost/api/auth/reset-password', { token: 'abc', password: 'a new password' }));
+
+        expect(tx.user.update.mock.calls[0][0].data).toMatchObject({ password: expect.any(String), tokenVersion: { increment: 1 } });
+        expect(tx.user.updateMany).toHaveBeenCalledWith({ where: { id: 'u1', emailVerified: null }, data: { emailVerified: expect.any(Date) } });
+        expect(forgetTokenVersion).toHaveBeenCalledWith('u1');
     });
 
     it('refuses a new password shorter than 8 characters', async () => {

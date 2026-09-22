@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { z } from 'zod';
@@ -8,6 +9,18 @@ import { recordTransactionCreated } from '@/lib/metrics';
 import { isOwnReceiptUrl, isTrustedReceiptUrl, withTrustedReceipt } from '@/lib/receiptUrl';
 import { logger } from '@/lib/logger';
 import { MAX_EXPENSE_PAISE, resolveSplits, SPLIT_TYPES } from '@/lib/expenseSplits';
+import { IDEMPOTENCY_KEY_PATTERN } from '@/lib/idempotency';
+
+/** What a created expense is answered with, the first time and on any repeat. */
+const CREATED_INCLUDE = {
+    splits: { include: { user: { select: { id: true, name: true } } } },
+    payer: { select: { id: true, name: true } },
+    trip: { select: { id: true, title: true } },
+} as const;
+
+/** The expense an earlier save with this key made: answered as it was, nothing added. */
+const replay = (transaction: unknown) =>
+    NextResponse.json(transaction, { status: 200, headers: { 'Idempotency-Replayed': 'true' } });
 
 // Category labels for notification messages
 const CATEGORY_LABELS: Record<string, string> = {
@@ -161,6 +174,19 @@ export async function POST(req: Request) {
         const user = await prisma.user.findUnique({ where: { email: session.user.email } });
         if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
+        // A save the client repeats (a double tap, or a retry after the answer
+        // was lost) carries the same key: answer it with the expense the first
+        // one made. Stored with the saver's id, so no one else's key can match.
+        const clientKey = req.headers.get('idempotency-key');
+        if (clientKey !== null && !IDEMPOTENCY_KEY_PATTERN.test(clientKey)) {
+            return NextResponse.json({ error: 'Idempotency-Key must be 16 to 100 letters, digits, - or _' }, { status: 400 });
+        }
+        const idempotencyKey = clientKey === null ? null : `${user.id}:${clientKey}`;
+        if (idempotencyKey) {
+            const earlier = await prisma.transaction.findUnique({ where: { idempotencyKey }, include: CREATED_INCLUDE });
+            if (earlier) return replay(earlier);
+        }
+
         // Uploads land in the uploader's own folder: a new expense can't borrow someone else's photo.
         if (parsed.data.receiptUrl && !isOwnReceiptUrl(parsed.data.receiptUrl, user.id)) {
             return NextResponse.json({ error: 'Attach a receipt photo you uploaded' }, { status: 400 });
@@ -206,30 +232,38 @@ export async function POST(req: Request) {
         const splitData = resolution.splits;
 
         // Create transaction + splits atomically
-        const transaction = await prisma.transaction.create({
-            data: {
-                tripId: parsed.data.tripId,
-                payerId: actualPayerId,
-                title,
-                amount,
-                category,
-                method,
-                description,
-                receiptUrl: receiptUrl ?? null,
-                splitType,
-                splits: {
-                    create: splitData.map((s) => ({
-                        userId: s.userId,
-                        amount: s.amount,
-                    })),
+        let transaction;
+        try {
+            transaction = await prisma.transaction.create({
+                data: {
+                    tripId: parsed.data.tripId,
+                    payerId: actualPayerId,
+                    title,
+                    amount,
+                    category,
+                    method,
+                    description,
+                    receiptUrl: receiptUrl ?? null,
+                    splitType,
+                    idempotencyKey,
+                    splits: {
+                        create: splitData.map((s) => ({
+                            userId: s.userId,
+                            amount: s.amount,
+                        })),
+                    },
                 },
-            },
-            include: {
-                splits: { include: { user: { select: { id: true, name: true } } } },
-                payer: { select: { id: true, name: true } },
-                trip: { select: { id: true, title: true } },
-            },
-        });
+                include: CREATED_INCLUDE,
+            });
+        } catch (error) {
+            // Two saves with one key at the same moment: the key's unique
+            // index let the other one in first.
+            if (idempotencyKey && error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+                const earlier = await prisma.transaction.findUnique({ where: { idempotencyKey }, include: CREATED_INCLUDE });
+                if (earlier) return replay(earlier);
+            }
+            throw error;
+        }
         // Expenses carrying a receipt come from the scan flow.
         recordTransactionCreated(receiptUrl ? 'receipt' : 'manual', category, transaction.amount);
 

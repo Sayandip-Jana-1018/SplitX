@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { Prisma } from '@prisma/client';
 import { ids, jsonRequest } from '../../helpers/http';
 
 const { auth, prisma } = vi.hoisted(() => ({
@@ -6,7 +7,7 @@ const { auth, prisma } = vi.hoisted(() => ({
     prisma: {
         user: { findUnique: vi.fn() },
         trip: { findFirst: vi.fn() },
-        transaction: { create: vi.fn() },
+        transaction: { create: vi.fn(), findUnique: vi.fn() },
         notification: { createMany: vi.fn() },
     },
 }));
@@ -21,8 +22,8 @@ const STORAGE = 'https://abcdproject.supabase.co';
 const trustedReceipt = `${STORAGE}/storage/v1/object/public/receipts/${ids.alice}/0b6e2f4e-7a51-4d0e-9f7c-2f3a9d1c5b11.jpg`;
 const members = [ids.alice, ids.bob, ids.carol];
 
-function send(body: Record<string, unknown>) {
-    return POST(jsonRequest('http://localhost/api/transactions', { tripId: ids.trip, title: 'Dinner', amount: 90_000, ...body }));
+function send(body: Record<string, unknown>, headers: Record<string, string> = {}) {
+    return POST(jsonRequest('http://localhost/api/transactions', { tripId: ids.trip, title: 'Dinner', amount: 90_000, ...body }, { headers }));
 }
 
 beforeEach(() => {
@@ -45,11 +46,56 @@ beforeEach(() => {
         deletedAt: null,
     }));
     prisma.notification.createMany.mockResolvedValue({ count: 2 });
+    prisma.transaction.findUnique.mockResolvedValue(null);
 });
 
 afterEach(() => {
     vi.clearAllMocks();
     vi.unstubAllEnvs();
+});
+
+describe('POST /api/transactions with an Idempotency-Key (a retried or double-tapped save)', () => {
+    const KEY = { 'Idempotency-Key': 'same-expense-saved-again' };
+    const saved = { id: 'ctxn00000000001', title: 'Dinner', amount: 90_000 };
+
+    it('stores the key as the saver’s own, so no one else’s key can ever match it', async () => {
+        const res = await send({}, KEY);
+
+        expect(res.status).toBe(201);
+        expect(prisma.transaction.create.mock.calls[0][0].data.idempotencyKey).toBe(`${ids.alice}:${KEY['Idempotency-Key']}`);
+    });
+
+    it('answers a repeat with the expense the first save made, and adds nothing', async () => {
+        prisma.transaction.findUnique.mockResolvedValue(saved);
+
+        const res = await send({}, KEY);
+
+        expect(res.status).toBe(200);
+        expect(res.headers.get('Idempotency-Replayed')).toBe('true');
+        expect(await res.json()).toEqual(saved);
+        expect(prisma.transaction.findUnique.mock.calls[0][0].where).toEqual({ idempotencyKey: `${ids.alice}:${KEY['Idempotency-Key']}` });
+        expect(prisma.transaction.create).not.toHaveBeenCalled();
+    });
+
+    it('when two saves with one key arrive together, answers the second with the first', async () => {
+        prisma.transaction.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce(saved);
+        prisma.transaction.create.mockRejectedValue(new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+            code: 'P2002', clientVersion: 'test', meta: { target: ['idempotencyKey'] },
+        }));
+
+        const res = await send({}, KEY);
+
+        expect(res.status).toBe(200);
+        expect(await res.json()).toEqual(saved);
+    });
+
+    it('refuses a key that isn’t one, and stores none without a key', async () => {
+        expect((await send({}, { 'Idempotency-Key': 'short' })).status).toBe(400);
+        expect((await send({}, { 'Idempotency-Key': 'has spaces in it and more' })).status).toBe(400);
+
+        await send({});
+        expect(prisma.transaction.create.mock.calls[0][0].data.idempotencyKey).toBeNull();
+    });
 });
 
 describe('POST /api/transactions', () => {

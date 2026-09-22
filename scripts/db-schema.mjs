@@ -102,6 +102,9 @@ COMMIT;
 -- "Production database" workflow.
 
 \\set ON_ERROR_STOP on
+-- The file is UTF-8 (a default in the schema is an emoji); say so, as pg_dump
+-- does, rather than rely on the encoding of the machine running psql.
+SET client_encoding = 'UTF8';
 SET client_min_messages TO warning;
 
 -- A database this file built before it recorded migrations holds exactly

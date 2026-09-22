@@ -3,7 +3,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 
 const { prisma, consumeAllowance, sendVerificationLink, verificationRequired } = vi.hoisted(() => ({
     prisma: {
-        user: { findFirst: vi.fn(), update: vi.fn(), create: vi.fn() },
+        user: { findFirst: vi.fn(), findUnique: vi.fn(), update: vi.fn(), create: vi.fn() },
         account: { upsert: vi.fn() },
     },
     consumeAllowance: vi.fn(),
@@ -23,7 +23,8 @@ vi.mock('next-auth/providers/credentials', () => ({ default: (options: unknown) 
 vi.mock('next-auth/providers/google', () => ({ default: (options: unknown) => options }));
 vi.mock('next-auth/providers/github', () => ({ default: (options: unknown) => options }));
 
-const { authorizeCredentials, EmailNotConfirmed, syncOAuthSignIn, verifiedProviderEmail } = await import('@/lib/auth');
+const { authorizeCredentials, EmailNotConfirmed, sessionToken, syncOAuthSignIn, verifiedProviderEmail } = await import('@/lib/auth');
+const { forgetAllTokenVersions } = await import('@/lib/sessionVersion');
 
 let passwordHash = '';
 beforeAll(async () => {
@@ -42,6 +43,45 @@ beforeEach(() => {
 afterEach(() => {
     vi.resetAllMocks();
     vi.unstubAllGlobals();
+    forgetAllTokenVersions();
+});
+
+describe('sessionToken (the jwt callback)', () => {
+    it('stamps a new session with the account’s version as it is now', async () => {
+        prisma.user.findUnique.mockResolvedValue({ tokenVersion: 2 });
+
+        const token = await sessionToken({ token: {}, user: { id: 'u1', email: 'alice@example.com' } });
+
+        expect(token).toMatchObject({ id: 'u1', email: 'alice@example.com', tokenVersion: 2 });
+    });
+
+    it('keeps a session carrying the current version, and ends one issued before its sessions were ended', async () => {
+        prisma.user.findUnique.mockResolvedValue({ tokenVersion: 2 });
+
+        expect(await sessionToken({ token: { id: 'u1', tokenVersion: 2 } })).toMatchObject({ id: 'u1' });
+        expect(await sessionToken({ token: { id: 'u1', tokenVersion: 1 } })).toBeNull();
+    });
+
+    it('keeps sessions from before versions existed, until the account first ends its sessions', async () => {
+        prisma.user.findUnique.mockResolvedValue({ tokenVersion: 0 });
+        expect(await sessionToken({ token: { id: 'u1' } })).toMatchObject({ id: 'u1' });
+
+        forgetAllTokenVersions();
+        prisma.user.findUnique.mockResolvedValue({ tokenVersion: 1 });
+        expect(await sessionToken({ token: { id: 'u1' } })).toBeNull();
+    });
+
+    it('ends the session of an account that no longer exists', async () => {
+        prisma.user.findUnique.mockResolvedValue(null);
+
+        expect(await sessionToken({ token: { id: 'u1', tokenVersion: 0 } })).toBeNull();
+    });
+
+    it('keeps the session when the database can’t be reached', async () => {
+        prisma.user.findUnique.mockRejectedValue(new Error('connection refused'));
+
+        expect(await sessionToken({ token: { id: 'u1', tokenVersion: 0 } })).toMatchObject({ id: 'u1' });
+    });
 });
 
 describe('authorizeCredentials', () => {

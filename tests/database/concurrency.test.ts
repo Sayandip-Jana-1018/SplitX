@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { prisma } from '@/lib/db';
+import { newIdempotencyKey } from '@/lib/idempotency';
 import { jsonRequest } from '../helpers/http';
 import { emptyDatabase, expense, groupOf, person, sessionOf } from './fixtures';
 
@@ -14,6 +15,7 @@ vi.mock('@/lib/auth', () => ({ auth }));
 const { transitionSettlement, TransitionRefused } = await import('@/lib/settlementTransitions');
 const settlements = await import('@/app/api/settlements/route');
 const expenseRoute = await import('@/app/api/transactions/[id]/route');
+const expenses = await import('@/app/api/transactions/route');
 const join = await import('@/app/api/groups/join/route');
 
 beforeEach(emptyDatabase);
@@ -116,6 +118,28 @@ describe('one expense, edited twice at once', () => {
             const saved = await prisma.transaction.findUniqueOrThrow({ where: { id: dinner.id }, include: { splits: true } });
             expect([60_000, 90_000]).toContain(saved.amount);
             expect(saved.splits.map((split) => split.amount)).toEqual([saved.amount / 3, saved.amount / 3, saved.amount / 3]);
+        }
+    });
+});
+
+describe('one expense, saved twice at once (a double tap, or a retry)', () => {
+    it('with one Idempotency-Key, is saved once, and both saves are answered with it', async () => {
+        for (let round = 0; round < 5; round++) {
+            const [alice, bob] = [await person('Alice'), await person('Bob')];
+            const { trip } = await groupOf(alice, [bob]);
+            auth.mockResolvedValue(sessionOf(alice));
+
+            const key = newIdempotencyKey();
+            const save = () => expenses.POST(jsonRequest('http://localhost/api/transactions', {
+                tripId: trip.id, title: 'Dinner', amount: 20_000, splitType: 'equal', splitAmong: [alice.id, bob.id],
+            }, { headers: { 'Idempotency-Key': key } }));
+            const responses = await Promise.all([save(), save()]);
+
+            expect(responses.map((response) => response.status).sort()).toEqual([200, 201]);
+            const [first, second] = await Promise.all(responses.map((response) => response.json()));
+            expect(first.id).toBe(second.id);
+            expect(await prisma.transaction.count({ where: { tripId: trip.id } })).toBe(1);
+            expect(await prisma.splitItem.count({ where: { transaction: { tripId: trip.id } } })).toBe(2);
         }
     });
 });

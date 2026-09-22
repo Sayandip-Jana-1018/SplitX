@@ -53,6 +53,7 @@ import { useHaptics } from '@/hooks/useHaptics';
 import { useIsClient } from '@/hooks/useMediaQuery';
 import { isFeatureEnabled } from '@/lib/featureFlags';
 import { getNetworkErrorCopy, NetworkTaggedError, toNetworkTaggedError } from '@/lib/networkErrors';
+import { sessionEnded } from '@/lib/signOut';
 import { refreshMoneyData } from '@/lib/swr';
 import { cn, formatCurrency, formatDate, timeAgo } from '@/lib/utils';
 import styles from './groupDetail.module.css';
@@ -138,7 +139,7 @@ async function groupFetcher<T>(url: string): Promise<T | null> {
         throw toNetworkTaggedError({ error });
     }
     if (response.status === 401) {
-        window.location.href = '/login';
+        sessionEnded();
         return null;
     }
     if (response.status === 403 || response.status === 404) return null;

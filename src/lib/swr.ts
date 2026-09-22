@@ -2,10 +2,11 @@
 
 import { mutate } from 'swr';
 import { NetworkTaggedError, toNetworkTaggedError } from '@/lib/networkErrors';
+import { sessionEnded } from '@/lib/signOut';
 
 /**
  * Shared SWR fetcher: tags network failures so screens can render the right
- * error copy, and bounces to /login when the session has expired.
+ * error copy, and signs out to /login when the session has ended.
  */
 export async function fetcher<T = unknown>(url: string): Promise<T> {
     let response: Response;
@@ -16,7 +17,7 @@ export async function fetcher<T = unknown>(url: string): Promise<T> {
     }
 
     if (response.status === 401) {
-        if (typeof window !== 'undefined') window.location.href = '/login';
+        if (typeof window !== 'undefined') sessionEnded();
         throw new NetworkTaggedError('default', 'Your session has expired.');
     }
 

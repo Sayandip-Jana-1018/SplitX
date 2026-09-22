@@ -2366,6 +2366,47 @@ list.
 production. A production server that evaluates the module twice (a separate bundle or module graph)
 would open a second connection pool. The client is now kept there in every environment.
 
+### D-074 · Sessions that can be ended, and expenses that are saved once
+**2026-09-22** · ✅ written and tested (1,027 → 1,045 unit tests, 12 database tests) · its two migrations must reach production before its pull request merges
+
+**Ending sessions.** A session is a signed cookie that lasts 30 days, and nothing could end it early:
+not a password reset, not a lost phone.
+- Each account has a `tokenVersion`, and every session carries the version it was issued with
+  (`src/lib/auth.ts`, `src/lib/sessionVersion.ts`). A session carrying an older version is refused,
+  which also clears its cookie.
+- **A password reset** raises the version, since a reset is what someone does when they think the old
+  password leaked. The reset link also confirms the address, because it arrived there.
+- **Sign out of all devices**, in Settings, raises it on demand.
+- Each server remembers an account's version for 30 seconds, so checking it isn't a database read on
+  every request. An ended session stops at once on the server that ended it, and within 30 seconds
+  everywhere else. A session being issued reads the version fresh.
+- Sessions from before the column exist carry no version and count as 0, so the deploy signs nobody
+  out. If the database can't be reached, a session stands: nothing works without the database anyway.
+
+**A sign-in loop.** When a session stopped working (it expired, or was signed out elsewhere), pages
+answered the 401 by going to `/login`. But the cookie was still there, and the page gate sends anyone
+carrying one from `/login` to the dashboard, which answered 401 again: an endless loop. A 401 now
+signs out properly, which clears the cookie, then goes to sign-in and remembers where to come back to
+(`sessionEnded` in `src/lib/signOut.ts`).
+
+**Expenses saved once.** The new-expense page set its busy state only after its first network call,
+the one that creates a group's first trip. So a quick double tap could add the expense twice, and a
+retry after a lost answer always did.
+- The page now allows one save at a time from the first tap. It sends an `Idempotency-Key`: one per
+  expense, kept for retries of the same expense, and new when the expense changes.
+- `POST /api/transactions` stores the key with the saver's id, in a unique column. A repeat is answered
+  with the first expense (200, `Idempotency-Replayed: true`). When two arrive at once, the unique index
+  lets one in and the other is answered with it.
+- On the real database, two saves at once with one key made one expense, five rounds out of five.
+
+**Rollout.** The new code reads both columns in every query of their tables. So this merges only after
+the "Production database" workflow has applied its migrations from this branch.
+
+Also: `schema.sql` now sets `client_encoding` to UTF8, as pg_dump files do. psql on Windows read it as
+WIN1252 and refused the ✈️ default of `Group.emoji`. Checked on the local PostgreSQL 17:
+- a cluster database with the first two migrations gets exactly the two new ones;
+- a database built on Windows is identical to the one Prisma builds.
+
 ---
 
 ## Open problems

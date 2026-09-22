@@ -8,6 +8,7 @@ import { ArrowRightLeft, Bell, Check, Link2Off, ReceiptText, RotateCcw, Users, W
 import Button from '@/components/ui/Button';
 import { Notice, Spinner } from '@/components/ui/kit';
 import { AuthCard, PublicShell, apiErrorMessage } from '@/components/auth/AuthKit';
+import { sessionEnded } from '@/lib/signOut';
 import { cn } from '@/lib/utils';
 import styles from '@/components/auth/auth.module.css';
 
@@ -51,7 +52,7 @@ export default function JoinGroupPage() {
                 body: JSON.stringify({ inviteCode: code }),
             });
             if (res.status === 401) {
-                router.push(`/login?callbackUrl=${encodeURIComponent(`/join/${code}`)}`);
+                sessionEnded(`/join/${code}`);
                 return;
             }
             const data = await res.json().catch(() => null);

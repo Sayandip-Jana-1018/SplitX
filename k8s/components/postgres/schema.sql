@@ -10,6 +10,9 @@
 -- "Production database" workflow.
 
 \set ON_ERROR_STOP on
+-- The file is UTF-8 (a default in the schema is an emoji); say so, as pg_dump
+-- does, rather than rely on the encoding of the machine running psql.
+SET client_encoding = 'UTF8';
 SET client_min_messages TO warning;
 
 -- A database this file built before it recorded migrations holds exactly
@@ -467,5 +470,54 @@ CREATE INDEX "AuditLog_entityType_entityId_idx" ON "AuditLog"("entityType", "ent
 
 INSERT INTO "_prisma_migrations" ("id", "checksum", "finished_at", "migration_name", "started_at", "applied_steps_count")
 VALUES (gen_random_uuid()::text, '4e7d127a91832de6124b7c9fbd94c112e7eea8bd98952d3bf7535c48efa2a50f', now(), '20260922171914_audit_log_entity_index', now(), 1);
+COMMIT;
+\endif
+
+-- ─── 20260922180425_user_token_version ─────────────────────────────────
+SELECT NOT EXISTS (
+    SELECT 1 FROM "_prisma_migrations"
+    WHERE "migration_name" = '20260922180425_user_token_version' AND "finished_at" IS NOT NULL AND "rolled_back_at" IS NULL
+) AS pending \gset
+\if :pending
+\echo 'applying 20260922180425_user_token_version'
+BEGIN;
+
+-- Ending sessions: a password reset, or "sign out of all devices", raises an
+-- account's tokenVersion, and a session issued with an older version is
+-- refused (src/lib/auth.ts). Sessions issued before this column carry no
+-- version and count as 0, the default, so nobody is signed out by it.
+-- A constant default is stored once, not written into every row: instant.
+
+-- AlterTable
+ALTER TABLE "User" ADD COLUMN     "tokenVersion" INTEGER NOT NULL DEFAULT 0;
+
+INSERT INTO "_prisma_migrations" ("id", "checksum", "finished_at", "migration_name", "started_at", "applied_steps_count")
+VALUES (gen_random_uuid()::text, '10e05f0a325b94fa02f2dc9b6fa91dcb53efacfeafd081af18c69e971216352e', now(), '20260922180425_user_token_version', now(), 1);
+COMMIT;
+\endif
+
+-- ─── 20260922180436_transaction_idempotency_key ────────────────────────
+SELECT NOT EXISTS (
+    SELECT 1 FROM "_prisma_migrations"
+    WHERE "migration_name" = '20260922180436_transaction_idempotency_key' AND "finished_at" IS NOT NULL AND "rolled_back_at" IS NULL
+) AS pending \gset
+\if :pending
+\echo 'applying 20260922180436_transaction_idempotency_key'
+BEGIN;
+
+-- A save that is retried (the network dropped after the server saved it) or
+-- tapped twice carries the same Idempotency-Key, stored here as
+-- "<userId>:<key>"; the unique index makes the second one find the first
+-- instead of creating another expense, even when both arrive at once.
+-- Existing rows keep NULL, which a unique index allows any number of.
+
+-- AlterTable
+ALTER TABLE "Transaction" ADD COLUMN     "idempotencyKey" TEXT;
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Transaction_idempotencyKey_key" ON "Transaction"("idempotencyKey");
+
+INSERT INTO "_prisma_migrations" ("id", "checksum", "finished_at", "migration_name", "started_at", "applied_steps_count")
+VALUES (gen_random_uuid()::text, '15683311575ffbffdf57efb41e27e915e1f7333bc80f99d57dddfb2d32a3da27', now(), '20260922180436_transaction_idempotency_key', now(), 1);
 COMMIT;
 \endif

@@ -30,6 +30,7 @@ import { Notice, Progress, Segmented } from '@/components/ui/kit';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useHaptics } from '@/hooks/useHaptics';
 import { inferCategory } from '@/lib/categoryInference';
+import { newIdempotencyKey } from '@/lib/idempotency';
 import { refreshMoneyData } from '@/lib/swr';
 import { CATEGORIES, PAYMENT_METHODS, formatCurrency, toPaise, cn } from '@/lib/utils';
 import { equalSharesById } from '@/lib/splits';
@@ -100,6 +101,10 @@ function QuickAddContent() {
     const [payerId, setPayerId] = useState('');
     const [sheet, setSheet] = useState<'group' | 'category' | 'payer' | 'method' | null>(null);
     const [saving, setSaving] = useState(false);
+    // A second tap can land before React re-renders the button as busy.
+    const saveInFlight = useRef(false);
+    // The key the last save of this expense was sent with (lib/idempotency.ts).
+    const saveAttempt = useRef<{ key: string; payload: string } | null>(null);
     const [selectedMembers, setSelectedMembers] = useState<Set<string>>(new Set());
     const [isCustomCategory, setIsCustomCategory] = useState(false);
     const [customCatValue, setCustomCatValue] = useState('');
@@ -624,7 +629,7 @@ function QuickAddContent() {
         toast('Voice input applied — review and save', 'success');
     }, [members, toast]);
 
-    const handleSave = async () => {
+    const saveExpense = async () => {
         if (!numericAmount || numericAmount <= 0) {
             toast('Enter an amount greater than zero', 'error');
             return;
@@ -667,7 +672,6 @@ function QuickAddContent() {
             }
         }
 
-        setSaving(true);
         try {
             const payload: Record<string, unknown> = {
                 tripId,
@@ -686,10 +690,17 @@ function QuickAddContent() {
                 payload.splitAmong = selectedMemberIds;
             }
 
+            // The same expense keeps its key: a retry after an answer that got
+            // lost finds the expense the first try saved instead of adding it
+            // twice. A changed expense is a new one, with a new key.
+            const payloadText = JSON.stringify(payload);
+            if (saveAttempt.current?.payload !== payloadText) {
+                saveAttempt.current = { key: newIdempotencyKey(), payload: payloadText };
+            }
             const res = await fetch('/api/transactions', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
+                headers: { 'Content-Type': 'application/json', 'Idempotency-Key': saveAttempt.current.key },
+                body: payloadText,
             });
 
             if (res.ok) {
@@ -719,7 +730,20 @@ function QuickAddContent() {
             }
         } catch {
             toast('Network error — please check your connection', 'error');
+        }
+    };
+
+    // One save at a time, from the first tap: the busy button alone can't stop
+    // a second tap that lands first, which would add the expense twice (and,
+    // for a group without one yet, create two trips on the way).
+    const handleSave = async () => {
+        if (saveInFlight.current) return;
+        saveInFlight.current = true;
+        setSaving(true);
+        try {
+            await saveExpense();
         } finally {
+            saveInFlight.current = false;
             setSaving(false);
         }
     };

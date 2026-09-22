@@ -56,12 +56,13 @@ export default function SettingsPage() {
     const standalone = useMediaQuery('(display-mode: standalone)', false);
     const fileRef = useRef<HTMLInputElement>(null);
 
-    const [sheet, setSheet] = useState<'profile' | 'delete' | null>(null);
+    const [sheet, setSheet] = useState<'profile' | 'delete' | 'sessions' | null>(null);
     const [form, setForm] = useState({ name: '', phone: '', upiId: '' });
     const [saving, setSaving] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [exporting, setExporting] = useState(false);
     const [deleting, setDeleting] = useState(false);
+    const [endingSessions, setEndingSessions] = useState(false);
     const [confirmText, setConfirmText] = useState('');
     const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
     const [installedNow, setInstalledNow] = useState(false);
@@ -203,6 +204,23 @@ export default function SettingsPage() {
         } catch {
             toast('Network error — try again', 'error');
             setDeleting(false);
+        }
+    };
+
+    const signOutEverywhere = async () => {
+        setEndingSessions(true);
+        try {
+            const res = await fetch('/api/me/sessions', { method: 'DELETE' });
+            if (res.ok) {
+                toast('Signed out of every device', 'success');
+                await signOutAndForget('/login');
+            } else {
+                toast(errorMessage(await res.json().catch(() => null), 'Could not sign out of your other devices'), 'error');
+                setEndingSessions(false);
+            }
+        } catch {
+            toast('Network error — try again', 'error');
+            setEndingSessions(false);
         }
     };
 
@@ -353,6 +371,13 @@ export default function SettingsPage() {
                                 chevron={!exporting}
                             />
                             <ListRow
+                                onClick={() => setSheet('sessions')}
+                                leading={<IconTile tone="neutral"><LogOut size={18} /></IconTile>}
+                                title="Sign out of all devices"
+                                subtitle="Ends every session, on this device too"
+                                chevron
+                            />
+                            <ListRow
                                 onClick={() => {
                                     setConfirmText('');
                                     setSheet('delete');
@@ -435,6 +460,24 @@ export default function SettingsPage() {
                     <Button fullWidth size="lg" loading={saving} disabled={!form.name.trim() || upiInvalid} onClick={saveProfile}>
                         Save changes
                     </Button>
+                </div>
+            </Modal>
+
+            {/* ── Sign out of all devices ── */}
+            <Modal isOpen={sheet === 'sessions'} onClose={() => !endingSessions && setSheet(null)} title="Sign out of all devices" size="small">
+                <div className={styles.confirm}>
+                    <span className={styles.confirmIcon}><LogOut size={26} /></span>
+                    <p className={styles.confirmTitle}>Sign out everywhere?</p>
+                    <p className={styles.confirmText}>
+                        Every phone and browser signed in to your account is signed out within a minute, this one
+                        included. Use it if you lost a device or signed in on one that isn&apos;t yours.
+                    </p>
+                    <div className={styles.twoUp}>
+                        <Button variant="secondary" onClick={() => setSheet(null)} disabled={endingSessions}>Cancel</Button>
+                        <Button variant="danger" leftIcon={<LogOut size={16} />} loading={endingSessions} onClick={signOutEverywhere}>
+                            Sign out all
+                        </Button>
+                    </div>
                 </div>
             </Modal>
 
