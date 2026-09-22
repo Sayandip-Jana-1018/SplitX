@@ -5,13 +5,26 @@ import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { invalidInput } from '@/lib/invalidInput';
 
+/**
+ * A day like "2026-10-02" (or a full timestamp), read into a Date here: a
+ * string the database can't read used to reach it and come back as a 500.
+ */
+const TripDate = z.string()
+    .trim()
+    .refine((value) => !Number.isNaN(Date.parse(value)), 'Use a date like 2026-10-02')
+    .transform((value) => new Date(value))
+    .refine((date) => date.getUTCFullYear() >= 2000 && date.getUTCFullYear() <= 2100, 'The date must be between 2000 and 2100');
+
 const CreateTripSchema = z.object({
     groupId: z.string().cuid(),
-    title: z.string().min(1).max(100),
-    description: z.string().optional(),
-    startDate: z.string().optional(),
-    endDate: z.string().optional(),
-});
+    title: z.string().trim().min(1).max(100),
+    description: z.string().trim().max(500).optional(),
+    startDate: TripDate.optional(),
+    endDate: TripDate.optional(),
+}).refine(
+    (trip) => !trip.startDate || !trip.endDate || trip.endDate >= trip.startDate,
+    { message: 'The trip must end on or after the day it starts', path: ['endDate'] },
+);
 
 // GET /api/trips?groupId=xxx
 export async function GET(req: Request) {
@@ -96,8 +109,8 @@ export async function POST(req: Request) {
                 groupId: parsed.data.groupId,
                 title: parsed.data.title,
                 description: parsed.data.description,
-                startDate: parsed.data.startDate ? new Date(parsed.data.startDate) : undefined,
-                endDate: parsed.data.endDate ? new Date(parsed.data.endDate) : undefined,
+                startDate: parsed.data.startDate,
+                endDate: parsed.data.endDate,
             },
         });
 
