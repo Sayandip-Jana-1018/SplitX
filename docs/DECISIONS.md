@@ -2471,6 +2471,39 @@ would have been refused, the classroom problem B-015 fixed for the rest of the A
 - a browser without a device cookie still gets ten a minute;
 - thirty minted devices can't exceed a lowered network ceiling.
 
+### D-077 · A property test runs whole group histories through the app's own rules
+**2026-09-23** · ✅ `tests/unit/ledgerModel.property.test.ts` (fast-check 4.10, a dev dependency)
+
+The plan asked for a model test over random sequences of create, edit, delete, remove-member and
+settle.
+- **What it runs.** Each of 300 runs is a group history of 20 to 80 random steps: people join and are
+  removed, expenses are added, edited and deleted, payments are started, approved, sent back and
+  declined.
+- **Through the real rules.** Every step goes through the functions the routes use: `resolveSplits`,
+  `settlementRoom`, the transition table, and D-063's rule for removing a member.
+- **Checked after every step:**
+  - the group nets to zero in whole paise;
+  - every expense's shares equal its amount, once per person;
+  - a new payment's room is never negative;
+  - the settle-up plan, paid in full, leaves everyone at zero, in fewer payments than there are people
+    owing or owed.
+- **Checked at the end:** with anything still open closed, every payment in the plan fits the app's
+  own limit, and once all are approved the group is settled.
+
+**A test that can't pass while testing nothing.** The first version passed with almost no payments in
+it, which counting what the histories did revealed:
+- fast-check's arrays are short by default (about five steps), so balances rarely existed yet;
+- its decimals lean towards edge values like 0, so asking for a share of the room asked for nothing.
+
+The histories are now 20 to 80 steps, payments target people who owe and people who are owed, and
+they ask for 1 to 130% of the room, so refusals are exercised too. Each run of the test now covers
+about 2,800 expenses, 950 edits, 500 deletions, 1,350 payments (with 400 more refused as too much),
+700 payment moves, 70 removals and 550 joins. The test fails if any of those counts falls below half.
+
+**Shown to catch a real bug.** Equal shares were rounded down with the leftover paise dropped, planted
+for one run. The property failed on its first history, and fast-check shrank it to a 1-paisa expense
+split between several people, where the shares add up to 0. The planted change was then reverted.
+
 ---
 
 ## Open problems
