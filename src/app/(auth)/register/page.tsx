@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { signIn } from 'next-auth/react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Lock, Mail, User, UserPlus } from 'lucide-react';
+import { Lock, Mail, MailCheck, RotateCcw, User, UserPlus } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Notice } from '@/components/ui/kit';
@@ -19,6 +19,7 @@ import {
 } from '@/components/auth/AuthKit';
 import styles from '@/components/auth/auth.module.css';
 import { PASSWORD_MIN_CHARS, passwordProblem } from '@/lib/password';
+import { cn } from '@/lib/utils';
 
 export default function RegisterPage() {
     return (
@@ -38,6 +39,9 @@ function RegisterForm() {
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    // Set once the account waits for its address to be confirmed.
+    const [sentTo, setSentTo] = useState<string | null>(null);
+    const [resent, setResent] = useState(false);
 
     const loginHref = callbackUrl === '/dashboard'
         ? '/login'
@@ -65,6 +69,13 @@ function RegisterForm() {
                 return;
             }
 
+            // While SplitX can email, a new account confirms its address first.
+            if (data?.verificationSent) {
+                setSentTo(email.trim());
+                setLoading(false);
+                return;
+            }
+
             const result = await signIn('credentials', { email: email.trim(), password, redirect: false });
             router.replace(!result || result.error ? loginHref : callbackUrl);
         } catch {
@@ -72,6 +83,43 @@ function RegisterForm() {
             setLoading(false);
         }
     };
+
+    const resend = async () => {
+        if (!sentTo) return;
+        setLoading(true);
+        setError('');
+        try {
+            const res = await fetch('/api/auth/resend-verification', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: sentTo }),
+            });
+            if (res.ok) setResent(true);
+            else setError(apiErrorMessage(await res.json().catch(() => null), 'We couldn’t send the link. Please try again.'));
+        } catch {
+            setError('Network error. Please try again.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    if (sentTo) {
+        return (
+            <AuthCard
+                key="sent"
+                icon={<span className={cn(styles.stateIcon, styles.stateAccent)}><MailCheck size={30} /></span>}
+                title="Confirm your email"
+                subtitle={<>We’ve sent a link to <strong>{sentTo}</strong>. Open it to finish setting up your account, then sign in.</>}
+                footer={<Link href={loginHref}>Go to sign in</Link>}
+            >
+                {error && <Notice tone="danger">{error}</Notice>}
+                {resent && <Notice tone="success">If a link was due, it’s on its way. Links can take a minute; check spam too.</Notice>}
+                <Button fullWidth variant="secondary" leftIcon={<RotateCcw size={16} />} loading={loading} onClick={resend}>
+                    Resend link
+                </Button>
+            </AuthCard>
+        );
+    }
 
     return (
         <AuthCard

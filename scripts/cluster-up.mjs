@@ -287,9 +287,9 @@ console.log('    ' + IMAGE + ' is now on every node');
 heading('Secret splitx-secrets (built from .env)');
 const REQUIRED = ['POSTGRES_PASSWORD', 'REDIS_PASSWORD', 'METRICS_TOKEN', 'NEXTAUTH_SECRET'];
 const OPTIONAL = [
-    'NEXT_PUBLIC_SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'GEMINI_API_KEY',
+    'NEXT_PUBLIC_SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'GEMINI_API_KEY', 'OPENAI_API_KEY',
     'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GITHUB_ID', 'GITHUB_SECRET',
-    'RESEND_API_KEY', 'EMAIL_FROM',
+    'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASSWORD', 'RESEND_API_KEY', 'EMAIL_FROM',
 ];
 const missing = REQUIRED.filter((key) => !process.env[key]);
 if (missing.length) fail('.env is missing: ' + missing.join(', '));

@@ -37,6 +37,8 @@ const CREDENTIAL_ROUTES = new Set([
     '/api/register',
     '/api/auth/forgot-password',
     '/api/auth/reset-password',
+    '/api/auth/verify-email',
+    '/api/auth/resend-verification',
 ]);
 
 function perMinute(variable: string, fallback: number) {

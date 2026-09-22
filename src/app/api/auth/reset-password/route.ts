@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 import { passwordProblem } from '@/lib/password';
-import { hashResetToken } from '@/lib/resetTokens';
+import { hashSecretToken } from '@/lib/secretTokens';
 import { logger } from '@/lib/logger';
 
 class ResetRefused extends Error {}
@@ -24,7 +24,7 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: problem }, { status: 400 });
         }
 
-        const tokenHash = hashResetToken(token);
+        const tokenHash = hashSecretToken(token);
         const hashedPassword = await bcrypt.hash(password, 12);
 
         try {

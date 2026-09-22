@@ -40,6 +40,11 @@ function LoginForm() {
         setError('');
         try {
             const result = await signIn('credentials', { email: email.trim(), password, redirect: false });
+            if (result?.code === 'email_unverified') {
+                setError('Confirm your email first: we’ve sent a link to your inbox. Open it, then sign in. It can take a minute; check spam too.');
+                setLoading(false);
+                return;
+            }
             if (!result || result.error) {
                 setError('That email and password don’t match. Try again, or reset your password.');
                 setLoading(false);

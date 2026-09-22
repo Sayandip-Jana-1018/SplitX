@@ -2148,6 +2148,56 @@ deleted group, and one account per address whatever its case.
 **Result, 2026-09-22:** 1 live group, 37 expenses, 62 shares, 0 settlements and 9 accounts; every rule
 holds. No production data was affected by the old member removal (B-029 closed).
 
+### D-070 · Email that reaches anyone, addresses that are confirmed, and an auth library without critical holes
+**2026-09-22** · ✅ written and unit-tested (987 → 1,006 tests) · live once the user puts the SMTP settings in `.env` and Vercel
+
+**Email.** SplitX sent mail through Resend's shared `onboarding@resend.dev`, which delivers only to
+the Resend account's owner: every reset link for anyone else was reported sent and never arrived.
+The code also ignored the error Resend returns (it doesn't throw), so failures were silent.
+`src/lib/email.ts` now sends through **SMTP** when `SMTP_HOST`, `SMTP_USER` and `SMTP_PASSWORD` are
+set (a Gmail account with an app password reaches any address without owning a domain), or through
+Resend only with `EMAIL_FROM` on a verified domain; `onboarding@resend.dev` is never used. With
+neither, nothing claims to have sent: "forgot password" answers 503 for every address alike.
+`npm run email:test -- <address>` checks the settings with one message and prints only the mail
+server's answer.
+
+**Confirming addresses** (the rest of security finding H2; D-068 did provider sign-in):
+- While SplitX can send email, a password account signs in only once its address is confirmed.
+  Sign-up sends a link; the link is single use, kept as SHA-256 in `VerificationToken`, valid for
+  24 hours, and sent at most once every ten minutes per address.
+- Only someone who gets the password right learns that the address is unconfirmed (the sign-in page
+  shows `email_unverified`), and signing in sends them a fresh link. This is also how existing
+  password accounts confirm: nothing to migrate, and Google or GitHub accounts are confirmed already.
+- **Sign-up answers the same for a taken address** ("check your email"); the owner gets an email
+  saying someone tried. The password is hashed before the lookup so the time taken doesn't tell
+  either. Two sign-ups racing with one address end the same way. Without email, a taken address is
+  refused as before: a uniform answer needs the email to back it.
+- `/api/auth/verify-email` and `/api/auth/resend-verification` are rate limited like sign-in, and
+  fail closed the same way (D-068).
+- Without an email sender nobody is asked to confirm, since nobody could.
+
+**The auth library.** `npm audit` of the production dependencies found `next-auth` 5.0.0-beta.30 with
+`@auth/core` 0.41.0 carrying two **critical** advisories: auth checks that fail *open* on a
+configuration error (GHSA-8fpg-xm3f-6cx3) and an address check done before Unicode normalization
+(GHSA-7rqj-j65f-68wh); plus a high (GHSA-xmf8-cvqr-rfgj, a malformed Bearer header crashes
+`getToken`) and a moderate (GHSA-x445-f3h2-j279). **Upgraded to 5.0.0-beta.32 with `@auth/core`
+0.41.3**, which fixes all four.
+- `next-auth` names nodemailer as an optional peer, `^7.0.7 || ^8.0.5`, and every 7.x and 8.x release
+  carries high advisories fixed only in 9.1. SplitX never uses next-auth's email provider, the only
+  thing that loads it through `next-auth`, so an npm `overrides` entry gives `next-auth` the same
+  nodemailer 10 the app uses, instead of turning off peer checks for the whole project.
+- Fixed within their ranges: `ws` (through Supabase), `uuid` (through Resend), `defu` (through the
+  Prisma CLI's config loader), `effect`, `baseline-browser-mapping`. Left: B-030.
+
+Found on the way: the cluster's secret never carried `OPENAI_API_KEY`, so AI receipt scans could not
+work on Kubernetes; it now carries it and the SMTP settings.
+
+**Tests:** which sender is chosen (and never `onboarding@resend.dev`), the message SMTP sends (sender,
+plain-text copy, link), Resend's returned error, a missing site address; one link per ten minutes,
+only its hash stored, single use; sign-up's uniform answer, the notice to the owner, the race, and
+the no-email behaviour; sign-in asking for confirmation only after the right password; and the
+resend route answering the same for every address.
+
 ---
 
 ## Open problems
@@ -2183,6 +2233,7 @@ holds. No production data was affected by the old member removal (B-029 closed).
 | B-027 | With the cluster running, the 6 GB WSL VM held about 4 GB in memory and all 8 GB of its swap (2026-09-21), about 12 GB against the 4.6 GB the same cluster used the day before. | The control plane crash-looped and the app answered 503. On Windows, the swap file held the SSD at a queue of 100–245 and 61 ms reads, which froze the laptop. Release `7e3509e` (deployment 6572256500, 15:45 UTC) reached no relay and was never deployed: no delivery was logged after 15:30 UTC. | Open. Next time the cluster runs, watch the VM's anonymous, shared and swapped memory from `k8s:up` on (node-exporter already exports all three), find what grew, and fit the local cluster into 6 GB. Then redeliver 6572256500 from GitHub's webhook page and read Jenkins' statuses on GitHub. |
 | B-028 | The AI chat builds its own balances: pairwise instead of the group plan, over every expense including deleted ones, in deleted groups too, with ±1 paisa counted as settled. | Its answers to "who owes me?" can disagree with Settle Up, and count expenses that were deleted. | ✅ Resolved 2026-09-22 — D-067. The chat's context is the ledger: balances per group over live expenses, and each group's settle-up plan. |
 | B-029 | Removing a member used to re-split their shares among the others (D-063). Groups that had a member removed may hold shares that were moved between people, and former members may still owe or be owed. | Balances in those groups reflect the old re-split, not what people agreed to. | ✅ Checked 2026-09-22 — D-069. `npm run ledger:audit -- --https` read production (1 group, 37 expenses, 62 shares, 0 settlements, 9 accounts) in a read-only transaction: no share of a former member, no former member with a balance, every expense adding up, every group netting to zero. Nothing to repair. |
+| B-030 | `npm audit` still reports one high advisory: `deepmerge-ts` below 8 (GHSA-ggr8-5vv4-36mx, stack exhaustion when merging self-referencing objects), through `prisma` → `@prisma/config`. | The Prisma CLI is a development and migration tool; the app's runtime (`@prisma/client`) doesn't use it, and the only objects it merges are our own config. | Accepted 2026-09-22 (D-070). The fix is Prisma 7, a major upgrade with its own changes; revisit it with the migration baseline (fix 8 of the plan), and keep it out of the runtime image. |
 
 ## Environment notes (this machine)
 
