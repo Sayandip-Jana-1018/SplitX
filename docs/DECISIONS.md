@@ -2124,6 +2124,30 @@ unreachable), a verified-only address from each provider, the password removal a
 password rules at 7/8/72/73 bytes and in emoji, the local limiter's windows, reset tokens stored as
 hashes, one use per link, and the same answer for accounts that exist and don't.
 
+### D-069 · Production's money is checked against the rules, read only
+**2026-09-22** · ✅ run against production: 13 rules, none broken (`docs/evidence/ledger-audit.json`)
+
+D-063 and D-064 changed what the app allows. What was already in the database was written under the
+old rules, so it could break the new ones: shares moved by the old member removal (B-029), balances
+of people no longer in a group, settlements in states the transition table doesn't know.
+
+**Decided:** `scripts/ledger-audit.mjs` (`npm run ledger:audit`, `--https` where port 5432 is blocked)
+checks 13 rules with SQL and reports how many records break each: shares adding up to their
+expense, shares only of current members, nobody gone with a balance, every group netting to zero,
+amounts in range, settlements positive, never to oneself, in known states, none waiting in a
+deleted group, and one account per address whatever its case.
+- **Read only, twice over:** it sends SELECTs only, and each runs in a read-only transaction
+  (`Neon-Batch-Read-Only` over HTTPS, `SET TRANSACTION READ ONLY` over the Postgres protocol), so
+  the database itself refuses a write.
+- **Counts only:** no names, addresses or record IDs, nor the database host; the report can be
+  committed. It first says how much it looked at, so a report of zeros can't come from an empty
+  database.
+- Exit code 1 when a rule is broken, so it can gate a pipeline. Repairs are separate and approved
+  one at a time.
+
+**Result, 2026-09-22:** 1 live group, 37 expenses, 62 shares, 0 settlements and 9 accounts; every rule
+holds. No production data was affected by the old member removal (B-029 closed).
+
 ---
 
 ## Open problems
@@ -2158,7 +2182,7 @@ hashes, one use per link, and the same answer for accounts that exist and don't.
 | B-026 | Jenkins' deploy builds and `cd:verify` read GitHub's deployments without a token, and this network's public address shares GitHub's anonymous allowance (60 an hour) with other devices. | A deploy would fail at its first step whenever someone else on the network had spent the allowance: on 2026-09-21 its hour began eleven minutes before this laptop booted, and it was spent when `cd:verify` ran, which failed 2 of its 15 checks on it. | Open — the user creates a fine-grained token (this repository only, Deployments read and write) and puts it in `.env` as `JENKINS_GITHUB_TOKEN`; `k8s:up` hands it to Jenkins. Both scripts now say when the allowance is spent and until when, instead of a bare 403, and the build log no longer repeats GitHub's message, which names the address. **2026-09-21:** the token is in `.env` and works (5,000 an hour). |
 | B-027 | With the cluster running, the 6 GB WSL VM held about 4 GB in memory and all 8 GB of its swap (2026-09-21), about 12 GB against the 4.6 GB the same cluster used the day before. | The control plane crash-looped and the app answered 503. On Windows, the swap file held the SSD at a queue of 100–245 and 61 ms reads, which froze the laptop. Release `7e3509e` (deployment 6572256500, 15:45 UTC) reached no relay and was never deployed: no delivery was logged after 15:30 UTC. | Open. Next time the cluster runs, watch the VM's anonymous, shared and swapped memory from `k8s:up` on (node-exporter already exports all three), find what grew, and fit the local cluster into 6 GB. Then redeliver 6572256500 from GitHub's webhook page and read Jenkins' statuses on GitHub. |
 | B-028 | The AI chat builds its own balances: pairwise instead of the group plan, over every expense including deleted ones, in deleted groups too, with ±1 paisa counted as settled. | Its answers to "who owes me?" can disagree with Settle Up, and count expenses that were deleted. | ✅ Resolved 2026-09-22 — D-067. The chat's context is the ledger: balances per group over live expenses, and each group's settle-up plan. |
-| B-029 | Removing a member used to re-split their shares among the others (D-063). Groups that had a member removed may hold shares that were moved between people, and former members may still owe or be owed. | Balances in those groups reflect the old re-split, not what people agreed to. | Open — fix 9 of the plan: a read-only check of production (`scripts/ledger-audit.mjs`) counts groups with former members holding a balance, and shares that don't add up. Any repair is approved one by one. |
+| B-029 | Removing a member used to re-split their shares among the others (D-063). Groups that had a member removed may hold shares that were moved between people, and former members may still owe or be owed. | Balances in those groups reflect the old re-split, not what people agreed to. | ✅ Checked 2026-09-22 — D-069. `npm run ledger:audit -- --https` read production (1 group, 37 expenses, 62 shares, 0 settlements, 9 accounts) in a read-only transaction: no share of a former member, no former member with a balance, every expense adding up, every group netting to zero. Nothing to repair. |
 
 ## Environment notes (this machine)
 

@@ -16,6 +16,7 @@
     "test:coverage": "vitest run --project unit --coverage",
     "test:integration": "vitest run --project integration",
     "test:alerts": "node scripts/test-alerts.mjs",
+    "ledger:audit": "node --env-file=.env scripts/ledger-audit.mjs",
     "image:build": "node scripts/image-build.mjs",
     "image:report": "node --env-file=.env scripts/image-report.mjs",
     "db:schema": "node scripts/db-schema.mjs",
