@@ -2198,6 +2198,40 @@ only its hash stored, single use; sign-up's uniform answer, the notice to the ow
 the no-email behaviour; sign-in asking for confirmation only after the right password; and the
 resend route answering the same for every address.
 
+### D-071 · Every page says what it may load and use
+**2026-09-22** · ✅ written and unit-tested (1,006 → 1,015 tests) · report-only; enforce after production shows the app itself breaks no rule
+
+Production already sent HSTS (Vercel's, with preload), `nosniff`, `X-Frame-Options: DENY` and a
+referrer policy. It sent no Content-Security-Policy, and no Permissions-Policy on pages.
+
+**Decided** (`src/lib/security/contentSecurityPolicy.ts`, sent from `next.config.ts` on every route):
+- **A Content-Security-Policy, report-only first.** Only the site itself for scripts, frames, form
+  posts and base URLs; no plugins; nobody may frame the site. Requests (`connect-src`) may go only
+  to the site, Supabase storage (photos are uploaded straight there) and jsDelivr, where on-device
+  receipt reading loads its engine; images also from Google's and GitHub's profile photo hosts.
+  Browsers report what it would block to `/api/csp-report`, which counts reports in
+  `splitx_csp_violations_total` (by directive and kind of source, a fixed set of labels) and logs at
+  most one line every ten seconds, so fake reports can't flood the logs.
+- **`'unsafe-inline'` stays for scripts, on purpose.** Next.js writes each page's data as inline
+  scripts, so without it every response would need a nonce, and a nonce makes every page render per
+  request: the landing and sign-in pages are served prerendered today. React escapes what it renders
+  and no page puts user text into raw HTML; the policy's work is everything else, above all that an
+  injected script can't send data anywhere the list doesn't name. `'unsafe-eval'` is not allowed;
+  `'wasm-unsafe-eval'` is, for the OCR engine's WebAssembly.
+- **Permissions-Policy:** camera and microphone for this site only (receipt scanning, voice entry);
+  location, payment, USB, serial, HID and Bluetooth for no one.
+- `Cross-Origin-Opener-Policy: same-origin` (sign-in uses redirects, not pop-ups), and our own HSTS
+  in production for the cluster and CloudFront, where Vercel's isn't there.
+- Development gets neither HSTS nor the CSP: it runs over plain HTTP and its tooling uses eval.
+
+**Next:** after the merge, open production's pages and read the browser console, where report-only
+violations appear, then switch the header to `Content-Security-Policy`. Self-hosting the OCR engine
+(fix 7 of the plan) would remove jsDelivr from the list.
+
+**Tests:** the policy's invariants (no `'unsafe-eval'`; `object-src`, `frame-ancestors`, `base-uri`,
+`form-action` and `connect-src` as above), both report formats, labels kept to a fixed set whatever a
+report claims, at most 20 reports per request, and the route's counting and size limit.
+
 ---
 
 ## Open problems

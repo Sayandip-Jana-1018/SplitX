@@ -155,6 +155,12 @@ function createMetrics() {
             labelNames: ['provider'] as const,
             registers: [register],
         }),
+        cspViolations: new client.Counter({
+            name: 'splitx_csp_violations_total',
+            help: 'Content-Security-Policy violations browsers reported, by directive and kind of source',
+            labelNames: ['directive', 'source'] as const,
+            registers: [register],
+        }),
         activeGroups: new client.Gauge({
             name: 'splitx_active_groups',
             help: 'Groups that have not been deleted (refreshed at scrape time; identical on every pod)',
@@ -246,6 +252,10 @@ export function recordAiChat(provider: 'gemini' | 'local', outcome: 'ok' | 'erro
 
 export function recordReceiptScan(outcome: 'success' | 'upstream_error' | 'rate_limited' | 'unparseable' | 'error') {
     metrics.receiptScans.inc({ outcome });
+}
+
+export function recordCspViolation(directive: string, source: string) {
+    metrics.cspViolations.inc({ directive, source });
 }
 
 export function recordVoiceParse(provider: 'gemini' | 'gemini_fallback' | 'local') {
