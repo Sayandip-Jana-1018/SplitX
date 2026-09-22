@@ -2504,6 +2504,28 @@ about 2,800 expenses, 950 edits, 500 deletions, 1,350 payments (with 400 more re
 for one run. The property failed on its first history, and fast-check shrank it to a 1-paisa expense
 split between several people, where the shares add up to 0. The planted change was then reverted.
 
+### D-078 · Answers a page can show, links that reach people, dates that are dates
+**2026-09-23** · ✅ written and unit-tested (1,047 → 1,064 tests), live on `main`
+
+Small things from the audit's low list, each with a test that failed first:
+- **Validation errors are one sentence.** Three routes (creating a trip, creating a group, editing the
+  profile) answered invalid input with the validator's raw issue objects as `error`. Pages can only show
+  text, so people saw a generic fallback, and the objects described the code's internals to anyone who
+  sent junk. They now answer "Invalid <field>: <reason>" (`src/lib/invalidInput.ts`), the way the money
+  routes already did.
+- **A body that isn't JSON is a 400,** not a 500. Six routes read JSON without a catch; every API route
+  now reads it with one.
+- **Invite links never point at localhost.** `POST /api/contacts/invite` built links from
+  `NEXTAUTH_URL` or `http://localhost:3000`, and the local `.env` has no `NEXTAUTH_URL` (Vercel may
+  not either). `src/lib/siteUrl.ts` uses `NEXTAUTH_URL` or `AUTH_URL`, then Vercel's production domain,
+  then the address the request came in on. Email links use the same helper, without the request.
+- **Trip dates are dates.** An unreadable date reached the database as an invalid `Date` and came back
+  as a 500. The schema now reads and checks dates: an end before the start, a year outside 2000 to 2100,
+  a title of only spaces, or a description past 500 characters is refused.
+
+Already done, found while checking: removing a member rotates the group's invite code (D-063), so the
+removed person can't rejoin with the old link.
+
 ---
 
 ## Open problems
