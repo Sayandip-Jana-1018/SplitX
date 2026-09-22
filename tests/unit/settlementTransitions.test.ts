@@ -192,13 +192,15 @@ describe('transitionSettlement', () => {
         expect(tx.group.findMany).not.toHaveBeenCalled();
     });
 
-    it('treats a settlement of a deleted group as gone', async () => {
+    it('treats a settlement as gone once its group is deleted or the person has left it', async () => {
         tx.settlement.findFirst.mockResolvedValue(null);
 
         expect((await refusal(move('approve', ids.alice))).status).toBe(404);
         await move('approve', ids.alice).catch(() => undefined);
         expect(tx.settlement.findFirst.mock.calls[0][0].where).toEqual({
-            id: SETTLEMENT, deletedAt: null, trip: { group: { deletedAt: null } },
+            id: SETTLEMENT,
+            deletedAt: null,
+            trip: { group: { deletedAt: null, OR: [{ ownerId: ids.alice }, { members: { some: { userId: ids.alice } } }] } },
         });
     });
 

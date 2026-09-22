@@ -1968,6 +1968,34 @@ deleted group, and a serializable conflict; plus the routes' wiring.
 **Left:** a payer can't withdraw their own request; the receiver's "Not paid" is the way out, and
 the refusal says so. The frontend review (phase 1b of the plan) adds the button.
 
+### D-065 · Only a group's members reach it, and the server writes what it says
+**2026-09-22** · ✅ written and unit-tested (915 → 924 tests)
+
+Four ways a signed-in person could reach past their own groups:
+
+| Where | What was possible |
+|---|---|
+| `POST /api/contacts/invite` | Anyone who knew a group's ID got its invite code, and with it could join (security finding H1) |
+| `POST /api/notifications` | Any member could send anyone in a shared group a notification with any title, text, type and link: a phishing channel inside the app |
+| `POST /api/groups/:id/messages` | A message could claim `type: system` (a fake "✅ confirmed receiving ₹5,000"), attach a settlement or an expense from any other group by ID, and be of any length |
+| Settlement moves | A person removed from a group could still approve or decline payments in it (high finding 6); editing and deleting expenses was closed in D-063 |
+
+**Decided:**
+- A group's invite link goes only to its own members; any other group ID is a 404.
+- **The only notification a person can send is a payment reminder, and the server writes it:** the
+  request names the person and the group; both must be members, the amount comes from the group's
+  settle-up plan (a reminder to someone who owes the sender nothing is refused), and the title,
+  text and link are fixed. One a minute per pair, as before.
+- **Chat takes text and payment reminders, up to 1,000 characters.** System messages, and messages
+  carrying a settlement or an expense, are written by the server alone (approving a payment writes
+  one).
+- **Moving a payment needs current membership** of its group, like editing an expense.
+- An invitation needs a group that still exists. Malformed JSON on these routes is a 400.
+
+**Tests:** each hole above, from the outside: the invite code never appears for a non-member, a
+reminder's text and link are the server's whatever the request says, and a chat message can't be a
+system message or carry another group's records.
+
 ---
 
 ## Open problems

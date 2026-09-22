@@ -90,8 +90,19 @@ export async function transitionSettlement(params: {
     const rule: Transition = SETTLEMENT_TRANSITIONS[params.action];
 
     const run = async (tx: Prisma.TransactionClient) => {
+        // Only a current member of the group can move its money: someone who
+        // has left (or been removed) no longer can.
         const before = await tx.settlement.findFirst({
-            where: { id: params.settlementId, deletedAt: null, trip: { group: { deletedAt: null } } },
+            where: {
+                id: params.settlementId,
+                deletedAt: null,
+                trip: {
+                    group: {
+                        deletedAt: null,
+                        OR: [{ ownerId: params.actorId }, { members: { some: { userId: params.actorId } } }],
+                    },
+                },
+            },
             include: settlementInclude,
         });
         if (!before) throw new TransitionRefused('Settlement not found', 404);

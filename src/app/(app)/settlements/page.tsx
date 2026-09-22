@@ -322,15 +322,13 @@ export default function SettlementsPage() {
         const res = await fetch('/api/notifications', {
             method: 'POST',
             headers: JSON_HEADERS,
-            body: JSON.stringify({
-                userId: item.from.id,
-                type: 'payment_reminder',
-                title: 'Payment reminder',
-                body: `${item.to.name} is reminding you to pay ${formatCurrency(item.amount)}`,
-                link: '/settlements',
-            }),
+            body: JSON.stringify({ userId: item.from.id, groupId: item.groupId }),
         });
-        toast(res.ok ? `Reminder sent to ${firstName(item.from.name)}` : 'Could not send the reminder', res.ok ? 'success' : 'error');
+        const body = res.ok ? null : await res.json().catch(() => ({}));
+        toast(
+            res.ok ? `Reminder sent to ${firstName(item.from.name)}` : (typeof body?.error === 'string' ? body.error : 'Could not send the reminder'),
+            res.ok ? 'success' : 'error'
+        );
         return false;
     });
 

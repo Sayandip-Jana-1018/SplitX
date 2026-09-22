@@ -3,14 +3,19 @@ import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { isFeatureEnabled } from '@/lib/featureFlags';
 import { z } from 'zod';
+import { loadGroupLedger, planLedgerTransfers } from '@/lib/ledger';
+import { formatCurrency } from '@/lib/utils';
 import { logger } from '@/lib/logger';
 
-const CreateNotificationSchema = z.object({
-    userId: z.string().min(1),
-    type: z.string().min(1),
-    title: z.string().min(1).max(200),
-    body: z.string().min(1).max(500),
-    link: z.string().optional(),
+/**
+ * A person can send one kind of notification: a reminder to someone who owes
+ * them. The server writes its title, text and link. It used to take all three
+ * from the request, so any member could send anyone in a shared group a
+ * message with any link in it.
+ */
+const ReminderSchema = z.object({
+    userId: z.string().min(1).max(64),
+    groupId: z.string().min(1).max(64),
 });
 
 function extractGroupIdFromLink(link?: string | null) {
@@ -142,7 +147,10 @@ export async function PATCH(req: Request) {
         const user = await prisma.user.findUnique({ where: { email: session.user.email } });
         if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
-        const body = await req.json();
+        const body = await req.json().catch(() => null);
+        if (!body || typeof body !== 'object') {
+            return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
+        }
         const { ids, markAll } = body as { ids?: string[]; markAll?: boolean };
 
         if (markAll) {
@@ -164,7 +172,7 @@ export async function PATCH(req: Request) {
     }
 }
 
-// POST /api/notifications — create a notification for another user (e.g., payment reminders)
+// POST /api/notifications — remind someone in a shared group that they owe you.
 export async function POST(req: Request) {
     try {
         const session = await auth();
@@ -175,55 +183,54 @@ export async function POST(req: Request) {
         const sender = await prisma.user.findUnique({ where: { email: session.user.email } });
         if (!sender) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
-        const body = await req.json();
-        const parsed = CreateNotificationSchema.safeParse(body);
+        const parsed = ReminderSchema.safeParse(await req.json().catch(() => null));
         if (!parsed.success) {
-            return NextResponse.json({ error: parsed.error.issues[0]?.message || 'Invalid request body' }, { status: 400 });
+            return NextResponse.json({ error: 'Choose who to remind, and in which group' }, { status: 400 });
         }
+        const { userId, groupId } = parsed.data;
 
-        const { userId, type, title, body: notifBody, link } = parsed.data;
-
-        // Prevent sending notifications to yourself
         if (userId === sender.id) {
             return NextResponse.json({ error: 'Cannot send notification to yourself' }, { status: 400 });
         }
 
-        // Rate limit: max 1 reminder per pair per minute
-        if (type === 'payment_reminder') {
-            const oneMinuteAgo = new Date(Date.now() - 60_000);
-            const recentReminder = await prisma.notification.findFirst({
-                where: {
-                    userId,
-                    actorId: sender.id,
-                    type: 'payment_reminder',
-                    createdAt: { gte: oneMinuteAgo },
-                },
-            });
-            if (recentReminder) {
-                return NextResponse.json(
-                    { error: 'Reminder already sent recently. Try again in a minute.' },
-                    { status: 429 }
-                );
-            }
+        // Both must be in the group; what is owed comes from its settle-up plan.
+        const ledger = await loadGroupLedger(groupId);
+        const inGroup = (id: string) => Boolean(ledger?.members.some((member) => member.id === id));
+        if (!ledger || !inGroup(sender.id) || !inGroup(userId)) {
+            return NextResponse.json({ error: 'You can only remind people in your groups' }, { status: 403 });
+        }
+        const owed = planLedgerTransfers(ledger)
+            .filter((transfer) => transfer.from === userId && transfer.to === sender.id)
+            .reduce((sum, transfer) => sum + transfer.amount, 0);
+        if (owed === 0) {
+            return NextResponse.json({ error: 'They don’t owe you anything in this group' }, { status: 400 });
         }
 
-        // Security: Verify sender and recipient share at least one group
-        const sharedGroup = await prisma.group.findFirst({
+        // At most one reminder a minute from one person to another.
+        const recentReminder = await prisma.notification.findFirst({
             where: {
-                deletedAt: null,
-                AND: [
-                    { OR: [{ ownerId: sender.id }, { members: { some: { userId: sender.id } } }] },
-                    { OR: [{ ownerId: userId }, { members: { some: { userId } } }] },
-                ],
+                userId,
+                actorId: sender.id,
+                type: 'payment_reminder',
+                createdAt: { gte: new Date(Date.now() - 60_000) },
             },
-            select: { id: true },
         });
-        if (!sharedGroup) {
-            return NextResponse.json({ error: 'You can only send notifications to users in your groups' }, { status: 403 });
+        if (recentReminder) {
+            return NextResponse.json(
+                { error: 'Reminder already sent recently. Try again in a minute.' },
+                { status: 429 }
+            );
         }
 
         const notification = await prisma.notification.create({
-            data: { user: { connect: { id: userId } }, actor: { connect: { id: sender.id } }, type, title, body: notifBody, link },
+            data: {
+                user: { connect: { id: userId } },
+                actor: { connect: { id: sender.id } },
+                type: 'payment_reminder',
+                title: 'Payment reminder',
+                body: `${sender.name || 'Someone'} is reminding you to pay ${formatCurrency(owed)} in ${ledger.groupName}.`,
+                link: '/settlements',
+            },
         });
 
         return NextResponse.json(notification, { status: 201 });
