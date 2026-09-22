@@ -174,7 +174,7 @@ export async function GET(
             transactions: transactionSnapshots.filter((transaction) => !transaction.deletedAt),
             settlements: settlementSnapshots,
         });
-        const simplified = simplifyGroupBalances({ balances: currentBalances, members });
+        const simplified = simplifyGroupBalances({ balances: currentBalances, people: members });
 
         return NextResponse.json({
             group: {

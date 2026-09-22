@@ -4,16 +4,34 @@ import { auth } from '@/lib/auth';
 import { z } from 'zod';
 import { createAuditLog } from '@/lib/auditLog';
 import { serializeTransactionAuditSnapshot } from '@/lib/auditPayloads';
+import { MAX_EXPENSE_PAISE, resolveSplits, SPLIT_TYPES, type SplitType } from '@/lib/expenseSplits';
 import { logger } from '@/lib/logger';
 
 const UpdateTransactionSchema = z.object({
-    title: z.string().min(1).max(100).optional(),
-    amount: z.number().int().positive().optional(),
-    category: z.string().optional(),
-    method: z.string().optional(),
-    description: z.string().optional(),
-    splitAmong: z.array(z.string()).optional(),
+    title: z.string().trim().min(1).max(100).optional(),
+    amount: z.number().int().positive().max(MAX_EXPENSE_PAISE).optional(),
+    category: z.string().min(1).max(40).optional(),
+    method: z.string().min(1).max(40).optional(),
+    description: z.string().max(500).optional(),
+    splitType: z.enum(SPLIT_TYPES).optional(),
+    splitAmong: z.array(z.string().min(1).max(64)).max(200).optional(),
+    splits: z.array(z.object({
+        userId: z.string().min(1).max(64),
+        amount: z.number().int().nonnegative(),
+    })).max(200).optional(),
+    /** The `updatedAt` the editor was looking at: if it changed since, someone else edited first. */
+    expectedUpdatedAt: z.string().datetime().optional(),
 });
+
+/** Thrown inside the write when the row changed or disappeared since it was read. */
+class EditConflict extends Error {}
+
+const isKnownSplitType = (value: string): value is SplitType => (SPLIT_TYPES as readonly string[]).includes(value);
+
+const sameMembers = (a: readonly string[], b: readonly string[]) => {
+    const setA = new Set(a);
+    return setA.size === a.length && a.length === b.length && b.every((userId) => setA.has(userId));
+};
 
 // GET /api/transactions/[id] — get transaction detail
 export async function GET(
@@ -80,23 +98,36 @@ export async function PUT(
         }
 
         const { id } = await params;
-        const body = await req.json();
-        const parsed = UpdateTransactionSchema.safeParse(body);
+        const parsed = UpdateTransactionSchema.safeParse(await req.json().catch(() => null));
         if (!parsed.success) {
-            return NextResponse.json({ error: parsed.error.issues }, { status: 400 });
+            const issue = parsed.error.issues[0];
+            return NextResponse.json(
+                { error: issue ? `Invalid ${issue.path.join('.') || 'request'}: ${issue.message}` : 'Invalid request' },
+                { status: 400 }
+            );
         }
+        const edit = parsed.data;
 
         const user = await prisma.user.findUnique({ where: { email: session.user.email } });
         if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
-        // Verify access — must be payer or group owner, and not soft-deleted
+        // Only a current member may edit, and only the payer or the group owner.
+        // Membership is checked too: someone removed from the group loses the
+        // right to change what they paid for.
         const existing = await prisma.transaction.findFirst({
             where: {
                 id,
                 deletedAt: null,
-                OR: [
-                    { payerId: user.id },
-                    { trip: { group: { ownerId: user.id } } },
+                AND: [
+                    {
+                        trip: {
+                            group: {
+                                deletedAt: null,
+                                OR: [{ ownerId: user.id }, { members: { some: { userId: user.id } } }],
+                            },
+                        },
+                    },
+                    { OR: [{ payerId: user.id }, { trip: { group: { ownerId: user.id } } }] },
                 ],
             },
             include: {
@@ -110,51 +141,85 @@ export async function PUT(
             return NextResponse.json({ error: 'Transaction not found or access denied' }, { status: 404 });
         }
 
-        if (existing.splitType === 'custom') {
+        if (edit.expectedUpdatedAt && new Date(edit.expectedUpdatedAt).getTime() !== existing.updatedAt.getTime()) {
             return NextResponse.json(
-                { error: 'Custom split transactions cannot be edited. Delete and recreate the expense instead.' },
-                { status: 400 }
+                { error: 'Someone else changed this expense while you were editing. Reload it and try again.' },
+                { status: 409 }
             );
         }
 
-        // If amount changed, recalculate equal splits
-        const updateData: Record<string, unknown> = {};
-        if (parsed.data.title) updateData.title = parsed.data.title;
-        if (parsed.data.amount !== undefined) updateData.amount = parsed.data.amount;
-        if (parsed.data.category) updateData.category = parsed.data.category;
-        if (parsed.data.method) updateData.method = parsed.data.method;
-        if (parsed.data.description !== undefined) updateData.description = parsed.data.description;
+        // Any change to the amount or to who shares it recomputes the shares
+        // under the same rules as creating an expense (lib/expenseSplits.ts), so
+        // the shares always add up to the saved amount and only members are charged.
+        // Fields sent unchanged (an edit form sends everything) change nothing.
+        const amount = edit.amount ?? existing.amount;
+        const currentType: SplitType = isKnownSplitType(existing.splitType) ? existing.splitType : 'custom';
+        const splitType = edit.splitType ?? currentType;
+        const currentSharers = existing.splits.map((split) => split.userId);
+        const sharesTouched = amount !== existing.amount
+            || splitType !== currentType
+            || (edit.splitAmong !== undefined && !sameMembers(edit.splitAmong, currentSharers))
+            || edit.splits !== undefined;
 
-        // Update transaction
-        await prisma.$transaction(async (tx) => {
-            const txn = await tx.transaction.update({
-                where: { id },
-                data: updateData,
-            });
+        let newSplits: { userId: string; amount: number }[] | null = null;
+        if (sharesTouched) {
+            if (splitType !== 'equal' && edit.splits === undefined) {
+                return NextResponse.json(
+                    { error: `Changing a ${splitType} split needs the new amount each member owes` },
+                    { status: 400 }
+                );
+            }
+            const memberIds = existing.trip.group.members.map((member) => member.userId);
+            const resolution = resolveSplits({
+                amount,
+                splitType,
+                splitAmong: edit.splitAmong ?? currentSharers,
+                splits: edit.splits,
+            }, memberIds);
+            if (!resolution.ok) {
+                return NextResponse.json({ error: resolution.error }, { status: 400 });
+            }
+            newSplits = resolution.splits;
+        }
 
-            // If amount or splitAmong changed, recalculate splits for equal split
-            if ((parsed.data.amount || parsed.data.splitAmong) && existing.splitType === 'equal') {
-                const memberIds = parsed.data.splitAmong || existing.splits.map((s: { userId: string }) => s.userId);
-                const totalAmount = parsed.data.amount || existing.amount;
+        const updateData = {
+            ...(edit.title !== undefined && edit.title !== existing.title ? { title: edit.title } : {}),
+            ...(edit.category !== undefined && edit.category !== existing.category ? { category: edit.category } : {}),
+            ...(edit.method !== undefined && edit.method !== existing.method ? { method: edit.method } : {}),
+            ...(edit.description !== undefined && edit.description !== existing.description ? { description: edit.description } : {}),
+            ...(newSplits ? { amount, splitType } : {}),
+        };
 
-                if (memberIds.length > 0) {
-                    const perPerson = Math.floor(totalAmount / memberIds.length);
-                    const remainder = totalAmount - perPerson * memberIds.length;
+        if (Object.keys(updateData).length === 0) {
+            return NextResponse.json({ error: 'Nothing to change' }, { status: 400 });
+        }
 
-                    // Delete old splits and create new
+        // The write only lands on the version that was read: two people editing
+        // at once can't silently overwrite each other's change.
+        try {
+            await prisma.$transaction(async (tx) => {
+                const written = await tx.transaction.updateMany({
+                    where: { id, deletedAt: null, updatedAt: existing.updatedAt },
+                    data: updateData,
+                });
+                if (written.count !== 1) throw new EditConflict();
+
+                if (newSplits) {
                     await tx.splitItem.deleteMany({ where: { transactionId: id } });
                     await tx.splitItem.createMany({
-                        data: memberIds.map((userId: string, i: number) => ({
-                            transactionId: id,
-                            userId,
-                            amount: perPerson + (i === 0 ? remainder : 0),
-                        })),
+                        data: newSplits.map((split) => ({ transactionId: id, userId: split.userId, amount: split.amount })),
                     });
                 }
+            });
+        } catch (error) {
+            if (error instanceof EditConflict) {
+                return NextResponse.json(
+                    { error: 'Someone else changed this expense while you were editing. Reload it and try again.' },
+                    { status: 409 }
+                );
             }
-
-            return txn;
-        });
+            throw error;
+        }
 
         const full = await prisma.transaction.findUnique({
             where: { id },
@@ -255,13 +320,21 @@ export async function DELETE(
         const user = await prisma.user.findUnique({ where: { email: session.user.email } });
         if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
+        // Same rule as editing: a current member, and the payer or the owner.
         const transaction = await prisma.transaction.findFirst({
             where: {
                 id,
                 deletedAt: null,
-                OR: [
-                    { payerId: user.id },
-                    { trip: { group: { ownerId: user.id } } },
+                AND: [
+                    {
+                        trip: {
+                            group: {
+                                deletedAt: null,
+                                OR: [{ ownerId: user.id }, { members: { some: { userId: user.id } } }],
+                            },
+                        },
+                    },
+                    { OR: [{ payerId: user.id }, { trip: { group: { ownerId: user.id } } }] },
                 ],
             },
             include: {
@@ -283,11 +356,15 @@ export async function DELETE(
 
         const amountFormatted = `₹${(transaction.amount / 100).toLocaleString('en-IN')}`;
 
-        // 1. Soft-delete the transaction (preserve data)
-        await prisma.transaction.update({
-            where: { id },
+        // 1. Soft-delete the transaction (preserve data). Only one of two
+        // simultaneous deletes lands, so the history records one deletion.
+        const deleted = await prisma.transaction.updateMany({
+            where: { id, deletedAt: null },
             data: { deletedAt: new Date() },
         });
+        if (deleted.count !== 1) {
+            return NextResponse.json({ error: 'Transaction not found or access denied' }, { status: 404 });
+        }
 
         await createAuditLog({
             userId: user.id,
@@ -315,20 +392,8 @@ export async function DELETE(
             },
         });
 
-        // 2. Best-effort to clean up old "added" notification
-        try {
-            await prisma.notification.deleteMany({
-                where: {
-                    type: 'new_expense',
-                    link: `/groups/${transaction.trip.group.id}`,
-                    body: { contains: transaction.title },
-                },
-            });
-        } catch {
-            // ignore non-fatal error
-        }
-
-        // 3. Notify members that it was removed
+        // 2. Notify members that it was removed. (The "added" notification stays:
+        // matching it by title text deleted unrelated notifications.)
         try {
             const otherMemberIds = transaction.trip.group.members
                 .map((m: { userId: string }) => m.userId)

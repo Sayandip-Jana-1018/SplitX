@@ -31,6 +31,7 @@ import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { fetcher, refreshMoneyData } from '@/lib/swr';
 import { getNetworkErrorCopy, NetworkTaggedError } from '@/lib/networkErrors';
 import { cn, formatCurrency, formatDate } from '@/lib/utils';
+import { equalSharesById } from '@/lib/splits';
 import styles from './transactions.module.css';
 
 interface GroupMemberRef {
@@ -45,6 +46,7 @@ interface TransactionData {
     amount: number;
     method: string;
     createdAt: string;
+    updatedAt?: string;
     payer: { id: string; name: string | null };
     splits: { userId: string; amount: number; user: { id: string; name: string | null } }[];
     splitType?: string;
@@ -399,7 +401,8 @@ function ExpenseSheetBody({
     const [busy, setBusy] = useState(false);
 
     const members = useMemo(() => txn.trip?.group.members ?? [], [txn.trip]);
-    const isCustom = txn.splitType === 'custom';
+    // Only equal splits are re-split here; custom (and percentage) shares keep their amounts.
+    const isCustom = (txn.splitType ?? 'equal') !== 'equal';
     const canEdit = Boolean(currentUserId && (currentUserId === txn.payer.id || currentUserId === txn.trip?.group.ownerId));
     const category = getCategoryConfig(txn.category);
     const amountPaise = Math.round((parseFloat(amount) || 0) * 100);
@@ -422,10 +425,8 @@ function ExpenseSheetBody({
             return map;
         }
         const selected = people.filter((person) => splitAmong.has(person.id)).map((person) => person.id);
-        const each = selected.length ? Math.floor(amountPaise / selected.length) : 0;
-        const remainder = amountPaise - each * selected.length;
-        selected.forEach((id, index) => map.set(id, each + (index === 0 ? remainder : 0)));
-        return map;
+        // The same function the server uses, so the preview shows exactly what gets saved.
+        return selected.length ? equalSharesById(amountPaise, selected) : map;
     }, [amountPaise, isCustom, mode, people, splitAmong, txn.splits]);
 
     const payerPerson = people.find((person) => person.id === txn.payer.id);
@@ -435,15 +436,22 @@ function ExpenseSheetBody({
             toast('Add a title, an amount and at least one person', 'error');
             return;
         }
+        const sameSharers = splitAmong.size === txn.splits.length && txn.splits.every((split) => splitAmong.has(split.userId));
+        if (title.trim() === txn.title && (isCustom || (amountPaise === txn.amount && sameSharers))) {
+            setMode('view');
+            return;
+        }
         setBusy(true);
         try {
             const res = await fetch(`/api/transactions/${txn.id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
+                // Only what changed, and the version being edited: if someone
+                // else saved first, the server says so instead of overwriting.
                 body: JSON.stringify({
                     title: title.trim(),
-                    amount: amountPaise,
-                    splitAmong: Array.from(splitAmong),
+                    ...(isCustom ? {} : { amount: amountPaise, splitAmong: Array.from(splitAmong) }),
+                    ...(txn.updatedAt ? { expectedUpdatedAt: txn.updatedAt } : {}),
                 }),
             });
             if (res.ok) {

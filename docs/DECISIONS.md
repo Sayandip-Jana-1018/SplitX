@@ -1695,6 +1695,21 @@ Load tests recorded before this (D-046, D-051, D-053) ran on nodes without a bud
 this laptop now meets the budget before anything else, so rerun them before quoting their numbers for
 the Kind cluster. The demo itself runs on EKS (phase 7).
 
+**Later the same day: the cluster ran unnoticed, and did not fit.** After the WSL cap went to 6 GB,
+`k8s:up` woke the cluster, and it kept running with Docker Desktop in the tray while the user
+believed Docker was off. An hour later its VM had about 4 GB in memory and all 8 GB of swap full. The control
+plane was crash-looping (controller-manager 26 restarts, scheduler 25), the application was unready
+(503 at the edge), and the API server stopped answering (TLS handshake timeouts). On Windows the
+disk queue stood at 100–245 with reads taking 61 ms, and the CPU sat at 98 °C at 37% busy. Once the
+nodes were stopped and Docker Desktop quit: 3–5% busy, 61–65 °C, 8.2 GB free, disk queue 0,
+about 1 ms per read.
+- **Decided:** `k8s:up` also gives the nodes the restart policy `no`. A cluster runs only after
+  `k8s:up` or `k8s:resume` start it, never because Docker did. Docker Desktop itself should not start
+  at sign-in, which is the user's setting.
+- **Not understood yet (B-027):** the VM needed about 12 GB (4 in memory, 8 in swap) when, the day
+  before, the same cluster used about 4.6 GB. Until that is measured, the full cluster does not fit
+  in a 6 GB VM.
+
 ### D-061 · The scan at build time answers a question that ages
 **2026-09-20** · ✅ done, proved against the running release
 
@@ -1832,6 +1847,81 @@ of requests a second; the heaviest test in this project sends 100.
 
 ---
 
+## Phase 7 — A money engine that holds up with real users
+
+### D-063 · One ledger for every balance, and money that can't vanish
+**2026-09-22** · ✅ written and unit-tested (770 → 844 tests) · production data is checked next (fix 9 of the plan)
+
+An audit of the money engine found four critical faults, all in how balances were read or written:
+
+| # | What was wrong | What a user saw |
+|---|---|---|
+| 1 | Removing a member re-split only *their* shares among the others, ignoring what they had paid and settled | The rest of the group owed someone who was no longer in it, and debts moved between people who never agreed to them |
+| 2 | Settle Up and the Dashboard read one arbitrary active trip per group | Their suggestions disagreed with the group page once a group had two trips; paying a suggestion could leave a balance or be refused |
+| 3 | Editing an expense's amount kept its old shares | Shares that no longer added up to the expense: money created or destroyed |
+| 4 | An edit's `splitAmong` accepted anyone, and the same person twice | A stranger charged for a group's expense, or one person charged twice |
+
+Found while fixing them:
+- The payment check (`POST /api/settlements`) netted only the trip it was given, and a `catch {}`
+  let every payment through whenever the check itself failed.
+- Five places computed balances, each slightly differently: one trip or all trips, current members
+  only or everyone, ±1 paisa counted as settled or not.
+- Deleting a group soft-deleted every expense and cancelled payments on their way, whatever anyone
+  still owed (high finding 7).
+- The edit screen sent the amount and the members on every save, so once edits were validated a
+  custom-split expense could not even be renamed.
+
+**Decided:**
+- **One ledger** (`src/lib/ledger.ts`). A group's balances are every live expense and every
+  completed settlement on all of its trips, in exact paise, by one formula (`computeGroupBalances`).
+  Settle Up and the Dashboard (`/api/settlements/by-group`), `/api/settlements`, the group page
+  (`/balances`, and the group detail it shows while that loads) and every guard below read it.
+  Someone who has left but still owes or is owed stays in the plan under their own name; before,
+  their money disappeared from it.
+- **Exact paise, stable plans.** The planner no longer treats ±1 paisa as settled. Equal splits hand
+  out the odd paise by member ID (`equalSharesById`), so each paisa is owed by someone specific and
+  the plan clears it; accounts are sorted by ID before planning, so the same balances always give
+  the same plan.
+- **One set of split rules** (`src/lib/expenseSplits.ts`), for creating and editing alike: members
+  only, each at most once, adding up to the amount exactly, at most ₹10,00,000. An edit that changes
+  the amount or the people recomputes the shares; a field sent unchanged changes nothing.
+- **An edit lands only on the version that was read.** The write is an `updateMany` on `id` and the
+  `updatedAt` that was read, checked for one row; the edit screen also sends the `updatedAt` it
+  showed. Losing a race is a 409 saying someone else changed the expense, never a silent overwrite.
+  Only a current member who paid, or the owner, may edit or delete, so a removed member loses that
+  right. A delete lands once.
+- **Leaving is allowed only when square.** Removing a member is refused while they owe, are owed, or
+  have a settlement waiting. No share is rewritten, and their past expenses stay. The invite code
+  changes on removal, so the old link can't bring them back. Deleting a group is refused the same
+  way. Each check shares a serializable transaction with its write; a conflict (`P2034`) is a 409
+  asking to try again.
+- **A payment must fit.** At most what the payer owes and what the receiver is owed, both across the
+  whole group, less what open settlements already carry (`settlementRoom`). It is checked in a
+  serializable transaction with the insert, and no error is swallowed. An open request for the same
+  payment is reused whichever trip it was made on, and Settle Up matches payments waiting for
+  approval to its suggestions by payer, receiver and amount, not by trip.
+- **Bad input is a 400 with a sentence, not a 500:** malformed JSON, amounts past the 32-bit columns,
+  and schema errors as one readable message.
+
+**Rejected:**
+- Re-splitting the leaver's shares, which is what the old code did: it moves debts between people who
+  never agreed to them.
+- Settling a leaver's balance automatically against the owner: the same thing with extra steps.
+- A ±1 paisa tolerance: it hides a real debt of one paisa, and makes plans depend on rounding order.
+
+**Tests:** split rules, including 500 random equal splits that must add up exactly; the ledger across
+two trips with completed, pending and cancelled settlements and a former member; route tests for
+removing a member, deleting a group, editing and deleting an expense, creating a payment and both
+plan endpoints. Run against the code before this change, 39 of the 45 route tests fail; the other 6
+pin permission checks that were already right. The planner's randomized test now requires every
+balance to clear exactly, not to within a paisa.
+
+**Left:** approving and confirming a payment don't re-check the balance yet, and the settlement state
+machine still allows cancelled → completed (fix 4, next). The AI chat computes its own pairwise
+balances (B-028). Data written by the old removal may hold shares moved between people (B-029).
+
+---
+
 ## Open problems
 
 | ID | Problem | Why it matters | Status / planned fix |
@@ -1861,7 +1951,10 @@ of requests a second; the heaviest test in this project sends 100.
 | B-023 | metrics-server runs with `--kubelet-insecure-tls` on Kind, because Kind’s kubelets serve metrics with a certificate the cluster CA did not issue. | The flag disables verification of what the autoscaler reads. It is in a values file, not hidden in a script, precisely so it cannot be copied to AWS by accident. | Phase 7: EKS signs kubelet certificates properly — install the add-on without the flag and confirm the HPA still reads CPU. |
 | B-024 | In the final saturation run, 155 of 7,442 requests spent over 3 s inside a pod, all 30 to 50 s into the overload, on both pods, with none after. | A transient stall right when a burst arrives is exactly when a classroom notices. | 🚧 Narrowed 2026-09-18 — D-053. Not garbage collection: the stall belongs to freshly started pods at their 1-CPU limit. Without the limit, fresh pods had 0 and 89 requests over 3 s in a pod (175 to 228 with it), the longest 2.9 and 6.3 s, and served 45% more. Left: the remaining cold start; phase 7 measures the ALB slow start for new targets. |
 | B-025 | Sign-up, login and password reset are still limited to 10 a minute per address (D-022). | A room asked to register at once from one campus network would be refused after the first ten. The demo page needs no account, so it is not affected. | Before any demo asks people to sign up: count failed logins per account for brute-force protection, and give sign-up the device-plus-network treatment of D-045. |
-| B-026 | Jenkins' deploy builds and `cd:verify` read GitHub's deployments without a token, and this network's public address shares GitHub's anonymous allowance (60 an hour) with other devices. | A deploy would fail at its first step whenever someone else on the network had spent the allowance: on 2026-09-21 its hour began eleven minutes before this laptop booted, and it was spent when `cd:verify` ran, which failed 2 of its 15 checks on it. | Open — the user creates a fine-grained token (this repository only, Deployments read and write) and puts it in `.env` as `JENKINS_GITHUB_TOKEN`; `k8s:up` hands it to Jenkins. Both scripts now say when the allowance is spent and until when, instead of a bare 403, and the build log no longer repeats GitHub's message, which names the address. |
+| B-026 | Jenkins' deploy builds and `cd:verify` read GitHub's deployments without a token, and this network's public address shares GitHub's anonymous allowance (60 an hour) with other devices. | A deploy would fail at its first step whenever someone else on the network had spent the allowance: on 2026-09-21 its hour began eleven minutes before this laptop booted, and it was spent when `cd:verify` ran, which failed 2 of its 15 checks on it. | Open — the user creates a fine-grained token (this repository only, Deployments read and write) and puts it in `.env` as `JENKINS_GITHUB_TOKEN`; `k8s:up` hands it to Jenkins. Both scripts now say when the allowance is spent and until when, instead of a bare 403, and the build log no longer repeats GitHub's message, which names the address. **2026-09-21:** the token is in `.env` and works (5,000 an hour). |
+| B-027 | With the cluster running, the 6 GB WSL VM held about 4 GB in memory and all 8 GB of its swap (2026-09-21), about 12 GB against the 4.6 GB the same cluster used the day before. | The control plane crash-looped and the app answered 503. On Windows, the swap file held the SSD at a queue of 100–245 and 61 ms reads, which froze the laptop. Release `7e3509e` (deployment 6572256500, 15:45 UTC) reached no relay and was never deployed: no delivery was logged after 15:30 UTC. | Open. Next time the cluster runs, watch the VM's anonymous, shared and swapped memory from `k8s:up` on (node-exporter already exports all three), find what grew, and fit the local cluster into 6 GB. Then redeliver 6572256500 from GitHub's webhook page and read Jenkins' statuses on GitHub. |
+| B-028 | The AI chat builds its own balances: pairwise instead of the group plan, over every expense including deleted ones, in deleted groups too, with ±1 paisa counted as settled. | Its answers to "who owes me?" can disagree with Settle Up, and count expenses that were deleted. | Open — fix 6 of the plan moves its context onto the ledger (D-063), with its quotas, input caps and prompt handling. |
+| B-029 | Removing a member used to re-split their shares among the others (D-063). Groups that had a member removed may hold shares that were moved between people, and former members may still owe or be owed. | Balances in those groups reflect the old re-split, not what people agreed to. | Open — fix 9 of the plan: a read-only check of production (`scripts/ledger-audit.mjs`) counts groups with former members holding a balance, and shares that don't add up. Any repair is approved one by one. |
 
 ## Environment notes (this machine)
 
@@ -1873,13 +1966,21 @@ of requests a second; the heaviest test in this project sends 100.
 - 15.7 GB of physical RAM. Docker Desktop runs on WSL 2. The phase 0 plan, `memory=10GB` and
   `swap=8GB` in `%UserProfile%\.wslconfig`, starved Windows, which uses about 9 GB with an editor,
   a browser and this assistant: on 2026-09-21 it had 0.3 GB available and paged 1,600 times a
-  second (D-062). **Set `memory=6GB`** (swap can stay), run `wsl --shutdown`, and start Docker
-  Desktop again. The cluster uses about 4.5 GB. The CI stack (SonarQube, Nexus) must not run next
-  to it.
-- **Heat (2026-09-21).** After one of the two fans had been opened, the ACPI thermal zone read
-  81–92 °C at 10–14% CPU with the cluster up, 67 °C with it asleep, and 87–99 °C through the 90 s
-  of a cluster start at 20–40% CPU. The i7-13700HX throttles at 100 °C. Until PredatorSense shows
-  both fans spinning, keep the cluster asleep when it is not in use, and run no load tests.
+  second (D-062). `memory=6GB` is set now: it keeps Windows responsive, but the full cluster did
+  not fit in it (B-027). The CI stack (SonarQube, Nexus) must not run next to it.
+- **Docker Desktop keeps running after its window is closed.** Only **Quit Docker Desktop** from the
+  tray icon, `docker desktop stop` or a restart stops it, and with it the VM. Closing the window
+  left the whole cluster running in the background on 2026-09-21.
+- **Heat (2026-09-21).** One of the laptop's two fans has been removed; this is not a sensor fault.
+  The ACPI thermal zone read 81–92 °C at 10–14% CPU with the cluster up, 67 °C with it asleep,
+  87–99 °C through the 90 s of a cluster start at 20–40% CPU, and 61–65 °C at 3–5% with Docker
+  quit. The i7-13700HX throttles at 100 °C. Windows logged 104 "processor speed limited by system
+  firmware" events (Kernel-Processor-Power 37) in two days, a blue screen on 2026-09-20 (0x3B,
+  SYSTEM_SERVICE_EXCEPTION, in the graphics kernel `dxgkrnl.sys`, NVIDIA driver 551.76), and a
+  forced power-off that evening. Until the fan is replaced: no load tests, no rollback rehearsals,
+  and the cluster runs only while it is being used.
+- An external monitor on DisplayPort is driven by the NVIDIA GPU, so that GPU never sleeps while it
+  is connected.
 - **This network shares its public address.** On 2026-09-21 GitHub's anonymous API allowance (60 an
   hour per address) was counted in an hour that began at 14:22 UTC, eleven minutes before this
   laptop booted, so something else behind the same address started it; it was spent within that hour.

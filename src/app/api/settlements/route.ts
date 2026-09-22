@@ -1,57 +1,66 @@
 import { NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
+import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
-import { z } from 'zod';
 import { createAuditLog } from '@/lib/auditLog';
 import { serializeSettlementAuditSnapshot } from '@/lib/auditPayloads';
 import { createNotification } from '@/lib/notifications';
-import {
-    computeGroupBalances,
-    FinanceMember,
-    FinanceSettlementSnapshot,
-    FinanceTransactionSnapshot,
-    simplifyGroupBalances,
-} from '@/lib/groupFinance';
+import { loadGroupLedger, loadGroupLedgers, planLedgerTransfers, settlementRoom, type SettlementRoom } from '@/lib/ledger';
+import { formatCurrency } from '@/lib/utils';
 import { logger } from '@/lib/logger';
+
+/** Settlement amounts are stored in a 32-bit integer column. */
+const MAX_SETTLEMENT_PAISE = 2_147_483_647;
 
 const SettleSchema = z.object({
     tripId: z.string().cuid(),
     toUserId: z.string().cuid(),
     /** Set when the receiver records a payment made to them (e.g. cash) on the debtor's behalf. */
     fromUserId: z.string().cuid().optional(),
-    amount: z.number().int().positive(),
-    method: z.string().default('upi'),
-    note: z.string().optional(),
+    amount: z.number().int().positive().max(MAX_SETTLEMENT_PAISE),
+    method: z.string().trim().min(1).max(40).default('upi'),
+    note: z.string().max(500).optional(),
 });
 
-function buildFinanceMembers(group: {
-    owner: { id: string; name: string | null; image: string | null; upiId: string | null };
-    members: {
-        user: { id: string; name: string | null; image: string | null; upiId: string | null };
-    }[];
-}) {
-    const memberMap = new Map<string, FinanceMember>();
-
-    memberMap.set(group.owner.id, {
-        id: group.owner.id,
-        name: group.owner.name || 'Unknown',
-        image: group.owner.image || null,
-        upiId: group.owner.upiId || null,
-    });
-
-    for (const member of group.members) {
-        memberMap.set(member.user.id, {
-            id: member.user.id,
-            name: member.user.name || 'Unknown',
-            image: member.user.image || null,
-            upiId: member.user.upiId || null,
-        });
+class SettlementRefused extends Error {
+    constructor(message: string, readonly status = 400) {
+        super(message);
     }
-
-    return Array.from(memberMap.values());
 }
 
-// GET /api/settlements?tripId=xxx — get computed settlements for a trip (or ALL trips if omitted)
+/** Why a payment doesn't fit the group's balances, in words for the person making it. */
+function explainTooMuch(fit: SettlementRoom, amount: number, receiverName: string, recordedByReceiver: boolean): string | null {
+    if (fit.owes === 0) {
+        return recordedByReceiver ? 'They don’t owe anything in this group.' : 'You don’t owe anything in this group.';
+    }
+    if (fit.owed === 0) {
+        return recordedByReceiver ? 'You aren’t owed anything in this group.' : `${receiverName} isn’t owed anything in this group.`;
+    }
+    if (amount <= fit.room) return null;
+
+    if (fit.room < Math.min(fit.owes, fit.owed)) {
+        return fit.room === 0
+            ? 'Payments already waiting for approval cover this. Approve or cancel those first.'
+            : `Only ${formatCurrency(fit.room)} is left to settle once the payments already waiting are approved.`;
+    }
+    if (fit.owes <= fit.owed) {
+        return recordedByReceiver
+            ? `That’s more than they owe. Their net balance is ${formatCurrency(fit.owes)} in this group.`
+            : `Settlement amount exceeds what you owe. Your net balance is ${formatCurrency(fit.owes)} in this group.`;
+    }
+    return recordedByReceiver
+        ? `That’s more than you are owed. You are owed ${formatCurrency(fit.owed)} in this group.`
+        : `That’s more than ${receiverName} is owed. They are owed ${formatCurrency(fit.owed)} in this group.`;
+}
+
+// GET /api/settlements — the caller's settle-up plan across every group they
+// belong to; with ?tripId=, the plan of the group that trip belongs to.
+//
+// Balances belong to a group, across all of its trips (lib/ledger.ts): a trip is
+// a slice of the group's history, not an account of its own. ?tripId= used to
+// net that one trip with its own rounding, so its answer disagreed with the
+// group page.
 export async function GET(req: Request) {
     try {
         const session = await auth();
@@ -59,283 +68,62 @@ export async function GET(req: Request) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const { searchParams } = new URL(req.url);
-        const tripId = searchParams.get('tripId');
+        const tripId = new URL(req.url).searchParams.get('tripId');
 
         const user = await prisma.user.findUnique({ where: { email: session.user.email } });
         if (!user) return NextResponse.json({ computed: [], recorded: [], balances: {} });
 
+        const access: Prisma.GroupWhereInput = {
+            deletedAt: null,
+            OR: [
+                { ownerId: user.id },
+                { members: { some: { userId: user.id } } },
+            ],
+        };
+
+        let groupIds: string[];
         if (tripId) {
             const accessibleTrip = await prisma.trip.findFirst({
-                where: {
-                    id: tripId,
-                    group: {
-                        deletedAt: null,
-                        OR: [
-                            { ownerId: user.id },
-                            { members: { some: { userId: user.id } } },
-                        ],
-                    },
-                },
-                select: { id: true },
+                where: { id: tripId, group: access },
+                select: { groupId: true },
             });
 
             if (!accessibleTrip) {
                 return NextResponse.json({ error: 'Trip not found or access denied' }, { status: 404 });
             }
-
-            const transactions = await prisma.transaction.findMany({
-                where: { tripId, deletedAt: null },
-                include: { splits: true },
-            });
-
-            const balances: Record<string, number> = {};
-            for (const transaction of transactions) {
-                balances[transaction.payerId] = (balances[transaction.payerId] || 0) + transaction.amount;
-                for (const split of transaction.splits) {
-                    balances[split.userId] = (balances[split.userId] || 0) - split.amount;
-                }
-            }
-
-            const completedSettlements = await prisma.settlement.findMany({
-                where: {
-                    tripId,
-                    status: { in: ['completed', 'confirmed'] },
-                    deletedAt: null,
-                },
-            });
-
-            for (const settlement of completedSettlements) {
-                balances[settlement.fromId] = (balances[settlement.fromId] || 0) + settlement.amount;
-                balances[settlement.toId] = (balances[settlement.toId] || 0) - settlement.amount;
-            }
-
-            const transfers: { from: string; to: string; amount: number }[] = [];
-            const debtors: { id: string; amount: number }[] = [];
-            const creditors: { id: string; amount: number }[] = [];
-
-            for (const [userId, balance] of Object.entries(balances)) {
-                if (balance < -1) debtors.push({ id: userId, amount: -balance });
-                else if (balance > 1) creditors.push({ id: userId, amount: balance });
-            }
-
-            debtors.sort((a, b) => b.amount - a.amount);
-            creditors.sort((a, b) => b.amount - a.amount);
-
-            let i = 0, j = 0;
-            while (i < debtors.length && j < creditors.length) {
-                const transfer = Math.min(debtors[i].amount, creditors[j].amount);
-                if (transfer > 0) {
-                    transfers.push({ from: debtors[i].id, to: creditors[j].id, amount: transfer });
-                }
-                debtors[i].amount -= transfer;
-                creditors[j].amount -= transfer;
-                if (debtors[i].amount === 0) i++;
-                if (creditors[j].amount === 0) j++;
-            }
-
-            const allUserIds = new Set<string>();
-            for (const transfer of transfers) {
-                allUserIds.add(transfer.from);
-                allUserIds.add(transfer.to);
-            }
-
-            const users = allUserIds.size > 0
-                ? await prisma.user.findMany({
-                    where: { id: { in: Array.from(allUserIds) } },
-                    select: { id: true, name: true, image: true, upiId: true },
-                })
-                : [];
-            const nameMap = Object.fromEntries(users.map((entry) => [entry.id, entry.name || 'Unknown']));
-            const imageMap = Object.fromEntries(users.map((entry) => [entry.id, entry.image || null]));
-            const upiMap = Object.fromEntries(users.map((entry) => [entry.id, entry.upiId || null]));
-
-            const recorded = await prisma.settlement.findMany({
-                where: { tripId, deletedAt: null },
-                include: {
-                    from: { select: { id: true, name: true, image: true } },
-                    to: { select: { id: true, name: true, image: true } },
-                },
-                orderBy: { createdAt: 'desc' },
-            });
-
-            return NextResponse.json({
-                computed: transfers.map((transfer) => ({
-                    ...transfer,
-                    fromName: nameMap[transfer.from] || 'Unknown',
-                    toName: nameMap[transfer.to] || 'Unknown',
-                    fromImage: imageMap[transfer.from] || null,
-                    toImage: imageMap[transfer.to] || null,
-                    toUpiId: upiMap[transfer.to] || null,
-                })),
-                recorded,
-                balances,
-            });
+            groupIds = [accessibleTrip.groupId];
+        } else {
+            const groups = await prisma.group.findMany({ where: access, select: { id: true } });
+            groupIds = groups.map((group) => group.id);
         }
 
-        const groups = await prisma.group.findMany({
-            where: {
-                deletedAt: null,
-                OR: [
-                    { ownerId: user.id },
-                    { members: { some: { userId: user.id } } },
-                ],
-            },
-            include: {
-                owner: {
-                    select: { id: true, name: true, image: true, upiId: true },
-                },
-                members: {
-                    include: { user: { select: { id: true, name: true, image: true, upiId: true } } },
-                },
-                trips: {
-                    select: { id: true },
-                },
-            },
-        });
-
-        const tripIdToGroup = new Map<string, (typeof groups)[number]>();
-        const allTripIds: string[] = [];
-
-        for (const group of groups) {
-            for (const trip of group.trips) {
-                tripIdToGroup.set(trip.id, group);
-                allTripIds.push(trip.id);
-            }
-        }
-
-        if (allTripIds.length === 0) {
-            return NextResponse.json({ computed: [], recorded: [], balances: {} });
-        }
-
-        const [allTransactions, allCompletedSettlements, recorded] = await Promise.all([
-            prisma.transaction.findMany({
-                where: { tripId: { in: allTripIds }, deletedAt: null },
-                include: { splits: true },
-            }),
-            prisma.settlement.findMany({
-                where: {
-                    tripId: { in: allTripIds },
-                    status: { in: ['completed', 'confirmed'] },
-                    deletedAt: null,
-                },
-            }),
-            prisma.settlement.findMany({
-                where: { tripId: { in: allTripIds }, deletedAt: null },
-                include: {
-                    from: { select: { id: true, name: true, image: true } },
-                    to: { select: { id: true, name: true, image: true } },
-                },
-                orderBy: { createdAt: 'desc' },
-            }),
-        ]);
-
-        const transactionsByGroup = new Map<string, typeof allTransactions>();
-        for (const transaction of allTransactions) {
-            const group = tripIdToGroup.get(transaction.tripId);
-            if (!group) continue;
-            const transactions = transactionsByGroup.get(group.id) || [];
-            transactions.push(transaction);
-            transactionsByGroup.set(group.id, transactions);
-        }
-
-        const settlementsByGroup = new Map<string, typeof allCompletedSettlements>();
-        for (const settlement of allCompletedSettlements) {
-            const group = tripIdToGroup.get(settlement.tripId);
-            if (!group) continue;
-            const settlements = settlementsByGroup.get(group.id) || [];
-            settlements.push(settlement);
-            settlementsByGroup.set(group.id, settlements);
-        }
-
+        const ledgers = await loadGroupLedgers(groupIds);
         const balances: Record<string, number> = {};
-        const computed: Array<{
-            from: string;
-            to: string;
-            amount: number;
-            fromName: string;
-            toName: string;
-            fromImage: string | null;
-            toImage: string | null;
-            toUpiId: string | null;
-            groupId: string;
-            groupName: string;
-            groupEmoji: string;
-            groupBreakdown: { groupName: string; groupEmoji: string; amount: number }[];
-        }> = [];
-
-        for (const group of groups) {
-            const members = buildFinanceMembers(group);
-            const transactions = transactionsByGroup.get(group.id) || [];
-            const settlements = settlementsByGroup.get(group.id) || [];
-
-            const transactionSnapshots: FinanceTransactionSnapshot[] = transactions.map((transaction) => ({
-                id: transaction.id,
-                tripId: transaction.tripId,
-                tripTitle: group.name,
-                title: transaction.title,
-                amount: transaction.amount,
-                splitType: transaction.splitType,
-                payerId: transaction.payerId,
-                payerName: members.find((member) => member.id === transaction.payerId)?.name || 'Unknown',
-                createdAt: transaction.createdAt,
-                updatedAt: transaction.updatedAt,
-                deletedAt: transaction.deletedAt,
-                splits: transaction.splits.map((split) => ({
-                    userId: split.userId,
-                    userName: members.find((member) => member.id === split.userId)?.name || 'Unknown',
-                    amount: split.amount,
-                })),
-            }));
-
-            const settlementSnapshots: FinanceSettlementSnapshot[] = settlements.map((settlement) => ({
-                id: settlement.id,
-                tripId: settlement.tripId,
-                tripTitle: group.name,
-                fromId: settlement.fromId,
-                fromName: members.find((member) => member.id === settlement.fromId)?.name || 'Unknown',
-                toId: settlement.toId,
-                toName: members.find((member) => member.id === settlement.toId)?.name || 'Unknown',
-                amount: settlement.amount,
-                status: settlement.status,
-                method: settlement.method,
-                note: settlement.note,
-                createdAt: settlement.createdAt,
-                updatedAt: settlement.updatedAt,
-                deletedAt: settlement.deletedAt,
-            }));
-
-            const groupBalances = computeGroupBalances({
-                memberIds: members.map((member) => member.id),
-                transactions: transactionSnapshots,
-                settlements: settlementSnapshots,
-            });
-
-            for (const [memberId, amount] of Object.entries(groupBalances)) {
-                balances[memberId] = (balances[memberId] || 0) + amount;
+        const computed = [];
+        for (const ledger of ledgers) {
+            for (const [userId, amount] of Object.entries(ledger.balances)) {
+                balances[userId] = (balances[userId] ?? 0) + amount;
             }
-
-            const groupTransfers = simplifyGroupBalances({
-                balances: groupBalances,
-                members,
-            });
-
-            for (const transfer of groupTransfers) {
+            for (const transfer of planLedgerTransfers(ledger)) {
                 computed.push({
                     ...transfer,
-                    groupId: group.id,
-                    groupName: group.name,
-                    groupEmoji: group.emoji,
+                    tripId: tripId ?? ledger.defaultTripId,
+                    groupId: ledger.groupId,
+                    groupName: ledger.groupName,
+                    groupEmoji: ledger.groupEmoji,
                     groupBreakdown: [
                         {
-                            groupName: group.name,
-                            groupEmoji: group.emoji,
+                            groupName: ledger.groupName,
+                            groupEmoji: ledger.groupEmoji,
                             amount: transfer.amount,
                         },
                     ],
                 });
             }
         }
+        const recorded = ledgers
+            .flatMap((ledger) => ledger.settlements)
+            .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
         return NextResponse.json({ computed, recorded, balances });
     } catch (error) {
@@ -354,10 +142,13 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const body = await req.json();
-        const parsed = SettleSchema.safeParse(body);
+        const parsed = SettleSchema.safeParse(await req.json().catch(() => null));
         if (!parsed.success) {
-            return NextResponse.json({ error: parsed.error.issues }, { status: 400 });
+            const issue = parsed.error.issues[0];
+            return NextResponse.json(
+                { error: issue ? `Invalid ${issue.path.join('.') || 'request'}: ${issue.message}` : 'Invalid request' },
+                { status: 400 }
+            );
         }
 
         const user = await prisma.user.findUnique({ where: { email: session.user.email } });
@@ -377,8 +168,8 @@ export async function POST(req: Request) {
         }
 
         // ── Security: Verify the trip exists and everyone involved is a member ──
-        const trip = await prisma.trip.findUnique({
-            where: { id: parsed.data.tripId },
+        const trip = await prisma.trip.findFirst({
+            where: { id: parsed.data.tripId, group: { deletedAt: null } },
             include: {
                 group: {
                     include: { members: { select: { userId: true } } },
@@ -399,9 +190,10 @@ export async function POST(req: Request) {
         }
 
         // ── Reuse any in-flight request for the same pair + amount ──
+        // Anywhere in the group: balances are the group's, not one trip's.
         const openRequest = await prisma.settlement.findFirst({
             where: {
-                tripId: parsed.data.tripId,
+                trip: { groupId: trip.groupId },
                 fromId: debtorId,
                 toId: parsed.data.toUserId,
                 amount: parsed.data.amount,
@@ -424,7 +216,7 @@ export async function POST(req: Request) {
         const sixtySecondsAgo = new Date(Date.now() - 60_000);
         const duplicate = await prisma.settlement.findFirst({
             where: {
-                tripId: parsed.data.tripId,
+                trip: { groupId: trip.groupId },
                 fromId: debtorId,
                 toId: parsed.data.toUserId,
                 amount: parsed.data.amount,
@@ -441,81 +233,49 @@ export async function POST(req: Request) {
         }
 
         // ── Security: Over-settlement guard ──
-        // Use the debtor's NET BALANCE in the group (not pairwise debt) because
-        // the settlement page uses greedy netting which may route all of a user's
-        // debt through a single person (simplified transfers).
+        // Checked against the group's whole ledger (every trip), counting the
+        // payments already waiting for approval, in the same serializable
+        // transaction as the insert: two taps at once can't both slip through.
+        let settlement;
         try {
-            const tripTxns = await prisma.transaction.findMany({
-                where: { tripId: parsed.data.tripId, deletedAt: null },
-                include: { splits: true },
-            });
-            const completedSetts = await prisma.settlement.findMany({
-                where: {
-                    tripId: parsed.data.tripId,
-                    status: { in: ['completed', 'confirmed'] },
-                    deletedAt: null,
-                },
-            });
+            settlement = await prisma.$transaction(async (tx) => {
+                const ledger = await loadGroupLedger(trip.groupId, tx);
+                if (!ledger) throw new SettlementRefused('Group not found', 404);
 
-            // Positive = they are owed, Negative = they owe
-            let debtorBalance = 0;
-            for (const txn of tripTxns) {
-                if (txn.payerId === debtorId) {
-                    debtorBalance += txn.amount;
-                }
-                const debtorSplit = txn.splits.find(s => s.userId === debtorId);
-                if (debtorSplit) {
-                    debtorBalance -= debtorSplit.amount;
-                }
-            }
-            for (const s of completedSetts) {
-                if (s.fromId === debtorId) debtorBalance += s.amount;
-                if (s.toId === debtorId) debtorBalance -= s.amount;
-            }
+                const receiverName = ledger.people.get(parsed.data.toUserId)?.name || 'They';
+                const fit = settlementRoom(ledger, debtorId, parsed.data.toUserId);
+                const refusal = explainTooMuch(fit, parsed.data.amount, receiverName, recordedByReceiver);
+                if (refusal) throw new SettlementRefused(refusal);
 
-            if (debtorBalance >= 0) {
-                return NextResponse.json(
-                    { error: recordedByReceiver ? 'They don’t owe anything in this group.' : 'You don’t owe anything in this group.' },
-                    { status: 400 }
-                );
-            }
-
-            const totalDebt = Math.abs(debtorBalance);
-
-            // Allow small tolerance (₹1 = 100 paise) for rounding
-            if (parsed.data.amount > totalDebt + 100) {
-                const owedFormatted = `₹${(totalDebt / 100).toLocaleString('en-IN')}`;
-                return NextResponse.json(
-                    {
-                        error: recordedByReceiver
-                            ? `That’s more than they owe. Their net balance is ${owedFormatted} in this group.`
-                            : `Settlement amount exceeds what you owe. Your net balance is ${owedFormatted} in this group.`,
+                return tx.settlement.create({
+                    data: {
+                        tripId: parsed.data.tripId,
+                        fromId: debtorId,
+                        toId: parsed.data.toUserId,
+                        amount: parsed.data.amount,
+                        method: parsed.data.method,
+                        note: parsed.data.note,
+                        status: 'pending',
                     },
-                    { status: 400 }
+                    include: {
+                        from: { select: { name: true } },
+                        to: { select: { name: true } },
+                        trip: { select: { id: true, title: true, groupId: true } },
+                    },
+                });
+            }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+        } catch (error) {
+            if (error instanceof SettlementRefused) {
+                return NextResponse.json({ error: error.message }, { status: error.status });
+            }
+            if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034') {
+                return NextResponse.json(
+                    { error: 'The group changed at the same moment. Please try again.' },
+                    { status: 409 }
                 );
             }
-        } catch {
-            // If balance calculation fails, allow the settlement to proceed
-            // (better to allow than block a legitimate payment)
+            throw error;
         }
-
-        // ── Create settlement request ──
-        const settlement = await prisma.settlement.create({
-            data: {
-                tripId: parsed.data.tripId,
-                fromId: debtorId,
-                toId: parsed.data.toUserId,
-                amount: parsed.data.amount,
-                method: parsed.data.method,
-                note: parsed.data.note,
-                status: 'pending',
-            },
-            include: {
-                from: { select: { name: true } },
-                to: { select: { name: true } },
-                trip: { select: { id: true, title: true, groupId: true } },
-            },
-        });
 
         await createAuditLog({
             userId: user.id,
