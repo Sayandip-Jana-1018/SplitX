@@ -304,6 +304,9 @@ model AuditLog {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
+
+  // Balance history reads a group's entries by the expenses they are about.
+  @@index([entityType, entityId])
 }
 
 // ── Phase 2: AI Chat ────────────────────────────────────────

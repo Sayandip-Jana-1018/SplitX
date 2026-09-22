@@ -33,6 +33,20 @@ export default defineConfig({
                     fileParallelism: false,
                 },
             },
+            {
+                extends: true,
+                test: {
+                    // Runs against a real Postgres with the migrations applied (the
+                    // CI database job). It empties that database, so it refuses any
+                    // database that isn't local and named *_test.
+                    name: 'database',
+                    include: ['tests/database/**/*.test.ts'],
+                    setupFiles: ['tests/database/setup.ts'],
+                    testTimeout: 30_000,
+                    hookTimeout: 30_000,
+                    fileParallelism: false,
+                },
+            },
         ],
     },
 });

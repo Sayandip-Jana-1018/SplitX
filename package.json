@@ -15,8 +15,10 @@
     "test:watch": "vitest --project unit",
     "test:coverage": "vitest run --project unit --coverage",
     "test:integration": "vitest run --project integration",
+    "test:db": "vitest run --project database",
     "test:alerts": "node scripts/test-alerts.mjs",
     "ledger:audit": "node --env-file=.env scripts/ledger-audit.mjs",
+    "email:test": "node --env-file=.env scripts/email-test.mjs",
     "image:build": "node scripts/image-build.mjs",
     "image:report": "node --env-file=.env scripts/image-report.mjs",
     "db:schema": "node scripts/db-schema.mjs",
@@ -41,7 +43,8 @@
     "ioredis": "6.0.0",
     "lucide-react": "^0.564.0",
     "next": "^16.3.5",
-    "next-auth": "^5.0.0-beta.30",
+    "next-auth": "5.0.0-beta.32",
+    "nodemailer": "^10.0.10",
     "prom-client": "^15.1.3",
     "qrcode.react": "^4.2.0",
     "react": "19.2.3",
@@ -58,6 +61,7 @@
     "@commitlint/config-conventional": "^20.5.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20",
+    "@types/nodemailer": "^8.0.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitest/coverage-v8": "4.1.11",
@@ -68,5 +72,10 @@
     "prisma": "^6.19.2",
     "typescript": "^5",
     "vitest": "4.1.11"
+  },
+  "overrides": {
+    "next-auth": {
+      "nodemailer": "$nodemailer"
+    }
   }
 }

@@ -1,4 +1,5 @@
 import type { NextConfig } from 'next';
+import { CONTENT_SECURITY_POLICY, PERMISSIONS_POLICY } from './src/lib/security/contentSecurityPolicy';
 
 const nextConfig: NextConfig = {
   output: 'standalone',
@@ -45,6 +46,18 @@ const nextConfig: NextConfig = {
             key: 'Referrer-Policy',
             value: 'strict-origin-when-cross-origin',
           },
+          { key: 'Permissions-Policy', value: PERMISSIONS_POLICY },
+          { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
+          // Production only: development runs over plain HTTP and its tooling
+          // uses eval. The CSP is report-only until production shows no
+          // violations from the app itself (lib/security/contentSecurityPolicy.ts).
+          // Vercel sends its own HSTS; the cluster and CloudFront need this one.
+          ...(process.env.NODE_ENV === 'production'
+            ? [
+              { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains' },
+              { key: 'Content-Security-Policy-Report-Only', value: CONTENT_SECURITY_POLICY },
+            ]
+            : []),
         ],
       },
     ];

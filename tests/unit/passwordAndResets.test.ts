@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { normalizeEmail, passwordProblem } from '@/lib/password';
 import { clearLocalLimits, hitLocally } from '@/lib/rateLimit/local';
-import { hashResetToken } from '@/lib/resetTokens';
+import { hashSecretToken } from '@/lib/secretTokens';
 import { jsonRequest } from '../helpers/http';
 
-const { prisma, tx, sendPasswordResetEmail } = vi.hoisted(() => ({
+const { prisma, tx, sendPasswordResetEmail, emailTransport } = vi.hoisted(() => ({
     prisma: {
         user: { findFirst: vi.fn() },
         passwordResetToken: { deleteMany: vi.fn(), create: vi.fn() },
@@ -15,10 +15,11 @@ const { prisma, tx, sendPasswordResetEmail } = vi.hoisted(() => ({
         user: { updateMany: vi.fn() },
     },
     sendPasswordResetEmail: vi.fn(),
+    emailTransport: vi.fn(),
 }));
 
 vi.mock('@/lib/db', () => ({ prisma }));
-vi.mock('@/lib/email', () => ({ sendPasswordResetEmail }));
+vi.mock('@/lib/email', () => ({ sendPasswordResetEmail, emailTransport }));
 
 const forgot = await import('@/app/api/auth/forgot-password/route');
 const reset = await import('@/app/api/auth/reset-password/route');
@@ -60,8 +61,18 @@ describe('password reset links', () => {
         tx.passwordResetToken.findUnique.mockResolvedValue({ id: 't1', email: 'alice@example.com' });
         tx.passwordResetToken.deleteMany.mockResolvedValue({ count: 1 });
         tx.user.updateMany.mockResolvedValue({ count: 1 });
+        emailTransport.mockReturnValue('smtp');
     });
     afterEach(() => vi.resetAllMocks());
+
+    it('says so when no email can be sent, the same for every address', async () => {
+        emailTransport.mockReturnValue(null);
+
+        const res = await forgot.POST(jsonRequest('http://localhost/api/auth/forgot-password', { email: 'alice@example.com' }));
+
+        expect(res.status).toBe(503);
+        expect(prisma.user.findFirst).not.toHaveBeenCalled();
+    });
 
     it('keeps only a hash of the token; the email carries the token', async () => {
         prisma.user.findFirst.mockResolvedValue({ id: 'u1', email: 'alice@example.com', password: 'hash' });
@@ -71,7 +82,7 @@ describe('password reset links', () => {
         expect(res.status).toBe(200);
         const sent = sendPasswordResetEmail.mock.calls[0][1] as string;
         const stored = prisma.passwordResetToken.create.mock.calls[0][0].data.token;
-        expect(stored).toBe(hashResetToken(sent));
+        expect(stored).toBe(hashSecretToken(sent));
         expect(stored).not.toBe(sent);
     });
 
@@ -97,7 +108,7 @@ describe('password reset links', () => {
         const res = await reset.POST(jsonRequest('http://localhost/api/auth/reset-password', { token: 'abc', password: 'a new password' }));
 
         expect(res.status).toBe(200);
-        expect(tx.passwordResetToken.findUnique).toHaveBeenCalledWith({ where: { token: hashResetToken('abc') } });
+        expect(tx.passwordResetToken.findUnique).toHaveBeenCalledWith({ where: { token: hashSecretToken('abc') } });
         expect(tx.user.updateMany.mock.calls[0][0].where).toEqual({ email: 'alice@example.com' });
     });
 

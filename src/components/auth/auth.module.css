@@ -308,6 +308,22 @@
     color: var(--accent-500);
 }
 
+.spin {
+    animation: authSpin 0.9s linear infinite;
+}
+
+@keyframes authSpin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .spin {
+        animation: none;
+    }
+}
+
 /* ── Join ── */
 .joinHead {
     display: flex;

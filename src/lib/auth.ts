@@ -1,4 +1,4 @@
-import NextAuth from 'next-auth';
+import NextAuth, { CredentialsSignin } from 'next-auth';
 import type { Account, Profile, User } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import Google from 'next-auth/providers/google';
@@ -7,10 +7,16 @@ import { prisma } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 import { normalizeEmail } from '@/lib/password';
 import { consumeAllowance } from '@/lib/rateLimit';
+import { sendVerificationLink, verificationRequired } from '@/lib/emailVerification';
 import { logger } from '@/lib/logger';
 
 const LOGIN_ATTEMPTS = 10;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+
+/** The sign-in page reads this code and asks the person to open the link we sent. */
+export class EmailNotConfirmed extends CredentialsSignin {
+    code = 'email_unverified';
+}
 
 /**
  * The address a provider vouches for, or null. Google says whether it verified
@@ -66,6 +72,17 @@ export async function authorizeCredentials(credentials: Partial<Record<'email' |
     if (!user || !user.password) return null;
 
     if (!(await bcrypt.compare(credentials.password, user.password))) return null;
+
+    // Only someone who knows the password learns the address is unconfirmed,
+    // and they get a fresh link (at most one every ten minutes).
+    if (!user.emailVerified && user.email && verificationRequired()) {
+        try {
+            await sendVerificationLink(normalizeEmail(user.email));
+        } catch (error) {
+            logger.error('Could not send the confirmation email', { err: error });
+        }
+        throw new EmailNotConfirmed();
+    }
 
     return {
         id: user.id,

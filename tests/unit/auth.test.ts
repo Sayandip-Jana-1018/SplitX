@@ -1,23 +1,29 @@
 import bcrypt from 'bcryptjs';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { prisma, consumeAllowance } = vi.hoisted(() => ({
+const { prisma, consumeAllowance, sendVerificationLink, verificationRequired } = vi.hoisted(() => ({
     prisma: {
         user: { findFirst: vi.fn(), update: vi.fn(), create: vi.fn() },
         account: { upsert: vi.fn() },
     },
     consumeAllowance: vi.fn(),
+    sendVerificationLink: vi.fn(),
+    verificationRequired: vi.fn(),
 }));
 
 vi.mock('@/lib/db', () => ({ prisma }));
 vi.mock('@/lib/rateLimit', () => ({ consumeAllowance }));
 // next-auth itself needs Next's server runtime; the functions under test don't.
-vi.mock('next-auth', () => ({ default: () => ({ handlers: {}, signIn: vi.fn(), signOut: vi.fn(), auth: vi.fn() }) }));
+vi.mock('next-auth', () => ({
+    default: () => ({ handlers: {}, signIn: vi.fn(), signOut: vi.fn(), auth: vi.fn() }),
+    CredentialsSignin: class CredentialsSignin extends Error {},
+}));
+vi.mock('@/lib/emailVerification', () => ({ sendVerificationLink, verificationRequired }));
 vi.mock('next-auth/providers/credentials', () => ({ default: (options: unknown) => options }));
 vi.mock('next-auth/providers/google', () => ({ default: (options: unknown) => options }));
 vi.mock('next-auth/providers/github', () => ({ default: (options: unknown) => options }));
 
-const { authorizeCredentials, syncOAuthSignIn, verifiedProviderEmail } = await import('@/lib/auth');
+const { authorizeCredentials, EmailNotConfirmed, syncOAuthSignIn, verifiedProviderEmail } = await import('@/lib/auth');
 
 let passwordHash = '';
 beforeAll(async () => {
@@ -68,6 +74,27 @@ describe('authorizeCredentials', () => {
         prisma.user.findFirst.mockResolvedValue({ id: 'u1', email: 'alice@example.com', password: passwordHash });
 
         expect(await authorizeCredentials({ email: 'alice@example.com', password: 'correct horse' })).not.toBeNull();
+    });
+
+    it('asks for a confirmed address, only after the right password, and sends a fresh link', async () => {
+        verificationRequired.mockReturnValue(true);
+        sendVerificationLink.mockResolvedValue(true);
+        prisma.user.findFirst.mockResolvedValue({ id: 'u1', email: 'Alice@Example.com', password: passwordHash, emailVerified: null });
+
+        expect(await authorizeCredentials({ email: 'alice@example.com', password: 'wrong horse' })).toBeNull();
+        expect(sendVerificationLink).not.toHaveBeenCalled();
+
+        const error = await authorizeCredentials({ email: 'alice@example.com', password: 'correct horse' }).catch((caught) => caught);
+        expect(error).toBeInstanceOf(EmailNotConfirmed);
+        expect(error.code).toBe('email_unverified');
+        expect(sendVerificationLink).toHaveBeenCalledWith('alice@example.com');
+    });
+
+    it('lets an unconfirmed address sign in while SplitX has no way to send the link', async () => {
+        verificationRequired.mockReturnValue(false);
+        prisma.user.findFirst.mockResolvedValue({ id: 'u1', email: 'alice@example.com', password: passwordHash, emailVerified: null });
+
+        expect(await authorizeCredentials({ email: 'alice@example.com', password: 'correct horse' })).toMatchObject({ id: 'u1' });
     });
 
     it('refuses an account that has no password (Google or GitHub only)', async () => {

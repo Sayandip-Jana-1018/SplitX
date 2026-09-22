@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 
 const JoinGroupSchema = z.object({
-    inviteCode: z.string().min(1),
+    inviteCode: z.string().trim().min(1).max(64),
 });
 
 // POST /api/groups/join — join a group by invite code
@@ -16,8 +17,7 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const body = await req.json();
-        const parsed = JoinGroupSchema.safeParse(body);
+        const parsed = JoinGroupSchema.safeParse(await req.json().catch(() => null));
         if (!parsed.success) {
             return NextResponse.json({ error: 'Valid invite code is required' }, { status: 400 });
         }
@@ -37,23 +37,24 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'Invalid invite code' }, { status: 404 });
         }
 
-        // Check if already a member
-        const isMember = group.members.some(m => m.userId === user.id);
-        if (isMember) {
-            return NextResponse.json({
-                message: 'Already a member',
-                groupId: group.id,
-            });
-        }
+        const alreadyMember = () => NextResponse.json({ message: 'Already a member', groupId: group.id });
+        if (group.members.some(m => m.userId === user.id)) return alreadyMember();
 
-        // Add user as member
-        await prisma.groupMember.create({
-            data: {
-                groupId: group.id,
-                userId: user.id,
-                role: 'member',
-            },
-        });
+        // A second tap can pass the check above before the first one's insert
+        // lands; the database's one-membership-per-person rule then refuses it,
+        // and that tap is answered as what it is: already a member.
+        try {
+            await prisma.groupMember.create({
+                data: {
+                    groupId: group.id,
+                    userId: user.id,
+                    role: 'member',
+                },
+            });
+        } catch (error) {
+            if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') return alreadyMember();
+            throw error;
+        }
 
         // Notify all existing members about the new joiner
         const existingMemberIds = group.members

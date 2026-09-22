@@ -1,0 +1,90 @@
+name: Production database
+
+# Migrates the production database (Neon) with prisma/migrations, through
+# scripts/db-migrate.mjs. Manual only, one run at a time, and every run waits
+# for a reviewer to approve the "production-database" environment, the only
+# place that holds the database's address.
+#
+# How a schema change ships (D-072): its pull request carries the migration.
+# Run this workflow on that branch, first as a report, then with "apply", and
+# merge only after it succeeds: Vercel deploys a merge within minutes, and the
+# new code must find its columns already there. That is safe because migrations
+# only ever add — a new column is optional or has a default, and nothing the
+# running code reads is dropped or renamed in the same release.
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: Apply the pending migrations. Unticked, the run only reports what it would do.
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-database
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production-database
+    services:
+      shadow:
+        # Where Prisma replays migrations to compare against: empty, the version
+        # production runs, and gone when the job ends.
+        image: postgres:17.11-alpine3.24@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    steps:
+      - name: Keep the database's address out of the log
+        # The secret itself is masked; Prisma also prints the host it connects
+        # to, which is part of the secret and would not be.
+        env:
+          DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::The production-database environment has no PRODUCTION_DATABASE_URL secret."
+            exit 1
+          fi
+          host="$(node -e 'console.log(new URL(process.env.DATABASE_URL).hostname)')"
+          echo "::add-mask::$host"
+
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - name: Setup Node
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        # Before the database's address is in any step's environment: install
+        # scripts never see it.
+        run: npm ci --no-audit --no-fund
+
+      - name: Report (changes nothing)
+        if: ${{ !inputs.apply }}
+        env:
+          DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+          SHADOW_DATABASE_URL: postgresql://postgres@127.0.0.1:5432/postgres
+        run: node scripts/db-migrate.mjs
+
+      - name: Apply
+        if: ${{ inputs.apply }}
+        env:
+          DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+          SHADOW_DATABASE_URL: postgresql://postgres@127.0.0.1:5432/postgres
+        run: node scripts/db-migrate.mjs --apply

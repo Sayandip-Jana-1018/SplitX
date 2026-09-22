@@ -558,8 +558,12 @@ OPENAI_API_KEY="your-openai-api-key"
 
 ```bash
 npx prisma generate
-npx prisma db push
+npx prisma migrate deploy
 ```
+
+Schema changes are migrations: `npx prisma migrate dev --name <what_it_does>` against a local
+database. Production is migrated only by the "Production database" workflow (see
+`docs/DECISIONS.md`, D-072).
 
 ### 4. Run Development Server
 
