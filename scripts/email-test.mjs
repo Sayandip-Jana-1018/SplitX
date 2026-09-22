@@ -27,7 +27,9 @@ const port = Number(SMTP_PORT) || 465;
 const transport = nodemailer.createTransport({
     host: SMTP_HOST,
     port,
+    // As the app does (src/lib/email.ts): 587 must turn encrypted before signing in.
     secure: port === 465,
+    requireTLS: port !== 465,
     auth: { user: SMTP_USER, pass: SMTP_PASSWORD },
     connectionTimeout: 10_000,
     greetingTimeout: 10_000,

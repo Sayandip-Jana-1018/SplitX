@@ -2152,7 +2152,7 @@ deleted group, and one account per address whatever its case.
 holds. No production data was affected by the old member removal (B-029 closed).
 
 ### D-070 · Email that reaches anyone, addresses that are confirmed, and an auth library without critical holes
-**2026-09-22** · ✅ written and unit-tested (987 → 1,006 tests) · live once the user puts the SMTP settings in `.env` and Vercel
+**2026-09-22** · ✅ written and unit-tested (987 → 1,006 tests; 1,017 with the later changes) · live once the user puts the SMTP settings in `.env` and Vercel
 
 **Email.** SplitX sent mail through Resend's shared `onboarding@resend.dev`, which delivers only to
 the Resend account's owner: every reset link for anyone else was reported sent and never arrived.
@@ -2200,6 +2200,15 @@ plain-text copy, link), Resend's returned error, a missing site address; one lin
 only its hash stored, single use; sign-up's uniform answer, the notice to the owner, the race, and
 the no-email behaviour; sign-in asking for confirmation only after the right password; and the
 resend route answering the same for every address.
+
+**Later the same day,** before the first merge:
+- **Port 587** is what the alert emails already use through this network, so it is the documented
+  one. On any port but 465, SMTP now **requires** STARTTLS before signing in (`requireTLS`). Without
+  it, a server, or anyone in between, that didn't offer encryption would receive the app password
+  in the clear.
+- **Links need the site's address.** The local `.env` never had `NEXTAUTH_URL`, and next-auth on
+  Vercel runs without it. So links fall back to `VERCEL_PROJECT_PRODUCTION_URL`, the production
+  domain Vercel sets on every deployment, instead of every email failing to send.
 
 ### D-071 · Every page says what it may load and use
 **2026-09-22** · ✅ written and unit-tested (1,006 → 1,015 tests) · report-only; enforce after production shows the app itself breaks no rule

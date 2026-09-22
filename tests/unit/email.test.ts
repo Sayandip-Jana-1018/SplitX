@@ -21,11 +21,13 @@ const clearTransportCache = () => {
 beforeEach(() => {
     clearTransportCache();
     vi.stubEnv('SMTP_HOST', '');
+    vi.stubEnv('SMTP_PORT', '');
     vi.stubEnv('SMTP_USER', '');
     vi.stubEnv('SMTP_PASSWORD', '');
     vi.stubEnv('RESEND_API_KEY', '');
     vi.stubEnv('EMAIL_FROM', '');
     vi.stubEnv('NEXTAUTH_URL', 'https://splitx.example/');
+    vi.stubEnv('VERCEL_PROJECT_PRODUCTION_URL', '');
 });
 
 afterEach(() => {
@@ -83,12 +85,36 @@ describe('sending', () => {
         expect(message.text).not.toContain('<');
     });
 
+    it('on port 587 requires the connection to turn encrypted before signing in', async () => {
+        useSmtp();
+        vi.stubEnv('SMTP_PORT', '587');
+        sendMail.mockResolvedValue({ messageId: 'm1' });
+
+        await email.sendPasswordResetEmail('friend@example.com', 'token');
+
+        // Without requireTLS, a server (or anyone in between) that doesn't offer
+        // STARTTLS would receive the app password in the clear.
+        expect(createTransport).toHaveBeenCalledWith(expect.objectContaining({ port: 587, secure: false, requireTLS: true }));
+    });
+
     it('reports a failure Resend returns instead of throwing (it used to be ignored)', async () => {
         vi.stubEnv('RESEND_API_KEY', 're_test');
         vi.stubEnv('EMAIL_FROM', 'SplitX <mail@splitx.example>');
         resendSend.mockResolvedValue({ data: null, error: { message: 'domain not verified' } });
 
         await expect(email.sendPasswordResetEmail('friend@example.com', 'token')).rejects.toThrow('Resend refused the email: domain not verified');
+    });
+
+    it('on Vercel without NEXTAUTH_URL, links to the production domain Vercel provides', async () => {
+        useSmtp();
+        vi.stubEnv('NEXTAUTH_URL', '');
+        vi.stubEnv('AUTH_URL', '');
+        vi.stubEnv('VERCEL_PROJECT_PRODUCTION_URL', 'splitx-app.vercel.app');
+        sendMail.mockResolvedValue({ messageId: 'm1' });
+
+        await email.sendPasswordResetEmail('friend@example.com', 'token');
+
+        expect(sendMail.mock.calls[0][0].text).toContain('https://splitx-app.vercel.app/reset-password?token=token');
     });
 
     it('refuses to build a link without the site address', async () => {

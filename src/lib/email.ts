@@ -39,7 +39,10 @@ function smtpTransport() {
     globalForMail.__splitxSmtp ??= nodemailer.createTransport({
         host: process.env.SMTP_HOST,
         port,
+        // 465 is encrypted from the first byte; any other port (587) must turn
+        // encrypted with STARTTLS before the password is sent, or not send it.
         secure: port === 465,
+        requireTLS: port !== 465,
         auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASSWORD },
         // A request waits on this; a mail server that doesn't answer must not hold it.
         connectionTimeout: 10_000,
@@ -76,9 +79,14 @@ export async function sendEmail(mail: OutgoingEmail) {
     throw new EmailNotConfigured();
 }
 
-/** The site's own address, for links in emails. */
+/**
+ * The site's own address, for links in emails: NEXTAUTH_URL (or AUTH_URL), else
+ * on Vercel the production domain Vercel sets for every deployment, since
+ * next-auth itself runs there without either.
+ */
 export function appUrl() {
-    const url = process.env.NEXTAUTH_URL || process.env.AUTH_URL;
+    const vercelDomain = process.env.VERCEL_PROJECT_PRODUCTION_URL;
+    const url = process.env.NEXTAUTH_URL || process.env.AUTH_URL || (vercelDomain ? `https://${vercelDomain}` : '');
     if (!url) throw new Error('NEXTAUTH_URL is not set, so emails cannot link back to the site');
     return url.replace(/\/+$/, '');
 }
