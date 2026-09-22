@@ -2075,6 +2075,55 @@ empty answers, thinking dropped from the text); and each route: the chat's conte
 past the allowance it answers without calling Gemini, a busy Gemini gets the local answer, and
 oversized input is refused before anything is counted or spent.
 
+### D-068 · An account belongs to whoever proves the address, and sign-in can't be guessed at
+**2026-09-22** · ✅ written and unit-tested (961 → 987 tests) · email verification waits on an email sender
+
+What the audit (H2 and the low findings) and a reading of `src/lib/auth.ts` found:
+
+| What | Why it mattered |
+|---|---|
+| GitHub sign-in fell back to `emails[0]`, verified or not | Someone could add another person's address to their GitHub account unverified and sign in as that person |
+| Google and GitHub sign-in attached to any account with the same address | Someone who registered first with another person's address kept their password on the account after the real owner signed in with Google |
+| Sign-in looked up the address exactly as typed, though registration stores it in lower case | "Alice@…" could not sign in to the account created as "alice@…" |
+| Passwords of 6 characters, and no upper bound | bcrypt reads only 72 bytes, so a longer password matched anything sharing its first 72 |
+| Reset tokens stored as sent, and used by read-then-update | Whoever could read the table could reset any password; one link could be used twice at once |
+| Sign-in, registration and reset limits failed open with the rest | A Redis outage let password guessing run unlimited |
+| No limit per account | The per-address limit let a password be guessed from many addresses |
+
+**Decided:**
+- **A provider's address counts only if the provider verified it:** Google's `email_verified`, and
+  for GitHub the primary address if verified, otherwise another verified one, never an unverified
+  one. Without one, the sign-in is refused.
+- **A verified identity removes a password nobody proved.** When Google or GitHub signs in to an
+  account whose password was set while its address was unverified (every password account, today),
+  the password is removed and the address marked verified. The owner keeps signing in with the
+  provider, or resets the password by email. A name or photo the person chose is no longer
+  overwritten by the provider's.
+- Addresses are compared without case everywhere (sign-in, registration, reset) and stored in lower
+  case.
+- **Passwords are 8 characters to 72 bytes**, one rule (`src/lib/password.ts`) in the browser and on
+  the server.
+- **Reset links:** 32 random bytes; the database keeps their SHA-256; using one deletes it in the
+  same transaction that sets the password, so a link works once.
+- **Ten sign-in attempts per account per 15 minutes**, counted in Redis, successful ones included
+  (so an automated test should use a fresh account). The per-address limit for sign-in,
+  registration and reset **fails closed**: without Redis each server counts on its own
+  (`src/lib/rateLimit/local.ts`); everything else still fails open.
+
+**Left, and why:**
+- **Email verification at sign-up** needs an email sender that reaches anyone. Resend's
+  `onboarding@resend.dev` delivers only to the Resend account's owner, so reset emails reach nobody
+  else today either. The user chooses: a verified domain in Resend, or Gmail SMTP.
+- **Ending sessions** (after a reset, or "sign out everywhere") needs `User.tokenVersion`, a schema
+  change, and schema changes wait for the migration baseline (fix 8). Until then a session lasts
+  its 30 days, including one opened with a password that was later removed.
+- Registration still answers "already exists": uniform answers come with verification emails.
+
+**Tests:** sign-in by any case, the per-account limit (and signing in when its counter is
+unreachable), a verified-only address from each provider, the password removal and what is kept,
+password rules at 7/8/72/73 bytes and in emoji, the local limiter's windows, reset tokens stored as
+hashes, one use per link, and the same answer for accounts that exist and don't.
+
 ---
 
 ## Open problems

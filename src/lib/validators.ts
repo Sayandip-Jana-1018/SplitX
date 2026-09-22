@@ -1,10 +1,16 @@
 import { z } from 'zod';
+import { passwordProblem } from '@/lib/password';
 
 // ── Auth ──
+export const passwordSchema = z.string().superRefine((password, context) => {
+    const problem = passwordProblem(password);
+    if (problem) context.addIssue({ code: 'custom', message: problem });
+});
+
 export const registerSchema = z.object({
-    name: z.string().min(2, 'Name must be at least 2 characters'),
-    email: z.string().email('Please enter a valid email'),
-    password: z.string().min(6, 'Password must be at least 6 characters'),
+    name: z.string().trim().min(2, 'Name must be at least 2 characters').max(60, 'Name must be at most 60 characters'),
+    email: z.string().trim().max(254).email('Please enter a valid email'),
+    password: passwordSchema,
 });
 
 export const loginSchema = z.object({

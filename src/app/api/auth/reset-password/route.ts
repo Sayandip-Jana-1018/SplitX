@@ -1,58 +1,58 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import bcrypt from 'bcryptjs';
+import { passwordProblem } from '@/lib/password';
+import { hashResetToken } from '@/lib/resetTokens';
 import { logger } from '@/lib/logger';
 
+class ResetRefused extends Error {}
+
+// POST /api/auth/reset-password — sets a new password with the token from a
+// reset email. A token works once: it is deleted in the same transaction that
+// changes the password, so two submissions of one link can't both succeed.
 export async function POST(req: Request) {
     try {
-        const { token, password } = await req.json();
+        const body = await req.json().catch(() => null) as { token?: unknown; password?: unknown } | null;
+        const token = typeof body?.token === 'string' ? body.token : '';
+        const password = typeof body?.password === 'string' ? body.password : '';
 
-        if (!token || typeof token !== 'string') {
+        if (!token || token.length > 200) {
             return NextResponse.json({ error: 'Invalid reset link' }, { status: 400 });
         }
-
-        if (!password || typeof password !== 'string' || password.length < 6) {
-            return NextResponse.json(
-                { error: 'Password must be at least 6 characters' },
-                { status: 400 }
-            );
+        const problem = passwordProblem(password);
+        if (problem) {
+            return NextResponse.json({ error: problem }, { status: 400 });
         }
 
-        // Find the token
-        const resetToken = await prisma.passwordResetToken.findUnique({
-            where: { token },
-        });
-
-        if (!resetToken) {
-            return NextResponse.json(
-                { error: 'Invalid or expired reset link. Please request a new one.' },
-                { status: 400 }
-            );
-        }
-
-        // Check expiry
-        if (new Date() > resetToken.expires) {
-            // Clean up expired token
-            await prisma.passwordResetToken.delete({ where: { id: resetToken.id } });
-            return NextResponse.json(
-                { error: 'This reset link has expired. Please request a new one.' },
-                { status: 400 }
-            );
-        }
-
-        // Hash the new password
+        const tokenHash = hashResetToken(token);
         const hashedPassword = await bcrypt.hash(password, 12);
 
-        // Update user password
-        await prisma.user.update({
-            where: { email: resetToken.email },
-            data: { password: hashedPassword },
-        });
+        try {
+            await prisma.$transaction(async (tx) => {
+                const resetToken = await tx.passwordResetToken.findUnique({ where: { token: tokenHash } });
+                const used = await tx.passwordResetToken.deleteMany({
+                    where: { token: tokenHash, expires: { gt: new Date() } },
+                });
+                if (!resetToken || used.count !== 1) throw new ResetRefused();
 
-        // Delete all reset tokens for this email (cleanup)
-        await prisma.passwordResetToken.deleteMany({
-            where: { email: resetToken.email },
-        });
+                const updated = await tx.user.updateMany({
+                    where: { email: resetToken.email },
+                    data: { password: hashedPassword },
+                });
+                if (updated.count !== 1) throw new ResetRefused();
+
+                // Any other link for this account stops working too.
+                await tx.passwordResetToken.deleteMany({ where: { email: resetToken.email } });
+            });
+        } catch (error) {
+            if (error instanceof ResetRefused) {
+                return NextResponse.json(
+                    { error: 'Invalid or expired reset link. Please request a new one.' },
+                    { status: 400 }
+                );
+            }
+            throw error;
+        }
 
         return NextResponse.json({ message: 'Password reset successfully!' });
     } catch (error) {
