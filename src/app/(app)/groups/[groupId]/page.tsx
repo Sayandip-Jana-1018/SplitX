@@ -771,7 +771,7 @@ export default function GroupDetailPage() {
                         <Avatar name={memberToRemove.user.name || 'Member'} image={memberToRemove.user.image} size="xl" />
                         <p className={styles.confirmTitle}>Remove {firstName(memberToRemove.user.name)}?</p>
                         <p className={styles.confirmText}>
-                            They&apos;ll lose access to this group&apos;s expenses and chat. You can invite them again anytime.
+                            They&apos;ll lose access to this group&apos;s expenses and chat, and their past expenses stay in the history. Only someone who is settled up can be removed. You can invite them again anytime.
                         </p>
                         <div className={styles.twoUp} style={{ width: '100%', marginTop: 6 }}>
                             <Button variant="secondary" onClick={() => setMemberToRemove(null)} disabled={busy}>Cancel</Button>
@@ -787,7 +787,7 @@ export default function GroupDetailPage() {
                     <span className={styles.confirmIcon}><Trash2 size={26} /></span>
                     <p className={styles.confirmTitle}>Delete {group.name}?</p>
                     <p className={styles.confirmText}>
-                        This removes the group, all of its expenses and any pending settlements for everyone. This can&apos;t be undone.
+                        This removes the group and all of its expenses for everyone. A group can only be deleted once everyone is settled up. This can&apos;t be undone.
                     </p>
                     <div className={styles.twoUp} style={{ width: '100%', marginTop: 6 }}>
                         <Button variant="secondary" onClick={() => setSheet(null)} disabled={busy}>Keep group</Button>

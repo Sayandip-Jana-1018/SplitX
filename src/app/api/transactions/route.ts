@@ -7,7 +7,7 @@ import { serializeTransactionAuditSnapshot } from '@/lib/auditPayloads';
 import { recordTransactionCreated } from '@/lib/metrics';
 import { isOwnReceiptUrl, isTrustedReceiptUrl, withTrustedReceipt } from '@/lib/receiptUrl';
 import { logger } from '@/lib/logger';
-import { equalShares } from '@/lib/splits';
+import { MAX_EXPENSE_PAISE, resolveSplits, SPLIT_TYPES } from '@/lib/expenseSplits';
 
 // Category labels for notification messages
 const CATEGORY_LABELS: Record<string, string> = {
@@ -25,19 +25,19 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 const CreateTransactionSchema = z.object({
     tripId: z.string().cuid(),
-    title: z.string().min(1).max(100),
-    amount: z.number().int().positive(), // paise
-    category: z.string().default('other'),
-    method: z.string().default('cash'),
-    description: z.string().optional(),
+    title: z.string().trim().min(1).max(100),
+    amount: z.number().int().positive().max(MAX_EXPENSE_PAISE), // paise
+    category: z.string().min(1).max(40).default('other'),
+    method: z.string().min(1).max(40).default('cash'),
+    description: z.string().max(500).optional(),
     receiptUrl: z.string().refine(isTrustedReceiptUrl, { message: 'receiptUrl must point to SplitX receipt storage' }).optional(),
-    payerId: z.string().optional(), // who paid — defaults to logged-in user
-    splitType: z.enum(['equal', 'percentage', 'custom']).default('equal'),
-    splitAmong: z.array(z.string()).optional(), // subset of member IDs to split among
+    payerId: z.string().max(64).optional(), // who paid — defaults to logged-in user
+    splitType: z.enum(SPLIT_TYPES).default('equal'),
+    splitAmong: z.array(z.string().min(1).max(64)).max(200).optional(), // subset of member IDs to split among
     splits: z.array(z.object({
         userId: z.string().cuid(),
         amount: z.number().int().nonnegative(),
-    })).optional(),
+    })).max(200).optional(),
 });
 
 // GET /api/transactions?tripId=xxx  OR  /api/transactions?limit=N (auto-detect trips)
@@ -149,10 +149,13 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const body = await req.json();
-        const parsed = CreateTransactionSchema.safeParse(body);
+        const parsed = CreateTransactionSchema.safeParse(await req.json().catch(() => null));
         if (!parsed.success) {
-            return NextResponse.json({ error: parsed.error.issues }, { status: 400 });
+            const issue = parsed.error.issues[0];
+            return NextResponse.json(
+                { error: issue ? `Invalid ${issue.path.join('.') || 'request'}: ${issue.message}` : 'Invalid request' },
+                { status: 400 }
+            );
         }
 
         const user = await prisma.user.findUnique({ where: { email: session.user.email } });
@@ -186,61 +189,21 @@ export async function POST(req: Request) {
 
         const { title, amount, category, method, description, receiptUrl, splitType, splitAmong, splits, payerId: requestedPayerId } = parsed.data;
 
-        // Determine actual payer — use request payerId if valid, otherwise logged-in user
+        // The payer must be a member. An unknown payer is refused rather than
+        // quietly replaced by the person saving the expense.
         const allMemberIds: string[] = trip.group.members.map((m: { userId: string }) => m.userId);
-        const actualPayerId = (requestedPayerId && allMemberIds.includes(requestedPayerId))
-            ? requestedPayerId
-            : user.id;
-
-        // Calculate splits
-        let splitData: { userId: string; amount: number }[] = [];
-
-        if (splitType === 'equal') {
-            // Use splitAmong if provided, otherwise all group members
-            const targetIds = splitAmong && splitAmong.length > 0
-                ? allMemberIds.filter(id => splitAmong.includes(id))
-                : allMemberIds;
-
-            if (targetIds.length === 0) {
-                return NextResponse.json({ error: 'At least one member must be included in the split' }, { status: 400 });
-            }
-
-            const shares = equalShares(amount, targetIds.length);
-            splitData = targetIds.map((userId, i) => ({ userId, amount: shares[i] }));
-        } else if (splits) {
-            // Each member appears once — the database allows one split row per user.
-            if (new Set(splits.map((s) => s.userId)).size !== splits.length) {
-                return NextResponse.json(
-                    { error: 'Each member can appear only once in a split' },
-                    { status: 400 }
-                );
-            }
-            // Validate custom splits sum to total
-            const splitTotal = splits.reduce((sum, s) => sum + s.amount, 0);
-            if (splitTotal !== amount) {
-                return NextResponse.json(
-                    { error: `Split amounts (${splitTotal}) must equal the transaction total (${amount})` },
-                    { status: 400 }
-                );
-            }
-            // Validate all split user IDs are group members
-            const invalidUsers = splits.filter(s => !allMemberIds.includes(s.userId));
-            if (invalidUsers.length > 0) {
-                return NextResponse.json(
-                    { error: 'One or more split users are not members of this group' },
-                    { status: 400 }
-                );
-            }
-            splitData = splits;
+        if (requestedPayerId && !allMemberIds.includes(requestedPayerId)) {
+            return NextResponse.json({ error: 'The payer must be a current member of the group' }, { status: 400 });
         }
+        const actualPayerId = requestedPayerId ?? user.id;
 
-        // A non-equal split without per-member amounts would record an expense nobody owes.
-        if (splitData.length === 0) {
-            return NextResponse.json(
-                { error: `A ${splitType} split needs the amount each member owes` },
-                { status: 400 }
-            );
+        // The same rules as editing (lib/expenseSplits.ts): members only, each
+        // once, adding up to the amount exactly.
+        const resolution = resolveSplits({ amount, splitType, splitAmong, splits }, allMemberIds);
+        if (!resolution.ok) {
+            return NextResponse.json({ error: resolution.error }, { status: 400 });
         }
+        const splitData = resolution.splits;
 
         // Create transaction + splits atomically
         const transaction = await prisma.transaction.create({

@@ -74,8 +74,9 @@ interface TransferItem {
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 const firstName = (name?: string | null) => (name || 'Someone').split(' ')[0];
 
-function transferKey(fromId: string, toId: string, amount: number, tripId: string) {
-    return `${tripId}:${fromId}:${toId}:${amount}`;
+/** Balances are a group's across all its trips, so a payment is the same payment on any of them. */
+function transferKey(fromId: string, toId: string, amount: number) {
+    return `${fromId}:${toId}:${amount}`;
 }
 
 function buildItems(groups: GroupBalanceData[], scope: string) {
@@ -93,7 +94,7 @@ function buildItems(groups: GroupBalanceData[], scope: string) {
             .filter((settlement) => isPendingSettlementStatus(settlement.status))
             .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
         const inFlightKeys = new Set(inFlight.map((settlement) =>
-            transferKey(settlement.fromId, settlement.toId, settlement.amount, settlement.tripId || group.tripId)
+            transferKey(settlement.fromId, settlement.toId, settlement.amount)
         ));
 
         for (const settlement of inFlight) {
@@ -117,7 +118,7 @@ function buildItems(groups: GroupBalanceData[], scope: string) {
 
         group.computed.forEach((transfer, index) => {
             const tripId = transfer.tripId || group.tripId;
-            if (inFlightKeys.has(transferKey(transfer.from, transfer.to, transfer.amount, tripId))) return;
+            if (inFlightKeys.has(transferKey(transfer.from, transfer.to, transfer.amount))) return;
             pending.push({
                 id: `computed-${group.groupId}-${index}`,
                 source: 'computed',

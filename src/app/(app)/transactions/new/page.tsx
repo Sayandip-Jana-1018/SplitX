@@ -32,6 +32,7 @@ import { useHaptics } from '@/hooks/useHaptics';
 import { inferCategory } from '@/lib/categoryInference';
 import { refreshMoneyData } from '@/lib/swr';
 import { CATEGORIES, PAYMENT_METHODS, formatCurrency, toPaise, cn } from '@/lib/utils';
+import { equalSharesById } from '@/lib/splits';
 
 import styles from './quickadd.module.css';
 import VoiceInput from '@/components/features/VoiceInput';
@@ -401,14 +402,11 @@ function QuickAddContent() {
         };
     }, [customSplits, selectedMemberIds, splitType, totalPaise]);
 
-    const equalShares = useMemo(() => {
-        const map = new Map<string, number>();
-        if (selectedCount === 0) return map;
-        const each = Math.floor(totalPaise / selectedCount);
-        const remainder = totalPaise - each * selectedCount;
-        selectedMemberIds.forEach((id, index) => map.set(id, each + (index === 0 ? remainder : 0)));
-        return map;
-    }, [selectedCount, selectedMemberIds, totalPaise]);
+    // The same function the server uses, so the preview shows exactly what gets saved.
+    const equalShares = useMemo(
+        () => (selectedCount === 0 ? new Map<string, number>() : equalSharesById(totalPaise, selectedMemberIds)),
+        [selectedCount, selectedMemberIds, totalPaise]
+    );
 
     const shareFor = useCallback((memberId: string) => {
         if (splitType === 'custom') return customPlan?.splits.find((split) => split.userId === memberId)?.amount ?? 0;

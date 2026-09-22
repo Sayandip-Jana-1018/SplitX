@@ -84,6 +84,12 @@ export type BalanceHistoryDateRange = 'all' | '7d' | '30d';
 
 type BalanceDeltaMap = Record<string, number>;
 
+/** The parts of an expense and a settlement that move money: enough to compute balances from database rows. */
+type BalanceTransaction = Pick<FinanceTransactionSnapshot, 'payerId' | 'amount' | 'deletedAt'> & {
+    splits: Pick<FinanceSplitSnapshot, 'userId' | 'amount'>[];
+};
+type BalanceSettlement = Pick<FinanceSettlementSnapshot, 'fromId' | 'toId' | 'amount' | 'status' | 'deletedAt'>;
+
 type TimelineEvent = {
     id: string;
     sourceId: string;
@@ -120,7 +126,7 @@ export function applyDeltaMap(
     }
 }
 
-export function buildTransactionDeltaMap(snapshot: FinanceTransactionSnapshot | null | undefined) {
+export function buildTransactionDeltaMap(snapshot: BalanceTransaction | null | undefined) {
     if (!snapshot) return {};
 
     const deltaByUser: BalanceDeltaMap = {};
@@ -133,7 +139,7 @@ export function buildTransactionDeltaMap(snapshot: FinanceTransactionSnapshot | 
     return deltaByUser;
 }
 
-export function buildSettlementDeltaMap(snapshot: FinanceSettlementSnapshot | null | undefined) {
+export function buildSettlementDeltaMap(snapshot: BalanceSettlement | null | undefined) {
     if (!snapshot || !isCompletedSettlementStatus(snapshot.status) || snapshot.deletedAt) {
         return {};
     }
@@ -160,8 +166,8 @@ export function diffDeltaMaps(before: BalanceDeltaMap, after: BalanceDeltaMap) {
 
 export function computeGroupBalances(params: {
     memberIds: string[];
-    transactions: FinanceTransactionSnapshot[];
-    settlements: FinanceSettlementSnapshot[];
+    transactions: BalanceTransaction[];
+    settlements: BalanceSettlement[];
 }) {
     const balances = createZeroBalances(params.memberIds);
 
@@ -179,30 +185,35 @@ export function computeGroupBalances(params: {
 
 /**
  * Who should pay whom to settle a group: the fewest payments, from the planner
- * in lib/settlementPlanner.ts. A balance of ±1 paisa counts as settled.
+ * in lib/settlementPlanner.ts, exact to the paisa.
+ *
+ * Every non-zero balance takes part, including the balance of someone who has
+ * left the group: dropping it would make a real debt disappear from Settle Up.
+ * `people` only supplies names, photos and UPI IDs. The accounts are sorted by
+ * ID, so the same balances always give the same plan.
  */
 export function simplifyGroupBalances(params: {
     balances: Record<string, number>;
-    members: FinanceMember[];
+    people: FinanceMember[];
 }): SimplifiedTransfer[] {
-    const memberMap = new Map(params.members.map((member) => [member.id, member]));
-    const accounts = params.members.map((member) => ({
-        id: member.id,
-        amount: Math.round(params.balances[member.id] || 0),
-    }));
+    const personById = new Map(params.people.map((person) => [person.id, person]));
+    const accounts = Object.keys(params.balances)
+        .sort()
+        .map((id) => ({ id, amount: Math.round(params.balances[id] || 0) }))
+        .filter((account) => account.amount !== 0);
 
-    return planSettlement(accounts, { tolerance: 1 }).transfers.map((transfer) => {
-        const fromMember = memberMap.get(transfer.from);
-        const toMember = memberMap.get(transfer.to);
+    return planSettlement(accounts).transfers.map((transfer) => {
+        const from = personById.get(transfer.from);
+        const to = personById.get(transfer.to);
         return {
             from: transfer.from,
             to: transfer.to,
             amount: transfer.amount,
-            fromName: fromMember?.name || 'Unknown',
-            toName: toMember?.name || 'Unknown',
-            fromImage: fromMember?.image || null,
-            toImage: toMember?.image || null,
-            toUpiId: toMember?.upiId || null,
+            fromName: from?.name || 'Former member',
+            toName: to?.name || 'Former member',
+            fromImage: from?.image || null,
+            toImage: to?.image || null,
+            toUpiId: to?.upiId || null,
         };
     });
 }
@@ -301,11 +312,11 @@ export function buildBalanceHistory(params: {
         const balancesAfter = cloneBalances(change.balancesBefore);
         applyDeltaMap(balancesAfter, event.deltaByUser);
         const beforeRouteSummary = summarizeUserRoute(
-            simplifyGroupBalances({ balances: change.balancesBefore, members: params.members }),
+            simplifyGroupBalances({ balances: change.balancesBefore, people: params.members }),
             params.userId
         );
         const afterRouteSummary = summarizeUserRoute(
-            simplifyGroupBalances({ balances: balancesAfter, members: params.members }),
+            simplifyGroupBalances({ balances: balancesAfter, people: params.members }),
             params.userId
         );
 
@@ -337,7 +348,7 @@ export function buildBalanceHistory(params: {
         currentBalance: currentBalances[params.userId] || 0,
         changeCountThisWeek,
         currentRouteSummary: summarizeUserRoute(
-            simplifyGroupBalances({ balances: cloneBalances(currentBalances), members: params.members }),
+            simplifyGroupBalances({ balances: cloneBalances(currentBalances), people: params.members }),
             params.userId
         ),
         entries: limitedEntries,

@@ -1,10 +1,30 @@
+import { randomUUID } from 'node:crypto';
 import { NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
+import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { createAuditLog } from '@/lib/auditLog';
+import { balanceOf, loadGroupLedger, pendingSettlementsOf } from '@/lib/ledger';
 import { logger } from '@/lib/logger';
 
-// DELETE /api/groups/:groupId/members — remove a member from the group
+const RemoveMemberSchema = z.object({ userId: z.string().min(1).max(64) });
+
+const rupees = (paise: number) => `₹${(Math.abs(paise) / 100).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+
+class RemovalRefused extends Error {
+    constructor(message: string, readonly status: number) {
+        super(message);
+    }
+}
+
+// DELETE /api/groups/:groupId/members — remove a member from the group.
+//
+// A member can leave only once they are square with the group: no balance and
+// no settlement still open. Their expenses and shares stay exactly as they
+// were. This used to rewrite everyone's shares, ignoring what the removed
+// member had paid or already settled, so the rest of the group ended up owing
+// someone who was no longer in it (D-063).
 export async function DELETE(
     req: Request,
     { params }: { params: Promise<{ groupId: string }> }
@@ -16,22 +36,18 @@ export async function DELETE(
         }
 
         const { groupId } = await params;
-        const { userId } = await req.json();
-
-        if (!userId) {
+        const parsed = RemoveMemberSchema.safeParse(await req.json().catch(() => null));
+        if (!parsed.success) {
             return NextResponse.json({ error: 'userId is required' }, { status: 400 });
         }
+        const { userId } = parsed.data;
 
         const currentUser = await prisma.user.findUnique({ where: { email: session.user.email } });
         if (!currentUser) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
-        // Verify the group exists and the current user is the owner or admin
         const group = await prisma.group.findFirst({
             where: { id: groupId, deletedAt: null },
-            include: {
-                members: true,
-                trips: { select: { id: true } },
-            },
+            include: { members: true },
         });
 
         if (!group) {
@@ -39,101 +55,68 @@ export async function DELETE(
         }
 
         const isOwner = group.ownerId === currentUser.id;
-        const currentMember = group.members.find(m => m.userId === currentUser.id);
+        const currentMember = group.members.find((member) => member.userId === currentUser.id);
         const isAdmin = currentMember?.role === 'admin';
 
         if (!isOwner && !isAdmin) {
             return NextResponse.json({ error: 'Only the group owner or admin can remove members' }, { status: 403 });
         }
-
-        // Cannot remove the owner
         if (userId === group.ownerId) {
             return NextResponse.json({ error: 'Cannot remove the group owner' }, { status: 400 });
         }
-
-        // Cannot remove yourself (use leave instead)
         if (userId === currentUser.id) {
             return NextResponse.json({ error: 'Cannot remove yourself' }, { status: 400 });
         }
-
-        // Check if the member exists
-        const targetMember = group.members.find(m => m.userId === userId);
-        if (!targetMember) {
+        if (!group.members.some((member) => member.userId === userId)) {
             return NextResponse.json({ error: 'User is not a member of this group' }, { status: 404 });
         }
 
-        const tripIds = group.trips.map(t => t.id);
+        // The check and the removal happen in one serializable transaction: an
+        // expense saved at the same moment makes one of the two fail rather than
+        // leave a debt behind with someone who is no longer a member.
+        let removedName = 'A member';
+        try {
+            await prisma.$transaction(async (tx) => {
+                const ledger = await loadGroupLedger(groupId, tx);
+                if (!ledger) throw new RemovalRefused('Group not found', 404);
 
-        // ── Recalculate splits within a DB transaction ──
-        await prisma.$transaction(async (tx) => {
-            // 1. Delete the membership
-            await tx.groupMember.deleteMany({
-                where: { groupId, userId },
-            });
+                const person = ledger.people.get(userId);
+                removedName = person?.name || removedName;
 
-            // 2. Find all transactions where removed member has splits
-            if (tripIds.length > 0) {
-                const affectedTxns = await tx.transaction.findMany({
-                    where: {
-                        tripId: { in: tripIds },
-                        deletedAt: null,
-                        splits: { some: { userId } },
-                    },
-                    include: { splits: true },
-                });
-
-                for (const txn of affectedTxns) {
-                    const memberSplit = txn.splits.find(s => s.userId === userId);
-                    if (!memberSplit) continue;
-
-                    // Delete the removed member's split
-                    await tx.splitItem.delete({ where: { id: memberSplit.id } });
-
-                    // For equal splits: redistribute total evenly among remaining members
-                    if (txn.splitType === 'equal') {
-                        const remainingSplits = txn.splits.filter(s => s.userId !== userId);
-                        if (remainingSplits.length > 0) {
-                            const perPerson = Math.floor(txn.amount / remainingSplits.length);
-                            const remainder = txn.amount - perPerson * remainingSplits.length;
-
-                            for (let i = 0; i < remainingSplits.length; i++) {
-                                await tx.splitItem.update({
-                                    where: { id: remainingSplits[i].id },
-                                    data: { amount: perPerson + (i === 0 ? remainder : 0) },
-                                });
-                            }
-                        }
-                    } else {
-                        // For custom/percentage splits: redistribute removed member's share proportionally
-                        const remainingSplits = txn.splits.filter(s => s.userId !== userId);
-                        const removedAmount = memberSplit.amount;
-                        const remainingTotal = remainingSplits.reduce((sum, s) => sum + s.amount, 0);
-
-                        if (remainingSplits.length > 0 && removedAmount > 0) {
-                            let distributed = 0;
-                            for (let i = 0; i < remainingSplits.length; i++) {
-                                const isLast = i === remainingSplits.length - 1;
-                                const share = isLast
-                                    ? removedAmount - distributed
-                                    : Math.round((remainingSplits[i].amount / (remainingTotal || 1)) * removedAmount);
-                                distributed += share;
-                                await tx.splitItem.update({
-                                    where: { id: remainingSplits[i].id },
-                                    data: { amount: remainingSplits[i].amount + share },
-                                });
-                            }
-                        }
-                    }
+                const balance = balanceOf(ledger, userId);
+                if (balance !== 0) {
+                    const owes = balance < 0;
+                    throw new RemovalRefused(
+                        `${removedName} ${owes ? 'still owes' : 'is still owed'} ${rupees(balance)} in this group. `
+                        + 'Settle up first, then remove them.',
+                        409
+                    );
                 }
-            }
-        });
+                const open = pendingSettlementsOf(ledger, userId);
+                if (open.length > 0) {
+                    throw new RemovalRefused(
+                        `${removedName} has ${open.length} settlement${open.length === 1 ? '' : 's'} still waiting. `
+                        + 'Complete or cancel them first.',
+                        409
+                    );
+                }
 
-        // ── Get removed user details ──
-        const removedUser = await prisma.user.findUnique({
-            where: { id: userId },
-            select: { name: true },
-        });
-        const removedName = removedUser?.name || 'A member';
+                await tx.groupMember.deleteMany({ where: { groupId, userId } });
+                // A removed member must not be able to walk back in with the old link.
+                await tx.group.update({ where: { id: groupId }, data: { inviteCode: randomUUID().replace(/-/g, '') } });
+            }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+        } catch (error) {
+            if (error instanceof RemovalRefused) {
+                return NextResponse.json({ error: error.message }, { status: error.status });
+            }
+            if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034') {
+                return NextResponse.json(
+                    { error: 'The group changed while removing this member. Please try again.' },
+                    { status: 409 }
+                );
+            }
+            throw error;
+        }
 
         await createAuditLog({
             userId: currentUser.id,
@@ -166,7 +149,7 @@ export async function DELETE(
                     actor: { connect: { id: currentUser.id } },
                     type: 'member_removed',
                     title: '🚪 Removed from group',
-                    body: `You were removed from "${group.name}" by ${currentUser.name || 'an admin'}. Splits have been recalculated.`,
+                    body: `You were removed from "${group.name}" by ${currentUser.name || 'an admin'}. You were all settled up.`,
                     link: '/groups',
                 },
             });
@@ -177,17 +160,17 @@ export async function DELETE(
         // ── Notify remaining members ──
         try {
             const remainingMemberIds = group.members
-                .map(m => m.userId)
-                .filter(id => id !== userId && id !== currentUser.id);
+                .map((member) => member.userId)
+                .filter((id) => id !== userId && id !== currentUser.id);
 
             if (remainingMemberIds.length > 0) {
                 await prisma.notification.createMany({
-                    data: remainingMemberIds.map(memberId => ({
+                    data: remainingMemberIds.map((memberId) => ({
                         userId: memberId,
                         actorId: currentUser.id,
                         type: 'group_activity',
                         title: '🚪 Member removed',
-                        body: `${removedName} was removed from "${group.name}" by ${currentUser.name || 'an admin'}. Equal splits have been recalculated.`,
+                        body: `${removedName} was removed from "${group.name}" by ${currentUser.name || 'an admin'}. Their past expenses stay in the history.`,
                         link: `/groups/${groupId}`,
                     })),
                 });
@@ -198,7 +181,7 @@ export async function DELETE(
 
         return NextResponse.json({
             success: true,
-            message: `${removedName} removed and splits recalculated`,
+            message: `${removedName} was removed from the group`,
         });
     } catch (error) {
         logger.error('Remove member error', { err: error });

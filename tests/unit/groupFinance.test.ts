@@ -15,7 +15,7 @@ const member = (id: string, extra: Partial<FinanceMember> = {}): FinanceMember =
 describe('simplifyGroupBalances', () => {
     it('uses the planner: the fewest payments, with names, photos and UPI IDs', () => {
         const members = ['a', 'b', 'c', 'd', 'e'].map((id) => member(id, { image: `/img/${id}.png`, upiId: `${id}@upi` }));
-        const transfers = simplifyGroupBalances({ members, balances: { a: -700, b: -300, c: 500, d: 300, e: 200 } });
+        const transfers = simplifyGroupBalances({ people: members, balances: { a: -700, b: -300, c: 500, d: 300, e: 200 } });
 
         expect(transfers).toHaveLength(3);
         expect(transfers).toContainEqual({
@@ -24,24 +24,43 @@ describe('simplifyGroupBalances', () => {
         });
     });
 
-    it('treats a balance of ±1 paisa as settled and ignores balances of non-members', () => {
+    it('settles to the exact paisa: one paisa owed is still owed', () => {
         const transfers = simplifyGroupBalances({
-            members: [member('a'), member('b'), member('c')],
-            balances: { a: 1, b: -501, c: 500, outsider: 9_999 },
+            people: [member('a'), member('b'), member('c')],
+            balances: { a: 1, b: -501, c: 500 },
         });
-        expect(transfers).toEqual([expect.objectContaining({ from: 'b', to: 'c', amount: 500 })]);
+        expect(transfers).toHaveLength(2);
+        expect(transfers).toContainEqual(expect.objectContaining({ from: 'b', to: 'c', amount: 500 }));
+        expect(transfers).toContainEqual(expect.objectContaining({ from: 'b', to: 'a', amount: 1 }));
     });
 
-    it('clears every real group balance to within a paisa', () => {
+    it('keeps the balance of someone who has left, so their money never disappears', () => {
+        const transfers = simplifyGroupBalances({
+            people: [member('a')],
+            balances: { a: -300, gone: 300 },
+        });
+        expect(transfers).toEqual([
+            expect.objectContaining({ from: 'a', to: 'gone', amount: 300, fromName: 'Name a', toName: 'Former member', toUpiId: null }),
+        ]);
+    });
+
+    it('gives the same plan however the balances are ordered', () => {
+        const people = ['a', 'b', 'c', 'd'].map((id) => member(id));
+        const forward = simplifyGroupBalances({ people, balances: { a: -250, b: -250, c: 250, d: 250 } });
+        const reverse = simplifyGroupBalances({ people, balances: { d: 250, c: 250, b: -250, a: -250 } });
+        expect(reverse).toEqual(forward);
+    });
+
+    it('clears every real group balance exactly', () => {
         for (let seed = 1; seed <= 200; seed++) {
             const { members, transactions, settlements } = randomGroupHistory(seed);
             const balances = computeGroupBalances({ memberIds: members.map((m) => m.id), transactions, settlements });
             const left = { ...balances };
-            for (const t of simplifyGroupBalances({ balances, members })) {
+            for (const t of simplifyGroupBalances({ balances, people: members })) {
                 left[t.from] += t.amount;
                 left[t.to] -= t.amount;
             }
-            for (const amount of Object.values(left)) expect(Math.abs(amount)).toBeLessThanOrEqual(1);
+            for (const amount of Object.values(left)) expect(amount).toBe(0);
         }
     });
 });
@@ -114,7 +133,7 @@ describe('buildBalanceHistory', () => {
 
             expect(paged).toEqual(all.entries);
             const current = computeGroupBalances({ memberIds: people.map((m) => m.id), transactions: transactions.filter((t) => !t.deletedAt), settlements });
-            expect(all.currentRouteSummary).toBe(summarizeUserRoute(simplifyGroupBalances({ balances: current, members: people }), params.userId));
+            expect(all.currentRouteSummary).toBe(summarizeUserRoute(simplifyGroupBalances({ balances: current, people }), params.userId));
         }
     });
 });
