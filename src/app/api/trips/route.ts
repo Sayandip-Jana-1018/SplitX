@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
+import { invalidInput } from '@/lib/invalidInput';
 
 const CreateTripSchema = z.object({
     groupId: z.string().cuid(),
@@ -68,11 +69,8 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const body = await req.json();
-        const parsed = CreateTripSchema.safeParse(body);
-        if (!parsed.success) {
-            return NextResponse.json({ error: parsed.error.issues }, { status: 400 });
-        }
+        const parsed = CreateTripSchema.safeParse(await req.json().catch(() => null));
+        if (!parsed.success) return invalidInput(parsed.error);
 
         const user = await prisma.user.findUnique({ where: { email: session.user.email } });
         if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });

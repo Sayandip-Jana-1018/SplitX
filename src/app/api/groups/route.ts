@@ -4,6 +4,7 @@ import { auth } from '@/lib/auth';
 import { z } from 'zod';
 import { createAuditLog } from '@/lib/auditLog';
 import { logger } from '@/lib/logger';
+import { invalidInput } from '@/lib/invalidInput';
 
 const CreateGroupSchema = z.object({
     name: z.string().min(1).max(50),
@@ -65,11 +66,8 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const body = await req.json();
-        const parsed = CreateGroupSchema.safeParse(body);
-        if (!parsed.success) {
-            return NextResponse.json({ error: parsed.error.issues }, { status: 400 });
-        }
+        const parsed = CreateGroupSchema.safeParse(await req.json().catch(() => null));
+        if (!parsed.success) return invalidInput(parsed.error);
 
         const user = await prisma.user.findUnique({ where: { email: session.user.email } });
         if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });

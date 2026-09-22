@@ -23,8 +23,7 @@ export async function POST(req: Request) {
         const user = await prisma.user.findUnique({ where: { email: session.user.email } });
         if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
-        const body = await req.json();
-        const parsed = InviteSchema.safeParse(body);
+        const parsed = InviteSchema.safeParse(await req.json().catch(() => null));
         if (!parsed.success) {
             return NextResponse.json({ error: 'groupId and inviteeId are required' }, { status: 400 });
         }

@@ -27,8 +27,7 @@ export async function PATCH(
 
         const { id } = await params;
 
-        const body = await req.json();
-        const parsed = ActionSchema.safeParse(body);
+        const parsed = ActionSchema.safeParse(await req.json().catch(() => null));
         if (!parsed.success) {
             return NextResponse.json({ error: 'status must be "accepted" or "declined"' }, { status: 400 });
         }

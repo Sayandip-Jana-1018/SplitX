@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
+import { invalidInput } from '@/lib/invalidInput';
 import { deleteAccount, DeletionRefused } from '@/lib/accountDeletion';
 import { forgetTokenVersion } from '@/lib/sessionVersion';
 import { removeAvatars } from '@/lib/storage';
@@ -81,11 +82,8 @@ export async function PATCH(req: Request) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const body = await req.json();
-        const parsed = UpdateProfileSchema.safeParse(body);
-        if (!parsed.success) {
-            return NextResponse.json({ error: parsed.error.issues }, { status: 400 });
-        }
+        const parsed = UpdateProfileSchema.safeParse(await req.json().catch(() => null));
+        if (!parsed.success) return invalidInput(parsed.error);
 
         const updateData: Record<string, string> = {};
         if (parsed.data.name) updateData.name = parsed.data.name;
