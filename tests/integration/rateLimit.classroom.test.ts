@@ -20,9 +20,15 @@ const preview = (address: string, device?: string) =>
         headers: { 'x-forwarded-for': address, ...(device ? { cookie: `sx_device=${device}` } : {}) },
     });
 
-async function send(address: string, device: string | undefined, times: number) {
+const register = (address: string, device?: string) =>
+    new NextRequest('http://localhost/api/register', {
+        method: 'POST',
+        headers: { 'x-forwarded-for': address, ...(device ? { cookie: `sx_device=${device}` } : {}) },
+    });
+
+async function send(address: string, device: string | undefined, times: number, build = preview) {
     const outcomes = [];
-    for (let i = 0; i < times; i++) outcomes.push(await checkRateLimit(preview(address, device)));
+    for (let i = 0; i < times; i++) outcomes.push(await checkRateLimit(build(address, device)));
     return outcomes;
 }
 const allowed = (results: Awaited<ReturnType<typeof checkRateLimit>>[]) => results.filter((r) => r.outcome === 'allow').length;
@@ -35,6 +41,7 @@ beforeAll(async () => {
 afterEach(() => {
     vi.stubEnv('RATE_LIMIT_PREVIEW_PER_MINUTE', '');
     vi.stubEnv('RATE_LIMIT_PREVIEW_NETWORK_PER_MINUTE', '');
+    vi.stubEnv('RATE_LIMIT_AUTH_NETWORK_PER_MINUTE', '');
 });
 
 afterAll(async () => {
@@ -87,5 +94,29 @@ describe('a classroom behind one address, on real Redis', () => {
         const cookieless = await send(address, undefined, 70);
 
         expect(allowed(cookieless)).toBe(60);
+    });
+});
+
+describe('a class signing up at once, on real Redis (B-025)', () => {
+    it('lets sixty phones on one address each register, sign in and retry once', async () => {
+        const address = randomAddress();
+        const phones = Array.from({ length: 60 }, () => mintDevice()!);
+        const results = (await Promise.all(phones.map((phone) => send(address, phone, 3, register)))).flat();
+
+        expect(allowed(results)).toBe(180);
+    });
+
+    it('keeps a browser without a device cookie at ten a minute for its address', async () => {
+        const cookieless = await send(randomAddress(), undefined, 20, register);
+
+        expect(allowed(cookieless)).toBe(10);
+    });
+
+    it('still caps the whole address, however many devices are minted to guess passwords', async () => {
+        vi.stubEnv('RATE_LIMIT_AUTH_NETWORK_PER_MINUTE', '50');
+        const address = randomAddress();
+        const results = (await Promise.all(Array.from({ length: 30 }, () => send(address, mintDevice()!, 3, register)))).flat();
+
+        expect(allowed(results)).toBe(50);
     });
 });

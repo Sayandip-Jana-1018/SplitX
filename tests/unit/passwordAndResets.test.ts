@@ -4,7 +4,7 @@ import { clearLocalLimits, hitLocally } from '@/lib/rateLimit/local';
 import { hashSecretToken } from '@/lib/secretTokens';
 import { jsonRequest } from '../helpers/http';
 
-const { prisma, tx, sendPasswordResetEmail, emailTransport, forgetTokenVersion } = vi.hoisted(() => ({
+const { prisma, tx, sendPasswordResetEmail, emailTransport, forgetTokenVersion, consumeAllowance } = vi.hoisted(() => ({
     prisma: {
         user: { findFirst: vi.fn() },
         passwordResetToken: { deleteMany: vi.fn(), create: vi.fn() },
@@ -17,11 +17,13 @@ const { prisma, tx, sendPasswordResetEmail, emailTransport, forgetTokenVersion }
     sendPasswordResetEmail: vi.fn(),
     emailTransport: vi.fn(),
     forgetTokenVersion: vi.fn(),
+    consumeAllowance: vi.fn(),
 }));
 
 vi.mock('@/lib/db', () => ({ prisma }));
 vi.mock('@/lib/email', () => ({ sendPasswordResetEmail, emailTransport }));
 vi.mock('@/lib/sessionVersion', () => ({ forgetTokenVersion }));
+vi.mock('@/lib/rateLimit', () => ({ consumeAllowance }));
 
 const forgot = await import('@/app/api/auth/forgot-password/route');
 const reset = await import('@/app/api/auth/reset-password/route');
@@ -66,8 +68,21 @@ describe('password reset links', () => {
         tx.user.update.mockResolvedValue({ id: 'u1' });
         tx.user.updateMany.mockResolvedValue({ count: 1 });
         emailTransport.mockReturnValue('smtp');
+        consumeAllowance.mockResolvedValue({ outcome: 'allow', resetMs: 1_000 });
     });
     afterEach(() => vi.resetAllMocks());
+
+    it('sends at most three reset emails an hour to one account, answering the same after', async () => {
+        prisma.user.findFirst.mockResolvedValue({ id: 'u1', email: 'Alice@Example.com', password: 'hash' });
+        consumeAllowance.mockResolvedValue({ outcome: 'deny', resetMs: 600_000 });
+
+        const res = await forgot.POST(jsonRequest('http://localhost/api/auth/forgot-password', { email: 'alice@example.com' }));
+
+        expect(await res.json()).toEqual({ message: 'If an account exists with that email, we sent a reset link.' });
+        expect(consumeAllowance).toHaveBeenCalledWith('reset-mail:alice@example.com', 3, 60 * 60 * 1000);
+        expect(sendPasswordResetEmail).not.toHaveBeenCalled();
+        expect(prisma.passwordResetToken.create).not.toHaveBeenCalled();
+    });
 
     it('says so when no email can be sent, the same for every address', async () => {
         emailTransport.mockReturnValue(null);

@@ -3,9 +3,16 @@ import { prisma } from '@/lib/db';
 import { emailTransport, sendPasswordResetEmail } from '@/lib/email';
 import { normalizeEmail } from '@/lib/password';
 import { hashSecretToken, newSecretToken } from '@/lib/secretTokens';
+import { consumeAllowance } from '@/lib/rateLimit';
 import { logger } from '@/lib/logger';
 
 const RESET_LINK_MS = 60 * 60 * 1000;
+/**
+ * Reset emails per account per hour. The limit in front of this route is per
+ * device (B-025), loose enough for a classroom signing in at once, so it can't
+ * also be what keeps one person's inbox from being flooded.
+ */
+const RESET_MAILS_PER_HOUR = 3;
 
 // POST /api/auth/forgot-password — emails a reset link to an account that has a
 // password. The answer is the same whether or not the account exists.
@@ -36,6 +43,12 @@ export async function POST(req: Request) {
 
         // No account, or one that signs in with Google or GitHub only.
         if (!user?.email || !user.password) {
+            return successResponse;
+        }
+
+        // Past the account's allowance nothing is sent, and the answer is the same.
+        const recent = await consumeAllowance(`reset-mail:${user.email.toLowerCase()}`, RESET_MAILS_PER_HOUR, 60 * 60 * 1000);
+        if (recent.outcome === 'deny') {
             return successResponse;
         }
 

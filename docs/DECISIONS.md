@@ -2443,6 +2443,34 @@ would have disappeared for all its other members, history and balances included.
 The Settings dialog now says what happens, instead of promising that groups and expenses will be
 permanently deleted.
 
+### D-076 · A class can sign up at once from one campus address
+**2026-09-22** · ✅ written and tested (unit; the real-Redis classroom tests run in CI's integration job) · resolves B-025
+
+**Before.** Sign-up, sign-in and the password-reset routes were limited to ten a minute per network
+address. A class on one campus Wi-Fi shares one public address, so everyone after the tenth student
+would have been refused, the classroom problem B-015 fixed for the rest of the API.
+
+**Decided** (`src/lib/rateLimit/policies.ts`):
+- **Per device.** These routes are now limited per device, with the signed device cookie every browser
+  gets on its first page (D-045): ten a minute each. The network address has a ceiling of 240 a minute
+  (`RATE_LIMIT_AUTH_NETWORK_PER_MINUTE`), enough for sixty phones to register, sign in and retry once
+  in the same minute.
+- **Without a device cookie** (a script, not a browser), a request still counts against its address
+  at ten a minute.
+- **Guessing and flooding are stopped where they aim.** A device cookie is free to mint, so the
+  per-device limit alone guards against neither. Password guessing is capped per account: ten tries
+  per quarter hour (D-068). Inbox flooding is capped per address: one confirmation link every ten
+  minutes (D-070), and now at most three reset emails an hour per account. Past that limit the reset
+  route answers exactly as before and sends nothing.
+- **When the shared limiter is down**, these routes still fall back to ten a minute per address in
+  each process (D-068). That keeps guessing capped when the per-account counter can't be reached
+  either.
+
+**Tests:** the policy; the reset cap (nothing sent past it, the same answer). Against real Redis:
+- sixty phones on one address registering, signing in and retrying all get through;
+- a browser without a device cookie still gets ten a minute;
+- thirty minted devices can't exceed a lowered network ceiling.
+
 ---
 
 ## Open problems
@@ -2473,7 +2501,7 @@ permanently deleted.
 | B-022 | `argocd/`, `jenkins/Jenkinsfile`, `AWS_SETUP_GUIDE.md` and `DEMO_GUIDE.html` still reference the `helm/splitx` chart deleted in D-034, and `argocd/kind-cluster.yml` is a second, stale Kind config. | Anyone following those files sets up something that no longer exists. | 🚧 Narrowed 2026-09-20 — `argocd/` and the old Jenkins files are deleted, and the Jenkinsfile is the one that runs (D-055): GitOps does not return, because Jenkins is the deployer. `AWS_SETUP_GUIDE.md` and `DEMO_GUIDE.html` still describe the deleted chart; phase 8 rewrites the guides. |
 | B-023 | metrics-server runs with `--kubelet-insecure-tls` on Kind, because Kind’s kubelets serve metrics with a certificate the cluster CA did not issue. | The flag disables verification of what the autoscaler reads. It is in a values file, not hidden in a script, precisely so it cannot be copied to AWS by accident. | Phase 7: EKS signs kubelet certificates properly — install the add-on without the flag and confirm the HPA still reads CPU. |
 | B-024 | In the final saturation run, 155 of 7,442 requests spent over 3 s inside a pod, all 30 to 50 s into the overload, on both pods, with none after. | A transient stall right when a burst arrives is exactly when a classroom notices. | 🚧 Narrowed 2026-09-18 — D-053. Not garbage collection: the stall belongs to freshly started pods at their 1-CPU limit. Without the limit, fresh pods had 0 and 89 requests over 3 s in a pod (175 to 228 with it), the longest 2.9 and 6.3 s, and served 45% more. Left: the remaining cold start; phase 7 measures the ALB slow start for new targets. |
-| B-025 | Sign-up, login and password reset are still limited to 10 a minute per address (D-022). | A room asked to register at once from one campus network would be refused after the first ten. The demo page needs no account, so it is not affected. | Before any demo asks people to sign up: count failed logins per account for brute-force protection, and give sign-up the device-plus-network treatment of D-045. |
+| B-025 | Sign-up, login and password reset are still limited to 10 a minute per address (D-022). | A room asked to register at once from one campus network would be refused after the first ten. The demo page needs no account, so it is not affected. | ✅ Resolved 2026-09-22 — D-076. Credential routes are limited per device under a network ceiling of 240 a minute; guessing stays capped per account and inbox flooding per address. |
 | B-026 | Jenkins' deploy builds and `cd:verify` read GitHub's deployments without a token, and this network's public address shares GitHub's anonymous allowance (60 an hour) with other devices. | A deploy would fail at its first step whenever someone else on the network had spent the allowance: on 2026-09-21 its hour began eleven minutes before this laptop booted, and it was spent when `cd:verify` ran, which failed 2 of its 15 checks on it. | Open — the user creates a fine-grained token (this repository only, Deployments read and write) and puts it in `.env` as `JENKINS_GITHUB_TOKEN`; `k8s:up` hands it to Jenkins. Both scripts now say when the allowance is spent and until when, instead of a bare 403, and the build log no longer repeats GitHub's message, which names the address. **2026-09-21:** the token is in `.env` and works (5,000 an hour). |
 | B-027 | With the cluster running, the 6 GB WSL VM held about 4 GB in memory and all 8 GB of its swap (2026-09-21), about 12 GB against the 4.6 GB the same cluster used the day before. | The control plane crash-looped and the app answered 503. On Windows, the swap file held the SSD at a queue of 100–245 and 61 ms reads, which froze the laptop. Release `7e3509e` (deployment 6572256500, 15:45 UTC) reached no relay and was never deployed: no delivery was logged after 15:30 UTC. | Open. Next time the cluster runs, watch the VM's anonymous, shared and swapped memory from `k8s:up` on (node-exporter already exports all three), find what grew, and fit the local cluster into 6 GB. Then redeliver 6572256500 from GitHub's webhook page and read Jenkins' statuses on GitHub. |
 | B-028 | The AI chat builds its own balances: pairwise instead of the group plan, over every expense including deleted ones, in deleted groups too, with ±1 paisa counted as settled. | Its answers to "who owes me?" can disagree with Settle Up, and count expenses that were deleted. | ✅ Resolved 2026-09-22 — D-067. The chat's context is the ledger: balances per group over live expenses, and each group's settle-up plan. |

@@ -1,9 +1,13 @@
 /**
  * Which limit applies to a request.
  *
- * - `auth`: credential checks, registration and password-reset email — keyed by
- *   IP, because the caller isn't signed in yet and these are what brute-force
- *   and email-bombing attacks hit.
+ * - `auth`: credential checks, registration and password-reset email, which
+ *   brute-force and email-bombing attacks hit. The caller isn't signed in yet,
+ *   so a browser counts as its device, and its network has a ceiling (B-025): a
+ *   class signing up at once from one campus address is not one person. What
+ *   stops guessing is per account (ten tries per quarter hour, lib/auth.ts);
+ *   what stops inbox flooding is per address (lib/emailVerification.ts, the
+ *   forgot-password route).
  * - `preview`: the settlement preview, which does real CPU work per request.
  * - `api`: everything else under /api, keyed by the verified user when signed in.
  *
@@ -51,7 +55,13 @@ export function policyFor(method: string, pathname: string): RateLimitPolicy | n
     if (UNLIMITED_PREFIXES.some((prefix) => pathname.startsWith(prefix))) return null;
 
     if (method === 'POST' && CREDENTIAL_ROUTES.has(pathname)) {
-        return { name: 'auth', limit: perMinute('RATE_LIMIT_AUTH_PER_MINUTE', 10), windowMs: MINUTE_MS, keyBy: 'ip' };
+        return {
+            name: 'auth',
+            limit: perMinute('RATE_LIMIT_AUTH_PER_MINUTE', 10),
+            windowMs: MINUTE_MS,
+            keyBy: 'identity',
+            networkLimit: perMinute('RATE_LIMIT_AUTH_NETWORK_PER_MINUTE', 240),
+        };
     }
     // Session, CSRF and provider lookups are polled by the NextAuth client itself.
     if (pathname.startsWith('/api/auth/')) return null;
