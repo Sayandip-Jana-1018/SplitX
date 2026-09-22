@@ -2407,6 +2407,42 @@ WIN1252 and refused the ✈️ default of `Group.emoji`. Checked on the local Po
 - a cluster database with the first two migrations gets exactly the two new ones;
 - a database built on Windows is identical to the one Prisma builds.
 
+### D-075 · Deleting an account erases the person, not the group's history
+**2026-09-22** · ✅ written and tested (4 database tests; 3 of them fail on the old code) · ships with D-074 (it uses `tokenVersion`)
+
+**Before.** "Delete account" could only fail for anyone who had used the app. It removed the person's
+memberships, soft-deleted every group they owned, then hard-deleted the user row. Any expense, share,
+settlement or owned group still points at that row, and the database refuses (the database test
+"never deletes someone the money history names" shows it). So everyone who had ever been in a group
+got "Failed to delete account". Had it worked, it would have been worse: every group the person owned
+would have disappeared for all its other members, history and balances included.
+
+**Decided** (`src/lib/accountDeletion.ts`, one serializable transaction):
+- **Refused while money is open:** anything owed or owed to them, or a payment still waiting, in any
+  group. The answer names each group and amount, like removing a member (D-063).
+- **Owned groups** pass to the longest-standing admin, else the longest-standing member, who becomes
+  an admin. A group with nobody else in it is closed.
+- **The person is erased:** name "Deleted user"; email, password, photo, phone and UPI ID gone. They
+  leave every group, and every session ends (D-074). Deleted too:
+  - sign-in links (a later Google or GitHub sign-in makes a new account);
+  - contacts, budgets, AI chat, notifications, pending invitations, emailed links.
+  
+  Other people's address books keep what they typed, unlinked.
+- **The history stays whole.** Their expenses, shares and payments remain, so every group still adds
+  up to zero, and each group's history names them "Deleted user". Receipt photos stay with the
+  expenses they belong to. Profile photos are removed from storage after the transaction; a failure
+  there is logged and doesn't undo the deletion.
+- The address is free again: the same email can sign up as a new account.
+
+**Tests (real database):**
+- deletion is refused while money is owed, and changes nothing;
+- once square, the person is erased while the group's ledger still nets to zero and names them;
+- ownership passes to the longest-standing member, and a group nobody else is in is closed;
+- the email can register again.
+
+The Settings dialog now says what happens, instead of promising that groups and expenses will be
+permanently deleted.
+
 ---
 
 ## Open problems

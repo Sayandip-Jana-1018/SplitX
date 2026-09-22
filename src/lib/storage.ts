@@ -53,6 +53,22 @@ export function avatarObjectPath(userId: string, contentType: ImageType) {
     return `avatars/${userFolder(userId)}/${randomUUID()}.${EXTENSIONS[contentType]}`;
 }
 
+/**
+ * Removes every profile photo a person uploaded, for account deletion. Receipt
+ * photos stay: they belong to the group's expenses, which other people still see.
+ */
+export async function removeAvatars(userId: string, bucketName: string): Promise<number> {
+    const bucket = storageAdmin().storage.from(bucketName);
+    const folder = `avatars/${userFolder(userId)}`;
+    const { data, error } = await bucket.list(folder, { limit: 1000 });
+    if (error) throw error;
+    const paths = (data ?? []).map((object) => `${folder}/${object.name}`);
+    if (paths.length === 0) return 0;
+    const { error: removeError } = await bucket.remove(paths);
+    if (removeError) throw removeError;
+    return paths.length;
+}
+
 /** The image type a file really is, from its first bytes — never from its name or declared type. */
 export function sniffImageType(bytes: Uint8Array): ImageType | null {
     const startsWith = (signature: number[], offset = 0) => signature.every((byte, i) => bytes[offset + i] === byte);

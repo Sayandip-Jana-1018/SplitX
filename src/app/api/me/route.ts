@@ -3,6 +3,10 @@ import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
+import { deleteAccount, DeletionRefused } from '@/lib/accountDeletion';
+import { forgetTokenVersion } from '@/lib/sessionVersion';
+import { removeAvatars } from '@/lib/storage';
+import { RECEIPTS_BUCKET } from '@/lib/receiptUrl';
 
 // GET /api/me — returns current authenticated user
 export async function GET() {
@@ -110,7 +114,9 @@ export async function PATCH(req: Request) {
     }
 }
 
-// DELETE /api/me — permanently delete user account and all associated data
+// DELETE /api/me — deletes the account the way src/lib/accountDeletion.ts
+// describes: refused while money is open, the person erased from a history that
+// stays whole, every session ended. Then their profile photos are removed.
 export async function DELETE() {
     try {
         const session = await auth();
@@ -118,41 +124,26 @@ export async function DELETE() {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const user = await prisma.user.findUnique({ where: { email: session.user.email } });
+        const user = await prisma.user.findUnique({ where: { email: session.user.email }, select: { id: true } });
         if (!user) {
             return NextResponse.json({ error: 'User not found' }, { status: 404 });
         }
 
-        await prisma.$transaction(async (tx) => {
-            // Delete notifications (as recipient and actor)
-            await tx.notification.deleteMany({ where: { userId: user.id } });
-            await tx.notification.deleteMany({ where: { actorId: user.id } });
+        const outcome = await deleteAccount(user.id);
+        forgetTokenVersion(user.id);
 
-            // Delete contacts (Contact model uses ownerId instead of userId)
-            await tx.contact.deleteMany({ where: { ownerId: user.id } });
+        try {
+            await removeAvatars(user.id, RECEIPTS_BUCKET);
+        } catch (error) {
+            // The account is gone either way; a photo left behind is logged to clear by hand.
+            logger.warn('Could not remove the profile photos of a deleted account', { err: error });
+        }
 
-            // Delete budgets
-            await tx.budget.deleteMany({ where: { userId: user.id } });
-
-            // Delete group memberships
-            await tx.groupMember.deleteMany({ where: { userId: user.id } });
-
-            // Delete sessions and accounts (NextAuth)
-            await tx.session.deleteMany({ where: { userId: user.id } });
-            await tx.account.deleteMany({ where: { userId: user.id } });
-
-            // Soft-delete groups owned by user
-            await tx.group.updateMany({
-                where: { ownerId: user.id },
-                data: { deletedAt: new Date() },
-            });
-
-            // Delete the user
-            await tx.user.delete({ where: { id: user.id } });
-        });
-
-        return NextResponse.json({ message: 'Account deleted successfully' });
+        return NextResponse.json({ message: 'Your account was deleted.', ...outcome });
     } catch (error) {
+        if (error instanceof DeletionRefused) {
+            return NextResponse.json({ error: error.message }, { status: error.status });
+        }
         logger.error('Account deletion error', { err: error });
         return NextResponse.json({ error: 'Failed to delete account' }, { status: 500 });
     }

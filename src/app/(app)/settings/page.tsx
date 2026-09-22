@@ -384,7 +384,7 @@ export default function SettingsPage() {
                                 }}
                                 leading={<IconTile tone="danger"><Trash2 size={18} /></IconTile>}
                                 title="Delete account"
-                                subtitle="Permanently remove your account and data"
+                                subtitle="Erase your details and leave every group"
                                 tone="danger"
                                 chevron
                             />
@@ -487,7 +487,11 @@ export default function SettingsPage() {
                     <span className={styles.confirmIcon}><AlertTriangle size={26} /></span>
                     <p className={styles.confirmTitle}>This can&apos;t be undone</p>
                     <p className={styles.confirmText}>
-                        Your account, every group you own and all of your expenses will be permanently deleted.
+                        Your name, email, photo and payment details are erased, you leave every group, and you
+                        are signed out everywhere. Expenses and payments you were part of stay in each
+                        group&apos;s history as &ldquo;Deleted user&rdquo;, so everyone&apos;s balances still add up,
+                        and groups you own pass to their longest-standing member. Settle up first: you can&apos;t
+                        delete while you owe or are owed money.
                     </p>
                     <Input
                         label="Type DELETE to confirm"
