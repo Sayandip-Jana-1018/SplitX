@@ -901,6 +901,9 @@ Neon — the managed database behind Vercel and, in phase 7, EKS — is still
 managed with Prisma directly. This path exists so the local cluster can stand up
 a database of its own with nothing but the images it already has.
 
+**2026-09-22:** the file is now built from `prisma/migrations` instead, applying only the
+migrations a database doesn't have yet, and the Job runs it on every deploy (D-072).
+
 ### D-042 · Secrets are built from `.env` and piped to kubectl; they never touch a file or a command line
 **2026-09-16** · ✅ done
 
@@ -2021,8 +2024,8 @@ offline. A `next build --webpack` would have switched both on.
 
 **Balance history** (high finding 8) read every expense audit log in the database created since the
 group, for every group, and filtered them in JavaScript. It now asks only for the audit logs of this
-group's own expenses (`entityId IN` the group's expense IDs). `AuditLog` has no index yet; one on
-`(entityType, entityId)` comes with the migration baseline (fix 8 of the plan).
+group's own expenses (`entityId IN` the group's expense IDs). `AuditLog` had no index; one on
+`(entityType, entityId)` is the first migration after the baseline (D-072).
 
 **Tests:** `public/sw.js` itself, run against an in-memory Cache Storage: it deletes an earlier
 worker's caches, never answers an API call, and shows the offline page only when the network is gone. The
@@ -2232,6 +2235,95 @@ violations appear, then switch the header to `Content-Security-Policy`. Self-hos
 `form-action` and `connect-src` as above), both report formats, labels kept to a fixed set whatever a
 report claims, at most 20 reports per request, and the route's counting and size limit.
 
+### D-072 · Schema changes are migrations, proven on the Postgres production runs
+**2026-09-22** · ✅ written and tested on a real PostgreSQL 17 (1,015 unit tests, 10 new database tests) · production is baselined when the user runs the "Production database" workflow
+
+**Before.** Production was created and changed with `prisma db push`. Nothing recorded what it held,
+no change could be reviewed before it landed, and nothing stopped code that needs a new column from
+reaching production before the column. No test ran against a real database: every route test used a
+fake Prisma client, which has no constraints, no locks and no isolation levels.
+
+**The baseline.** `prisma/migrations/0_baseline` is the schema production holds today, generated from
+`schema.prisma`. Before relying on it, production was compared with it, read only, over Neon's HTTPS
+endpoint (this network blocks 5432). The catalog of every table, column (type, nullability, default),
+index and constraint in production was compared with the same catalog of a database built from the
+baseline: **137 columns, 41 indexes and 44 constraints, no difference.** Production runs PostgreSQL
+17.11 and has no `_prisma_migrations` table yet. The workflow checks again, with Prisma's own diff,
+before it records anything.
+
+**The first migration** adds the index balance history needs, `AuditLog (entityType, entityId)`. An
+index changes no query's result, so it is safe whichever lands first, the code or the index.
+
+**Production migrations** run only from `.github/workflows/production-database.yml`:
+- Manual, one run at a time, and every run waits for approval of the `production-database`
+  environment, the only place that holds the database's address.
+- A report first (what production has, what is pending, and the SQL the pending migrations will run),
+  then a run with "apply".
+- The first time, production is recorded as holding `0_baseline` only if Prisma's diff between the two
+  is empty. Any difference stops the run and prints it.
+- After applying, Prisma's diff between production and `schema.prisma` must be empty.
+- Only the direct address: a pooled one is refused, because a migration holds an advisory lock that a
+  transaction-mode pooler can't keep. The host is masked in the log, and dependencies are installed
+  before the address is in any step's environment.
+- `scripts/db-migrate.mjs` does the work. It was tested on a local copy of production's shape: the
+  report, the baseline and apply, a second report finding nothing to do, a database that differed
+  from the baseline (refused, left untouched, the difference printed), and an empty database
+  (everything applied).
+
+**How a schema change ships:** the pull request carries the migration; run the workflow on that
+branch, report then apply; then merge. Vercel deploys a merge within minutes and the code must find
+its columns already there, so **migrations only add**: a new column is optional or has a default, and
+nothing the running code reads is dropped or renamed in the same release.
+
+**The cluster** can't run Prisma (D-041), so `scripts/db-schema.mjs` now writes `schema.sql` from the
+migrations. Each migration the database doesn't have yet is applied in its own transaction and
+recorded in `_prisma_migrations` exactly as Prisma records it. The Job runs it on every deploy, so a
+migration added later reaches a cluster whose database already exists. A database built by the old
+file is recorded as holding the baseline, instead of failing on tables that already exist.
+
+**CI's new `database` job** runs on `postgres:17.11`, pinned by digest, the version production runs. It
+checks that:
+- the migrations build an empty database;
+- nothing in `schema.prisma` lacks a migration (`migrate diff --from-migrations`; a field added without
+  one fails the job with the SQL it needs);
+- `schema.sql` builds the same database as `prisma migrate deploy` (identical `pg_dump` and identical
+  migration records, checksums included), a second run changes nothing, and `prisma migrate status`
+  reads the result as up to date;
+- the database tests pass.
+
+The release job now waits for it.
+
+**The database tests** (`tests/database`, 10 of them) refuse to run against anything but a local
+database named `*_test`. They cover:
+- **Constraints the code relies on:** no share, payment or membership can point at nothing; one
+  membership per person per group, and one share per person per expense; no account can be deleted
+  while the money history names it, so account deletion will have to anonymise.
+- **Amounts:** the largest fits the 32-bit column, one past it is refused unwritten, and sums past
+  2^31 come back exact (the AI chat sums spending in SQL).
+- **Two actions at once**, each repeated over several rounds:
+  - approve and decline of one payment: exactly one happens, and only it is in the history;
+  - a double tap on "I have paid";
+  - five payments started together against one debt: never more than is owed, and every refusal a
+    400 or 409, never a 500. A probe of ten rounds saw one to three accepted and the rest refused as
+    conflicts;
+  - two edits of one expense: one lands whole, the other is asked to reload, and the shares always
+    equal the amount.
+
+**Found by them:** a double tap on "join" let two inserts race past the "already a member?" check, and
+the losing tap answered **500 "Failed to join group"** although the person had joined (`[201, 500]`
+on the first run). The unique constraint's refusal is now answered as "Already a member", the group
+is notified once, and a body that isn't JSON gets a 400.
+
+Everything above was verified before pushing, on a throwaway PostgreSQL 17.9 run from the binaries
+already installed, with its own data directory and port (Docker stayed off). It was deleted
+afterwards.
+
+**Next:**
+- `User.tokenVersion`, the first migration that adds a column, shipped the way described above.
+- The cluster's own Postgres stays at 16 for now, because moving it to 17 would strand an existing
+  cluster's data directory. The Kind end-to-end runs on GitHub's runners start fresh (phase 7), so
+  that is where it moves to 17.
+
 ---
 
 ## Open problems
@@ -2267,7 +2359,7 @@ report claims, at most 20 reports per request, and the route's counting and size
 | B-027 | With the cluster running, the 6 GB WSL VM held about 4 GB in memory and all 8 GB of its swap (2026-09-21), about 12 GB against the 4.6 GB the same cluster used the day before. | The control plane crash-looped and the app answered 503. On Windows, the swap file held the SSD at a queue of 100–245 and 61 ms reads, which froze the laptop. Release `7e3509e` (deployment 6572256500, 15:45 UTC) reached no relay and was never deployed: no delivery was logged after 15:30 UTC. | Open. Next time the cluster runs, watch the VM's anonymous, shared and swapped memory from `k8s:up` on (node-exporter already exports all three), find what grew, and fit the local cluster into 6 GB. Then redeliver 6572256500 from GitHub's webhook page and read Jenkins' statuses on GitHub. |
 | B-028 | The AI chat builds its own balances: pairwise instead of the group plan, over every expense including deleted ones, in deleted groups too, with ±1 paisa counted as settled. | Its answers to "who owes me?" can disagree with Settle Up, and count expenses that were deleted. | ✅ Resolved 2026-09-22 — D-067. The chat's context is the ledger: balances per group over live expenses, and each group's settle-up plan. |
 | B-029 | Removing a member used to re-split their shares among the others (D-063). Groups that had a member removed may hold shares that were moved between people, and former members may still owe or be owed. | Balances in those groups reflect the old re-split, not what people agreed to. | ✅ Checked 2026-09-22 — D-069. `npm run ledger:audit -- --https` read production (1 group, 37 expenses, 62 shares, 0 settlements, 9 accounts) in a read-only transaction: no share of a former member, no former member with a balance, every expense adding up, every group netting to zero. Nothing to repair. |
-| B-030 | `npm audit` still reports one high advisory: `deepmerge-ts` below 8 (GHSA-ggr8-5vv4-36mx, stack exhaustion when merging self-referencing objects), through `prisma` → `@prisma/config`. | The Prisma CLI is a development and migration tool; the app's runtime (`@prisma/client`) doesn't use it, and the only objects it merges are our own config. | Accepted 2026-09-22 (D-070). The fix is Prisma 7, a major upgrade with its own changes; revisit it with the migration baseline (fix 8 of the plan), and keep it out of the runtime image. |
+| B-030 | `npm audit` still reports one high advisory: `deepmerge-ts` below 8 (GHSA-ggr8-5vv4-36mx, stack exhaustion when merging self-referencing objects), through `prisma` → `@prisma/config`. | The Prisma CLI is a development and migration tool; the app's runtime (`@prisma/client`) doesn't use it, and the only objects it merges are our own config. | Accepted 2026-09-22 (D-070). The fix is Prisma 7, a major upgrade with its own changes. Still accepted after the migration baseline (D-072), which was done on Prisma 6: the upgrade is its own change. The CLI stays out of the runtime image. |
 
 ## Environment notes (this machine)
 

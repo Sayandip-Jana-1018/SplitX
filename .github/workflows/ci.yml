@@ -81,6 +81,99 @@ jobs:
       - name: Rate limiter against real Redis
         run: npm run test:integration
 
+  database:
+    # The schema, and the code that depends on it, against a real Postgres of
+    # the version production runs (Neon reports 17.11): the migrations build an
+    # empty database, schema.prisma has no change without a migration, the
+    # cluster's schema.sql builds the very same database, and the database
+    # tests pass (constraints, integer bounds, and two people writing at once).
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17.11-alpine3.24@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+        env:
+          # A throwaway database on the runner: no password to keep, or to leak.
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      PG: postgresql://postgres@127.0.0.1:5432
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - name: Setup Node
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: One empty database per check
+        env:
+          POSTGRES: ${{ job.services.postgres.id }}
+        run: |
+          for db in migrated shadow from_sql splitx_test; do
+            docker exec "$POSTGRES" createdb -U postgres "$db"
+          done
+
+      - name: The migrations build an empty database
+        run: DATABASE_URL="$PG/migrated" DIRECT_URL="$PG/migrated" npx prisma migrate deploy
+
+      - name: Nothing in schema.prisma is missing a migration
+        run: |
+          if ! DATABASE_URL="$PG/migrated" DIRECT_URL="$PG/migrated" npx prisma migrate diff \
+               --from-migrations prisma/migrations --to-schema-datamodel prisma/schema.prisma \
+               --shadow-database-url "$PG/shadow" --exit-code --script > missing.sql; then
+            echo "::error::prisma/schema.prisma changes what no migration makes. Add one with: npx prisma migrate dev --name <what_it_does>"
+            cat missing.sql
+            exit 1
+          fi
+          cat missing.sql
+
+      - name: The cluster's schema.sql builds the same database, and runs again as a no-op
+        shell: bash  # with pipefail: a failed pg_dump must fail the step, not compare as empty
+        env:
+          POSTGRES: ${{ job.services.postgres.id }}
+        run: |
+          for run in first second; do
+            echo "── $run run ──"
+            docker exec -i "$POSTGRES" psql -U postgres -d from_sql -X -q -v ON_ERROR_STOP=1 < k8s/components/postgres/schema.sql
+          done
+          for db in migrated from_sql; do
+            # pg_dump writes a random \restrict key into every dump (PostgreSQL 17.6+).
+            docker exec "$POSTGRES" pg_dump -U postgres --schema-only --no-owner --no-privileges "$db" \
+              | grep -Ev '^.(un)?restrict [[:alnum:]]+$' > "$db.schema.sql"
+            docker exec "$POSTGRES" psql -U postgres -d "$db" -X -tAc \
+              "SELECT migration_name, checksum, applied_steps_count FROM _prisma_migrations
+               WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL ORDER BY 1" > "$db.migrations.txt"
+          done
+          grep -q 'CREATE TABLE public."User"' migrated.schema.sql
+          diff migrated.schema.sql from_sql.schema.sql
+          diff migrated.migrations.txt from_sql.migrations.txt
+          echo "schema.sql and prisma migrate deploy built the same schema ($(grep -c '^CREATE TABLE' migrated.schema.sql) tables) and recorded the same migrations:"
+          cat from_sql.migrations.txt
+
+      - name: Prisma reads that database as up to date
+        run: DATABASE_URL="$PG/from_sql" DIRECT_URL="$PG/from_sql" npx prisma migrate status
+
+      - name: Database tests
+        env:
+          DATABASE_URL: postgresql://postgres@127.0.0.1:5432/splitx_test
+          DIRECT_URL: postgresql://postgres@127.0.0.1:5432/splitx_test
+        run: |
+          npx prisma migrate deploy
+          npm run test:db
+
   secret-scan:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -134,9 +227,10 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
 
-      - name: The committed SQL still matches the Prisma schema
-        # A model added to schema.prisma without regenerating would reach the
-        # cluster as a missing table, hours later, as a 500 from one endpoint.
+      - name: The cluster's schema.sql is up to date with prisma/migrations
+        # A migration committed without regenerating would reach the cluster as
+        # a missing table or column, hours later, as a 500 from one endpoint.
+        # (That the migrations match schema.prisma is the database job's check.)
         run: node scripts/db-schema.mjs --check
 
       - name: Render and validate every overlay, and the platform's own manifests
@@ -174,7 +268,7 @@ jobs:
     # A commit on main that passed every job above becomes a release: built
     # once, published, scanned, signed, and handed to Jenkins as a GitHub
     # deployment. Jenkins deploys only images this job signed (D-054).
-    needs: [verify, integration, secret-scan, manifests]
+    needs: [verify, integration, database, secret-scan, manifests]
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     timeout-minutes: 30

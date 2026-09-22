@@ -34,12 +34,11 @@ spec:
               set -eu
               echo "waiting for postgres..."
               until pg_isready -q; do sleep 2; done
-              if [ "$(psql -tAc "SELECT to_regclass('public.\"User\"') IS NOT NULL")" = "t" ]; then
-                echo "schema already present — nothing to do"
-                exit 0
-              fi
-              psql -v ON_ERROR_STOP=1 -f /schema/schema.sql
-              echo "schema applied: $(psql -tAc "SELECT count(*) FROM information_schema.tables WHERE table_schema='public'") tables"
+              # prisma/migrations, as psql: applies only the migrations this
+              # database doesn't have yet and records them the way Prisma does,
+              # so it runs on every deploy (scripts/db-schema.mjs).
+              psql -X -q -v ON_ERROR_STOP=1 -f /schema/schema.sql
+              echo "migrations recorded: $(psql -X -tAc "SELECT count(*) FROM _prisma_migrations WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL")"
           env:
             - name: PGHOST
               value: splitx-postgres
