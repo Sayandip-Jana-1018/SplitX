@@ -1,0 +1,14 @@
+# The EKS cluster's own settings, which the Kind cluster doesn't need (its
+# config is k8s/kind/cluster.yaml): a default StorageClass, and what the
+# teardown role may do. aws-up applies this right after Terraform makes the
+# cluster, before anything that needs a volume.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - storageclass.yaml
+  - teardown-access.yaml
+
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: splitx

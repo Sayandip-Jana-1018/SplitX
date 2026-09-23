@@ -1,0 +1,71 @@
+// SplitX's edge function (terraform/edge renders it; cloudfront-js-2.0).
+//
+// Online: requests go on to the platform's load balancer, except the two
+// paths that must never be reached from outside the cluster (D-043):
+// Prometheus's scrape endpoint and the readiness probe, which asks the
+// database on every call.
+// Offline: CloudFront answers every request itself with the page below, so
+// no origin is contacted while the platform is down.
+var ONLINE = ${online};
+
+var INTERNAL = ['/api/metrics', '/api/health/ready'];
+
+var OFFLINE_PAGE = '<!doctype html><html lang="en"><head><meta charset="utf-8">'
+    + '<meta name="viewport" content="width=device-width,initial-scale=1">'
+    + '<title>SplitX demo platform: offline</title>'
+    + '<style>body{margin:0;min-height:100vh;display:grid;place-items:center;'
+    + 'font-family:system-ui,sans-serif;background:#0f172a;color:#e2e8f0}'
+    + 'main{max-width:32rem;padding:2rem;text-align:center;line-height:1.5}'
+    + 'h1{font-size:1.4rem}a{color:#38bdf8}</style></head><body><main>'
+    + '<h1>The SplitX demo platform is offline</h1>'
+    + '<p>It runs on AWS on demo days only, and is taken down each evening.</p>'
+    + '<p>The app itself is always at <a href="https://splitsj.vercel.app">splitsj.vercel.app</a>.</p>'
+    + '</main></body></html>';
+
+// The path as the app will route it: percent-escapes decoded, lower case,
+// repeated and trailing slashes removed, so no spelling of an internal path
+// slips past.
+function normalise(uri) {
+    var path = uri;
+    try {
+        path = decodeURIComponent(uri);
+    } catch (e) {
+        // A malformed escape: the app answers it with 400.
+    }
+    path = path.toLowerCase().replace(/\/+/g, '/');
+    if (path.length > 1 && path.charAt(path.length - 1) === '/') {
+        path = path.slice(0, -1);
+    }
+    return path;
+}
+
+function handler(event) {
+    if (!ONLINE) {
+        return {
+            statusCode: 503,
+            statusDescription: 'Service Unavailable',
+            headers: {
+                'content-type': { value: 'text/html; charset=utf-8' },
+                'cache-control': { value: 'no-store' },
+                'retry-after': { value: '86400' },
+                'strict-transport-security': { value: 'max-age=31536000' },
+                'x-content-type-options': { value: 'nosniff' }
+            },
+            body: { encoding: 'text', data: OFFLINE_PAGE }
+        };
+    }
+
+    var request = event.request;
+    if (INTERNAL.indexOf(normalise(request.uri)) !== -1) {
+        return {
+            statusCode: 403,
+            statusDescription: 'Forbidden',
+            headers: {
+                'content-type': { value: 'text/plain; charset=utf-8' },
+                'cache-control': { value: 'no-store' }
+            },
+            body: { encoding: 'text', data: 'Not available' }
+        };
+    }
+    return request;
+}

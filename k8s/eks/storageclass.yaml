@@ -1,0 +1,21 @@
+# EKS 1.30 and later make no default StorageClass, so every PVC would wait in
+# Pending. The EBS CSI add-on can create a default one, but not an encrypted
+# one; this is the default instead. Every volume also carries the platform's
+# tags (the add-on's extraVolumeTags, terraform/platform/cluster.tf), which is
+# how aws-down's sweep finds any the cluster leaves behind.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: gp3
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"
+provisioner: ebs.csi.aws.com
+parameters:
+  type: gp3
+  encrypted: "true"
+  csi.storage.k8s.io/fstype: ext4
+# Deleting a PVC deletes its volume: nothing is kept past the day.
+reclaimPolicy: Delete
+# A volume is made in the zone of the node its pod lands on, not before.
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true

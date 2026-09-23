@@ -1,0 +1,34 @@
+# What aws-down may do inside the cluster, as the IAM role splitx-ci-teardown.
+# Its access entry (terraform/platform/cluster.tf) puts it in the Kubernetes
+# group splitx-teardown and grants nothing else, so this is all it can do: see
+# and delete the objects that hold AWS resources (Ingresses make the ALB,
+# load-balancer Services make NLBs, namespaces hold the PVCs whose EBS volumes
+# must go before the network can), and watch volumes disappear. It can't
+# create, change or read anything else, Secrets included.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: splitx-teardown
+rules:
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "list", "watch", "delete"]
+  - apiGroups: [""]
+    resources: ["services", "persistentvolumeclaims", "namespaces"]
+    verbs: ["get", "list", "watch", "delete"]
+  - apiGroups: [""]
+    resources: ["persistentvolumes"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: splitx-teardown
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: splitx-teardown
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: splitx-teardown

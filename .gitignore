@@ -41,11 +41,13 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# terraform
-terraform/.terraform/
-terraform/terraform.tfstate
-terraform/terraform.tfstate.backup
-terraform/.terraform.tfstate.lock.info
+# terraform: providers, modules, state and plans never enter the repository
+# (state lives in the splitx-bootstrap stack's S3 bucket).
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+.terraform.tfstate.lock.info
 # .terraform.lock.hcl IS committed: it pins provider versions and checksums.
 
 # python
