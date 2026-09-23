@@ -325,33 +325,44 @@ jobs:
           docker run --rm -v "$PWD:/src" -w /src "$TRIVY" config \
             --severity MEDIUM,HIGH,CRITICAL --exit-code 1 terraform
 
+      # The steps below run even after one fails (!cancelled()), so one run
+      # shows every problem; any failed step still fails the job.
       - name: Terraform version
         id: terraform
+        if: ${{ !cancelled() }}
         run: echo "version=$(cat terraform/.terraform-version)" >> "$GITHUB_OUTPUT"
 
       - name: Install Terraform
+        if: ${{ !cancelled() }}
         uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
         with:
           terraform_version: ${{ steps.terraform.outputs.version }}
           terraform_wrapper: false
 
       - name: Formatting
+        if: ${{ !cancelled() }}
         run: terraform fmt -check -recursive -diff terraform
 
-      - name: Each root validates, with its lock file as committed
-        # init writes a lock file when none is committed, or rewrites a stale
-        # one; either way the lock files in the repository must already be
-        # what init makes, so every run (and aws-up) installs the providers
-        # whose checksums were reviewed.
+      - name: Each root validates
+        if: ${{ !cancelled() }}
         run: |
           # Both roots use the same AWS provider: download it once.
           export TF_PLUGIN_CACHE_DIR="$RUNNER_TEMP/terraform-plugins"
           mkdir -p "$TF_PLUGIN_CACHE_DIR"
+          failed=0
           for root in edge platform; do
             echo "── $root ──"
-            terraform -chdir="terraform/$root" init -backend=false -input=false
-            terraform -chdir="terraform/$root" validate
+            terraform -chdir="terraform/$root" init -backend=false -input=false \
+              && terraform -chdir="terraform/$root" validate || failed=1
           done
+          exit "$failed"
+
+      - name: The lock files are committed as init makes them
+        # init writes a lock file when none is committed, or rewrites a stale
+        # one. The committed ones must already be what init makes, so every run
+        # (aws-up included) installs providers whose checksums were reviewed.
+        if: ${{ !cancelled() }}
+        run: |
           if ! git diff --quiet -- terraform || [ -n "$(git ls-files --others --exclude-standard -- terraform)" ]; then
             git status --short -- terraform
             for root in edge platform; do
@@ -363,11 +374,13 @@ jobs:
           fi
 
       - name: Install tflint
+        if: ${{ !cancelled() }}
         uses: terraform-linters/setup-tflint@1cf010d3c7aef302051ccdb68c14c5dc2efa34ef # v6.3.1
         with:
           tflint_version: v0.64.0
 
       - name: tflint
+        if: ${{ !cancelled() }}
         env:
           # The AWS ruleset is a plugin downloaded from GitHub.
           GITHUB_TOKEN: ${{ github.token }}

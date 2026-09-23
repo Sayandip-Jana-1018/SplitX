@@ -28,9 +28,6 @@ locals {
 }
 
 # ── Where CloudFront's access logs go: a week, then gone ──────────
-# Accepted (Trivy AWS-0132): S3's own keys, not a customer-managed key, which
-# would cost every month for access logs that are private and kept 7 days.
-#trivy:ignore:AWS-0132
 resource "aws_s3_bucket" "logs" {
   bucket        = "splitx-edge-logs-${local.account_id}-${var.region}"
   force_destroy = true
@@ -54,6 +51,9 @@ resource "aws_s3_bucket_public_access_block" "logs" {
   restrict_public_buckets = true
 }
 
+# Accepted (Trivy AWS-0132): S3's own keys, not a customer-managed key, which
+# would cost every month for access logs that are private and kept 7 days.
+#trivy:ignore:AWS-0132
 resource "aws_s3_bucket_server_side_encryption_configuration" "logs" {
   bucket = aws_s3_bucket.logs.id
 
@@ -108,8 +108,6 @@ resource "aws_s3_bucket_policy" "logs" {
 # real, resolvable name. This empty, private bucket is one SplitX owns, so the
 # name can never be claimed by anyone else. The edge function answers every
 # request while the platform is down, so CloudFront never actually asks it.
-# Accepted (Trivy AWS-0132): as for the logs bucket; this one holds nothing.
-#trivy:ignore:AWS-0132
 resource "aws_s3_bucket" "offline" {
   bucket        = "splitx-edge-offline-${local.account_id}-${var.region}"
   force_destroy = true
@@ -131,6 +129,8 @@ resource "aws_s3_bucket_public_access_block" "offline" {
   restrict_public_buckets = true
 }
 
+# Accepted (Trivy AWS-0132): as for the logs bucket; this one holds nothing.
+#trivy:ignore:AWS-0132
 resource "aws_s3_bucket_server_side_encryption_configuration" "offline" {
   bucket = aws_s3_bucket.offline.id
 
