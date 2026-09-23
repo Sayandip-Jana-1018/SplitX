@@ -2852,6 +2852,289 @@ are accepted in the templates with their reasons:
 
 Now both templates report 0 misconfigurations.
 
+### D-088 · Before the first deploy: a teardown role that can only remove, alarms that reach their topic, and CI roles held to one region
+**2026-09-23** · ✅ written and linted (cfn-lint 1.57.0: no findings; Trivy gates the templates in CI);
+policy v2 applied by the user and checked identical to the file; the stacks are not deployed yet (they
+wait for `BUDGET_EMAIL`)
+
+Five gaps were found in D-087's templates while writing the handoff. They were fixed before anything
+was deployed, while a change still cost nothing.
+
+- **The scheduled teardown could never have run.** `splitx-ci-deploy` trusted only jobs in `aws-demo`,
+  which has a required reviewer, so a teardown at 23:30 would have waited for an approval nobody
+  gives. A second `sub` on the same role was rejected, because an unreviewed job could then build as
+  well as remove. Instead there is a second role, **`splitx-ci-teardown`**:
+  - only jobs in the GitHub environment `aws-teardown` may assume it (no reviewer, `main` only), for
+    at most 2 hours;
+  - it may read the platform and Terraform's state;
+  - it deletes by named actions only: the network, the load balancers and target groups, volumes and
+    interfaces; the cluster by its ARN (named `splitx` only); the cluster's log groups and the
+    `splitx-*` alarms; `splitx-eks-*` and `splitx-wl-*` roles and policies; and the `splitx/demo/*`
+    secrets;
+  - its one change is switching the edge to its offline page (the distribution and the `splitx-*`
+    function);
+  - no create, run, attach or start action appears in it at all, and nothing that terminates an
+    instance or deletes a snapshot or an image. AWS itself refuses to delete a volume, group or
+    network that something uses;
+  - it carries `splitx-ci-boundary`, and the deploy role can't change it (`splitx-ci-*`).
+
+  Inside the cluster, its access entry puts it in the Kubernetes group `splitx-teardown`. `k8s/eks`
+  binds that group to a ClusterRole that may list and delete Ingresses, Services, PVCs and namespaces,
+  and nothing else: no Secrets, no create. Tag conditions on its deletes were considered and rejected.
+  The EKS module writes its security-group rules as `aws_security_group_rule`, which can't carry tags,
+  so a tag-conditioned revoke would be denied at night and leave the platform running.
+- **Both CI roles are held to the stack's region** (`aws:RequestedRegion`) for every regional service.
+  CloudFront, IAM and STS answer globally and are allowed separately. The account's other region holds
+  the user's coursework (four stopped instances and their volumes, in us-east-1), and no SplitX
+  workflow can reach it.
+- **The deploy role can't create KMS keys** (`kms:*` became `Describe*` and `List*`). A key costs
+  money every month and lingers for a week after deletion, and nothing here uses one (D-089).
+- **VPC flow logs.** The deploy role may also pass `splitx-eks-*` roles to
+  `vpc-flow-logs.amazonaws.com`.
+  - AWS documents that service as the flow-log role's trust principal, but not the
+    `iam:PassedToService` value that `CreateFlowLogs` sends.
+  - Both candidates are allowed: `ec2.amazonaws.com`, already in the list, and this one.
+  - The first platform apply proves which (B-031).
+- **CloudWatch can publish to `splitx-alerts`.** A topic policy replaces SNS's default one, and this
+  one admitted only Budgets. It now also admits `cloudwatch.amazonaws.com`, for this account's alarms
+  named `splitx-*` in this region (`aws:SourceArn`, `aws:SourceAccount`), in the shape CloudWatch's
+  documentation gives.
+- **No CloudFront alarms.**
+  - CloudFront publishes its metrics only in us-east-1, and an alarm can notify only a topic in its
+    own region. A second topic would mean a second subscription to confirm and SNS rights for the
+    deploy role, all for an email that arrives after the audience has seen the error on `/ops`.
+  - The ALB's alarms stay (D-089), and `/ops` will read CloudFront's metrics live (Phase 6).
+  - The synopsis's cache-hit-ratio alarm is dropped too. That metric is one of CloudFront's paid
+    "additional metrics"; the `x-cache: Hit from cloudfront` header on the build assets shows the
+    caching instead.
+- **`splitx-devops-policy` version 2** gained `servicequotas:GetServiceQuota` (read only), to check
+  the vCPU quota four `t3.large` nodes need. The user applied version 2 in the IAM console on
+  2026-09-23 at 22:47 IST. The live document was compared with the file programmatically and is
+  identical. CloudFormation now answers instead of refusing.
+
+---
+
+## Phase 11 — The platform on AWS: Terraform
+
+### D-089 · Terraform builds the platform each AWS day, and keeps an edge that costs nothing idle
+**2026-09-23** · 🚧 written. Checked locally: `terraform fmt` and the edge function's 26 tests.
+`validate`, tflint, Trivy and the lock files are checked in CI (job `terraform`, required for a
+release). Nothing is applied yet.
+
+**Two roots** replace May's (us-east-1, `t3.small`, ECR, local state, and empty). Both keep their
+state in the bootstrap stack's bucket:
+- the backend is partial: the bucket and region are passed at init, because the bucket's name holds
+  the account ID;
+- S3 locks the state itself (`use_lockfile`), so there is no DynamoDB table;
+- each root has its own key.
+
+| Root | Lives | Holds |
+|---|---|---|
+| `terraform/edge` | applied once, kept | CloudFront, its function, the access-log bucket, the bucket that stands in as origin while the platform is down |
+| `terraform/platform` | built by aws-up, destroyed by aws-down | the VPC, EKS and its add-ons, the nodes, the workloads' roles, the ALB's alarms |
+
+**Why CloudFront stays.** On 2026-09-23 the user asked whether it was needed or forced ("my university
+demands CloudFormation, not CloudFront"). It is needed:
+- **The app works only over HTTPS.** Its production session cookie is
+  `__Secure-authjs.session-token`, marked `secure` (`src/lib/auth.ts`), and browsers refuse such a
+  cookie over plain HTTP. On a bare ALB nobody could sign in, including the operator `/ops` needs.
+  The camera receipt scan and the offline app also need HTTPS, and Google refuses non-HTTPS
+  sign-in callbacks.
+- **CloudFront is the only free HTTPS here.** An ALB serves HTTPS only for a domain it holds a
+  certificate for, and SplitX owns no domain. CloudFront's `*.cloudfront.net` certificate is free.
+- **Its address stays the same.** The ALB's name changes every AWS day, and the distribution's
+  doesn't. So the OAuth callbacks, the webhook and the QR code are registered once.
+- **Idle, it costs nothing.**
+
+Rejected alternatives:
+- buying a domain (Route 53 and ACM), which costs money and needs the user to buy it;
+- API Gateway in front of a private ALB, where HTTP APIs time out at 30 s and need a VPC link rebuilt
+  every day;
+- plain HTTP.
+
+**The edge**
+- HTTP/2 and HTTP/3, IPv6, `PriceClass_200` (which includes India's edge locations), `http://`
+  redirected to `https://`, and the default certificate.
+- **Three behaviours:**
+  - **The app:** nothing cached. Every viewer header and cookie is forwarded, the Host header
+    included, because the app builds its redirects and sign-in callbacks from it.
+  - **`/_next/static/*`:** cached (`Managed-CachingOptimized`), with only Host forwarded. The file
+    names change with their content.
+  - **`/generic-webhook-trigger/*`:** GitHub's deployment webhook to Jenkins. It allows POST, is
+    never cached, and forwards every header and the token in the query string. Jenkins checks the
+    HMAC signature, the token and GitHub's newest deployment (D-056).
+- **The function `splitx-edge`** (`cloudfront-js-2.0`) runs on every behaviour.
+  - Online, it refuses `/api/metrics` and `/api/health/ready` (B-011) after normalising the path:
+    percent-escapes, case, and repeated and trailing slashes.
+  - Offline, it answers every request itself with a 503 page that links to the Vercel site, so no
+    origin is contacted.
+  - `tests/unit/infra/edgeFunction.test.ts` runs the very template Terraform renders (26 cases:
+    each spelling of the internal paths, the paths that must pass, and a malformed escape).
+- **The origin while the platform is down (5.1, item 6)** is an empty private bucket SplitX owns.
+  CloudFront requires an origin with a publicly resolvable name, and a name SplitX doesn't own could
+  be claimed by someone else and served under our address. The function answers before CloudFront
+  would ever ask the bucket. `origin_domain` accepts only an ALB's DNS name, so a typo can't send
+  visitors and their cookies elsewhere.
+- **Access logs** go to a private bucket and expire after 7 days. Both buckets are TLS only,
+  versioned and never public.
+- **Not added:**
+  - a response-headers policy, because the app already sends HSTS, CSP and the rest (D-071);
+  - AWS WAF, which costs $5 a month plus $1 per rule even while idle (Trivy AWS-0011, accepted:
+    the app limits requests itself, D-022 and D-045).
+
+**The platform**
+- **Network:**
+  - two zones, private `/19`s for nodes and pods (the VPC CNI gives every pod a VPC address), public
+    `/24`s for the ALB and the NAT gateway;
+  - one NAT gateway, about half the cost of one per zone;
+  - flow logs to CloudWatch, in one-minute batches, kept one day. They are written as the role
+    `splitx-eks-vpc-flow-logs`, bounded, and trusted only for this account's flow logs;
+  - the default security group loses its rules; the default network ACL stays as AWS makes it.
+    Security groups and NetworkPolicies filter the traffic;
+  - the service CIDR is pinned to `172.20.0.0/16` for the NetworkPolicies.
+- **EKS 1.35.** It is in standard support until 2027-03-27 (checked with
+  `describe-cluster-versions`), the same version as the Kind cluster.
+  - `authentication_mode = "API"`, with three access entries:
+    - `splitx-ci-deploy` as cluster admin;
+    - `splitx-ci-teardown` in the group `splitx-teardown` (D-088);
+    - the laptop's user `splitx-devops` as cluster admin, for fixing things on an AWS day. Its IAM
+      policy allows `eks:*`, so it could add itself anyway; the entry grants nothing new.
+  - No IRSA (the boundary forbids OIDC providers).
+  - No KMS key. EKS has envelope-encrypted all Kubernetes API data with an AWS-owned key since
+    2025-03-05, at no charge (Trivy AWS-0039, accepted).
+  - The API endpoint is public, because GitHub's runners have no fixed addresses. Reaching it isn't
+    access: only the three entries can act (AWS-0040 and AWS-0041, accepted).
+  - All five kinds of control-plane log go to a log group Terraform owns, kept one day, so destroy
+    removes it.
+- **Add-ons, pinned** to the versions EKS offered for 1.35 on 2026-09-23:
+
+  | Add-on | Version | Notes |
+  |---|---|---|
+  | vpc-cni | v1.23.1 | `enableNetworkPolicy: "true"` (without it every NetworkPolicy is silently ignored); its interfaces are tagged |
+  | eks-pod-identity-agent | v1.4.0 | before the nodes, like vpc-cni |
+  | kube-proxy | v1.35.3 | |
+  | coredns | v1.14.6 | |
+  | aws-ebs-csi-driver | v1.66.0 | with a Pod Identity role; its volumes carry the platform's tags |
+  | metrics-server | v0.9.0 | without Kind's insecure-TLS flag (B-023) |
+- **Nodes:**
+  - `t3.large` on demand, AL2023, 3 to 4 nodes, one replaced at a time, and 30 GiB encrypted gp3
+    root volumes;
+  - IMDSv2 with a hop limit of 1, so pods can't reach instance credentials. Phase 5's charts must
+    therefore be given the region and VPC ID (outputs `region` and `vpc_id`);
+  - EKS tags the group for the Cluster Autoscaler itself, and the module ignores `desired_size`
+    after creation, so an apply never undoes a scale-up;
+  - the node role gets the module's fixed `AmazonEC2ContainerRegistryReadOnly`, a superset of
+    `PullOnly`. The plan's point was that nodes keep ECR pull access for EKS's own add-on images,
+    and the account has no ECR repositories for the extra list and describe to reach.
+- **The workloads' Pod Identity roles** are named `splitx-wl-*`, each with its policy renamed from the
+  module's `AmazonEKS_*`, which the boundary refuses:
+
+  | Role | Service account | May |
+  |---|---|---|
+  | `splitx-wl-alb-controller` | `kube-system/aws-load-balancer-controller` | the controller's policy |
+  | `splitx-wl-ebs-csi` | through the add-on | the driver's policy |
+  | `splitx-wl-cluster-autoscaler` | `kube-system/cluster-autoscaler` | this cluster's node groups only |
+  | `splitx-wl-external-secrets` | `external-secrets/external-secrets` | read `splitx/demo/*` only |
+  | `splitx-wl-ops-api` | `ops/ops-api` | read the `splitx-*` stacks, the cluster, CloudFront and the `splitx-monthly` budget; an explicit deny on `ce:*` (Cost Explorer charges $0.01 a call) |
+- **Storage (decided; it was open).** `k8s/eks` makes an encrypted gp3 StorageClass the default, and
+  aws-up applies it. EKS makes none, and the EBS add-on's own default class can't be encrypted. The
+  platform root never talks to the Kubernetes API (no Kubernetes provider), so destroy never depends
+  on the cluster answering.
+- **The ALB's alarms (5.1, item 5).** The controller makes the ALB at run time, so it can't exist on
+  the first plan.
+  - With `alb_ready = true`, the root finds the ALB by the controller's tags (its cluster, and the
+    IngressGroup `splitx`). It then alarms when over 5% of the app's answers are 5xx in 3 of 5
+    minutes (with over 20 requests a minute), or when the ALB itself answers 5xx more than 10 times
+    in 5 minutes.
+  - Destroy removes the alarms and never looks the ALB up.
+  - aws-up sets `alb_ready` in Phase 5.
+- Every resource carries `project=splitx` and `stack=platform`. So does everything the controllers
+  make: the CNI's interfaces and the CSI driver's volumes, through their add-on settings. aws-down's
+  sweep and report rely on those tags (D-090).
+
+**CI: the `terraform` job.**
+1. Trivy runs on the clean checkout. It fetches the registry modules itself and checks what they
+   would build with our inputs, as a gate at medium and above.
+2. `terraform fmt`.
+3. `init -backend=false` and `validate` for each root. The committed lock files must be exactly what
+   init makes. The first run prints them: they are generated on GitHub's runners, never on the
+   laptop.
+4. tflint, with the recommended Terraform rules and the AWS ruleset.
+
+Each accepted finding is marked in the code with its reason: AWS-0039, 0040, 0041 and 0104 (open
+egress, which the nodes need for GHCR, Neon and GitHub, while NetworkPolicies limit pods) on the
+cluster; AWS-0011 on the distribution; AWS-0132 on the edge's two buckets.
+
+**Versions,** looked up in the registries on 2026-09-23 (Dependabot now proposes Terraform updates
+weekly):
+- Terraform 1.16.4 (in `terraform/.terraform-version`), `hashicorp/aws` 6.66.0;
+- terraform-aws-modules `vpc` 6.7.3, `eks` 21.26.0 (its one change from 21.25.3 is opt-in),
+  `eks-pod-identity` 2.9.0;
+- tflint 0.64.0 with the AWS ruleset 0.49.0;
+- kubectl 1.35.8, checksum pinned;
+- actions `setup-terraform` v4.0.1, `configure-aws-credentials` v6.3.0 and `setup-tflint` v6.3.1,
+  pinned by commit SHA.
+
+The module inputs were read from each pinned version's source, not written from memory. Version 21
+renamed many of them.
+
+**What differs from the synopsis** (the user: it was a showcase, not a promise, so it may change if
+documented):
+- two CloudFront origins with S3 static assets through OAC → one origin, with CloudFront caching the
+  app's own build assets;
+- ECR → GHCR (D-054);
+- CloudWatch alarms on CloudFront, and the cache-hit ratio → none (D-088);
+- the "S3 sync + CloudFront invalidation" deploy step → none (hashed asset names need no
+  invalidation);
+- S3 only for access logs and the stand-in origin.
+
+**Cost, estimated from list prices** for a 10-hour AWS day in ap-south-1: the control plane about $1,
+three `t3.large` about $2.70, NAT about $0.60 plus data, and ALB, public IPv4 addresses, EBS and logs
+about $1. That is about $5–6 a day. The rehearsal's bill is the measurement.
+
+### D-090 · Three workflows bring the platform up and down, and the evening's run proves it is gone
+**2026-09-23** · 🚧 written. `aws-teardown.mjs report` ran read-only against the real account (all 15
+kinds at zero in ap-south-1). None of the three workflows has run yet.
+
+All three share one concurrency group, so they never overlap. Each starts with
+`.github/actions/aws-terraform`, which:
+- checks the repository secret `AWS_ACCOUNT_ID`. As a secret, GitHub masks it everywhere in these
+  public logs, including in the ARNs Terraform prints;
+- assumes a role with GitHub's OIDC token, so no key is stored;
+- installs the pinned Terraform and kubectl;
+- initialises both roots against `splitx-tfstate-<account>-<region>`, the name the bootstrap stack
+  gives the bucket, with the committed lock files, read only.
+
+| Workflow | Runs | As | Does |
+|---|---|---|---|
+| `aws-edge` | by hand, after approval (`aws-demo`) | `splitx-ci-deploy` | Applies the edge, keeping its current origin, so it never flips the site online or offline. Then checks through CloudFront: `http://` redirects to `https://`; offline, `/` answers 503 with the offline page; online, `/api/health/live` answers 200 and `/api/metrics` 403. |
+| `aws-up` | by hand, after approval (`aws-demo`) | `splitx-ci-deploy` | Checks the vCPU quota (8 for four nodes), plans and applies the platform, then applies `k8s/eks`. It then checks: 3 or more nodes Ready across 2 zones; the six add-ons ACTIVE; the CNI's policy agent run with `--enable-network-policy=true`; gp3 is the default class; metrics-server answers; and `splitx-teardown` may delete Ingresses and namespaces but may not create pods or read Secrets. Phase 5 adds the charts, the Ingresses, the ALB's alarms and pointing the edge at the ALB. |
+| `aws-down` | by hand, and every day at 18:00 UTC (23:30 IST), without approval (`aws-teardown`, `main` only) | `splitx-ci-teardown` | Below. |
+
+**aws-down's order.** The ALB and the volumes are made by the cluster, not by Terraform, and the
+network can't be deleted while they exist:
+1. It reads what is up: resources in the platform's state, the cluster's status, and the edge's mode.
+2. It takes the edge offline, first, so visitors get the offline page. This step may fail without
+   stopping the rest: money comes first.
+3. It deletes every Ingress and load-balancer Service, and waits until the controller's load
+   balancers and their interfaces are gone.
+4. It deletes the workload namespaces, keeping `kube-system` with the CSI driver, and waits until the
+   PVCs' volumes are gone.
+5. `terraform destroy`. If it stops, a sweep runs and the destroy is tried once more.
+6. The sweep (always): the controller's load balancers, target groups and security groups; volumes;
+   stray interfaces and addresses; the platform's log groups and alarms; the demo's secrets (with no
+   recovery window).
+7. The report (always) lists the 15 kinds of thing the platform makes, in the job summary. It fails
+   the run unless every count is zero, allowing 5 minutes for anything still being deleted.
+
+When nothing is up, steps 2–5 are skipped, and the run only confirms that nothing is there. A failed
+nightly run emails the person who last set its schedule, through GitHub's own notifications.
+
+`scripts/aws-teardown.mjs` asks AWS; `scripts/lib/aws-leftovers.mjs` decides what counts as the
+platform's, by SplitX's tags and names alone. Its tests hold the negative case to account: the user's
+coursework instances and volumes, the default VPC, other log groups, and the account layer's
+`splitx-ci-*` roles are never selected (`tests/unit/infra/awsLeftovers.test.ts`).
+
 ---
 
 ## Open problems
@@ -2868,7 +3151,7 @@ Now both templates report 0 misconfigurations.
 | B-008 | Jenkinsfile stages are still theatre (`docker images` as "build", `|| echo` after Sonar). Only the secrets were removed in phase 0. It also deploys the Helm chart deleted in D-034. | Examiner-visible, and now pointing at a path that no longer exists. | ✅ Resolved 2026-09-20 — rewritten (D-055). Every stage does something whose failure fails the build: cosign verification, `kubectl apply -k` of the release commit, a rollout wait, a check through the ingress, and an automatic rollback. Proven by a real release and a deliberately broken one (`npm run cd:verify`). |
 | B-009 | `DEMO_GUIDE.html`, `AWS_SETUP_GUIDE.md` describe removed or wrong things (Ansible, t3.small, 23 resources). | Misleading docs. | Phase 8. |
 | B-010 | Prisma pool size across up to 12 pods is unset. | Connection exhaustion under autoscaling. | ✅ Resolved 2026-09-16 — D-042. `connection_limit=5&pool_timeout=10` is set on the URL the cluster builds, so ten pods use at most 50 connections. |
-| B-011 | `/api/metrics` and `/api/health/ready` will be reachable through CloudFront. | Metrics are token-protected, but readiness pings the DB per request. | ✅ Resolved for the cluster 2026-09-16 — D-043. Both paths answer 403 through ingress-nginx; the AWS overlay does the same with an ALB fixed-response rule. CloudFront itself is still phase 7. |
+| B-011 | `/api/metrics` and `/api/health/ready` will be reachable through CloudFront. | Metrics are token-protected, but readiness pings the DB per request. | ✅ Resolved for the cluster 2026-09-16 — D-043. Both paths answer 403 through ingress-nginx; the AWS overlay does the same with an ALB fixed-response rule. **2026-09-23:** CloudFront's own function refuses both too, after normalising the path (D-089); proven through CloudFront once the platform is online (B-031). |
 | B-012 | Supabase access policies not reviewed. | Any anon policy on the `receipts` bucket was pure risk once the app stopped writing with the anon key. | ✅ Resolved 2026-09-16 — the user deleted every policy and set the bucket to 10 MB and image types only. Verified: an SVG is refused (HTTP 415) even through a valid signed upload URL. |
 | B-013 | `npm test` was 65 lines of source-regex assertions. | CI "passed tests" that exercised no behaviour. | ✅ Resolved — D-018. |
 | B-014 | The Supabase project URL in the local `.env` did not resolve. | Storage couldn't be exercised, and uploads on the live site were failing. | ✅ Resolved 2026-09-14 — the free-tier project had been **paused**; the user resumed it and added the secret key to `.env` and Vercel. Verified live (D-027). |
@@ -2880,7 +3163,7 @@ Now both templates report 0 misconfigurations.
 | B-018 | One profile still carried an avatar that wasn’t a normal storage URL. | Photos kept as `data:` text sit in every API response that includes that user — group members, expense payers, settlement participants. | ✅ Resolved 2026-09-17. The corrected query found **one** `data:` avatar and **no** email-named files (the first query was wrong: the old code replaced `@` with `_`, so `LIKE '%@%'` could never match). It was **828 KB of text** — a 621 KB JPEG — carried in every response that mentioned that user. `scripts/migrate-avatars.mjs --apply --https` uploaded it to `avatars/<id>/`, rewrote the row only while it still held the `data:` value, and confirmed the stored copy is served as `image/jpeg` and **byte-identical** to the original. A backup of the old value was written first. Production now has 0 `data:` avatars. |
 | B-021 | The AWS root user still had two active access keys. | Root keys cannot be restricted by any policy. | ✅ Resolved 2026-09-16 — the user deleted both. Root keeps MFA (a security key), the CLI uses `splitx-devops`, and no repository file or GitHub Actions secret holds AWS keys. |
 | B-022 | `argocd/`, `jenkins/Jenkinsfile`, `AWS_SETUP_GUIDE.md` and `DEMO_GUIDE.html` still reference the `helm/splitx` chart deleted in D-034, and `argocd/kind-cluster.yml` is a second, stale Kind config. | Anyone following those files sets up something that no longer exists. | 🚧 Narrowed 2026-09-20 — `argocd/` and the old Jenkins files are deleted, and the Jenkinsfile is the one that runs (D-055): GitOps does not return, because Jenkins is the deployer. `AWS_SETUP_GUIDE.md` and `DEMO_GUIDE.html` still describe the deleted chart; phase 8 rewrites the guides. |
-| B-023 | metrics-server runs with `--kubelet-insecure-tls` on Kind, because Kind’s kubelets serve metrics with a certificate the cluster CA did not issue. | The flag disables verification of what the autoscaler reads. It is in a values file, not hidden in a script, precisely so it cannot be copied to AWS by accident. | Phase 7: EKS signs kubelet certificates properly — install the add-on without the flag and confirm the HPA still reads CPU. |
+| B-023 | metrics-server runs with `--kubelet-insecure-tls` on Kind, because Kind’s kubelets serve metrics with a certificate the cluster CA did not issue. | The flag disables verification of what the autoscaler reads. It is in a values file, not hidden in a script, precisely so it cannot be copied to AWS by accident. | 🚧 2026-09-23 — EKS's own metrics-server add-on, without the flag (D-089); aws-up checks that it answers. That the HPA reads CPU from it is checked on EKS in plan Phase 8. |
 | B-024 | In the final saturation run, 155 of 7,442 requests spent over 3 s inside a pod, all 30 to 50 s into the overload, on both pods, with none after. | A transient stall right when a burst arrives is exactly when a classroom notices. | 🚧 Narrowed 2026-09-18 — D-053. Not garbage collection: the stall belongs to freshly started pods at their 1-CPU limit. Without the limit, fresh pods had 0 and 89 requests over 3 s in a pod (175 to 228 with it), the longest 2.9 and 6.3 s, and served 45% more. Left: the remaining cold start; phase 7 measures the ALB slow start for new targets. |
 | B-025 | Sign-up, login and password reset are still limited to 10 a minute per address (D-022). | A room asked to register at once from one campus network would be refused after the first ten. The demo page needs no account, so it is not affected. | ✅ Resolved 2026-09-22 — D-076. Credential routes are limited per device under a network ceiling of 240 a minute; guessing stays capped per account and inbox flooding per address. |
 | B-026 | Jenkins' deploy builds and `cd:verify` read GitHub's deployments without a token, and this network's public address shares GitHub's anonymous allowance (60 an hour) with other devices. | A deploy would fail at its first step whenever someone else on the network had spent the allowance: on 2026-09-21 its hour began eleven minutes before this laptop booted, and it was spent when `cd:verify` ran, which failed 2 of its 15 checks on it. | Open — the user creates a fine-grained token (this repository only, Deployments read and write) and puts it in `.env` as `JENKINS_GITHUB_TOKEN`; `k8s:up` hands it to Jenkins. Both scripts now say when the allowance is spent and until when, instead of a bare 403, and the build log no longer repeats GitHub's message, which names the address. **2026-09-21:** the token is in `.env` and works (5,000 an hour). |
@@ -2888,6 +3171,7 @@ Now both templates report 0 misconfigurations.
 | B-028 | The AI chat builds its own balances: pairwise instead of the group plan, over every expense including deleted ones, in deleted groups too, with ±1 paisa counted as settled. | Its answers to "who owes me?" can disagree with Settle Up, and count expenses that were deleted. | ✅ Resolved 2026-09-22 — D-067. The chat's context is the ledger: balances per group over live expenses, and each group's settle-up plan. |
 | B-029 | Removing a member used to re-split their shares among the others (D-063). Groups that had a member removed may hold shares that were moved between people, and former members may still owe or be owed. | Balances in those groups reflect the old re-split, not what people agreed to. | ✅ Checked 2026-09-22 — D-069. `npm run ledger:audit -- --https` read production (1 group, 37 expenses, 62 shares, 0 settlements, 9 accounts) in a read-only transaction: no share of a former member, no former member with a balance, every expense adding up, every group netting to zero. Nothing to repair. |
 | B-030 | `npm audit` still reports one high advisory: `deepmerge-ts` below 8 (GHSA-ggr8-5vv4-36mx, stack exhaustion when merging self-referencing objects), through `prisma` → `@prisma/config`. | The Prisma CLI is a development and migration tool; the app's runtime (`@prisma/client`) doesn't use it, and the only objects it merges are our own config. | Accepted 2026-09-22 (D-070). The fix is Prisma 7, a major upgrade with its own changes. Still accepted after the migration baseline (D-072), which was done on Prisma 6: the upgrade is its own change. The CLI stays out of the runtime image. |
+| B-031 | Phase 4 (D-088 to D-090) is written and validated, but nothing in it has been applied. Only a real run proves: the `iam:PassedToService` value for the flow log's role (both candidates are allowed); that `splitx-ci-teardown`'s permissions cover a whole `terraform destroy` and the edge's offline apply; the ALB's lookup by the controller's tags (`ingress.k8s.aws/stack = splitx`); that the pinned add-on versions are still offered on the day; and the edge function in CloudFront's own runtime (it is tested in Node). | An AWS day that meets any of these unprepared loses hours of a rehearsal or the demo. | Open. `aws-edge` proves the edge's part as soon as the stacks and the `AWS_ACCOUNT_ID` secret exist. The rehearsal's first hour, a platform-only `aws-up` then `aws-down`, proves the rest (plan Phase 10). |
 
 ## Environment notes (this machine)
 
