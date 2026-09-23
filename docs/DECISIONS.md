@@ -2707,6 +2707,94 @@ bucket, run the way the browser runs it:
 
 ---
 
+## Phase 8 — Supply chain on GitHub: scanned code, signed evidence
+
+### D-085 · Every push is scanned, and every release carries signed evidence
+**2026-09-23** · ✅ running on `main` (93fea82: CI and CodeQL all green)
+
+- **CodeQL** (`.github/workflows/codeql.yml`) reads the TypeScript, and the workflows themselves (script
+  injection, tokens with too much power), with the `security-extended` queries. It runs on every push to
+  `main`, on pull requests, and every Monday, because new queries find problems in old code. Results
+  land in the Security tab. The first run passed for both.
+- **Dependabot** (`.github/dependabot.yml`) opens grouped weekly updates for npm, the pinned actions,
+  the Dockerfile and Compose. Each one goes through the full CI. Prisma's major versions are held back
+  (B-030).
+- **The release job** now makes three reports on the published image with Trivy, from one download of
+  the vulnerability database:
+  - every vulnerability at any severity, sent to the Security tab (category `trivy-image`);
+  - a CycloneDX SBOM;
+  - the vulnerability report in the form cosign attaches.
+
+  After signing, cosign attests the SBOM and the report to the image's digest, keylessly and recorded
+  in Rekor, so `cosign verify-attestation --type cyclonedx` (or `vuln`) proves what the image contained
+  and what was known about it when it shipped. The reports are also kept for 30 days as the artifact
+  `release-evidence-<commit>`. The gate is unchanged: an image with a critical or high vulnerability
+  that has a fix is never signed. The reports took 19 s and the attestations 9 s.
+- **SonarQube Cloud.** `verify` keeps its coverage report (the tests run once), and a `sonar` job scans
+  with it and waits for the quality gate. It is skipped, not failed, until the repository has
+  the variables `SONAR_ORGANIZATION` and `SONAR_PROJECT_KEY` and the secret `SONAR_TOKEN`. Coverage is
+  counted where the unit tests aim: the money logic, the API routes and the proxy. Pages are left to
+  the browser tests.
+
+---
+
+## Phase 9 — The control room: every tool on one live page
+
+### D-086 · /ops shows the pipeline live now, and the platform once it runs
+**2026-09-23** · ✅ written, unit-tested (1,125 → 1,143 tests) and checked in a browser; live once
+the Vercel variables are set
+
+The demo walks through one page instead of the code. Its first part works wherever the app runs,
+Vercel included, because it reads GitHub rather than a cluster:
+- **The release on main:** the newest CI run's commit and verdict. From the release job's own steps, it
+  shows whether the image passed the scan gate, was signed, and had its SBOM and vulnerability report
+  attested, plus the exact digest that was deployed. A QR code opens `/scale` for the audience.
+- **Tools:** each tool's latest verdict, from the tool itself:
+  - GitHub Actions;
+  - CodeQL and Trivy (open code scanning alerts, by severity);
+  - Dependabot;
+  - the SonarQube Cloud gate;
+  - Jenkins, for the `kind` and `aws` environments;
+  - Vercel, for Production.
+- **Pipeline:** the run's jobs with their durations.
+- **Deliveries:** each environment's newest deployment, and what its deployer reported.
+- **Cluster and traffic lab:** "not connected here" until ops-api runs in a cluster. It runs on AWS on
+  demo days and on Kind in CI, and those sections arrive with it.
+
+Rules, in `src/lib/ops/`:
+- Every panel carries its source and the time it was read. A source that can't be read says so, and why
+  (a missing token, a 403, a timeout). Nothing is ever filled in.
+- Each source is read at most once every 20 s per server process (SonarQube's gate once a minute),
+  however many dashboards are open.
+- **Only operators.** `OPS_ADMINS` lists them as `provider:accountId` pairs, an ID the sign-in provider
+  vouches for. It is not an email address, which someone could register first. A password account is
+  never an operator.
+  - A server layout checks this before anything renders, and the API checks again (401 when signed out,
+    403 when not an operator).
+  - Someone signed in who isn't an operator sees their own identity, to have it added.
+  - `/ops` is behind the page gate (D-079), and the old `/admin/health` page, which read an API that
+    never existed, now redirects here.
+- GitHub is read with `OPS_GITHUB_TOKEN`: a fine-grained token for this repository only, with read
+  access to Actions, Contents, Deployments, Code scanning alerts and Dependabot alerts.
+
+A unit test reads `ci.yml`, so renaming one of the release steps the page reports can't silently turn
+"signed" into "not signed".
+
+Checked in a browser against a local copy (throwaway database, production services blanked), with a
+seeded operator whose GitHub account ID was made up:
+- the page showed 93fea82, its passed scan, signature and attestations, the deployed digest, the seven
+  jobs with their durations, and three deliveries;
+- the token used locally can't read code scanning or Dependabot alerts, and the page said "GitHub
+  answered 403" for both;
+- a password user got 403 from the API, and the page explained why;
+- signed out, `/ops` redirected to sign-in;
+- at phone width, nothing overflowed.
+
+A first version showed Vercel's Preview deployment as Jenkins's. Jenkins now counts only `kind` and
+`aws`, and Vercel has its own row.
+
+---
+
 ## Open problems
 
 | ID | Problem | Why it matters | Status / planned fix |

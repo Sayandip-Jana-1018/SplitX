@@ -32,6 +32,7 @@ const PROTECTED_ROUTES = [
     '/settings',
     '/history',
     '/admin',
+    '/ops',
 ];
 
 // Routes that should redirect to dashboard if already authenticated
