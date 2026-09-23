@@ -3143,6 +3143,54 @@ coursework instances and volumes, the default VPC, other log groups, and the acc
 
 ---
 
+## Phase 12 — The platform, ready for EKS
+
+### D-091 · The demo's secrets go from .env to Secrets Manager in a signed request, and the cluster makes none
+**2026-09-23** · 🚧 written and tested; the dry run passes except for `DEMO_DATABASE_URL`, which the
+user has yet to create; nothing is written to AWS yet
+
+On EKS the cluster must never generate a secret. The Kind path does (`ensureEnv` in `k8s:up`), and
+that works because `.env` keeps what it made. On the GitHub runner that builds the platform, a value
+made up on every `aws-up` would break what depends on it: the webhook's HMAC, and the header
+CloudFront sends the load balancer. So the values travel from the laptop's `.env` to AWS Secrets
+Manager, and the External Secrets Operator turns them into Kubernetes Secrets on the cluster.
+
+`npm run aws:secrets`, run from the laptop as `splitx-devops` before an AWS day, writes two JSON
+secrets. Both are tagged `stack=platform`, and aws-down deletes them with no recovery window.
+
+| Secret | Holds |
+|---|---|
+| `splitx/demo/app` | the app's `splitx-secrets`: the demo database (with Prisma's pool capped at 5 per pod), the cluster's own Redis, the session and metrics secrets, the origin header's value, and whichever of OAuth, storage, AI, email and `/ops` keys `.env` has |
+| `splitx/demo/platform` | Grafana's admin password, Alertmanager's email (the app password's spaces removed), Jenkins' admin password, webhook secret, trigger token and GitHub token, and Nexus' admin password |
+
+How the mapping works (`scripts/lib/demo-secrets.mjs`):
+- **The demo uses its own database.** `DEMO_DATABASE_URL` is a Neon branch with production's schema
+  and none of its data, so a classroom's accounts never mix with real users'. Production's
+  `DATABASE_URL` and its Upstash Redis are never copied; a test checks that no production value
+  reaches the secret.
+- **GitHub sign-in on EKS uses a second OAuth app.** GitHub allows one callback address per OAuth
+  app, so the CloudFront address gets its own (`AWS_GITHUB_ID` and `AWS_GITHUB_SECRET` in `.env`).
+  Without it, the EKS site simply doesn't offer GitHub sign-in.
+- **Two values nobody has to choose are generated into `.env` on the first run:**
+  `ORIGIN_VERIFY_SECRET` and `NEXUS_ADMIN_PASSWORD`. Once generated, they stay the same across AWS
+  days.
+- **A missing required key stops the command,** and every missing key is named at once.
+  `--check` shows what would be written, by key name only.
+
+**The values touch no command line and no file but `.env`** (the rule of D-042).
+- The AWS CLI can take a secret only as an argument or from a file, so the script calls Secrets
+  Manager itself, over HTTPS.
+- Each request is signed with AWS Signature Version 4 (`scripts/lib/aws-sigv4.mjs`, about 50
+  lines, no dependency). The CLI's credentials come from `aws configure export-credentials` and are
+  held in memory.
+- **The signer is proven twice:**
+  - it reproduces AWS's documented reference values, both the signing key and the signature of the
+    IAM `ListUsers` example;
+  - a live `ListSecrets` call it signed was answered 200, and the same call with a tampered
+    signature was refused with `InvalidSignatureException`.
+
+---
+
 ## Open problems
 
 | ID | Problem | Why it matters | Status / planned fix |
