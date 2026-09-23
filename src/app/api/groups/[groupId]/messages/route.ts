@@ -29,10 +29,11 @@ export async function GET(
         const user = await prisma.user.findUnique({ where: { email: session.user.email } });
         if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
-        // Verify membership
+        // Verify membership (a deleted group's chat is gone too)
         const group = await prisma.group.findFirst({
             where: {
                 id: groupId,
+                deletedAt: null,
                 OR: [
                     { ownerId: user.id },
                     { members: { some: { userId: user.id } } },

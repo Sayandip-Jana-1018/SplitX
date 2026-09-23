@@ -2632,6 +2632,22 @@ Also: the property test from D-077 once took 5.2 s during a full run on this lap
 5-second limit. It takes about 2 s alone, and a 3,000-history soak (10 times its usual run) found
 nothing, so it now has a 30-second limit.
 
+### D-083 · A profile photo can't be a tracker, and a deleted group stays deleted
+**2026-09-23** · ✅ written and unit-tested (1,103 → 1,108 tests)
+
+Two more items from the audit's low list:
+- **Profile photos only from SplitX's storage or the sign-in provider.** `PATCH /api/me` accepted any
+  string up to 2,000 characters as `image`. Everyone in your groups sees your photo, so one request
+  could make every member's browser load a tracking pixel from any site. No page ever sent that field:
+  photos are uploaded through `/api/me/avatar` or come from Google or GitHub at sign-in. The field is
+  gone, and anything sent in it is ignored.
+- **A deleted group's expenses, search results and chat are gone.** Three reads checked membership
+  but not whether the group still exists: one expense (`GET /api/transactions/:id`), search, and the
+  group's chat. Every other group read already checked. Each new test fails against the old code.
+
+Looked at and left as it is: `/api/health` still pings the database for anyone. It is the keep-warm ping
+the signed-in app sends every 4 minutes, and the general API rate limit applies to it.
+
 ---
 
 ## Open problems

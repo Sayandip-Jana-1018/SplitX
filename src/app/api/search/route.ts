@@ -46,6 +46,7 @@ export async function GET(req: Request) {
                 deletedAt: null,
                 trip: {
                     group: {
+                        deletedAt: null,
                         OR: [
                             { ownerId: user.id },
                             { members: { some: { userId: user.id } } },

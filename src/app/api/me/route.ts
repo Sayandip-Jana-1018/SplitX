@@ -67,11 +67,13 @@ export async function GET() {
     }
 }
 
+// No `image`: a profile photo is shown to everyone in your groups, so it comes
+// only from an upload to SplitX's storage (/api/me/avatar) or from Google or
+// GitHub at sign-in, never from a URL anyone types (a tracking pixel, say).
 const UpdateProfileSchema = z.object({
     name: z.string().min(1).max(100).optional(),
     phone: z.string().max(20).regex(/^[+]?\d[\d\s-]{6,18}$/, 'Invalid phone number').optional().or(z.literal('')),
     upiId: z.string().max(100).regex(/^[\w.-]+@[\w]+$/, 'Invalid UPI ID format (e.g. name@bank)').optional().or(z.literal('')),
-    image: z.string().max(2000).optional(),
 });
 
 // PATCH /api/me — update current user's profile
@@ -89,7 +91,6 @@ export async function PATCH(req: Request) {
         if (parsed.data.name) updateData.name = parsed.data.name;
         if (parsed.data.phone !== undefined) updateData.phone = parsed.data.phone;
         if (parsed.data.upiId !== undefined) updateData.upiId = parsed.data.upiId;
-        if (parsed.data.image !== undefined) updateData.image = parsed.data.image;
 
         const user = await prisma.user.update({
             where: { email: session.user.email },
