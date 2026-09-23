@@ -36,7 +36,18 @@ jobs:
         run: npx tsc --noEmit
 
       - name: Test
-        run: npm test
+        # The unit suite with coverage (for SonarQube), then the hardening checks
+        # `npm test` also runs.
+        run: |
+          npm run test:coverage
+          node tests/production-hardening.test.mjs
+
+      - name: Keep the coverage report
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage
+          path: coverage/lcov.info
+          retention-days: 7
 
       - name: Lint
         run: npm run lint
@@ -264,6 +275,41 @@ jobs:
           done
           exit "$failed"
 
+  sonar:
+    # SonarQube Cloud: bugs, code smells, duplication, security hotspots, and
+    # the unit tests' coverage (from verify, not a second test run). The
+    # quality gate's verdict fails this job. It runs once the repository has
+    # the organization and project keys (variables SONAR_ORGANIZATION and
+    # SONAR_PROJECT_KEY, as SonarQube Cloud shows them) and a token (secret
+    # SONAR_TOKEN); until then it is skipped, not failed.
+    needs: verify
+    if: ${{ vars.SONAR_ORGANIZATION != '' && vars.SONAR_PROJECT_KEY != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          # Full history: Sonar tells new code from old by it.
+          fetch-depth: 0
+
+      - name: Coverage from verify
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: coverage
+          path: coverage
+
+      - name: Scan, and wait for the quality gate
+        uses: SonarSource/sonarqube-scan-action@ba9859eae8dd6bd29e412f25ddbbef3d032000f4 # v8.2.2
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >
+            -Dsonar.organization=${{ vars.SONAR_ORGANIZATION }}
+            -Dsonar.projectKey=${{ vars.SONAR_PROJECT_KEY }}
+            -Dsonar.qualitygate.wait=true
+
   release:
     # A commit on main that passed every job above becomes a release: built
     # once, published, scanned, signed, and handed to Jenkins as a GitHub
@@ -281,6 +327,7 @@ jobs:
       packages: write     # publish to ghcr.io
       id-token: write     # keyless signing: GitHub's OIDC token names this workflow as the signer
       deployments: write  # ask Jenkins to deploy, through a GitHub deployment and its webhook
+      security-events: write # the image's vulnerabilities, in the Security tab
     env:
       IMAGE: ghcr.io/sayandip-jana-1018/splitx
       TRIVY: aquasec/trivy:0.74.0@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969
@@ -346,6 +393,34 @@ jobs:
           fi
           echo "ref=$IMAGE@$digest" >> "$GITHUB_OUTPUT"
 
+      - name: Reports on the image
+        # Every vulnerability at every severity (SARIF, for the Security tab), the
+        # image's contents as a CycloneDX SBOM, and the vulnerability report in
+        # the form cosign attaches. One vulnerability database, downloaded once.
+        id: reports
+        env:
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+          REF: ${{ steps.image.outputs.ref }}
+        run: |
+          mkdir -p release-evidence "$RUNNER_TEMP/trivy"
+          trivy() {
+            docker run --rm -e TRIVY_USERNAME -e TRIVY_PASSWORD \
+              -v "$RUNNER_TEMP/trivy:/root/.cache/trivy" -v "$PWD/release-evidence:/out" \
+              "$TRIVY" image --no-progress "$@" "$REF"
+          }
+          trivy --format sarif --output /out/trivy.sarif --scanners vuln
+          trivy --format cyclonedx --output /out/sbom.cdx.json --skip-db-update
+          trivy --format cosign-vuln --output /out/vuln.json --skip-db-update
+          ls -l release-evidence
+
+      - name: Show the image's vulnerabilities in the Security tab
+        if: ${{ always() && steps.reports.outcome == 'success' }}
+        uses: github/codeql-action/upload-sarif@1c5b675653bb5c22dbe9b12b556ec555138e09fd # v4.38.1
+        with:
+          sarif_file: release-evidence/trivy.sarif
+          category: trivy-image
+
       - name: Scan for vulnerabilities
         # An image with a critical or high vulnerability that has a fix is left
         # published but unsigned, and Jenkins deploys only signed images.
@@ -354,7 +429,8 @@ jobs:
           TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
           REF: ${{ steps.image.outputs.ref }}
         run: |
-          docker run --rm -e TRIVY_USERNAME -e TRIVY_PASSWORD "$TRIVY" image \
+          docker run --rm -e TRIVY_USERNAME -e TRIVY_PASSWORD \
+            -v "$RUNNER_TEMP/trivy:/root/.cache/trivy" "$TRIVY" image --skip-db-update \
             --severity CRITICAL,HIGH --ignore-unfixed --exit-code 1 --no-progress "$REF"
 
       - name: Install cosign
@@ -369,6 +445,24 @@ jobs:
         env:
           REF: ${{ steps.image.outputs.ref }}
         run: cosign sign --yes "$REF"
+
+      - name: Attest the SBOM and the vulnerability report
+        # Signed statements about this exact digest, made the same keyless way
+        # and recorded in Rekor: what the image contains, and what was known to
+        # be vulnerable in it when it was released. Anyone can check them with
+        # `cosign verify-attestation --type cyclonedx|vuln`.
+        env:
+          REF: ${{ steps.image.outputs.ref }}
+        run: |
+          cosign attest --yes --type cyclonedx --predicate release-evidence/sbom.cdx.json "$REF"
+          cosign attest --yes --type vuln --predicate release-evidence/vuln.json "$REF"
+
+      - name: Keep the release evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-evidence-${{ steps.provenance.outputs.git_sha }}
+          path: release-evidence/
+          retention-days: 30
 
       - name: Ask Jenkins to deploy it
         # A GitHub deployment for the environment "kind" (the rehearsal cluster).
@@ -392,4 +486,5 @@ jobs:
             echo "| Image | \`$REF\` |"
             echo "| Scan | no critical or high vulnerability with a fix |"
             echo "| Signed by | \`$GITHUB_WORKFLOW_REF\` |"
+            echo "| Attested | CycloneDX SBOM, vulnerability report |"
           } >> "$GITHUB_STEP_SUMMARY"
