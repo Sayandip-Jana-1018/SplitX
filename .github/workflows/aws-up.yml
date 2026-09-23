@@ -1,0 +1,118 @@
+name: AWS up
+
+# Builds SplitX's demo platform on AWS (terraform/platform: the network, EKS
+# and its add-ons, the node group, the workloads' roles) on the morning of an
+# AWS day, and checks that it works. aws-down removes it that evening, or at
+# 23:30 IST by itself.
+#
+# Phase 5 adds the rest of the day's start after "Check the platform": the
+# charts (External Secrets turning Secrets Manager into Kubernetes Secrets),
+# the Ingresses and their ALB, the ALB's alarms (a second apply with
+# alb_ready=true), and pointing the edge at the ALB.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write # GitHub's OIDC token, exchanged for the role splitx-ci-deploy
+
+concurrency:
+  group: aws
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ap-south-1 # the splitx-bootstrap stack's region
+  CLUSTER_NAME: splitx
+
+jobs:
+  up:
+    runs-on: ubuntu-latest
+    # A reviewer approves before the job starts: this is what spends money.
+    environment: aws-demo
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - name: AWS and Terraform
+        uses: ./.github/actions/aws-terraform
+        with:
+          role: splitx-ci-deploy
+          account-id: ${{ secrets.AWS_ACCOUNT_ID }}
+          region: ${{ env.AWS_REGION }}
+          session-seconds: '10800'
+
+      - name: Enough vCPU quota for four nodes
+        # Running On-Demand Standard (A, C, D, H, I, M, R, T, Z) instances: four
+        # t3.large nodes need 8. A new account can have less, and the node group
+        # would then fail twenty minutes in.
+        run: |
+          quota="$(aws service-quotas get-service-quota --service-code ec2 --quota-code L-1216C47A --query Quota.Value --output text)"
+          echo "vCPU quota for standard on-demand instances in $AWS_REGION: $quota"
+          if (( ${quota%.*} < 8 )); then
+            echo "::error::The quota is ${quota%.*} vCPUs and the platform needs 8. Ask for more in Service Quotas (EC2, L-1216C47A) before an AWS day."
+            exit 1
+          fi
+
+      - name: Plan the platform
+        run: terraform -chdir=terraform/platform plan -input=false -out=platform.tfplan
+
+      - name: Build the platform
+        run: terraform -chdir=terraform/platform apply -input=false platform.tfplan
+
+      - name: Connect to the cluster
+        run: aws eks update-kubeconfig --name "$CLUSTER_NAME" --region "$AWS_REGION"
+
+      - name: The cluster's own settings
+        # The default encrypted gp3 StorageClass, and what aws-down may do.
+        run: kubectl apply -k k8s/eks
+
+      - name: Check the platform
+        run: |
+          fail() { echo "::error::$1"; exit 1; }
+
+          kubectl wait --for=condition=Ready nodes --all --timeout=10m
+          nodes="$(kubectl get nodes --no-headers | wc -l)"
+          (( nodes >= 3 )) || fail "$nodes nodes are Ready, not 3"
+          zones="$(kubectl get nodes -o jsonpath='{.items[*].metadata.labels.topology\.kubernetes\.io/zone}' | tr ' ' '\n' | sort -u | wc -l)"
+          (( zones == 2 )) || fail "the nodes are in $zones zones, not 2"
+
+          for addon in vpc-cni eks-pod-identity-agent kube-proxy coredns aws-ebs-csi-driver metrics-server; do
+            status="$(aws eks describe-addon --cluster-name "$CLUSTER_NAME" --addon-name "$addon" --query addon.status --output text)"
+            [[ "$status" == ACTIVE ]] || fail "the $addon add-on is $status"
+          done
+
+          # The policy agent runs in every aws-node pod, but enforces nothing
+          # unless it is switched on; then every NetworkPolicy would be ignored.
+          kubectl -n kube-system get daemonset aws-node \
+            -o jsonpath='{.spec.template.spec.containers[?(@.name=="aws-eks-nodeagent")].args}' | grep -q -- '--enable-network-policy=true' \
+            || fail "the VPC CNI's network policy agent is not enforcing"
+
+          [[ "$(kubectl get storageclass gp3 -o jsonpath='{.metadata.annotations.storageclass\.kubernetes\.io/is-default-class}')" == true ]] \
+            || fail "gp3 is not the default StorageClass"
+
+          # metrics-server answers (the autoscaler reads it), with verified kubelet TLS.
+          for attempt in $(seq 1 20); do kubectl top nodes > /tmp/top 2>&1 && break; sleep 15; done
+          grep -q '%' /tmp/top || fail "metrics-server does not answer: $(cat /tmp/top)"
+
+          # The teardown role can delete what it must, and create nothing.
+          can() { kubectl auth can-i "$@" --as=aws-down --as-group=splitx-teardown; }
+          [[ "$(can delete ingresses --all-namespaces)" == yes ]] || fail "aws-down could not delete Ingresses"
+          [[ "$(can delete namespaces)" == yes ]] || fail "aws-down could not delete namespaces"
+          [[ "$(can create pods --all-namespaces || true)" == no ]] || fail "aws-down could create pods"
+          [[ "$(can get secrets --all-namespaces || true)" == no ]] || fail "aws-down could read Secrets"
+
+          {
+            echo "### The platform"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Cluster | $CLUSTER_NAME, Kubernetes $(terraform -chdir=terraform/platform output -raw kubernetes_version), $AWS_REGION |"
+            echo "| Nodes | $nodes Ready across $zones zones |"
+            echo "| Add-ons | vpc-cni (network policies on), Pod Identity agent, kube-proxy, CoreDNS, EBS CSI, metrics-server: all ACTIVE |"
+            echo "| Storage | gp3, encrypted, the default class |"
+            echo "| Teardown access | delete Ingresses and namespaces: yes; create pods or read Secrets: no |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          cat /tmp/top

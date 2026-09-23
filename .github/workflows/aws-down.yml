@@ -1,0 +1,117 @@
+name: AWS down
+
+# Removes SplitX's demo platform from AWS and proves nothing is left. It runs
+# as splitx-ci-teardown, which can look and remove but never create, so it
+# needs no approval, and every evening at 23:30 IST it runs by itself: budget
+# data lags 8 to 12 hours, so a forgotten platform would otherwise run all
+# night. When nothing is up, it only confirms that.
+#
+# The order matters. The load balancer and the volumes were made by the
+# cluster, not by Terraform, and the network can't be deleted while they
+# exist, so they go first, through Kubernetes; then Terraform destroys what it
+# made; then a sweep removes anything the cluster left, by SplitX's tags; then
+# the report lists everything the platform makes, and fails unless it is all
+# gone.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 18 * * *' # 18:00 UTC is 23:30 IST
+
+permissions:
+  contents: read
+  id-token: write # GitHub's OIDC token, exchanged for the role splitx-ci-teardown
+
+concurrency:
+  group: aws
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ap-south-1 # the splitx-bootstrap stack's region
+  CLUSTER_NAME: splitx
+
+jobs:
+  down:
+    runs-on: ubuntu-latest
+    # No reviewer, main only: the only environment splitx-ci-teardown trusts.
+    environment: aws-teardown
+    timeout-minutes: 100
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - name: Setup Node
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 24
+
+      - name: AWS and Terraform
+        uses: ./.github/actions/aws-terraform
+        with:
+          role: splitx-ci-teardown
+          account-id: ${{ secrets.AWS_ACCOUNT_ID }}
+          region: ${{ env.AWS_REGION }}
+          session-seconds: '7200'
+
+      - name: What is up
+        id: state
+        run: |
+          resources="$(terraform -chdir=terraform/platform state list | wc -l)"
+          cluster="$(aws eks describe-cluster --name "$CLUSTER_NAME" --query cluster.status --output text 2>/dev/null || echo none)"
+          edge="$(terraform -chdir=terraform/edge output -raw mode 2>/dev/null || echo none)"
+          echo "Platform resources in Terraform's state: $resources; cluster: $cluster; edge: $edge"
+          {
+            echo "resources=$resources"
+            echo "cluster=$cluster"
+            echo "edge=$edge"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Take the edge offline
+        # First, so visitors get the offline page rather than errors. Money
+        # comes first, though: the platform comes down even if this fails.
+        if: steps.state.outputs.edge == 'online'
+        continue-on-error: true
+        run: terraform -chdir=terraform/edge apply -input=false -auto-approve
+
+      - name: Remove the load balancers
+        # Deleting the Ingresses (and any load-balancer Services) makes the
+        # AWS Load Balancer Controller delete what it made.
+        if: steps.state.outputs.cluster == 'ACTIVE'
+        continue-on-error: true
+        run: |
+          aws eks update-kubeconfig --name "$CLUSTER_NAME" --region "$AWS_REGION"
+          kubectl delete ingress --all --all-namespaces --wait=false
+          kubectl get services --all-namespaces -o json \
+            | jq -r '.items[] | select(.spec.type == "LoadBalancer") | "\(.metadata.namespace) \(.metadata.name)"' \
+            | while read -r namespace name; do kubectl delete service -n "$namespace" "$name" --wait=false; done
+          node scripts/aws-teardown.mjs wait-load-balancers
+
+      - name: Remove the volumes
+        # Deleting the workload namespaces deletes their pods, then their PVCs,
+        # and the EBS CSI driver (in kube-system, kept) deletes the volumes.
+        if: steps.state.outputs.cluster == 'ACTIVE'
+        continue-on-error: true
+        run: |
+          for namespace in $(kubectl get namespaces -o jsonpath='{.items[*].metadata.name}'); do
+            case "$namespace" in kube-system | kube-public | kube-node-lease | default) continue ;; esac
+            kubectl delete namespace "$namespace" --wait=false
+          done
+          node scripts/aws-teardown.mjs wait-volumes
+
+      - name: Destroy the platform
+        if: steps.state.outputs.resources != '0'
+        run: |
+          if ! terraform -chdir=terraform/platform destroy -input=false -auto-approve; then
+            echo "::warning::The destroy stopped; sweeping what the cluster left, then trying once more."
+            node scripts/aws-teardown.mjs sweep
+            terraform -chdir=terraform/platform destroy -input=false -auto-approve
+          fi
+
+      - name: Sweep what the cluster left
+        if: always()
+        run: node scripts/aws-teardown.mjs sweep
+
+      - name: Nothing is left
+        if: always()
+        run: node scripts/aws-teardown.mjs report --wait 300

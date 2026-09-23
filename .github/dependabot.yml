@@ -26,7 +26,10 @@ updates:
         update-types: ['version-update:semver-major']
 
   - package-ecosystem: github-actions
-    directory: /
+    # The workflows, and the composite action the aws-* workflows share.
+    directories:
+      - /
+      - /.github/actions/aws-terraform
     schedule:
       interval: weekly
       day: monday
@@ -58,5 +61,22 @@ updates:
       timezone: Asia/Kolkata
     groups:
       compose-images:
+        patterns:
+          - '*'
+
+  # terraform/edge and terraform/platform: the AWS provider and the
+  # terraform-aws-modules versions, lock files included. Each PR runs the
+  # terraform job (validate, tflint, Trivy) before anything is applied.
+  - package-ecosystem: terraform
+    directories:
+      - /terraform/edge
+      - /terraform/platform
+    schedule:
+      interval: weekly
+      day: monday
+      time: '09:00'
+      timezone: Asia/Kolkata
+    groups:
+      terraform:
         patterns:
           - '*'

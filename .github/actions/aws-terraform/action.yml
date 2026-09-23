@@ -1,0 +1,79 @@
+name: SplitX on AWS
+description: >-
+  What aws-edge, aws-up and aws-down start with: one of SplitX's two CI roles,
+  assumed with GitHub's OIDC token (no stored keys); the pinned Terraform and
+  kubectl; and both Terraform roots initialised against the state bucket the
+  splitx-bootstrap stack made, with the committed lock files.
+
+inputs:
+  role:
+    description: splitx-ci-deploy (aws-edge, aws-up; reviewed) or splitx-ci-teardown (aws-down; can only remove).
+    required: true
+  account-id:
+    description: The AWS account, from the repository secret AWS_ACCOUNT_ID (GitHub then masks it in these public logs).
+    required: true
+  region:
+    description: The splitx-bootstrap stack's region.
+    required: true
+  session-seconds:
+    description: How long the role's session lasts (the roles allow 3 h and 2 h).
+    default: '3600'
+
+runs:
+  using: composite
+  steps:
+    - name: The account is known
+      shell: bash
+      env:
+        ACCOUNT_ID: ${{ inputs.account-id }}
+      run: |
+        if [[ ! "$ACCOUNT_ID" =~ ^[0-9]{12}$ ]]; then
+          echo "::error::Set the repository secret AWS_ACCOUNT_ID to the 12-digit AWS account ID (Settings, Secrets and variables, Actions)."
+          exit 1
+        fi
+
+    - name: Assume ${{ inputs.role }}
+      uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+      with:
+        role-to-assume: arn:aws:iam::${{ inputs.account-id }}:role/${{ inputs.role }}
+        role-session-name: splitx-${{ github.run_id }}
+        role-duration-seconds: ${{ inputs.session-seconds }}
+        aws-region: ${{ inputs.region }}
+
+    - name: Terraform version
+      id: terraform
+      shell: bash
+      run: echo "version=$(cat terraform/.terraform-version)" >> "$GITHUB_OUTPUT"
+
+    - name: Install Terraform ${{ steps.terraform.outputs.version }}
+      uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+      with:
+        terraform_version: ${{ steps.terraform.outputs.version }}
+        # Plain output, so `terraform output -raw` can be read by the steps.
+        terraform_wrapper: false
+
+    - name: Install kubectl (checksum pinned)
+      # The version the cluster runs (1.35), not whatever the runner image has.
+      shell: bash
+      env:
+        KUBECTL_VERSION: v1.35.8
+        KUBECTL_SHA256: 874d5e72dbb819f43cff16bcd1e4f8bac5b7f2361fe1e55049b0a6c676fb0cbf
+      run: |
+        mkdir -p "$RUNNER_TEMP/bin"
+        curl -sSfLo "$RUNNER_TEMP/bin/kubectl" "https://dl.k8s.io/release/$KUBECTL_VERSION/bin/linux/amd64/kubectl"
+        echo "$KUBECTL_SHA256  $RUNNER_TEMP/bin/kubectl" | sha256sum --check --strict -
+        chmod 0755 "$RUNNER_TEMP/bin/kubectl"
+        echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+    - name: Initialise both roots
+      shell: bash
+      env:
+        ACCOUNT_ID: ${{ inputs.account-id }}
+        REGION: ${{ inputs.region }}
+      run: |
+        # The bucket's name, as cloudformation/bootstrap.yaml makes it.
+        bucket="splitx-tfstate-$ACCOUNT_ID-$REGION"
+        for root in edge platform; do
+          terraform -chdir="terraform/$root" init -input=false -lockfile=readonly \
+            -backend-config="bucket=$bucket" -backend-config="region=$REGION"
+        done

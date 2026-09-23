@@ -1,0 +1,81 @@
+name: AWS edge
+
+# Applies terraform/edge, SplitX's CloudFront distribution, which stays up
+# between AWS days at no cost: once to create it, and again whenever its
+# configuration changes. It keeps whatever the edge points at, so it never
+# takes the site online or offline; aws-up and aws-down do that. Then it
+# checks the site through CloudFront, as a visitor would.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write # GitHub's OIDC token, exchanged for the role splitx-ci-deploy
+
+# aws-edge, aws-up and aws-down never run at the same time.
+concurrency:
+  group: aws
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ap-south-1 # the splitx-bootstrap stack's region
+
+jobs:
+  edge:
+    runs-on: ubuntu-latest
+    # A reviewer approves before the job starts, and only this environment's
+    # jobs may assume splitx-ci-deploy.
+    environment: aws-demo
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - name: AWS and Terraform
+        uses: ./.github/actions/aws-terraform
+        with:
+          role: splitx-ci-deploy
+          account-id: ${{ secrets.AWS_ACCOUNT_ID }}
+          region: ${{ env.AWS_REGION }}
+
+      - name: Plan, keeping the current origin
+        run: |
+          # Nothing yet (the first run), or offline: an empty origin.
+          origin="$(terraform -chdir=terraform/edge output -raw origin_domain 2>/dev/null || true)"
+          echo "The edge's origin stays: ${origin:-none, offline}"
+          terraform -chdir=terraform/edge plan -input=false -out=edge.tfplan -var "origin_domain=$origin"
+
+      - name: Apply
+        run: terraform -chdir=terraform/edge apply -input=false edge.tfplan
+
+      - name: The site answers through CloudFront
+        run: |
+          domain="$(terraform -chdir=terraform/edge output -raw domain_name)"
+          mode="$(terraform -chdir=terraform/edge output -raw mode)"
+          echo "Waiting for the distribution to reach every edge location."
+          aws cloudfront wait distribution-deployed --id "$(terraform -chdir=terraform/edge output -raw distribution_id)"
+
+          status() { curl -sS -o /tmp/body -w '%{http_code}' --retry 3 --retry-all-errors "$@"; }
+          redirect="$(curl -sS -o /dev/null -w '%{http_code} %{redirect_url}' "http://$domain/")"
+          [[ "$redirect" == "301 https://$domain/" ]] || { echo "::error::http:// answered '$redirect', not a redirect to https"; exit 1; }
+          if [[ "$mode" == offline ]]; then
+            code="$(status "https://$domain/")"
+            [[ "$code" == 503 ]] && grep -q 'The SplitX demo platform is offline' /tmp/body \
+              || { echo "::error::offline, but / answered $code"; exit 1; }
+            checks="http:// redirects to https://; / answers 503 with the offline page"
+          else
+            [[ "$(status "https://$domain/api/health/live")" == 200 ]] || { echo "::error::/api/health/live did not answer 200"; exit 1; }
+            [[ "$(status "https://$domain/api/metrics")" == 403 ]] || { echo "::error::/api/metrics was not refused"; exit 1; }
+            checks="http:// redirects to https://; /api/health/live answers 200; /api/metrics is refused (403)"
+          fi
+          {
+            echo "### The edge"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Address | https://$domain |"
+            echo "| Mode | $mode |"
+            echo "| Checked | $checks |"
+          } >> "$GITHUB_STEP_SUMMARY"
