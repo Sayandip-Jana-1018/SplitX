@@ -75,7 +75,7 @@
     "husky": "^9.1.7",
     "prisma": "^6.19.2",
     "typescript": "^5",
-    "vitest": "4.1.11"
+    "vitest": "5.0.1"
   },
   "overrides": {
     "next-auth": {
