@@ -3,7 +3,8 @@ Description: >-
   SplitX guardrails (stack splitx-guardrails): a monthly cost budget, counted
   without credits so it tracks real usage, with alerts at 50%, 80% and 100% of
   it and when the month's forecast passes it, sent to an SNS topic that emails
-  the owner. Permanent: it is never part of aws-up or aws-down.
+  the owner. The platform's CloudWatch alarms (named splitx-*) use the same
+  topic. Permanent: it is never part of aws-up or aws-down.
 
 Parameters:
   AlertEmail:
@@ -50,6 +51,20 @@ Resources:
             Action: sns:Publish
             Resource: !Ref AlertTopic
             Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+          # A topic policy replaces SNS's default one, so CloudWatch must be
+          # named too: only this account's alarms in this region whose names
+          # start with splitx- (the ALB alarms aws-up creates) may publish.
+          - Sid: SplitXAlarmsMayPublish
+            Effect: Allow
+            Principal:
+              Service: cloudwatch.amazonaws.com
+            Action: sns:Publish
+            Resource: !Ref AlertTopic
+            Condition:
+              ArnLike:
+                aws:SourceArn: !Sub arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:splitx-*
               StringEquals:
                 aws:SourceAccount: !Ref AWS::AccountId
 
@@ -112,7 +127,7 @@ Resources:
 
 Outputs:
   AlertTopicArn:
-    Description: SplitX's alert topic (budgets now; CloudWatch alarms later).
+    Description: SplitX's alert topic, for the budget and the platform's splitx-* CloudWatch alarms.
     Value: !Ref AlertTopic
   BudgetName:
     Value: splitx-monthly

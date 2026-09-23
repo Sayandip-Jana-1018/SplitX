@@ -8,7 +8,7 @@
         "ec2:*", "eks:*", "elasticloadbalancing:*", "autoscaling:*",
         "application-autoscaling:*", "cloudfront:*", "logs:*", "cloudwatch:*",
         "kms:*", "budgets:*", "tag:*", "sts:GetCallerIdentity",
-        "iam:Get*", "iam:List*"
+        "iam:Get*", "iam:List*", "servicequotas:GetServiceQuota"
       ],
       "Resource": "*"
     },

@@ -1,10 +1,12 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >-
   SplitX bootstrap (stack splitx-bootstrap): what Terraform needs before it can
-  run. Its state bucket; keyless access for GitHub Actions (OIDC); the role that
-  only the aws-demo environment may assume; and the permissions boundary every
-  role that role creates must carry. Deployed once from the laptop as
-  splitx-devops (npm run aws:bootstrap), through a change set.
+  run. Its state bucket; keyless access for GitHub Actions (OIDC); two roles,
+  one that only the reviewed aws-demo environment may assume to build the
+  platform and one that only aws-teardown may assume to remove it; and the
+  permissions boundary both carry, as does every role they create. Deployed
+  once from the laptop as splitx-devops (npm run aws:bootstrap), through a
+  change set.
 
 Parameters:
   GitHubRepository:
@@ -18,7 +20,22 @@ Parameters:
     AllowedPattern: '[A-Za-z0-9_.-]+'
     Description: >-
       The GitHub environment whose jobs may assume the deploy role. It has a
-      required reviewer, so nothing reaches AWS without an approval.
+      required reviewer, so nothing is built on AWS without an approval.
+  TeardownEnvironment:
+    Type: String
+    Default: aws-teardown
+    AllowedPattern: '[A-Za-z0-9_.-]+'
+    Description: >-
+      The GitHub environment whose jobs may assume the teardown role. It has no
+      reviewer, so the scheduled teardown runs while nobody is watching; it is
+      limited to main, and the role can only remove.
+  ClusterName:
+    Type: String
+    Default: splitx
+    AllowedPattern: '[a-z0-9-]+'
+    Description: >-
+      The EKS cluster's name, as terraform/platform sets it. The teardown role
+      may delete that cluster and its logs, and no other.
   CreateOidcProvider:
     Type: String
     AllowedValues: ['true', 'false']
@@ -34,7 +51,7 @@ Resources:
   # ── Terraform's state ──────────────────────────────────────────
   # Accepted (Trivy AWS-0132): encrypted with S3's own keys, not a customer
   # managed KMS key. The bucket is private, TLS only and versioned, and only
-  # splitx-devops and splitx-ci-deploy can read it; a key of our own would add
+  # splitx-devops and the two CI roles can read it; a key of our own would add
   # a monthly charge and one more thing to manage, for little more protection.
   #trivy:ignore:AWS-0132
   StateBucket:
@@ -113,7 +130,7 @@ Resources:
     Properties:
       ManagedPolicyName: splitx-ci-boundary
       Description: >-
-        Permissions boundary for the deploy role and every role it creates:
+        Permissions boundary for the CI roles and every role they create:
         no IAM changes outside splitx-eks-* and splitx-wl-*, nothing at all to
         splitx-ci-*, and every new role carries this same boundary.
       PolicyDocument:
@@ -164,39 +181,55 @@ Resources:
             Action: iam:DeleteRolePermissionsBoundary
             Resource: '*'
 
-  # ── What a deploy may do ───────────────────────────────────────
+  # ── What a deploy may do (aws-up, aws-edge; reviewed) ──────────
   DeployPolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
       ManagedPolicyName: splitx-ci-deploy-policy
       Description: >-
-        What aws-up and aws-down do: build and remove the platform (VPC, EKS,
+        What aws-up and aws-edge do: build and remove the platform (VPC, EKS,
         load balancer, CloudFront), read and write Terraform's state, the demo's
-        secrets, and the platform's own roles, each bounded.
+        secrets, and the platform's own roles, each bounded. Regional services
+        only in this stack's region.
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
-          - Sid: Platform
+          # Only here: the account's other regions hold things SplitX must never
+          # touch, and a mistake in a workflow can't reach them.
+          - Sid: PlatformInThisRegion
             Effect: Allow
             Action:
               - autoscaling:*
-              - cloudfront:*
               - cloudwatch:*
               - ec2:*
               - eks:*
               - elasticloadbalancing:*
-              - kms:*
               - logs:*
               - tag:*
+              # Read only: a key of our own costs every month and lingers for
+              # a week after it is deleted. EKS encrypts its data with an
+              # AWS-owned key at no charge.
+              - kms:Describe*
+              - kms:List*
               - ssm:GetParameter
               - ssm:GetParameters
-              - sts:GetCallerIdentity
-              - budgets:ViewBudget
+              - servicequotas:GetServiceQuota
               - cloudformation:DescribeStacks
               - cloudformation:DescribeStackResources
               - cloudformation:DetectStackDrift
               - cloudformation:DescribeStackDriftDetectionStatus
               - cloudformation:DescribeStackResourceDrifts
+            Resource: '*'
+            Condition:
+              StringEquals:
+                aws:RequestedRegion: !Ref AWS::Region
+          # Global services answer from us-east-1, whatever the stack's region.
+          - Sid: GlobalServices
+            Effect: Allow
+            Action:
+              - cloudfront:*
+              - budgets:ViewBudget
+              - sts:GetCallerIdentity
               - iam:Get*
               - iam:List*
             Resource: '*'
@@ -249,6 +282,9 @@ Resources:
                   - eks.amazonaws.com
                   - ec2.amazonaws.com
                   - pods.eks.amazonaws.com
+                  # The VPC's flow log writes to CloudWatch Logs as a role the
+                  # flow-logs service assumes (splitx-eks-vpc-flow-logs).
+                  - vpc-flow-logs.amazonaws.com
           - Sid: PlatformPolicies
             Effect: Allow
             Action:
@@ -292,13 +328,201 @@ Resources:
         - Key: project
           Value: splitx
 
+  # ── What a teardown may do (aws-down; unattended) ──────────────
+  # The scheduled teardown runs at night without a reviewer, so its role can
+  # look at everything and remove the platform, and nothing else: no create,
+  # run, attach or start action appears here. The one change it may make is to
+  # switch the edge to its offline page.
+  TeardownPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: splitx-ci-teardown-policy
+      Description: >-
+        What aws-down does, unattended: read the platform, switch the edge to
+        its offline page, and delete the platform and its leftovers in this
+        region. It can't create, start or enlarge anything.
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: ReadThePlatform
+            Effect: Allow
+            Action:
+              - autoscaling:Describe*
+              - cloudformation:DescribeStacks
+              - cloudwatch:Describe*
+              - cloudwatch:ListTagsForResource
+              - ec2:Describe*
+              - eks:Describe*
+              - eks:List*
+              - elasticloadbalancing:Describe*
+              - logs:Describe*
+              - logs:ListTagsForResource
+              - logs:ListTagsLogGroup
+              - secretsmanager:ListSecrets
+              - tag:GetResources
+            Resource: '*'
+            Condition:
+              StringEquals:
+                aws:RequestedRegion: !Ref AWS::Region
+          - Sid: ReadGlobalServices
+            Effect: Allow
+            Action:
+              - cloudfront:Describe*
+              - cloudfront:Get*
+              - cloudfront:List*
+              - iam:Get*
+              - iam:List*
+              - sts:GetCallerIdentity
+            Resource: '*'
+          # The network, the load balancers the cluster made, and the volumes and
+          # interfaces it left. Named actions only: nothing here can terminate an
+          # instance or delete a snapshot or an image, and AWS refuses to delete
+          # a volume, group or network that something still uses.
+          - Sid: RemoveTheNetwork
+            Effect: Allow
+            Action:
+              - ec2:DeleteFlowLogs
+              - ec2:DeleteInternetGateway
+              - ec2:DeleteLaunchTemplate
+              - ec2:DeleteNatGateway
+              - ec2:DeleteNetworkAclEntry
+              - ec2:DeleteNetworkInterface
+              - ec2:DeleteRoute
+              - ec2:DeleteRouteTable
+              - ec2:DeleteSecurityGroup
+              - ec2:DeleteSubnet
+              - ec2:DeleteTags
+              - ec2:DeleteVolume
+              - ec2:DeleteVpc
+              - ec2:DetachInternetGateway
+              - ec2:DisassociateAddress
+              - ec2:DisassociateRouteTable
+              - ec2:ReleaseAddress
+              - ec2:RevokeSecurityGroupEgress
+              - ec2:RevokeSecurityGroupIngress
+              - elasticloadbalancing:DeleteListener
+              - elasticloadbalancing:DeleteLoadBalancer
+              - elasticloadbalancing:DeleteRule
+              - elasticloadbalancing:DeleteTargetGroup
+            Resource: '*'
+            Condition:
+              StringEquals:
+                aws:RequestedRegion: !Ref AWS::Region
+          - Sid: RemoveTheCluster
+            Effect: Allow
+            Action:
+              - eks:DeleteAccessEntry
+              - eks:DeleteAddon
+              - eks:DeleteCluster
+              - eks:DeleteNodegroup
+              - eks:DeletePodIdentityAssociation
+              - eks:DisassociateAccessPolicy
+            Resource:
+              - !Sub arn:aws:eks:${AWS::Region}:${AWS::AccountId}:cluster/${ClusterName}
+              - !Sub arn:aws:eks:${AWS::Region}:${AWS::AccountId}:nodegroup/${ClusterName}/*
+              - !Sub arn:aws:eks:${AWS::Region}:${AWS::AccountId}:addon/${ClusterName}/*
+              - !Sub arn:aws:eks:${AWS::Region}:${AWS::AccountId}:access-entry/${ClusterName}/*
+              - !Sub arn:aws:eks:${AWS::Region}:${AWS::AccountId}:podidentityassociation/${ClusterName}/*
+          - Sid: RemoveThePlatformLogsAndAlarms
+            Effect: Allow
+            Action:
+              - logs:DeleteLogGroup
+              - cloudwatch:DeleteAlarms
+            Resource:
+              - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/eks/${ClusterName}/*
+              - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/vpc-flow-logs/${ClusterName}*
+              - !Sub arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:splitx-*
+          - Sid: RemoveThePlatformRoles
+            Effect: Allow
+            Action:
+              - iam:DeleteRole
+              - iam:DeleteRolePolicy
+              - iam:DetachRolePolicy
+              - iam:RemoveRoleFromInstanceProfile
+            Resource:
+              - !Sub arn:aws:iam::${AWS::AccountId}:role/splitx-eks-*
+              - !Sub arn:aws:iam::${AWS::AccountId}:role/splitx-wl-*
+          - Sid: RemoveThePlatformPolicies
+            Effect: Allow
+            Action:
+              - iam:DeletePolicy
+              - iam:DeletePolicyVersion
+            Resource:
+              - !Sub arn:aws:iam::${AWS::AccountId}:policy/splitx-eks-*
+              - !Sub arn:aws:iam::${AWS::AccountId}:policy/splitx-wl-*
+          - Sid: RemoveTheDemoSecrets
+            Effect: Allow
+            Action:
+              - secretsmanager:DeleteSecret
+              - secretsmanager:DescribeSecret
+            Resource: !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:splitx/demo/*
+          - Sid: TerraformState
+            Effect: Allow
+            Action:
+              - s3:ListBucket
+              - s3:GetObject
+              - s3:PutObject
+              - s3:DeleteObject
+            Resource:
+              - !GetAtt StateBucket.Arn
+              - !Sub '${StateBucket.Arn}/*'
+          - Sid: ReadTheEdgeBuckets
+            Effect: Allow
+            Action:
+              - s3:Get*
+              - s3:List*
+            Resource:
+              - arn:aws:s3:::splitx-edge-*
+              - arn:aws:s3:::splitx-edge-*/*
+          - Sid: TakeTheEdgeOffline
+            Effect: Allow
+            Action:
+              - cloudfront:PublishFunction
+              - cloudfront:UpdateDistribution
+              - cloudfront:UpdateFunction
+            Resource:
+              - !Sub arn:aws:cloudfront::${AWS::AccountId}:distribution/*
+              - !Sub arn:aws:cloudfront::${AWS::AccountId}:function/splitx-*
+
+  TeardownRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: splitx-ci-teardown
+      Description: >-
+        Assumed by GitHub Actions jobs in the aws-teardown environment only; it
+        removes the platform and can't create it.
+      MaxSessionDuration: 7200
+      PermissionsBoundary: !Ref CiBoundary
+      ManagedPolicyArns:
+        - !Ref TeardownPolicy
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !If
+                - MakeOidcProvider
+                - !Ref GitHubOidcProvider
+                - !Sub arn:aws:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                token.actions.githubusercontent.com:sub: !Sub repo:${GitHubRepository}:environment:${TeardownEnvironment}
+      Tags:
+        - Key: project
+          Value: splitx
+
 Outputs:
   StateBucketName:
     Description: Terraform's backend bucket (terraform init -backend-config=bucket=...).
     Value: !Ref StateBucket
   DeployRoleArn:
-    Description: The role aws-up and aws-down assume (aws-actions/configure-aws-credentials).
+    Description: The role aws-up and aws-edge assume (aws-actions/configure-aws-credentials).
     Value: !GetAtt DeployRole.Arn
+  TeardownRoleArn:
+    Description: The role aws-down assumes; it can only remove.
+    Value: !GetAtt TeardownRole.Arn
   BoundaryArn:
     Description: The permissions boundary every platform role must carry.
     Value: !Ref CiBoundary

@@ -4,8 +4,10 @@
  * IAM user splitx-devops (terraform/bootstrap):
  *
  *   splitx-bootstrap   Terraform's state bucket, GitHub's OIDC provider, the
- *                      role only the aws-demo environment may assume, and the
- *                      permissions boundary every platform role carries
+ *                      role only the reviewed aws-demo environment may assume
+ *                      (it builds), the role only aws-teardown may assume (it
+ *                      can only remove), and the permissions boundary both
+ *                      carry, as does every platform role
  *   splitx-guardrails  the monthly budget (without credits) and the alert topic
  *
  * Each stack is deployed through a change set (aws cloudformation deploy): the
