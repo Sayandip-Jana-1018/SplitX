@@ -2798,8 +2798,8 @@ A first version showed Vercel's Preview deployment as Jenkins's. Jenkins now cou
 ## Phase 10 — The account layer on AWS: CloudFormation
 
 ### D-087 · CloudFormation makes what Terraform needs, and the deploy identities can't escalate
-**2026-09-23** · ✅ written, linted and gated in CI (01d7c86, 09bf59c); deploys once the user applies
-version 2 of `splitx-devops-policy`
+**2026-09-23** · ✅ written, linted and gated in CI (01d7c86, 09bf59c); **deployed 2026-09-23** with
+D-088's changes (see there)
 
 Terraform can't create the things it needs before it runs, so two CloudFormation stacks do. They are
 deployed once from the laptop (`npm run aws:bootstrap`), each through a change set (`--plan` shows the
@@ -2853,9 +2853,11 @@ are accepted in the templates with their reasons:
 Now both templates report 0 misconfigurations.
 
 ### D-088 · Before the first deploy: a teardown role that can only remove, alarms that reach their topic, and CI roles held to one region
-**2026-09-23** · ✅ written and linted (cfn-lint 1.57.0: no findings; Trivy gates the templates in CI);
-policy v2 applied by the user and checked identical to the file; the stacks are not deployed yet (they
-wait for `BUDGET_EMAIL`)
+**2026-09-23** · ✅ written and linted (cfn-lint 1.57.0: no findings; Trivy gates the templates in CI).
+Policy v2 was applied by the user and checked identical to the file. **Both stacks were deployed on
+2026-09-23 at about 23:37 IST** through change sets (`splitx-bootstrap`: 8 resources; `splitx-guardrails`: 3;
+all `CREATE_COMPLETE`). The roles' trust conditions read back as designed, one per environment, each
+with the boundary. The alert email's subscription waits for the user to confirm it.
 
 Five gaps were found in D-087's templates while writing the handoff. They were fixed before anything
 was deployed, while a change still cost nothing.
