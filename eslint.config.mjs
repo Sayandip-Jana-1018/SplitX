@@ -14,6 +14,8 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Generated test coverage reports.
     "coverage/**",
+    // The OCR engine, minified, copied from node_modules at build (scripts/tesseract-assets.mjs).
+    "public/tesseract/**",
   ]),
 ]);
 

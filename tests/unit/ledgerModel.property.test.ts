@@ -257,5 +257,8 @@ describe('a group’s whole life, at random (property test)', () => {
         expect(happened.move).toBeGreaterThan(330);
         expect(happened.remove).toBeGreaterThan(30);
         expect(happened.join).toBeGreaterThan(275);
-    });
+    // About 2 s alone, but it shares the CPU with every other test file: on a
+    // busy laptop it once passed 5 s, the default, and was cut off (a 3,000-run
+    // soak of the same property found nothing).
+    }, 30_000);
 });

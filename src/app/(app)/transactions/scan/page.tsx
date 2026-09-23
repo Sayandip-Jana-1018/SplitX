@@ -48,6 +48,18 @@ interface AdvancedResult {
 
 const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
 
+/**
+ * On-device reading loads its worker, engine and English model from this site
+ * (scripts/tesseract-assets.mjs copies them in at build), not from a CDN. The
+ * worker starts straight from its file, not through a blob: wrapper.
+ */
+const TESSERACT_FILES = {
+    workerPath: '/tesseract/worker.min.js',
+    corePath: '/tesseract/core',
+    langPath: '/tesseract/lang',
+    workerBlobURL: false,
+};
+
 const STEPS = [
     { Icon: Camera, title: 'Snap', text: 'Photo or screenshot' },
     { Icon: Sparkles, title: 'Read', text: 'We pull out the details' },
@@ -190,6 +202,7 @@ function ScanReceipt() {
         try {
             const Tesseract = await import('tesseract.js');
             const result = await Tesseract.recognize(file, 'eng', {
+                ...TESSERACT_FILES,
                 logger: (message: { status: string; progress: number }) => {
                     if (message.status === 'recognizing text') setProgress(Math.round(message.progress * 100));
                 },

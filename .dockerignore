@@ -16,6 +16,8 @@ reports
 
 # User uploads live in Supabase Storage, never in an image
 public/uploads
+# The build copies the OCR engine in itself (scripts/tesseract-assets.mjs)
+public/tesseract
 
 # Not part of the application build
 .github
@@ -23,6 +25,8 @@ public/uploads
 tests
 docs
 scripts
+# …except the step `npm run build` runs first, which copies the OCR engine into public/
+!scripts/tesseract-assets.mjs
 k8s
 helm
 argocd

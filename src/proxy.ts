@@ -277,7 +277,8 @@ export const config = {
          * - _next/static (static files)
          * - _next/image (image optimization)
          * - favicon.ico, icons, manifest, sw.js, offline.html (PWA assets)
+         * - tesseract/ (the on-device OCR engine, about 7 MB of static files)
          */
-        '/((?!_next/static|_next/image|favicon\\.ico|icons|manifest\\.json|sw\\.js|offline\\.html).*)',
+        '/((?!_next/static|_next/image|favicon\\.ico|icons|manifest\\.json|sw\\.js|offline\\.html|tesseract/).*)',
     ],
 };

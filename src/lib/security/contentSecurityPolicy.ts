@@ -10,8 +10,10 @@
  *   what it renders and no page puts user text into raw HTML, so the policy's
  *   job is the rest: no scripts, requests, frames or form posts to anyone the
  *   list below doesn't name, which stops an injected script sending data away.
- * - `'wasm-unsafe-eval'` and jsDelivr: on-device receipt reading (Tesseract)
- *   compiles WebAssembly and loads its worker, engine and language data there.
+ * - `'wasm-unsafe-eval'`: on-device receipt reading (Tesseract) compiles
+ *   WebAssembly. Its worker, engine and language data are served by the site
+ *   itself (scripts/tesseract-assets.mjs), so no CDN is named anywhere, and
+ *   the worker starts from its own file, so workers need no blob: source.
  * - Supabase: receipt and avatar photos are read from, and uploaded straight
  *   to, its storage.
  * - Google and GitHub: profile photos of people who signed in with them.
@@ -25,13 +27,13 @@ export const CSP_REPORT_PATH = '/api/csp-report';
 
 export const CONTENT_SECURITY_POLICY = [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://cdn.jsdelivr.net",
+    "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'",
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob: https://*.supabase.co https://lh3.googleusercontent.com https://avatars.githubusercontent.com https://res.cloudinary.com",
     "font-src 'self' data:",
-    "connect-src 'self' https://*.supabase.co https://cdn.jsdelivr.net",
+    "connect-src 'self' https://*.supabase.co",
     "media-src 'self' blob:",
-    "worker-src 'self' blob:",
+    "worker-src 'self'",
     "manifest-src 'self'",
     "frame-src 'none'",
     "frame-ancestors 'none'",

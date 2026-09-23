@@ -2238,7 +2238,7 @@ referrer policy. It sent no Content-Security-Policy, and no Permissions-Policy o
 
 **Next:** after the merge, open production's pages and read the browser console, where report-only
 violations appear, then switch the header to `Content-Security-Policy`. Self-hosting the OCR engine
-(fix 7 of the plan) would remove jsDelivr from the list.
+(fix 7 of the plan) would remove jsDelivr from the list (done 2026-09-23, D-081).
 
 **Tests:** the policy's invariants (no `'unsafe-eval'`; `object-src`, `frame-ancestors`, `base-uri`,
 `form-action` and `connect-src` as above), both report formats, labels kept to a fixed set whatever a
@@ -2595,6 +2595,42 @@ Tests:
   of only free items.
 - A property test: the parts always add up exactly, each within a paisa of its exact proportion.
 - The route and the parser; the new route and parser cases fail against the old code.
+
+Checked in a browser against a local copy of the app (below, D-081): an on-device scan of "Amount $12.50
+paid" shows "This bill looks to be in USD" and no amount, where it used to read ₹12.50. The item-split
+sheet needs the AI scan, which needs the shared rate limiter for its quota, so it is checked on the live
+site with a real receipt.
+
+### D-081 · The OCR engine is served by the site; the CSP names no CDN
+**2026-09-23** · ✅ written, unit-tested (1,102 → 1,103 tests) and checked in a browser
+
+On-device receipt reading (Tesseract) loaded its worker, its WebAssembly engine and its English model
+from jsDelivr. So the Content-Security-Policy had to allow scripts and requests from a CDN that serves
+every npm package ever published.
+
+- `scripts/tesseract-assets.mjs` copies them into `public/tesseract/` before every `next dev` and `next
+  build`. They come from the pinned packages in `node_modules`: the English model comes from
+  `@tesseract.js-data/eng` 1.0.0, the package the CDN served it from. The copies are not committed, and
+  Docker builds make their own (one exception in `.dockerignore`).
+- The worker picks one of three engine builds (relaxed SIMD, SIMD or plain) for the browser; each is about
+  3.9 MB, and the model is 2.9 MB. Tesseract keeps the model in IndexedDB after the first read.
+- The worker now starts straight from its file, not through a `blob:` wrapper.
+- The CSP drops jsDelivr from `script-src` and `connect-src`, and `blob:` from `worker-src`. It keeps
+  `'wasm-unsafe-eval'`, which WebAssembly needs.
+- The proxy skips `/tesseract/`, as it does the icons: 7 MB of static files need no rate limiter.
+
+Checked in a browser, against the app running locally with a throwaway database (production storage,
+Redis, email and AI switched off):
+- a receipt drawn on a canvas and given to the gallery input read as ₹450, Google Pay, and its UPI
+  reference;
+- nothing was requested from jsDelivr;
+- with the engine and model moved away and the browser's cached copy deleted, the scan failed, and the
+  console named `/tesseract/core/tesseract-core-relaxedsimd-lstm.wasm.js` on this site. So the files
+  really come from the site, with no silent fallback to the CDN.
+
+Also: the property test from D-077 once took 5.2 s during a full run on this laptop and hit the default
+5-second limit. It takes about 2 s alone, and a 3,000-history soak (10 times its usual run) found
+nothing, so it now has a 30-second limit.
 
 ---
 

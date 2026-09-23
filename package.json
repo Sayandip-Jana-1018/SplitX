@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "node scripts/tesseract-assets.mjs",
     "dev": "next dev",
+    "prebuild": "node scripts/tesseract-assets.mjs",
     "build": "next build",
     "start": "next start",
     "postinstall": "prisma generate",
@@ -37,6 +39,7 @@
     "@opentelemetry/sdk-trace-node": "2.11.0",
     "@prisma/client": "^6.19.2",
     "@supabase/supabase-js": "^2.97.0",
+    "@tesseract.js-data/eng": "1.0.0",
     "@upstash/redis": "^1.36.2",
     "bcryptjs": "^3.0.3",
     "framer-motion": "^12.34.0",

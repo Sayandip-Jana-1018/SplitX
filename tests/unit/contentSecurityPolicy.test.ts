@@ -18,9 +18,14 @@ describe('the policy', () => {
         expect(directives.get('form-action')).toEqual(["'self'"]);
     });
 
-    it('lets requests go only to the site, its storage and the OCR engine', () => {
-        expect(directives.get('connect-src')).toEqual(["'self'", 'https://*.supabase.co', 'https://cdn.jsdelivr.net']);
+    it('lets requests go only to the site and its photo storage', () => {
+        expect(directives.get('connect-src')).toEqual(["'self'", 'https://*.supabase.co']);
         expect(directives.get('default-src')).toEqual(["'self'"]);
+    });
+
+    it('runs scripts and workers from the site alone: the OCR engine is served from it too', () => {
+        expect(directives.get('script-src')).toEqual(["'self'", "'unsafe-inline'", "'wasm-unsafe-eval'"]);
+        expect(directives.get('worker-src')).toEqual(["'self'"]);
     });
 
     it('lets the site itself, and nothing else, use the camera and microphone', () => {
