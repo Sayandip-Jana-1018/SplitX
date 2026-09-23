@@ -18,6 +18,11 @@ Parameters:
     Description: The month's budget in US dollars.
 
 Resources:
+  # Accepted (Trivy AWS-0095): not encrypted. AWS Budgets cannot publish to a
+  # topic encrypted with SNS's AWS-managed key (its key policy can't admit
+  # budgets.amazonaws.com), so encryption would need a paid key of its own, for
+  # messages that only say what percentage of the budget has been spent.
+  #trivy:ignore:AWS-0095
   AlertTopic:
     Type: AWS::SNS::Topic
     Properties:

@@ -32,6 +32,11 @@ Conditions:
 
 Resources:
   # ── Terraform's state ──────────────────────────────────────────
+  # Accepted (Trivy AWS-0132): encrypted with S3's own keys, not a customer
+  # managed KMS key. The bucket is private, TLS only and versioned, and only
+  # splitx-devops and splitx-ci-deploy can read it; a key of our own would add
+  # a monthly charge and one more thing to manage, for little more protection.
+  #trivy:ignore:AWS-0132
   StateBucket:
     Type: AWS::S3::Bucket
     # State outlives the stack: deleting the stack must never delete what

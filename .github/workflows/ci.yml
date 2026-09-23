@@ -294,11 +294,11 @@ jobs:
           cfn-lint --regions ap-south-1 -- cloudformation/*.yaml
 
       - name: Trivy misconfigurations
-        # Report-only for its first run: each finding is then fixed, or accepted
-        # in the template with its reason, and this becomes a gate.
+        # A gate: any finding at medium or above fails the build. The two
+        # accepted ones are marked in the templates, each with its reason.
         run: |
           docker run --rm -v "$PWD:/src" -w /src "$TRIVY" config \
-            --severity MEDIUM,HIGH,CRITICAL --exit-code 0 cloudformation
+            --severity MEDIUM,HIGH,CRITICAL --exit-code 1 cloudformation
 
   sonar:
     # SonarQube Cloud: bugs, code smells, duplication, security hotspots, and
