@@ -2632,6 +2632,28 @@ Also: the property test from D-077 once took 5.2 s during a full run on this lap
 5-second limit. It takes about 2 s alone, and a 3,000-history soak (10 times its usual run) found
 nothing, so it now has a 30-second limit.
 
+### D-082 · Before enforcing the CSP: what production's pages load
+**2026-09-23** · 🚧 public pages checked; signed-in pages wait for a check in a signed-in browser
+
+The policy (D-071, D-081) is still report-only. It can be enforced only once nothing the app itself
+does breaks it. Evidence so far, from production:
+- **Public pages report nothing.** On the landing page, sign-in, sign-up, `/scale` and forgot-password, a
+  buffered `ReportingObserver` (which also returns reports from before it started) found no
+  violations. To prove it would catch one, an image from `example.com` was added to the landing page:
+  it was reported as `img-src`. That probe also sent one report to production's `/api/csp-report` at
+  about 12:10 IST.
+- **Profile photos.** Production's 9 accounts use `lh3.googleusercontent.com` (8) and SplitX's Supabase
+  (1). The policy allows both, and GitHub's avatar host.
+- **The OCR worker** gets the same policy with its own file, and the policy allows everything it does:
+  load its engine and model from the site, compile WebAssembly, and fetch. Its only uses of `Function`
+  are fallbacks for browsers without `globalThis`, which modern browsers never reach.
+- **OAuth sign-in** starts with a `fetch` and then navigates (`next-auth/react`), so `form-action 'self'`
+  never sees the redirect to Google or GitHub.
+
+Left before enforcing: the signed-in pages under the production build. They need a signed-in browser,
+and none is available to me, since I don't sign in to people's accounts. Once they report nothing, the
+header becomes `Content-Security-Policy`, keeping `report-uri`, so anything missed still reports.
+
 ### D-083 · A profile photo can't be a tracker, and a deleted group stays deleted
 **2026-09-23** · ✅ written and unit-tested (1,103 → 1,108 tests)
 
