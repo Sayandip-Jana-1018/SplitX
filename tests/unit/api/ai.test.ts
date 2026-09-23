@@ -193,4 +193,41 @@ describe('POST /api/receipt-scan', () => {
         expect(res.status).toBe(504);
         expect(fetchMock.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
     });
+
+    const modelReads = (bill: Record<string, unknown>) => fetchMock.mockImplementation(async () =>
+        new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(bill) } }] })));
+    const scanned = async () => (await scan('data:image/jpeg;base64,/9j/AAAA')).json();
+
+    it('counts each item row once, since its price is already quantity × unit price', async () => {
+        modelReads({ items: [{ name: 'Coffee', quantity: 2, price: 240 }, { name: 'Cake', quantity: 1, price: 150 }], subtotal: 390, taxes: { GST: 19.5 }, total: 409.5 });
+
+        const bill = await scanned();
+
+        expect(bill.items).toEqual([{ name: 'Coffee', quantity: 2, price: 24_000 }, { name: 'Cake', quantity: 1, price: 15_000 }]);
+        expect(bill.total).toBe(40_950);
+        expect(bill.notes).toBeNull(); // it used to report a ₹240 gap here, counting the coffees twice
+    });
+
+    it('without a printed total, uses the items and taxes, each row once', async () => {
+        modelReads({ items: [{ name: 'Coffee', quantity: 2, price: 240 }], taxes: { GST: 12 }, total: 0 });
+
+        expect((await scanned()).total).toBe(25_200);
+    });
+
+    it('says which currency the bill is in, and reads rupees when it can’t tell', async () => {
+        for (const [read, currency] of [['usd', 'USD'], [' EUR ', 'EUR'], [undefined, 'INR'], ['dollars', 'INR']]) {
+            modelReads({ items: [], total: 12.5, currency: read });
+            expect((await scanned()).currency).toBe(currency);
+        }
+    });
+
+    it('drops a discount listed as an item, and notes a total far from the items', async () => {
+        modelReads({ items: [{ name: 'Thali', quantity: 1, price: 300 }, { name: 'Discount', quantity: 1, price: -50 }], taxes: {}, total: 200 });
+
+        const bill = await scanned();
+
+        expect(bill.items.map((item: { name: string }) => item.name)).toEqual(['Thali']);
+        expect(bill.total).toBe(20_000);
+        expect(bill.notes).toContain('sum to ₹300 but receipt total is ₹200');
+    });
 });

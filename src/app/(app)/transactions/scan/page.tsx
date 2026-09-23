@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import { PaymentTag } from '@/components/ui/Icons';
-import { IconTile, ListGroup, ListRow, Progress, Segmented, Tag } from '@/components/ui/kit';
+import { IconTile, ListGroup, ListRow, Notice, Progress, Segmented, Tag } from '@/components/ui/kit';
 import { useToast } from '@/components/ui/Toast';
 import SplitByItems from '@/components/features/SplitByItems';
 import { useIsClient } from '@/hooks/useMediaQuery';
@@ -35,10 +35,13 @@ type ScanMode = 'basic' | 'advanced';
 interface AdvancedResult {
     merchant: string | null;
     date: string | null;
+    /** `price` is the row's total, quantity included. */
     items: { name: string; quantity: number; price: number }[];
     subtotal: number;
     taxes: Record<string, number>;
     total: number;
+    /** ISO 4217 code of the amounts as printed. */
+    currency: string;
     category: string;
     confidence: number;
 }
@@ -174,7 +177,7 @@ function ScanReceipt() {
             }
             window.clearInterval(progressTimerRef.current);
             setProgress(100);
-            setAdvanced(payload as AdvancedResult);
+            setAdvanced({ ...(payload as AdvancedResult), currency: (payload as AdvancedResult).currency || 'INR' });
             setState('result');
         } catch {
             fail('Couldn’t reach the AI service. Check your connection and try again.');
@@ -302,9 +305,14 @@ function ScanReceipt() {
 
     const goToComposer = (params: URLSearchParams) => {
         params.set('source', 'scan');
-        if (groupId) params.set('groupId', groupId);
+        if (groupId && !params.has('groupId')) params.set('groupId', groupId);
         router.push(`/transactions/new?${params.toString()}`);
     };
+
+    // SplitX keeps every group in rupees. A bill in another currency carries
+    // over without its amount, for the person to type what they paid in ₹.
+    const billCurrency = mode === 'advanced' ? advanced?.currency ?? 'INR' : parsed?.currency ?? 'INR';
+    const inRupees = billCurrency === 'INR';
 
     const addAsExpense = async () => {
         setSaving(true);
@@ -315,7 +323,7 @@ function ScanReceipt() {
         const params = new URLSearchParams();
         if (receiptUrl) params.set('receiptUrl', receiptUrl);
         if (mode === 'advanced' && advanced) {
-            if (advanced.total) params.set('amount', String(advanced.total / 100));
+            if (advanced.total && inRupees) params.set('amount', String(advanced.total / 100));
             if (advanced.merchant) params.set('title', advanced.merchant);
             if (advanced.category) params.set('category', advanced.category);
         } else if (parsed) {
@@ -460,6 +468,13 @@ function ScanReceipt() {
                             </Tag>
                         </div>
 
+                        {!inRupees && (
+                            <Notice tone="warning" title={`This bill ${mode === 'advanced' ? 'is' : 'looks to be'} in ${billCurrency}`}>
+                                SplitX keeps every group in rupees, so its amount doesn’t carry over. Type what you paid
+                                in ₹ on the next screen.{mode === 'advanced' && ' Splitting by item works for bills in rupees.'}
+                            </Notice>
+                        )}
+
                         {mode === 'advanced' && advanced && (
                             <div className={styles.receipt}>
                                 <div className={styles.receiptTop}>
@@ -474,21 +489,21 @@ function ScanReceipt() {
                                                     {item.name}
                                                     {item.quantity > 1 && <span className={styles.itemQty}>×{item.quantity}</span>}
                                                 </span>
-                                                <span className={styles.itemPrice}>{formatCurrency(item.price * item.quantity)}</span>
+                                                <span className={styles.itemPrice}>{formatCurrency(item.price, advanced.currency)}</span>
                                             </li>
                                         ))}
                                     </ul>
                                 )}
                                 <div className={styles.totals}>
                                     {advanced.subtotal > 0 && (
-                                        <div className={styles.totalRow}><span>Subtotal</span><span>{formatCurrency(advanced.subtotal)}</span></div>
+                                        <div className={styles.totalRow}><span>Subtotal</span><span>{formatCurrency(advanced.subtotal, advanced.currency)}</span></div>
                                     )}
                                     {Object.entries(advanced.taxes).map(([name, amount]) => (
-                                        <div key={name} className={styles.totalRow}><span>{name}</span><span>{formatCurrency(amount)}</span></div>
+                                        <div key={name} className={styles.totalRow}><span>{name}</span><span>{formatCurrency(amount, advanced.currency)}</span></div>
                                     ))}
                                     <div className={cn(styles.totalRow, styles.grandTotal)}>
                                         <span>Total</span>
-                                        <span>{formatCurrency(advanced.total)}</span>
+                                        <span>{formatCurrency(advanced.total, advanced.currency)}</span>
                                     </div>
                                 </div>
                             </div>
@@ -524,7 +539,7 @@ function ScanReceipt() {
                         )}
 
                         <div className={styles.actions}>
-                            {mode === 'advanced' && advanced && advanced.items.length > 0 && (
+                            {mode === 'advanced' && advanced && advanced.items.length > 0 && inRupees && (
                                 <ListGroup>
                                     <ListRow
                                         onClick={() => setSplitOpen(true)}
@@ -637,7 +652,8 @@ function ScanReceipt() {
                     taxes={advanced.taxes}
                     total={advanced.total}
                     merchant={advanced.merchant}
-                    onCreateExpense={async (splits, title, total) => {
+                    groupId={groupId}
+                    onCreateExpense={async (splits, title, total, splitGroupId) => {
                         setSplitOpen(false);
                         setSaving(true);
                         const receiptUrl = await uploadCurrentReceipt();
@@ -646,6 +662,7 @@ function ScanReceipt() {
                             amount: String(total / 100),
                             category: advanced.category || 'food',
                             splitData: JSON.stringify(splits),
+                            groupId: splitGroupId,
                         });
                         if (receiptUrl) params.set('receiptUrl', receiptUrl);
                         goToComposer(params);

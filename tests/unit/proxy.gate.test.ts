@@ -94,6 +94,15 @@ describe('the page gate', () => {
         expect(res.cookies.get(`__Secure-${COOKIE}`)).toMatchObject({ maxAge: 0, secure: true });
     });
 
+    it('in production, reads the __Secure- session Auth.js issues there', async () => {
+        vi.stubEnv('NODE_ENV', 'production');
+        const name = `__Secure-${COOKIE}`;
+        const token = await encode({ token: { id: 'cuseralice00001' }, secret: SECRET, salt: name, maxAge: 3_600 });
+
+        expect((await visit('/dashboard', `${name}=${token}`)).headers.get('location')).toBeNull();
+        expect((await visit('/dashboard', `${name}=forged`)).cookies.get(name)).toMatchObject({ maxAge: 0, secure: true });
+    });
+
     it('without an auth secret, where nothing can be checked, a cookie still counts', async () => {
         vi.stubEnv('AUTH_SECRET', '');
         vi.stubEnv('NEXTAUTH_SECRET', '');

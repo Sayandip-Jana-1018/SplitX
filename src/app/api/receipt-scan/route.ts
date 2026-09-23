@@ -4,6 +4,8 @@ import { prisma } from '@/lib/db';
 import { takeAiQuota } from '@/lib/aiQuota';
 import { recordReceiptScan } from '@/lib/metrics';
 import { logger } from '@/lib/logger';
+import { adjustmentLooksWrong } from '@/lib/receiptSplit';
+import { formatCurrency } from '@/lib/utils';
 
 /**
  * POST /api/receipt-scan — Advanced AI receipt scanning via OpenAI GPT-4o-mini vision.
@@ -14,7 +16,7 @@ import { logger } from '@/lib/logger';
 interface ReceiptItem {
     name: string;
     quantity: number;
-    price: number;      // in paise
+    price: number;      // the row's total (quantity × unit price), in paise
 }
 
 interface ReceiptScanResult {
@@ -24,6 +26,8 @@ interface ReceiptScanResult {
     subtotal: number;   // paise
     taxes: Record<string, number>; // e.g. { CGST: 1702, SGST: 1702 }
     total: number;       // paise
+    /** ISO 4217 code of the amounts as printed. SplitX records rupees, so the page warns about any other. */
+    currency: string;
     category: string;
     confidence: number;
     notes: string | null; // warnings about pricing inconsistencies
@@ -40,6 +44,7 @@ Return ONLY valid JSON with this exact schema (no markdown, no explanation, no c
   "subtotal": 500.00,
   "taxes": { "CGST": 25.00, "SGST": 25.00 },
   "total": 550.00,
+  "currency": "INR",
   "category": "food|transport|shopping|entertainment|bills|health|education|general",
   "confidence": 0.95,
   "notes": null
@@ -53,7 +58,7 @@ MOST IMPORTANT — TOTAL AMOUNT:
 3. If multiple totals appear (subtotal, total, grand total, payment), use the LAST/LARGEST one that represents what was actually charged/paid.
 
 ITEM EXTRACTION:
-4. Prices MUST be in the ORIGINAL CURRENCY as exact decimals (e.g., 120.50 for ₹120.50). Do NOT convert currencies.
+4. Prices MUST be in the ORIGINAL CURRENCY as exact decimals (e.g., 120.50 for ₹120.50). Do NOT convert currencies. Set "currency" to the ISO 4217 code of that currency (₹, Rs or INR is "INR"; $ in the US is "USD"; € is "EUR"). If the receipt shows no currency, use "INR".
 5. Include EVERY SINGLE ITEM listed. Do not skip or summarize items.
 6. "price" inside "items" must be the TOTAL price for that item row (quantity × unit price) as printed on the receipt.
 7. If quantity is missing, default to 1.
@@ -208,12 +213,15 @@ export async function POST(req: Request) {
             return isNaN(n) ? 0 : Math.round(n * 100);
         };
 
+        // A discount the model listed as an item is dropped: the printed total already has it.
         const items: ReceiptItem[] = Array.isArray(parsed.items)
-            ? parsed.items.map((item: Record<string, unknown>) => ({
-                name: String(item.name || 'Unknown item'),
-                quantity: typeof item.quantity === 'number' ? item.quantity : 1,
-                price: toPaise(item.price),
-            }))
+            ? parsed.items
+                .map((item: Record<string, unknown>) => ({
+                    name: String(item.name || 'Unknown item'),
+                    quantity: typeof item.quantity === 'number' && item.quantity > 0 ? item.quantity : 1,
+                    price: toPaise(item.price),
+                }))
+                .filter((item: ReceiptItem) => item.price >= 0)
             : [];
 
         const taxes: Record<string, number> = {};
@@ -224,6 +232,7 @@ export async function POST(req: Request) {
         }
 
         const aiNotes = typeof parsed.notes === 'string' ? parsed.notes : null;
+        const currencyCode = typeof parsed.currency === 'string' ? parsed.currency.trim().toUpperCase() : '';
 
         const result: ReceiptScanResult = {
             merchant: typeof parsed.merchant === 'string' ? parsed.merchant : null,
@@ -231,31 +240,26 @@ export async function POST(req: Request) {
             items,
             subtotal: toPaise(parsed.subtotal),
             taxes,
-            total: toPaise(parsed.total),
+            total: Math.max(0, toPaise(parsed.total)),
+            currency: /^[A-Z]{3}$/.test(currencyCode) ? currencyCode : 'INR',
             category: typeof parsed.category === 'string' ? parsed.category : 'general',
             confidence: typeof parsed.confidence === 'number' ? parsed.confidence : 0.5,
             notes: aiNotes,
         };
 
-        // Sanity check: if total is 0 but items have prices, compute total
-        if (result.total === 0 && items.length > 0) {
-            result.total = items.reduce((s, i) => s + i.price * i.quantity, 0);
-            const taxTotal = Object.values(taxes).reduce((s, v) => s + v, 0);
-            result.total += taxTotal;
-        }
-
-        // Post-processing validation: flag if item sum diverges significantly from declared total
-        const itemSum = items.reduce((s, i) => s + i.price * i.quantity, 0);
+        // Each item's price is already its row total, so quantities aren't multiplied in again.
+        const itemSum = items.reduce((s, i) => s + i.price, 0);
         const taxTotal = Object.values(taxes).reduce((s, v) => s + v, 0);
         const computedTotal = itemSum + taxTotal;
-        if (result.total > 0 && computedTotal > 0) {
-            const diff = Math.abs(result.total - computedTotal);
-            const pct = diff / result.total;
-            if (pct > 0.05 && diff > 500) { // >5% and >₹5 discrepancy
-                const diffRupees = (diff / 100).toFixed(2);
-                const note = `Item prices + taxes sum to ₹${(computedTotal / 100).toFixed(2)} but receipt total is ₹${(result.total / 100).toFixed(2)} (₹${diffRupees} difference). Using printed receipt total.`;
-                result.notes = result.notes ? `${result.notes}. ${note}` : note;
-            }
+
+        // No printed total read: the items and taxes are the best there is.
+        if (result.total === 0 && items.length > 0) result.total = computedTotal;
+
+        // Flag a printed total the items and taxes are far from; the printed total still stands.
+        if (result.total > 0 && computedTotal > 0 && adjustmentLooksWrong(result.total - computedTotal, result.total)) {
+            const money = (paise: number) => formatCurrency(paise, result.currency);
+            const note = `Item prices + taxes sum to ${money(computedTotal)} but receipt total is ${money(result.total)} (${money(Math.abs(result.total - computedTotal))} difference). Using printed receipt total.`;
+            result.notes = result.notes ? `${result.notes}. ${note}` : note;
         }
 
         recordReceiptScan('success');

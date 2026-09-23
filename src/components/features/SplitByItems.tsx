@@ -7,84 +7,100 @@ import {
 } from 'lucide-react';
 import Avatar from '@/components/ui/Avatar';
 import Button from '@/components/ui/Button';
+import { adjustmentLooksWrong, splitReceipt, type ReceiptLine } from '@/lib/receiptSplit';
 import { formatCurrency } from '@/lib/utils';
 
 /* ── Types ── */
-interface ReceiptItem {
-    name: string;
-    quantity: number;
-    price: number; // in paise
-}
-
 interface MemberInfo {
     id: string;
     name: string;
     image: string | null;
 }
 
+interface GroupOption {
+    id: string;
+    name: string;
+    members: MemberInfo[];
+}
+
 interface SplitByItemsProps {
     isOpen: boolean;
     onClose: () => void;
-    items: ReceiptItem[];
+    items: ReceiptLine[];
     taxes: Record<string, number>; // e.g. { GST: 500 }
     total: number;
     merchant: string | null;
-    onCreateExpense: (splits: { userId: string; amount: number }[], title: string, total: number) => void;
+    /** The group the scan was started from, if any; otherwise the most recently active group. */
+    groupId?: string | null;
+    onCreateExpense: (splits: { userId: string; amount: number }[], title: string, total: number, groupId: string) => void;
 }
 
-
+/** Every item shared by everyone in the group: where a split starts. */
+function everyoneHadEverything(items: ReceiptLine[], members: MemberInfo[]) {
+    return Object.fromEntries(items.map((_, index) => [index, new Set(members.map((member) => member.id))]));
+}
 
 export default function SplitByItems({
-    isOpen, onClose, items, taxes, total, merchant, onCreateExpense,
+    isOpen, onClose, items, taxes, total, merchant, groupId, onCreateExpense,
 }: SplitByItemsProps) {
-    const [members, setMembers] = useState<MemberInfo[]>([]);
+    const [groups, setGroups] = useState<GroupOption[]>([]);
+    const [chosenGroupId, setChosenGroupId] = useState<string | null>(null);
     const [loadingMembers, setLoadingMembers] = useState(true);
     // For each item index → set of member IDs who had that item
     const [assignments, setAssignments] = useState<Record<number, Set<string>>>({});
     const [expandedItem, setExpandedItem] = useState<number | null>(null);
     const [creating, setCreating] = useState(false);
 
-    // Fetch group members
+    const members = useMemo(
+        () => groups.find((group) => group.id === chosenGroupId)?.members ?? [],
+        [groups, chosenGroupId]
+    );
+
+    // Load the groups. A bill is split within one group: the one the scan came
+    // from, else the most recently active one, as the expense form picks.
     useEffect(() => {
         if (!isOpen) return;
+        let cancelled = false;
         (async () => {
             try {
                 const res = await fetch('/api/groups');
                 if (!res.ok) return;
-                const groups = await res.json();
-                if (!Array.isArray(groups) || groups.length === 0) return;
+                const data = await res.json();
+                if (cancelled || !Array.isArray(data)) return;
 
-                const memberMap = new Map<string, MemberInfo>();
-                for (const g of groups) {
-                    if (g.members) {
-                        for (const m of g.members) {
-                            const id = m.userId || m.user?.id;
-                            if (id && !memberMap.has(id)) {
-                                memberMap.set(id, {
-                                    id,
-                                    name: m.user?.name || m.name || 'Unknown',
-                                    image: m.user?.image || null,
-                                });
-                            }
-                        }
-                    }
-                }
-                const memberList = Array.from(memberMap.values());
-                setMembers(memberList);
-
-                // Default: all items assigned to all members
-                const defaultAssign: Record<number, Set<string>> = {};
-                items.forEach((_, idx) => {
-                    defaultAssign[idx] = new Set(memberList.map(m => m.id));
-                });
-                setAssignments(defaultAssign);
+                const options: GroupOption[] = data.map((group: {
+                    id: string;
+                    name: string;
+                    members?: { userId?: string; user?: { id?: string; name?: string | null; image?: string | null } }[];
+                }) => ({
+                    id: group.id,
+                    name: group.name,
+                    members: (group.members ?? [])
+                        .map((member) => ({
+                            id: member.userId || member.user?.id || '',
+                            name: member.user?.name || 'Unknown',
+                            image: member.user?.image || null,
+                        }))
+                        .filter((member) => member.id),
+                }));
+                const chosen = options.find((group) => group.id === groupId) ?? options[0];
+                setGroups(options);
+                setChosenGroupId(chosen?.id ?? null);
+                setAssignments(everyoneHadEverything(items, chosen?.members ?? []));
             } catch (e) {
                 console.error('Failed to fetch members:', e);
             } finally {
-                setLoadingMembers(false);
+                if (!cancelled) setLoadingMembers(false);
             }
         })();
-    }, [isOpen, items]);
+        return () => { cancelled = true; };
+    }, [isOpen, items, groupId]);
+
+    const chooseGroup = (id: string) => {
+        setChosenGroupId(id);
+        setAssignments(everyoneHadEverything(items, groups.find((group) => group.id === id)?.members ?? []));
+        setExpandedItem(null);
+    };
 
     // Toggle a member assignment for an item
     const toggleAssignment = (itemIdx: number, memberId: string) => {
@@ -112,47 +128,23 @@ export default function SplitByItems({
         });
     };
 
-    // Compute per-person totals
-    const perPersonTotals = useMemo(() => {
-        const totals: Record<string, number> = {};
-        members.forEach(m => { totals[m.id] = 0; });
+    // Each person's share of the printed total, in whole paise (lib/receiptSplit.ts).
+    const split = useMemo(() => splitReceipt({
+        items,
+        taxes,
+        total,
+        assignments: items.map((_, index) => [...(assignments[index] ?? [])]),
+        memberIds: members.map((member) => member.id),
+    }), [assignments, items, taxes, total, members]);
 
-        // Sum item-level splits
-        let assignedSubtotal = 0;
-        items.forEach((item, idx) => {
-            const assigned = assignments[idx];
-            if (!assigned || assigned.size === 0) return;
-            const perPerson = Math.round(item.price / assigned.size);
-            assigned.forEach(id => {
-                totals[id] = (totals[id] || 0) + perPerson;
-            });
-            assignedSubtotal += item.price;
-        });
-
-        // Distribute taxes proportionally based on item-level share
-        const totalTax = Object.values(taxes).reduce((s, v) => s + v, 0);
-        if (assignedSubtotal > 0 && totalTax > 0) {
-            for (const memberId of Object.keys(totals)) {
-                if (totals[memberId] > 0) {
-                    const proportion = totals[memberId] / assignedSubtotal;
-                    totals[memberId] += Math.round(totalTax * proportion);
-                }
-            }
-        }
-
-        return totals;
-    }, [assignments, items, taxes, members]);
-
-    const grandTotal = Object.values(perPersonTotals).reduce((s, v) => s + v, 0);
+    const shareOf = new Map(split?.shares.map((share) => [share.userId, share.amount]) ?? []);
     const unassignedItems = items.filter((_, idx) => !assignments[idx] || assignments[idx].size === 0);
+    const misread = split ? adjustmentLooksWrong(split.adjustment, split.total) : false;
 
     const handleCreate = async () => {
-        if (unassignedItems.length > 0) return;
+        if (!split || !chosenGroupId) return;
         setCreating(true);
-        const splits = Object.entries(perPersonTotals)
-            .filter(([, amount]) => amount > 0)
-            .map(([userId, amount]) => ({ userId, amount }));
-        onCreateExpense(splits, merchant || 'Receipt expense', grandTotal);
+        onCreateExpense(split.shares, merchant || 'Receipt expense', split.total, chosenGroupId);
         setCreating(false);
     };
 
@@ -229,9 +221,35 @@ export default function SplitByItems({
                                         {merchant}
                                     </p>
                                 )}
+                                {groups.length > 1 ? (
+                                    <label style={{
+                                        display: 'flex', alignItems: 'center', gap: 8, marginTop: 8,
+                                        fontSize: '13px', color: 'var(--fg-tertiary)', fontWeight: 500,
+                                    }}>
+                                        Group
+                                        <select
+                                            value={chosenGroupId ?? ''}
+                                            onChange={(event) => chooseGroup(event.target.value)}
+                                            style={{
+                                                font: 'inherit', fontWeight: 600, color: 'var(--fg-primary)',
+                                                background: 'var(--surface-primary)',
+                                                border: '1px solid var(--border-secondary)',
+                                                borderRadius: '10px', padding: '4px 8px', maxWidth: 220,
+                                            }}
+                                        >
+                                            {groups.map((group) => (
+                                                <option key={group.id} value={group.id}>{group.name}</option>
+                                            ))}
+                                        </select>
+                                    </label>
+                                ) : groups.length === 1 && (
+                                    <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--fg-tertiary)' }}>
+                                        In {groups[0].name}
+                                    </p>
+                                )}
                             </div>
 
-                            <button onClick={onClose} style={{
+                            <button onClick={onClose} aria-label="Close" style={{
                                 background: 'var(--surface-primary)',
                                 border: '1px solid var(--border-secondary)',
                                 borderRadius: '50%',
@@ -259,6 +277,13 @@ export default function SplitByItems({
                             }}>
                                 <Loader2 size={32} className="animate-spin" style={{ opacity: 0.5 }} />
                                 <span style={{ fontSize: '14px', fontWeight: 500 }}>Loading group...</span>
+                            </div>
+                        ) : groups.length === 0 ? (
+                            <div style={{
+                                display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center',
+                                height: 200, color: 'var(--fg-tertiary)', fontSize: '14px', fontWeight: 500, padding: '0 24px',
+                            }}>
+                                Create a group first, then split this bill by item with the people in it.
                             </div>
                         ) : (
                             <>
@@ -482,8 +507,8 @@ export default function SplitByItems({
                                     })}
                                 </div>
 
-                                {/* ── Taxes ── */}
-                                {Object.keys(taxes).length > 0 && (
+                                {/* ── Taxes, and the rest of the bill ── */}
+                                {(Object.keys(taxes).length > 0 || Boolean(split?.adjustment)) && (
                                     <div style={{
                                         background: 'var(--surface-primary)',
                                         borderRadius: '20px', padding: '20px',
@@ -510,6 +535,18 @@ export default function SplitByItems({
                                                 <span style={{ fontWeight: 500 }}>{formatCurrency(amount)}</span>
                                             </div>
                                         ))}
+                                        {split && split.adjustment !== 0 && (
+                                            <div style={{
+                                                display: 'flex', justifyContent: 'space-between',
+                                                fontSize: '14px', color: 'var(--fg-secondary)',
+                                                marginBottom: 8
+                                            }}>
+                                                <span>{split.adjustment < 0 ? 'Discount and round-off' : 'Other charges on the bill'}</span>
+                                                <span style={{ fontWeight: 500 }}>
+                                                    {split.adjustment < 0 ? '−' : ''}{formatCurrency(Math.abs(split.adjustment))}
+                                                </span>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
 
@@ -539,7 +576,7 @@ export default function SplitByItems({
                                     WebkitOverflowScrolling: 'touch',
                                 }}>
                                     {members.map(m => {
-                                        const amount = perPersonTotals[m.id] || 0;
+                                        const amount = shareOf.get(m.id) ?? 0;
                                         if (amount === 0) return null;
                                         return (
                                             <div key={m.id} style={{
@@ -571,26 +608,28 @@ export default function SplitByItems({
 
                                         <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
                                             <span style={{ fontSize: '32px', fontWeight: 800, color: 'var(--fg-primary)', lineHeight: 1 }}>
-                                                {formatCurrency(grandTotal)}
+                                                {formatCurrency(split?.total ?? total)}
                                             </span>
                                         </div>
 
-                                        {Math.abs(grandTotal - total) >= 2 && (
-                                            <div style={{
-                                                display: 'flex', alignItems: 'center', gap: 6, marginTop: 4,
-                                                color: 'var(--fg-tertiary)', fontSize: '13px'
+                                        {split && (
+                                            <span style={{ marginTop: 4, color: 'var(--fg-tertiary)', fontSize: '13px', textAlign: 'center' }}>
+                                                Items {formatCurrency(split.itemsTotal)}
+                                                {split.taxTotal !== 0 && ` · taxes ${formatCurrency(split.taxTotal)}`}
+                                                {split.adjustment < 0 && ` · discount and round-off −${formatCurrency(-split.adjustment)}`}
+                                                {split.adjustment > 0 && ` · other charges ${formatCurrency(split.adjustment)}`}
+                                            </span>
+                                        )}
+
+                                        {misread && split && (
+                                            <span role="status" style={{
+                                                marginTop: 6, maxWidth: 360, textAlign: 'center',
+                                                color: 'var(--color-warning)', fontSize: '13px', fontWeight: 600,
+                                                background: 'rgba(245, 158, 11, 0.1)', padding: '4px 10px', borderRadius: 8,
                                             }}>
-                                                <span>Original Receipt:</span>
-                                                <span style={{
-                                                    fontWeight: 600, color: 'var(--fg-secondary)',
-                                                    textDecoration: 'line-through', opacity: 0.7
-                                                }}>
-                                                    {formatCurrency(total)}
-                                                </span>
-                                                <span style={{ color: 'var(--color-warning)', fontSize: '12px', fontWeight: 600, background: 'rgba(245, 158, 11, 0.1)', padding: '1px 6px', borderRadius: 4 }}>
-                                                    Mismatch
-                                                </span>
-                                            </div>
+                                                The items and taxes come to {formatCurrency(split.itemsTotal + split.taxTotal)}, but the bill
+                                                says {formatCurrency(split.total)}. Check the items before saving.
+                                            </span>
                                         )}
                                     </div>
                                 </div>
@@ -598,21 +637,23 @@ export default function SplitByItems({
                                 <Button
                                     fullWidth
                                     size="lg"
-                                    disabled={unassignedItems.length > 0 || creating}
+                                    disabled={!split || !chosenGroupId || creating}
                                     loading={creating}
                                     onClick={handleCreate}
                                     style={{
                                         height: 56,
                                         borderRadius: '16px',
                                         fontSize: '16px',
-                                        background: unassignedItems.length > 0 ? 'var(--bg-muted)' : 'var(--accent-500)',
+                                        background: split && chosenGroupId ? 'var(--accent-500)' : 'var(--bg-muted)',
                                         color: 'white',
-                                        boxShadow: unassignedItems.length > 0 ? 'none' : '0 8px 24px rgba(var(--accent-500-rgb), 0.3)'
+                                        boxShadow: split && chosenGroupId ? '0 8px 24px rgba(var(--accent-500-rgb), 0.3)' : 'none'
                                     }}
                                 >
-                                    {unassignedItems.length > 0
-                                        ? `${unassignedItems.length} Unassigned Items`
-                                        : 'Create Expense'}
+                                    {!chosenGroupId
+                                        ? 'No group to split in'
+                                        : unassignedItems.length > 0
+                                            ? `${unassignedItems.length} Unassigned Items`
+                                            : 'Create Expense'}
                                 </Button>
                             </motion.div>
                         )}

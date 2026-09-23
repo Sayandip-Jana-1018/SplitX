@@ -18,6 +18,8 @@ export interface ParsedTransaction {
     upiRef: string | null;
     date: Date | null;
     confidence: number;           // 0-1
+    /** ISO 4217 code the text's amounts look to be in; SplitX records rupees. */
+    currency: string;
     rawText: string;
     items: ReceiptLineItem[];     // extracted line items
 }
@@ -28,6 +30,25 @@ const AMOUNT_PATTERNS = [
     /(?:amount|amt|paid|debited|credited)[:\s]*(?:₹|Rs\.?|INR)?\s*([\d,]+(?:\.\d{1,2})?)/gi,
     /(?:₹|Rs\.?|INR)?\s*([\d,]+(?:\.\d{1,2})?)\s*(?:paid|debited|sent|received)/gi,
 ];
+
+// ── Currency ──
+// Text counts as rupees unless it shows another currency and no rupee sign.
+// S$ is checked before a bare $, which is read as US dollars.
+const RUPEE_MARKER = /₹|\bRs\.?\s*\d|\bINR\b/i;
+const FOREIGN_MARKERS: [code: string, marker: RegExp][] = [
+    ['EUR', /€|\bEUR\b/i],
+    ['GBP', /£|\bGBP\b/i],
+    ['AED', /\bAED\b/i],
+    ['SGD', /\bS\$|\bSGD\b/i],
+    ['THB', /฿|\bTHB\b/i],
+    ['JPY', /¥|\bJPY\b/i],
+    ['USD', /\$|\bUSD\b/i],
+];
+
+export function detectCurrency(text: string): string {
+    if (RUPEE_MARKER.test(text)) return 'INR';
+    return FOREIGN_MARKERS.find(([, marker]) => marker.test(text))?.[0] ?? 'INR';
+}
 
 // ── UPI Ref Patterns ──
 const UPI_REF_PATTERNS = [
@@ -189,7 +210,9 @@ export function extractLineItems(rawText: string): ReceiptLineItem[] {
 }
 
 export function parseTransactionText(rawText: string): ParsedTransaction {
-    const amount = extractAmount(rawText);
+    const currency = detectCurrency(rawText);
+    // An amount in another currency isn't rupees: it's left for the person to type.
+    const amount = currency === 'INR' ? extractAmount(rawText) : null;
     const upiRef = extractUpiRef(rawText);
     const method = detectMethod(rawText);
     const merchant = extractMerchant(rawText);
@@ -209,6 +232,7 @@ export function parseTransactionText(rawText: string): ParsedTransaction {
         upiRef,
         date: new Date(),
         confidence,
+        currency,
         rawText,
         items,
     };

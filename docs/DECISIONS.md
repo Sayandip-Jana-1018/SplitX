@@ -2527,7 +2527,7 @@ Already done, found while checking: removing a member rotates the group's invite
 removed person can't rejoin with the old link.
 
 ### D-079 · The page gate checks the session, not that a cookie exists
-**2026-09-23** · ✅ written and unit-tested (1,064 → 1,075 tests)
+**2026-09-23** · ✅ written and unit-tested (1,064 → 1,076 tests), live on `main` (8749a8d)
 
 The gate in `src/proxy.ts` counted anyone carrying a cookie with a session's name as signed in. A
 forged cookie, an expired one, or one issued under another secret opened every signed-in page, and each
@@ -2547,9 +2547,54 @@ Not checked here: whether the session was ended everywhere (D-074). That needs t
 gate runs before every page. Such a session still opens the page, its first API call answers 401, and
 the page signs out (`sessionEnded`).
 
-Of the 11 new tests, 7 fail against the old gate. The other 4 pin what should not change: a genuine
+Of the first 11 tests, 7 fail against the old gate. The other 4 pin what should not change: a genuine
 session opens pages and skips sign-in, the fallback without a secret, and API routes left to their own
-checks.
+checks. A 12th covers production's `__Secure-` cookie.
+
+Checked on the live site after the deploy, with a made-up cookie:
+- `/dashboard` answered 307 to `/login?callbackUrl=%2Fdashboard`, with
+  `Set-Cookie: __Secure-authjs.session-token=; Max-Age=0; Secure; HttpOnly`.
+- `/login` answered 200 with the same removal.
+- `/history` without a cookie answered 307 to sign-in.
+
+### D-080 · A scanned bill splits to exactly what was paid, in rupees only
+**2026-09-23** · ✅ written and unit-tested (1,076 → 1,102 tests)
+
+The receipt scan had four faults:
+- **Quantities were counted twice.** The AI is told that each item's price is the row's total
+  (quantity × unit price). The scan page and the route then multiplied it by the quantity again. Two
+  coffees at ₹240 showed as ₹480, the route reported a gap between the items and the total that wasn't
+  there, and a bill without a readable total got one that was too high.
+- **The split lost and invented paise, and dropped the rest of the bill.** "Split by items" rounded each
+  person's part of each item on its own (₹100 among three saved as ₹99.99) and did the same with the
+  taxes. It saved the sum of those parts, not the printed total, so a discount, a service charge or the
+  round-off never reached the expense.
+- **It offered people from every group.** The sheet merged the members of all your groups and put every
+  item on all of them. The expense form then dropped whoever wasn't in the chosen group, and the shares
+  no longer added up.
+- **Any currency was read as rupees.** A bill for $12.50 became an expense of ₹12.50. On-device, "$25.00
+  paid" was read as ₹25, and the clipboard banner offered it too.
+
+Now:
+- `src/lib/receiptSplit.ts` shares each item's row total equally among the people who had it, with the
+  extra paisa placed as in any equal split. Everything else on the bill (the gap between the items and
+  the printed total) is shared in proportion to what each person had, by largest remainder. The shares add
+  up to the printed total exactly, since that is what was paid. The sheet shows the gap as "discount and
+  round-off" or "other charges", and warns when it is over ₹5 and over 5% of the bill: then an item was
+  probably misread.
+- The sheet splits within one group: the one the scan came from, else the most recently active, which is
+  the group the expense form opens. When there are others, it can switch between them.
+- The AI returns the bill's currency (ISO 4217). The on-device reader looks for currency signs and codes,
+  and reads a rupee sign or no sign at all as rupees. A bill in another currency shows a warning, its
+  amount doesn't carry over (the person types what they paid in ₹), and splitting by item is offered only
+  for bills in rupees.
+- The route drops any discount row the AI lists as an item, since the printed total already includes it.
+
+Tests:
+- The split's worked examples, checked by hand: a round-off, a discount, three people sharing ₹100, a bill
+  of only free items.
+- A property test: the parts always add up exactly, each within a paisa of its exact proportion.
+- The route and the parser; the new route and parser cases fail against the old code.
 
 ---
 
