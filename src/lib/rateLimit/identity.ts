@@ -45,7 +45,12 @@ function remember(key: string, userId: string | null, expiresAt: number) {
     if (verified.size > CACHE_MAX_ENTRIES) verified.delete(verified.keys().next().value as string);
 }
 
-async function verifiedUserId(request: Request): Promise<string | null> {
+/**
+ * The user a request's session cookie was issued to, when it verifies with the
+ * auth secret and hasn't expired; null otherwise. Also the page gate's check
+ * (src/proxy.ts).
+ */
+export async function verifiedSessionUserId(request: Request): Promise<string | null> {
     const cookies = request.headers.get('cookie');
     const secret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
     if (!cookies || !cookies.includes('authjs.session-token') || !secret) return null;
@@ -73,7 +78,7 @@ async function verifiedUserId(request: Request): Promise<string | null> {
 }
 
 export async function resolveIdentity(request: Request, ip: string | null): Promise<RequestIdentity> {
-    const userId = await verifiedUserId(request);
+    const userId = await verifiedSessionUserId(request);
     if (userId) return { kind: 'user', key: `user:${digest(userId)}` };
 
     const network = ipIdentity(ip);

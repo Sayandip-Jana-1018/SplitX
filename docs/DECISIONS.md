@@ -2526,6 +2526,31 @@ Small things from the audit's low list, each with a test that failed first:
 Already done, found while checking: removing a member rotates the group's invite code (D-063), so the
 removed person can't rejoin with the old link.
 
+### D-079 · The page gate checks the session, not that a cookie exists
+**2026-09-23** · ✅ written and unit-tested (1,064 → 1,075 tests)
+
+The gate in `src/proxy.ts` counted anyone carrying a cookie with a session's name as signed in. A
+forged cookie, an expired one, or one issued under another secret opened every signed-in page, and each
+of the page's requests then answered 401. `/history` and `/admin/health` weren't on its list at all.
+
+- The gate now verifies the cookie with the auth secret: the same cached check the rate limiter already
+  runs on every API call (`verifiedSessionUserId` in `src/lib/rateLimit/identity.ts`). A cookie that
+  doesn't verify, or has expired, goes to sign-in, and the redirect removes it.
+- On sign-in and sign-up, such a cookie is removed and the page shows. It isn't a redirect: if a cookie
+  ever refused to clear, a redirect back to the same page would loop.
+- A large session, which Auth.js splits across cookies (`.0`, `.1`, …), counts. The old check looked
+  only at the unsplit name, so it would have sent a split session to sign-in.
+- `/history` and `/admin` are gated like the other signed-in pages.
+- Without an auth secret nothing can be checked, and a cookie counts as before.
+
+Not checked here: whether the session was ended everywhere (D-074). That needs the database, and the
+gate runs before every page. Such a session still opens the page, its first API call answers 401, and
+the page signs out (`sessionEnded`).
+
+Of the 11 new tests, 7 fail against the old gate. The other 4 pin what should not change: a genuine
+session opens pages and skips sign-in, the fallback without a secret, and API routes left to their own
+checks.
+
 ---
 
 ## Open problems

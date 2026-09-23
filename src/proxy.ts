@@ -8,6 +8,7 @@ import { checkRateLimit } from '@/lib/rateLimit';
 import { clientIp } from '@/lib/rateLimit/clientIp';
 import { hitLocally } from '@/lib/rateLimit/local';
 import { DEVICE_COOKIE, deviceCookieOptions, mintDevice, verifyDevice } from '@/lib/rateLimit/device';
+import { verifiedSessionUserId } from '@/lib/rateLimit/identity';
 import { PREVIEW_ADMISSION_HEADER, tryAdmitPreview } from '@/lib/previewAdmission';
 import { arrivalTime, previewMaxQueueMs, REQUEST_START_HEADER, requestStartValue } from '@/lib/requestQueue';
 
@@ -29,20 +30,49 @@ const PROTECTED_ROUTES = [
     '/settlements',
     '/analytics',
     '/settings',
+    '/history',
+    '/admin',
 ];
 
 // Routes that should redirect to dashboard if already authenticated
 const AUTH_ROUTES = ['/login', '/register'];
 
-/**
- * Check if the user has a valid session token cookie.
- * In production NextAuth uses __Secure- prefix; in dev it doesn't.
- */
+// A session cookie: __Secure- in production, and split into .0, .1… when large.
+const SESSION_COOKIE = /^(__Secure-)?authjs\.session-token(\.\d+)?$/;
+
+/** Whether the request carries a session cookie at all, genuine or not. */
 function hasSessionToken(request: NextRequest): boolean {
-    return (
-        request.cookies.has('__Secure-authjs.session-token') ||
-        request.cookies.has('authjs.session-token')
-    );
+    return request.cookies.getAll().some(({ name }) => SESSION_COOKIE.test(name));
+}
+
+/**
+ * Whether the visitor is signed in, for the page gate. A cookie counts only if
+ * it is a session this server issued and it hasn't expired, checked with the
+ * auth secret (the same cached decode the rate limiter uses). A session that
+ * was ended everywhere still verifies; its pages' API calls answer 401 and the
+ * page signs out (lib/signOut.ts). Without a secret nothing can be checked, and
+ * a cookie counts as before.
+ */
+async function sessionState(request: NextRequest): Promise<'none' | 'valid' | 'stale'> {
+    if (!hasSessionToken(request)) return 'none';
+    if (!(process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET)) return 'valid';
+    return (await verifiedSessionUserId(request)) ? 'valid' : 'stale';
+}
+
+/** Tells the browser to drop a session cookie that no longer works. */
+function clearSessionCookies(request: NextRequest, response: NextResponse) {
+    for (const { name } of request.cookies.getAll()) {
+        if (!SESSION_COOKIE.test(name)) continue;
+        response.cookies.set(name, '', {
+            path: '/',
+            maxAge: 0,
+            httpOnly: true,
+            sameSite: 'lax',
+            // A __Secure- cookie can only be replaced, even by an expired one, over HTTPS with Secure set.
+            secure: name.startsWith('__Secure-') || isHttps(request),
+        });
+    }
+    return response;
 }
 
 /** Lets the request continue to its route, carrying its trace and arrival time. */
@@ -118,19 +148,30 @@ export async function proxy(request: NextRequest) {
 
     // ── Auth Route Protection ──
     // Skip auth checks for static assets and API routes (API routes have their own auth)
-    if (!pathname.startsWith('/api') && !pathname.startsWith('/_next')) {
-        const isAuthenticated = hasSessionToken(request);
+    const isProtected = PROTECTED_ROUTES.some((route) => pathname.startsWith(route));
+    const isAuthRoute = AUTH_ROUTES.some((route) => pathname.startsWith(route));
+    if ((isProtected || isAuthRoute) && !pathname.startsWith('/api') && !pathname.startsWith('/_next')) {
+        const session = await sessionState(request);
 
         // Redirect authenticated users away from login/register
-        if (isAuthenticated && AUTH_ROUTES.some((route) => pathname.startsWith(route))) {
+        if (session === 'valid' && isAuthRoute) {
             return decide(request, trace, NextResponse.redirect(new URL('/dashboard', request.url)), 'redirect_dashboard');
         }
 
-        // Redirect unauthenticated users away from protected routes
-        if (!isAuthenticated && PROTECTED_ROUTES.some((route) => pathname.startsWith(route))) {
+        // Redirect unauthenticated users away from protected routes. An expired
+        // or forged cookie is dropped on the way: it used to count as signed
+        // in, and the page's own requests failed instead.
+        if (session !== 'valid' && isProtected) {
             const loginUrl = new URL('/login', request.url);
             loginUrl.searchParams.set('callbackUrl', pathname);
-            return decide(request, trace, NextResponse.redirect(loginUrl), 'redirect_login');
+            return decide(request, trace, clearSessionCookies(request, NextResponse.redirect(loginUrl)), 'redirect_login');
+        }
+
+        // Sign-in shows as usual and drops a cookie that no longer works; no
+        // redirect, so a cookie that won't clear can't start a loop. (Pages are
+        // never rate limited.)
+        if (session === 'stale') {
+            return decide(request, trace, clearSessionCookies(request, forward(request, trace, receivedAt)), 'pass');
         }
     }
 
