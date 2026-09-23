@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
-import { isTrustedReceiptUrl } from '@/lib/receiptUrl';
+import { withViewableReceipts } from '@/lib/receiptAccess';
 import { logger } from '@/lib/logger';
 
 // GET /api/groups/[groupId]/receipts — get all transactions with receipt images for a group
@@ -81,14 +81,15 @@ export async function GET(
             image: m.user.image,
         }));
 
-        const receipts = transactions
-            .filter(t => isTrustedReceiptUrl(t.receiptUrl))
+        // Photos in the private bucket become signed links; any that can't be shown are left out.
+        const receipts = (await withViewableReceipts(transactions))
+            .filter((t): t is typeof t & { receiptUrl: string } => typeof t.receiptUrl === 'string')
             .map(t => ({
                 id: t.id,
                 title: t.title,
                 amount: t.amount,
                 category: t.category,
-                receiptUrl: t.receiptUrl!,
+                receiptUrl: t.receiptUrl,
                 date: t.date.toISOString(),
                 payer: t.payer,
             }));

@@ -8,10 +8,20 @@
  * rejected on write and dropped on read.
  */
 
-/** The public bucket that holds receipt photos (and, under avatars/, profile photos). */
+/** The public bucket: profile photos under avatars/, and receipts uploaded before D-084. */
 export const RECEIPTS_BUCKET = 'receipts';
 
+/**
+ * The private bucket receipt photos go to now. Its objects open only through
+ * short-lived signed links the server makes for people who may see the
+ * expense (lib/receiptAccess.ts), so a copied link stops working.
+ */
+export const RECEIPT_PHOTOS_BUCKET = 'receipt-photos';
+
 const STORAGE_PATH_PREFIX = '/storage/v1/object/';
+// How a photo in the private bucket is recorded on its expense: Supabase's
+// address for the object, which opens nothing without a signed token.
+const PRIVATE_PHOTO_PREFIX = `${STORAGE_PATH_PREFIX}authenticated/${RECEIPT_PHOTOS_BUCKET}/`;
 const MAX_URL_LENGTH = 2_048;
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1']);
 
@@ -42,10 +52,28 @@ export function isTrustedReceiptUrl(value: unknown): value is string {
 /**
  * A receipt this user uploaded through SplitX: signed uploads always land in
  * the uploader's own folder, so a new expense can't borrow anyone else's photo.
+ * Only the private bucket counts: a new expense never gets a public photo.
  */
 export function isOwnReceiptUrl(value: unknown, userId: string): value is string {
     if (!isTrustedReceiptUrl(value)) return false;
-    return new URL(value).pathname.startsWith(`${STORAGE_PATH_PREFIX}public/${RECEIPTS_BUCKET}/${userId}/`);
+    return new URL(value).pathname.startsWith(`${PRIVATE_PHOTO_PREFIX}${userId}/`);
+}
+
+/** What an expense records for a photo uploaded to `path` in the private bucket. */
+export function privateReceiptReference(path: string): string | null {
+    const origin = storageOrigin();
+    return origin ? `${origin}${PRIVATE_PHOTO_PREFIX}${path}` : null;
+}
+
+/**
+ * The object path of a recorded private-bucket photo; null for anything else.
+ * Not decoded: the server names every object (a user id and a UUID), so a real
+ * path has nothing to decode, and a crafted one can't make decoding throw.
+ */
+export function privateReceiptPath(value: unknown): string | null {
+    if (!isTrustedReceiptUrl(value)) return null;
+    const { pathname } = new URL(value);
+    return pathname.startsWith(PRIVATE_PHOTO_PREFIX) ? pathname.slice(PRIVATE_PHOTO_PREFIX.length) : null;
 }
 
 /** Clears a stored receipt URL that fails the trust check (rows saved before validation existed). */

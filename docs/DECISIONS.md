@@ -2670,6 +2670,41 @@ Two more items from the audit's low list:
 Looked at and left as it is: `/api/health` still pings the database for anyone. It is the keep-warm ping
 the signed-in app sends every 4 minutes, and the general API rate limit applies to it.
 
+### D-084 · Receipt photos are private, smaller, and rationed
+**2026-09-23** · ✅ written and unit-tested (1,108 → 1,125 tests); bucket created and checked, live on `main`
+
+Receipt photos went to the public `receipts` bucket. Anyone holding a photo's link could open it,
+forever, and a receipt can carry names, card digits and an address. Browsers uploaded the phone's
+original photo, often 3–5 MB, and nothing limited how many.
+
+- **A private bucket.** New photos go to `receipt-photos`: private, 5 MB per file, JPEG, PNG or WebP. An
+  expense records the object's authenticated address, which opens nothing by itself.
+- **Signed links, only after the access check.** Three routes turn each private photo into a link that
+  works for an hour (`src/lib/receiptAccess.ts`), after their own membership checks: the expense list,
+  one expense, and a group's receipts. That's one call to storage per list. If storage can't sign, the
+  photo is left out, not the whole answer.
+- **Only your own private photo.** A new expense accepts only a photo in the uploader's own folder of the
+  private bucket. A public URL, even your own, is refused.
+- **Smaller.** The browser redraws each photo at 2,048 pixels at most, as a JPEG (on white, since
+  screenshots can be transparent), as the AI scan already did. That is usually under 1 MB. The original
+  goes up when it is already smaller, or can't be redrawn. The upload limit is now 5 MB, down from 10.
+- **Rationed.** 20 photos a person a day and 300 for everyone (`src/lib/uploadQuota.ts`,
+  `RECEIPT_UPLOADS_PER_DAY`, `RECEIPT_UPLOADS_PER_DAY_ALL`). Like the AI allowances they fail closed.
+  The expense still saves, just without its photo.
+
+Nothing moves. Production has no expense with a photo (a read-only count on 2026-09-23: 0 of 37). The
+public bucket keeps profile photos (one in production) and any upload never attached to an expense.
+
+**Rollout:** the bucket had to exist before this deployed. Without it, uploads would answer 502 and
+expenses would save without their photos. The user created it in the Supabase dashboard. Checked
+through the API before the push: private, a 5 MB limit, JPEG, PNG and WebP only. Then a probe on the real
+bucket, run the way the browser runs it:
+- the signed upload answered 200;
+- the signed read answered 200 with the same bytes;
+- the same object without a signed link was refused (400), both at its public address and at its
+  authenticated one;
+- the probe was deleted, and nothing was left.
+
 ---
 
 ## Open problems

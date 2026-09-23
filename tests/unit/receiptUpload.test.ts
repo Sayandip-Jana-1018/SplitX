@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { uploadReceipt } from '@/lib/receiptUpload';
 
-const UPLOAD_URL = 'https://abcdproject.supabase.co/storage/v1/object/upload/sign/receipts/cuseralice00001/0b6e.jpg?token=t';
-const PUBLIC_URL = 'https://abcdproject.supabase.co/storage/v1/object/public/receipts/cuseralice00001/0b6e.jpg';
+const UPLOAD_URL = 'https://abcdproject.supabase.co/storage/v1/object/upload/sign/receipt-photos/cuseralice00001/0b6e.jpg?token=t';
+const REFERENCE = 'https://abcdproject.supabase.co/storage/v1/object/authenticated/receipt-photos/cuseralice00001/0b6e.jpg';
 const photo = () => new File([new Uint8Array([0xff, 0xd8, 0xff, 0xe0])], 'receipt.jpg', { type: 'image/jpeg' });
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
@@ -13,15 +13,15 @@ describe('uploadReceipt', () => {
     });
     afterEach(() => vi.restoreAllMocks());
 
-    it('asks the server for a signed URL, PUTs the photo there with no key, and returns its public URL', async () => {
+    it('asks the server for a signed URL, PUTs the photo there with no key, and returns what the expense records', async () => {
         const file = photo();
         const fetchImpl = vi.fn<typeof fetch>(async (input) =>
             String(input) === '/api/receipts/upload-url'
-                ? json({ success: true, data: { path: 'cuseralice00001/0b6e.jpg', uploadUrl: UPLOAD_URL, publicUrl: PUBLIC_URL } })
+                ? json({ success: true, data: { path: 'cuseralice00001/0b6e.jpg', uploadUrl: UPLOAD_URL, receiptUrl: REFERENCE } })
                 : new Response('{"Key":"receipts/cuseralice00001/0b6e.jpg"}', { status: 200 })
         );
 
-        expect(await uploadReceipt(file, fetchImpl)).toBe(PUBLIC_URL);
+        expect(await uploadReceipt(file, fetchImpl)).toBe(REFERENCE);
 
         const [signUrl, signInit = {}] = fetchImpl.mock.calls[0];
         expect(signUrl).toBe('/api/receipts/upload-url');
@@ -46,7 +46,7 @@ describe('uploadReceipt', () => {
     it('returns null when storage rejects the photo', async () => {
         const fetchImpl = vi.fn<typeof fetch>(async (input) =>
             String(input) === '/api/receipts/upload-url'
-                ? json({ success: true, data: { path: 'p', uploadUrl: UPLOAD_URL, publicUrl: PUBLIC_URL } })
+                ? json({ success: true, data: { path: 'p', uploadUrl: UPLOAD_URL, receiptUrl: REFERENCE } })
                 : new Response('{"statusCode":"415","error":"invalid_mime_type"}', { status: 400 })
         );
         expect(await uploadReceipt(photo(), fetchImpl as typeof fetch)).toBeNull();

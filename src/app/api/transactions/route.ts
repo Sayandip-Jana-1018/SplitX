@@ -6,7 +6,8 @@ import { z } from 'zod';
 import { createAuditLog } from '@/lib/auditLog';
 import { serializeTransactionAuditSnapshot } from '@/lib/auditPayloads';
 import { recordTransactionCreated } from '@/lib/metrics';
-import { isOwnReceiptUrl, isTrustedReceiptUrl, withTrustedReceipt } from '@/lib/receiptUrl';
+import { withViewableReceipts } from '@/lib/receiptAccess';
+import { isOwnReceiptUrl, isTrustedReceiptUrl } from '@/lib/receiptUrl';
 import { logger } from '@/lib/logger';
 import { MAX_EXPENSE_PAISE, resolveSplits, SPLIT_TYPES } from '@/lib/expenseSplits';
 import { IDEMPOTENCY_KEY_PATTERN } from '@/lib/idempotency';
@@ -106,7 +107,7 @@ export async function GET(req: Request) {
                 orderBy: { createdAt: 'desc' },
                 take: limit,
             });
-            return NextResponse.json(transactions.map(withTrustedReceipt));
+            return NextResponse.json(await withViewableReceipts(transactions));
         }
 
         // No tripId — auto-discover all trips for this user's groups
@@ -147,7 +148,7 @@ export async function GET(req: Request) {
             take: limit,
         });
 
-        return NextResponse.json(transactions.map(withTrustedReceipt));
+        return NextResponse.json(await withViewableReceipts(transactions));
     } catch (error) {
         logger.error('Failed to fetch transactions', { err: error });
         return NextResponse.json({ error: 'Failed to fetch transactions' }, { status: 500 });

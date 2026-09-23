@@ -19,7 +19,8 @@ vi.mock('@/lib/auditLog', () => ({ createAuditLog: vi.fn() }));
 const { POST } = await import('@/app/api/transactions/route');
 
 const STORAGE = 'https://abcdproject.supabase.co';
-const trustedReceipt = `${STORAGE}/storage/v1/object/public/receipts/${ids.alice}/0b6e2f4e-7a51-4d0e-9f7c-2f3a9d1c5b11.jpg`;
+const PHOTOS = `${STORAGE}/storage/v1/object/authenticated/receipt-photos`;
+const trustedReceipt = `${PHOTOS}/${ids.alice}/0b6e2f4e-7a51-4d0e-9f7c-2f3a9d1c5b11.jpg`;
 const members = [ids.alice, ids.bob, ids.carol];
 
 function send(body: Record<string, unknown>, headers: Record<string, string> = {}) {
@@ -127,8 +128,9 @@ describe('POST /api/transactions', () => {
     it.each([
         ['a javascript: URL', 'javascript:alert(1)'],
         ['another site', 'https://evil.example/storage/v1/object/public/receipts/x.jpg'],
-        ["another member's upload", `${STORAGE}/storage/v1/object/public/receipts/${ids.bob}/0b6e2f4e-7a51-4d0e-9f7c-2f3a9d1c5b11.jpg`],
-        ['a path that climbs out of your folder', `${STORAGE}/storage/v1/object/public/receipts/${ids.alice}/../${ids.bob}/x.jpg`],
+        ["another member's upload", `${PHOTOS}/${ids.bob}/0b6e2f4e-7a51-4d0e-9f7c-2f3a9d1c5b11.jpg`],
+        ['a path that climbs out of your folder', `${PHOTOS}/${ids.alice}/../${ids.bob}/x.jpg`],
+        ['a photo in the public bucket, even from your own folder', `${STORAGE}/storage/v1/object/public/receipts/${ids.alice}/0b6e2f4e-7a51-4d0e-9f7c-2f3a9d1c5b11.jpg`],
         ['an old upload outside any folder', `${STORAGE}/storage/v1/object/public/receipts/receipt_1789_ab12c.jpg`],
     ])('rejects %s as a receipt and writes nothing', async (_, receiptUrl) => {
         const res = await send({ receiptUrl });

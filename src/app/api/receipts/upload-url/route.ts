@@ -3,8 +3,9 @@ import { apiError, apiSuccess, ErrorMessages } from '@/lib/apiResponse';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { logger } from '@/lib/logger';
-import { RECEIPTS_BUCKET } from '@/lib/receiptUrl';
+import { privateReceiptReference, RECEIPT_PHOTOS_BUCKET } from '@/lib/receiptUrl';
 import { MAX_RECEIPT_BYTES, RECEIPT_TYPES, receiptObjectPath, storageAdmin, StorageUnavailableError } from '@/lib/storage';
+import { takeReceiptUpload } from '@/lib/uploadQuota';
 
 /**
  * POST /api/receipts/upload-url — a one-time signed URL for uploading one receipt photo.
@@ -16,8 +17,11 @@ import { MAX_RECEIPT_BYTES, RECEIPT_TYPES, receiptObjectPath, storageAdmin, Stor
  * straight to Supabase Storage at the returned URL. Photos never pass through
  * the app's pods, the browser needs no storage key, and the URL cannot
  * overwrite an existing object. Signed upload URLs expire after two hours.
- * The bucket's own type and size limits (10 MB; JPEG, PNG, WebP, GIF) are the
- * final check on what is actually uploaded.
+ *
+ * Photos go to the private bucket (D-084): the answer's `receiptUrl` is what the
+ * expense records, and it opens nothing by itself. Each upload counts against
+ * the daily photo allowances (lib/uploadQuota.ts). The bucket's own type and
+ * size limits (5 MB; JPEG, PNG, WebP) are the final check on what arrives.
  */
 
 const UploadRequest = z.strictObject({
@@ -40,9 +44,17 @@ export async function POST(request: Request) {
         const user = await prisma.user.findUnique({ where: { email: session.user.email }, select: { id: true } });
         if (!user) return apiError(ErrorMessages.USER_NOT_FOUND, 404);
 
-        const bucket = storageAdmin().storage.from(RECEIPTS_BUCKET);
+        const quota = await takeReceiptUpload(user.id);
+        if (!quota.ok) {
+            const refused = apiError(quota.error, quota.status, quota.status === 429 ? 'RECEIPT_QUOTA' : 'RECEIPT_QUOTA_UNAVAILABLE');
+            if (quota.retryAfterSeconds) refused.headers.set('Retry-After', String(quota.retryAfterSeconds));
+            return refused;
+        }
+
+        const bucket = storageAdmin().storage.from(RECEIPT_PHOTOS_BUCKET);
         const { data, error } = await bucket.createSignedUploadUrl(receiptObjectPath(user.id, parsed.data.contentType));
-        if (error) {
+        const receiptUrl = data ? privateReceiptReference(data.path) : null;
+        if (error || !data || !receiptUrl) {
             logger.error('Could not sign a receipt upload', { err: error });
             return apiError(UNAVAILABLE, 502, 'STORAGE_ERROR');
         }
@@ -51,7 +63,8 @@ export async function POST(request: Request) {
             path: data.path,
             // Carries its own one-time token: the browser PUTs the photo here with no key.
             uploadUrl: data.signedUrl,
-            publicUrl: bucket.getPublicUrl(data.path).data.publicUrl,
+            // What the expense records: the private object, shown later through signed links.
+            receiptUrl,
         });
     } catch (error) {
         if (error instanceof StorageUnavailableError) {

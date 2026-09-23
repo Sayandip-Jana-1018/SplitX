@@ -6,6 +6,7 @@ import { createAuditLog } from '@/lib/auditLog';
 import { serializeTransactionAuditSnapshot } from '@/lib/auditPayloads';
 import { MAX_EXPENSE_PAISE, resolveSplits, SPLIT_TYPES, type SplitType } from '@/lib/expenseSplits';
 import { logger } from '@/lib/logger';
+import { withViewableReceipts } from '@/lib/receiptAccess';
 
 const UpdateTransactionSchema = z.object({
     title: z.string().trim().min(1).max(100).optional(),
@@ -80,7 +81,8 @@ export async function GET(
             return NextResponse.json({ error: 'Transaction not found' }, { status: 404 });
         }
 
-        return NextResponse.json(transaction);
+        const [viewable] = await withViewableReceipts([transaction]);
+        return NextResponse.json(viewable);
     } catch (error) {
         logger.error('Failed to fetch transaction', { err: error });
         return NextResponse.json({ error: 'Failed to fetch transaction' }, { status: 500 });

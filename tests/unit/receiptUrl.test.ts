@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { isOwnReceiptUrl, isTrustedReceiptUrl, withTrustedReceipt } from '@/lib/receiptUrl';
+import { isOwnReceiptUrl, isTrustedReceiptUrl, privateReceiptPath, privateReceiptReference, withTrustedReceipt } from '@/lib/receiptUrl';
 
 describe('isTrustedReceiptUrl', () => {
     beforeEach(() => {
@@ -58,7 +58,7 @@ describe('isTrustedReceiptUrl', () => {
 });
 
 describe('isOwnReceiptUrl', () => {
-    const base = 'https://abcdproject.supabase.co/storage/v1/object/public/receipts';
+    const base = 'https://abcdproject.supabase.co/storage/v1/object/authenticated/receipt-photos';
     beforeEach(() => {
         vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://abcdproject.supabase.co');
     });
@@ -66,7 +66,7 @@ describe('isOwnReceiptUrl', () => {
         vi.unstubAllEnvs();
     });
 
-    it("accepts a photo in the user's own folder", () => {
+    it("accepts a photo in the user's own folder of the private bucket", () => {
         expect(isOwnReceiptUrl(`${base}/cuseralice00001/0b6e2f4e.jpg`, 'cuseralice00001')).toBe(true);
     });
 
@@ -76,9 +76,42 @@ describe('isOwnReceiptUrl', () => {
         ['a climb out of the folder', `${base}/cuseralice00001/../cuserbob0000001/0b6e2f4e.jpg`],
         ['an encoded climb out of the folder', `${base}/cuseralice00001/%2e%2e/cuserbob0000001/0b6e2f4e.jpg`],
         ['an old upload at the bucket root', `${base}/receipt_1789_ab12c.jpg`],
-        ['another bucket', 'https://abcdproject.supabase.co/storage/v1/object/public/avatars/cuseralice00001/a.jpg'],
-        ['another site', `https://evil.example/storage/v1/object/public/receipts/cuseralice00001/a.jpg`],
+        ['a public photo, even in the own folder', 'https://abcdproject.supabase.co/storage/v1/object/public/receipts/cuseralice00001/a.jpg'],
+        ['a signed link to the own photo', `https://abcdproject.supabase.co/storage/v1/object/sign/receipt-photos/cuseralice00001/a.jpg?token=t`],
+        ['another bucket', 'https://abcdproject.supabase.co/storage/v1/object/authenticated/avatars/cuseralice00001/a.jpg'],
+        ['another site', `https://evil.example/storage/v1/object/authenticated/receipt-photos/cuseralice00001/a.jpg`],
     ])('rejects %s', (_, url) => {
         expect(isOwnReceiptUrl(url, 'cuseralice00001')).toBe(false);
+    });
+});
+
+describe('private photo references', () => {
+    beforeEach(() => {
+        vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://abcdproject.supabase.co');
+    });
+    afterEach(() => {
+        vi.unstubAllEnvs();
+    });
+
+    it('records an upload as the private object, and reads its path back', () => {
+        const reference = privateReceiptReference('cuseralice00001/0b6e2f4e.jpg');
+
+        expect(reference).toBe('https://abcdproject.supabase.co/storage/v1/object/authenticated/receipt-photos/cuseralice00001/0b6e2f4e.jpg');
+        expect(privateReceiptPath(reference)).toBe('cuseralice00001/0b6e2f4e.jpg');
+    });
+
+    it('finds no private path in a public photo, another origin, or something that is not a URL', () => {
+        expect(privateReceiptPath('https://abcdproject.supabase.co/storage/v1/object/public/receipts/a/b.jpg')).toBeNull();
+        expect(privateReceiptPath('https://evil.example/storage/v1/object/authenticated/receipt-photos/a/b.jpg')).toBeNull();
+        expect(privateReceiptPath('b.jpg')).toBeNull();
+    });
+
+    it('never throws on a crafted escape: the path is not decoded', () => {
+        expect(privateReceiptPath('https://abcdproject.supabase.co/storage/v1/object/authenticated/receipt-photos/a/%zz.jpg')).toBe('a/%zz.jpg');
+    });
+
+    it('records nothing when storage is not configured', () => {
+        vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', '');
+        expect(privateReceiptReference('a/b.jpg')).toBeNull();
     });
 });
