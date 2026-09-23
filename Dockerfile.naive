@@ -9,7 +9,7 @@
 #
 #   It still uses the same .dockerignore, so no secrets reach it.
 # ═══════════════════════════════════════════════════════════════
-FROM node:24.21.0-bookworm@sha256:6dac556d980b7f0e5498d08f08cee0ca67798b4ad6c23964a9214920e67758d0
+FROM node:26.9.0-bookworm@sha256:347d9d5391493c2fc3f0d161b75a9cab64a9805064b1b01b099f8ee97f98ed47
 
 WORKDIR /app
 COPY . .
