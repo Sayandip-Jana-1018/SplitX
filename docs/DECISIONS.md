@@ -3127,8 +3127,12 @@ network can't be deleted while they exist:
 7. The report (always) lists the 15 kinds of thing the platform makes, in the job summary. It fails
    the run unless every count is zero, allowing 5 minutes for anything still being deleted.
 
-When nothing is up, steps 2–5 are skipped, and the run only confirms that nothing is there. A failed
-nightly run emails the person who last set its schedule, through GitHub's own notifications.
+The nightly run first checks GitHub's own records, with no AWS credentials (job `needed`). It goes on
+only if `aws-up` has run since the last `aws-down` that ended green. Otherwise nothing can be up, and it
+stops without assuming a role. So the schedule stays quiet before the stacks exist, and a failed
+teardown is retried every night until one succeeds. A run started by hand always goes on; when nothing
+is up, steps 2–5 are skipped and it only confirms that. A failed nightly run emails the person who last
+set its schedule, through GitHub's own notifications.
 
 `scripts/aws-teardown.mjs` asks AWS; `scripts/lib/aws-leftovers.mjs` decides what counts as the
 platform's, by SplitX's tags and names alone. Its tests hold the negative case to account: the user's
