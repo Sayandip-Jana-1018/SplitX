@@ -1,0 +1,299 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  SplitX bootstrap (stack splitx-bootstrap): what Terraform needs before it can
+  run. Its state bucket; keyless access for GitHub Actions (OIDC); the role that
+  only the aws-demo environment may assume; and the permissions boundary every
+  role that role creates must carry. Deployed once from the laptop as
+  splitx-devops (npm run aws:bootstrap), through a change set.
+
+Parameters:
+  GitHubRepository:
+    Type: String
+    Default: Sayandip-Jana-1018/SplitX
+    AllowedPattern: '[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+'
+    Description: owner/name of the repository whose workflows may deploy.
+  DeployEnvironment:
+    Type: String
+    Default: aws-demo
+    AllowedPattern: '[A-Za-z0-9_.-]+'
+    Description: >-
+      The GitHub environment whose jobs may assume the deploy role. It has a
+      required reviewer, so nothing reaches AWS without an approval.
+  CreateOidcProvider:
+    Type: String
+    AllowedValues: ['true', 'false']
+    Default: 'true'
+    Description: >-
+      false when the account already has token.actions.githubusercontent.com
+      as an OIDC provider (an account can have only one per URL).
+
+Conditions:
+  MakeOidcProvider: !Equals [!Ref CreateOidcProvider, 'true']
+
+Resources:
+  # ── Terraform's state ──────────────────────────────────────────
+  StateBucket:
+    Type: AWS::S3::Bucket
+    # State outlives the stack: deleting the stack must never delete what
+    # Terraform knows about the resources it created.
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub splitx-tfstate-${AWS::AccountId}-${AWS::Region}
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+            BucketKeyEnabled: true
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      LifecycleConfiguration:
+        Rules:
+          - Id: old-state-versions
+            Status: Enabled
+            NoncurrentVersionExpiration:
+              NoncurrentDays: 90
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+      Tags:
+        - Key: project
+          Value: splitx
+
+  StateBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref StateBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: TlsOnly
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !GetAtt StateBucket.Arn
+              - !Sub '${StateBucket.Arn}/*'
+            Condition:
+              Bool:
+                aws:SecureTransport: 'false'
+
+  # ── Keyless access from GitHub Actions ─────────────────────────
+  GitHubOidcProvider:
+    Type: AWS::IAM::OIDCProvider
+    Condition: MakeOidcProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList:
+        - sts.amazonaws.com
+      # AWS verifies GitHub's certificate through its own trusted authorities;
+      # the thumbprints are what the API still records.
+      ThumbprintList:
+        - 6938fd4d98bab03faadb97b34396831e3780aea1
+        - 1c58a3a8518e8759bf075b76b750d4f2df264fcd
+      Tags:
+        - Key: project
+          Value: splitx
+
+  # ── The most any platform role may do ──────────────────────────
+  CiBoundary:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: splitx-ci-boundary
+      Description: >-
+        Permissions boundary for the deploy role and every role it creates:
+        no IAM changes outside splitx-eks-* and splitx-wl-*, nothing at all to
+        splitx-ci-*, and every new role carries this same boundary.
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: WithinTheseLimits
+            Effect: Allow
+            Action: '*'
+            Resource: '*'
+          - Sid: NoIamWritesOutsideThePlatform
+            Effect: Deny
+            Action:
+              - iam:Add*
+              - iam:Attach*
+              - iam:Change*
+              - iam:Create*
+              - iam:Deactivate*
+              - iam:Delete*
+              - iam:Detach*
+              - iam:Enable*
+              - iam:PassRole
+              - iam:Put*
+              - iam:Remove*
+              - iam:Reset*
+              - iam:Resync*
+              - iam:Set*
+              - iam:Tag*
+              - iam:Untag*
+              - iam:Update*
+              - iam:Upload*
+            NotResource:
+              - !Sub arn:aws:iam::${AWS::AccountId}:role/splitx-eks-*
+              - !Sub arn:aws:iam::${AWS::AccountId}:role/splitx-wl-*
+              - !Sub arn:aws:iam::${AWS::AccountId}:policy/splitx-eks-*
+              - !Sub arn:aws:iam::${AWS::AccountId}:policy/splitx-wl-*
+              - !Sub arn:aws:iam::${AWS::AccountId}:role/aws-service-role/*
+          - Sid: NewRolesCarryThisBoundary
+            Effect: Deny
+            Action:
+              - iam:CreateRole
+              - iam:PutRolePermissionsBoundary
+            Resource: '*'
+            Condition:
+              StringNotEquals:
+                iam:PermissionsBoundary: !Sub arn:aws:iam::${AWS::AccountId}:policy/splitx-ci-boundary
+          - Sid: BoundariesStay
+            Effect: Deny
+            Action: iam:DeleteRolePermissionsBoundary
+            Resource: '*'
+
+  # ── What a deploy may do ───────────────────────────────────────
+  DeployPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: splitx-ci-deploy-policy
+      Description: >-
+        What aws-up and aws-down do: build and remove the platform (VPC, EKS,
+        load balancer, CloudFront), read and write Terraform's state, the demo's
+        secrets, and the platform's own roles, each bounded.
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Platform
+            Effect: Allow
+            Action:
+              - autoscaling:*
+              - cloudfront:*
+              - cloudwatch:*
+              - ec2:*
+              - eks:*
+              - elasticloadbalancing:*
+              - kms:*
+              - logs:*
+              - tag:*
+              - ssm:GetParameter
+              - ssm:GetParameters
+              - sts:GetCallerIdentity
+              - budgets:ViewBudget
+              - cloudformation:DescribeStacks
+              - cloudformation:DescribeStackResources
+              - cloudformation:DetectStackDrift
+              - cloudformation:DescribeStackDriftDetectionStatus
+              - cloudformation:DescribeStackResourceDrifts
+              - iam:Get*
+              - iam:List*
+            Resource: '*'
+          - Sid: StateAndLogBuckets
+            Effect: Allow
+            Action: s3:*
+            Resource:
+              - arn:aws:s3:::splitx-*
+              - arn:aws:s3:::splitx-*/*
+          - Sid: DemoSecrets
+            Effect: Allow
+            Action: secretsmanager:*
+            Resource: !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:splitx/*
+          - Sid: CreatePlatformRolesWithTheBoundary
+            Effect: Allow
+            Action:
+              - iam:CreateRole
+              - iam:PutRolePermissionsBoundary
+            Resource:
+              - !Sub arn:aws:iam::${AWS::AccountId}:role/splitx-eks-*
+              - !Sub arn:aws:iam::${AWS::AccountId}:role/splitx-wl-*
+            Condition:
+              StringEquals:
+                iam:PermissionsBoundary: !Ref CiBoundary
+          - Sid: ManagePlatformRoles
+            Effect: Allow
+            Action:
+              - iam:AttachRolePolicy
+              - iam:DeleteRole
+              - iam:DeleteRolePolicy
+              - iam:DetachRolePolicy
+              - iam:PutRolePolicy
+              - iam:TagRole
+              - iam:UntagRole
+              - iam:UpdateAssumeRolePolicy
+              - iam:UpdateRole
+              - iam:UpdateRoleDescription
+            Resource:
+              - !Sub arn:aws:iam::${AWS::AccountId}:role/splitx-eks-*
+              - !Sub arn:aws:iam::${AWS::AccountId}:role/splitx-wl-*
+          - Sid: PassPlatformRolesToTheirServices
+            Effect: Allow
+            Action: iam:PassRole
+            Resource:
+              - !Sub arn:aws:iam::${AWS::AccountId}:role/splitx-eks-*
+              - !Sub arn:aws:iam::${AWS::AccountId}:role/splitx-wl-*
+            Condition:
+              StringEquals:
+                iam:PassedToService:
+                  - eks.amazonaws.com
+                  - ec2.amazonaws.com
+                  - pods.eks.amazonaws.com
+          - Sid: PlatformPolicies
+            Effect: Allow
+            Action:
+              - iam:CreatePolicy
+              - iam:CreatePolicyVersion
+              - iam:DeletePolicy
+              - iam:DeletePolicyVersion
+              - iam:TagPolicy
+            Resource:
+              - !Sub arn:aws:iam::${AWS::AccountId}:policy/splitx-eks-*
+              - !Sub arn:aws:iam::${AWS::AccountId}:policy/splitx-wl-*
+          - Sid: ServiceLinkedRoles
+            Effect: Allow
+            Action: iam:CreateServiceLinkedRole
+            Resource: !Sub arn:aws:iam::${AWS::AccountId}:role/aws-service-role/*
+
+  DeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: splitx-ci-deploy
+      Description: Assumed by GitHub Actions jobs in the aws-demo environment only.
+      MaxSessionDuration: 10800
+      PermissionsBoundary: !Ref CiBoundary
+      ManagedPolicyArns:
+        - !Ref DeployPolicy
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !If
+                - MakeOidcProvider
+                - !Ref GitHubOidcProvider
+                - !Sub arn:aws:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                token.actions.githubusercontent.com:sub: !Sub repo:${GitHubRepository}:environment:${DeployEnvironment}
+      Tags:
+        - Key: project
+          Value: splitx
+
+Outputs:
+  StateBucketName:
+    Description: Terraform's backend bucket (terraform init -backend-config=bucket=...).
+    Value: !Ref StateBucket
+  DeployRoleArn:
+    Description: The role aws-up and aws-down assume (aws-actions/configure-aws-credentials).
+    Value: !GetAtt DeployRole.Arn
+  BoundaryArn:
+    Description: The permissions boundary every platform role must carry.
+    Value: !Ref CiBoundary

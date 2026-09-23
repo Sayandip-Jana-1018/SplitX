@@ -275,6 +275,31 @@ jobs:
           done
           exit "$failed"
 
+  iac:
+    # The CloudFormation templates: AWS's own linter (types, properties, IAM
+    # policy shape, region support), then Trivy's misconfiguration checks at
+    # high and critical. Nothing here touches AWS.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      TRIVY: aquasec/trivy:0.74.0@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - name: cfn-lint
+        run: |
+          pipx install cfn-lint==1.57.0
+          cfn-lint --regions ap-south-1 -- cloudformation/*.yaml
+
+      - name: Trivy misconfigurations
+        # Report-only for its first run: each finding is then fixed, or accepted
+        # in the template with its reason, and this becomes a gate.
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src "$TRIVY" config \
+            --severity MEDIUM,HIGH,CRITICAL --exit-code 0 cloudformation
+
   sonar:
     # SonarQube Cloud: bugs, code smells, duplication, security hotspots, and
     # the unit tests' coverage (from verify, not a second test run). The
@@ -314,7 +339,7 @@ jobs:
     # A commit on main that passed every job above becomes a release: built
     # once, published, scanned, signed, and handed to Jenkins as a GitHub
     # deployment. Jenkins deploys only images this job signed (D-054).
-    needs: [verify, integration, database, secret-scan, manifests]
+    needs: [verify, integration, database, secret-scan, manifests, iac]
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     timeout-minutes: 30

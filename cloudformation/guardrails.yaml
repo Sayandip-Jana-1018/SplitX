@@ -1,0 +1,113 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  SplitX guardrails (stack splitx-guardrails): a monthly cost budget, counted
+  without credits so it tracks real usage, with alerts at 50%, 80% and 100% of
+  it and when the month's forecast passes it, sent to an SNS topic that emails
+  the owner. Permanent: it is never part of aws-up or aws-down.
+
+Parameters:
+  AlertEmail:
+    Type: String
+    NoEcho: true
+    AllowedPattern: '[^@\s]+@[^@\s]+\.[^@\s]+'
+    Description: Where budget alerts go. AWS emails a confirmation link first.
+  MonthlyLimitUsd:
+    Type: Number
+    Default: 15
+    MinValue: 1
+    Description: The month's budget in US dollars.
+
+Resources:
+  AlertTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: splitx-alerts
+      DisplayName: SplitX alerts
+      Subscription:
+        - Protocol: email
+          Endpoint: !Ref AlertEmail
+      Tags:
+        - Key: project
+          Value: splitx
+
+  AlertTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      Topics:
+        - !Ref AlertTopic
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: BudgetsMayPublish
+            Effect: Allow
+            Principal:
+              Service: budgets.amazonaws.com
+            Action: sns:Publish
+            Resource: !Ref AlertTopic
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+
+  MonthlyBudget:
+    Type: AWS::Budgets::Budget
+    Properties:
+      Budget:
+        BudgetName: splitx-monthly
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        BudgetLimit:
+          Amount: !Ref MonthlyLimitUsd
+          Unit: USD
+        CostTypes:
+          # Credits would make every month look free; the point is to see real use.
+          IncludeCredit: false
+          IncludeRefund: false
+          IncludeTax: true
+          IncludeSupport: true
+          IncludeUpfront: true
+          IncludeRecurring: true
+          IncludeOtherSubscription: true
+          IncludeSubscription: true
+          IncludeDiscount: true
+          UseBlended: false
+          UseAmortized: false
+      NotificationsWithSubscribers:
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 50
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: SNS
+              Address: !Ref AlertTopic
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 80
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: SNS
+              Address: !Ref AlertTopic
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 100
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: SNS
+              Address: !Ref AlertTopic
+        - Notification:
+            NotificationType: FORECASTED
+            ComparisonOperator: GREATER_THAN
+            Threshold: 100
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: SNS
+              Address: !Ref AlertTopic
+
+Outputs:
+  AlertTopicArn:
+    Description: SplitX's alert topic (budgets now; CloudWatch alarms later).
+    Value: !Ref AlertTopic
+  BudgetName:
+    Value: splitx-monthly

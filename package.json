@@ -22,6 +22,7 @@
     "ledger:audit": "node --env-file=.env scripts/ledger-audit.mjs",
     "email:test": "node --env-file=.env scripts/email-test.mjs",
     "image:build": "node scripts/image-build.mjs",
+    "aws:bootstrap": "node --env-file=.env scripts/aws-bootstrap.mjs",
     "image:report": "node --env-file=.env scripts/image-report.mjs",
     "db:schema": "node scripts/db-schema.mjs",
     "avatars:check": "node --env-file=.env scripts/migrate-avatars.mjs",
