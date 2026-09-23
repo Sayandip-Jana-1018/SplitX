@@ -2795,6 +2795,65 @@ A first version showed Vercel's Preview deployment as Jenkins's. Jenkins now cou
 
 ---
 
+## Phase 10 — The account layer on AWS: CloudFormation
+
+### D-087 · CloudFormation makes what Terraform needs, and the deploy identities can't escalate
+**2026-09-23** · ✅ written, linted and gated in CI (01d7c86, 09bf59c); deploys once the user applies
+version 2 of `splitx-devops-policy`
+
+Terraform can't create the things it needs before it runs, so two CloudFormation stacks do. They are
+deployed once from the laptop (`npm run aws:bootstrap`), each through a change set (`--plan` shows the
+change sets without running them). Then they stay.
+
+**`splitx-bootstrap`** (`cloudformation/bootstrap.yaml`) holds:
+- **Terraform's state bucket** `splitx-tfstate-<account>-ap-south-1`: versioned, encrypted, TLS only,
+  never public, with old state versions expiring after 90 days. It is new. The old
+  `splitx-terraform-state-*` bucket is in `us-east-1`, empty and unversioned (checked read-only), and a
+  stack in `ap-south-1` can't adopt a bucket from another region. The old bucket costs nothing, and
+  deleting it is the user's call.
+- **GitHub's OIDC provider**, created here because the account had none.
+- **The role `splitx-ci-deploy`**, which only jobs in the GitHub environment `aws-demo` may assume
+  (`repo:…:environment:aws-demo`, with a required reviewer), for at most 3 hours. It may build and
+  remove the platform, read and write state, `splitx/*` secrets, and roles and policies named
+  `splitx-eks-*` or `splitx-wl-*`, which it may pass only to EKS, EC2 and EKS Pod Identity.
+- **The boundary `splitx-ci-boundary`**, carried by that role and by every role it creates:
+  - no IAM changes outside `splitx-eks-*` and `splitx-wl-*` (and service-linked roles);
+  - nothing at all to `splitx-ci-*`;
+  - every new role carries this same boundary;
+  - no boundary can be removed.
+
+  An administrator policy attached to such a role still can't reach beyond it.
+
+**`splitx-guardrails`** (`cloudformation/guardrails.yaml`) holds a $15 monthly budget counted without
+credits, so it tracks real usage. It alerts at 50%, 80% and 100% and when the month's forecast passes
+it, through the SNS topic `splitx-alerts`, which emails the address in `BUDGET_EMAIL` after that
+address confirms the subscription.
+
+**Version 2 of `splitx-devops-policy`** (`terraform/bootstrap`):
+- adds CloudFormation on `splitx-*` stacks, SNS on `splitx-*` topics, and Secrets Manager on
+  `splitx/*`;
+- drops ECR, since GHCR is the registry;
+- closes version 1's escalation paths:
+  - the user may never change or delete its own policy;
+  - every `splitx-*` role it creates must carry the boundary, and no boundary can be removed;
+  - it may pass roles only to EKS, EC2 and Pod Identity.
+
+What remains, by design: it can edit the boundary through the bootstrap stack. It is the one identity
+that manages SplitX's IAM. Since it can't change its own policy, the account's administrator applies
+version 2, in the console.
+
+**CI** (`iac` job, required for a release) lints both templates with `cfn-lint` 1.57.0, then runs Trivy's
+misconfiguration checks as a gate at medium and above. The first run found two, both high, and both
+are accepted in the templates with their reasons:
+- **AWS-0132:** the state bucket uses S3's own keys, not a customer-managed key, which would cost
+  monthly for little more protection on a private, TLS-only bucket that two identities can read;
+- **AWS-0095:** the budget topic is unencrypted, because AWS Budgets can't publish to a topic under
+  SNS's AWS-managed key, and its messages are budget percentages.
+
+Now both templates report 0 misconfigurations.
+
+---
+
 ## Open problems
 
 | ID | Problem | Why it matters | Status / planned fix |
