@@ -2,9 +2,10 @@ name: AWS down
 
 # Removes SplitX's demo platform from AWS and proves nothing is left. It runs
 # as splitx-ci-teardown, which can look and remove but never create, so it
-# needs no approval, and every evening at 23:30 IST it runs by itself: budget
+# needs no approval, and every evening at 23:30 IST it checks by itself: budget
 # data lags 8 to 12 hours, so a forgotten platform would otherwise run all
-# night. When nothing is up, it only confirms that.
+# night. The nightly check touches AWS only if aws-up has run since the last
+# teardown that ended green; otherwise nothing can be up, and it stops there.
 #
 # The order matters. The load balancer and the volumes were made by the
 # cluster, not by Terraform, and the network can't be deleted while they
@@ -31,7 +32,43 @@ env:
   CLUSTER_NAME: splitx
 
 jobs:
+  needed:
+    # The platform can only exist after aws-up has run, so the nightly run
+    # goes on only when aws-up has run since the last aws-down that ended
+    # green (that is, proved nothing left). A failed teardown is therefore
+    # retried every night until one succeeds. This reads GitHub's own records
+    # and needs no AWS credentials. A run started by hand always goes on.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+    outputs:
+      run: ${{ steps.check.outputs.run }}
+
+    steps:
+      - name: Has aws-up run since the last successful teardown?
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [[ "$EVENT" != schedule ]]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          up="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/aws-up.yml/runs?per_page=1" --jq '.workflow_runs[0].created_at // ""')"
+          down="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/aws-down.yml/runs?status=success&per_page=1" --jq '.workflow_runs[0].created_at // ""')"
+          echo "Newest aws-up run: ${up:-none}. Newest aws-down run that ended green: ${down:-none}."
+          if [[ -n "$up" && "$up" > "$down" ]]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "Nothing has been built since the last clean teardown: nothing to do." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
   down:
+    needs: needed
+    if: needs.needed.outputs.run == 'true'
     runs-on: ubuntu-latest
     # No reviewer, main only: the only environment splitx-ci-teardown trusts.
     environment: aws-teardown

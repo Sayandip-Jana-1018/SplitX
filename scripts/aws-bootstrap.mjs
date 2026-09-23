@@ -84,7 +84,21 @@ for (const stack of stacks) {
     ], { json: false });
     if (deploy.status !== 0) fail(`${stack.name} failed; its events: aws cloudformation describe-stack-events --stack-name ${stack.name}`);
 
-    if (!PLAN_ONLY) {
+    if (PLAN_ONLY) {
+        // What the change set would do, resource by resource.
+        const listed = aws(['cloudformation', 'list-change-sets', '--stack-name', stack.name]);
+        const newest = (JSON.parse(listed.stdout).Summaries ?? [])
+            .sort((a, b) => String(b.CreationTime).localeCompare(String(a.CreationTime)))[0];
+        if (newest) {
+            const described = aws(['cloudformation', 'describe-change-set', '--stack-name', stack.name, '--change-set-name', newest.ChangeSetName]);
+            const changes = JSON.parse(described.stdout).Changes ?? [];
+            console.log(`${stack.name}: ${changes.length} change(s), not executed`);
+            for (const { ResourceChange: change } of changes) {
+                const replaced = change.Replacement === 'True' ? ', replaced' : '';
+                console.log(`  ${change.Action.padEnd(6)} ${change.LogicalResourceId} (${change.ResourceType}${replaced})`);
+            }
+        }
+    } else {
         const described = aws(['cloudformation', 'describe-stacks', '--stack-name', stack.name]);
         const [{ StackStatus, Outputs = [] }] = JSON.parse(described.stdout).Stacks;
         console.log(`${stack.name}: ${StackStatus}`);
