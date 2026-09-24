@@ -3720,7 +3720,8 @@ Chromium, driven over the DevTools protocol at 390 px and a device scale of 2.
 ## Phase 14 — The whole platform, end to end, on GitHub's runners
 
 ### D-099 · kind-e2e: the Kind platform, a real GitHub delivery and every verifier, on a runner
-**2026-09-24** · 🚧 written and unit-tested (1,282 → 1,302 tests); its first runs follow
+**2026-09-24** · ✅ written, unit-tested (1,282 → 1,302 tests) and proven on 2026-09-25: run 6 passed
+every check
 
 The laptop can't run the cluster any more (B-027, and one fan missing), so the whole platform is
 proven where it costs nothing: a GitHub-hosted runner with 4 CPUs and 16 GB.
@@ -3784,7 +3785,8 @@ it would deploy over the release under test.
 
 **Not proven until a run passes:** every step after `k8s:up` on a runner, and the four items D-097
 left: Kyverno's admission metrics reaching Prometheus; ops-api reading through Kind's API server;
-the lab driving the autoscaler; and the evidence reaching Nexus.
+the lab driving the autoscaler; and the evidence reaching Nexus. Runs 5 and 6 proved all of it
+(below).
 
 **Run 1 (36023050479, on `7cddd45`) found a Phase 6 bug.**
 - **What worked:** the run found `7cddd45`'s own release and verified both signatures with cosign,
@@ -3886,8 +3888,34 @@ D-100 has the five causes and their fixes.
 - **B-027:** memory peaked at 8.1 GB in use, 6.75 GB of it anonymous, with no swap, while the lab
   held 10 app pods.
 
+**Run 6 (36040446436, on `05aab36`, D-102's fix) passed every check. Phase 7 is done.**
+- **`k8s:up`** passed, Nexus' proof included.
+- **The delivery:** GitHub's webhook reached the runner's Jenkins, which delivered the release in
+  73 s: "Deployed 05aab36d1164 and checked through the edge; evidence in Nexus".
+- **`k8s:verify`:** 35 of 35, and 1 skipped (email, for the same reason as before).
+  - The dashboard check ran 49 queries on 37 metrics.
+  - It named the failed-build counter "not published yet", with the plugin's reason, instead of
+    failing.
+- **`cd:verify --rollback`:** 16 of 16.
+  - The broken release failed after 180 s and was rolled back. 617 of 617 requests got 200
+    meanwhile.
+  - The new check passed: the failed-build counter read 1, 30 s after that build ended in failure.
+- **`ops-verify`:** 24 of 24.
+  - Access: signed out 401, a visitor 403, the operator 200.
+  - Kyverno reported 47 admissions allowed and 0 refused.
+  - The lab's 5,401 plans were all served: 0 refused, 0 failed, p95 67 ms.
+  - The autoscaler went from 2 pods to 10, and up to 10 answered at once.
+  - The page's chart peaked at 60.2 requests a second.
+  - The evidence (`05aab36d1164/6645236192`) was in Nexus, complete. Jenkins' last result, the
+    deliberate failure, reached the page.
+- **Jenkins' consoles** for both builds were kept in the evidence.
+- **B-027:** memory peaked at 8.2 GB in use, 6.7 GB of it anonymous, with no swap.
+- **Where to read it:** the run's evidence artifact, `kind-e2e-36040446436`, is kept for 30 days.
+  Every PASS line is also in the job log.
+
 ### D-100 · What kind-e2e run 4 found: five causes, each read in the source of what was involved
-**2026-09-24** · 🚧 fixed and unit-tested (1,302 → 1,311 tests); the next kind-e2e run proves them
+**2026-09-24** · ✅ fixed, unit-tested (1,302 → 1,311 tests) and proven by run 5, then again by run 6
+(D-099)
 
 Each cause below was found in the source code of the component involved, at its pinned version, not
 guessed from the symptom.
@@ -3971,7 +3999,7 @@ guessed from the symptom.
 (`pkg/metrics/admission.go` in Kyverno 1.19.1), so ops-api's query stands.
 
 ### D-101 · Vercel deploys `main` only
-**2026-09-24** · 🚧 committed; the next push proves it (one Production deployment, no Preview)
+**2026-09-24** · ✅ proven: `05aab36`'s push made one Production deployment and no Preview
 
 **What happened.**
 - Vercel emailed that the Hobby team had used 100 % of its 10 GB of Functions Storage. The
@@ -3995,11 +4023,14 @@ guessed from the symptom.
   with slashes, such as Dependabot's.
 - Previews of pull requests are gone. CI still runs on every one, and nothing here used them.
 
-**The user's part:**
-- check the per-project usage;
-- set Pre-Production, Canceled and Errored retention to the shortest option in SplitX's settings,
-  and keep Production at a week or more for rollback;
-- delete the old Preview deployments.
+**The user's part, done on 2026-09-25:**
+- By then the dashboard read 10.05 GB of 10 GB.
+- Hobby has no retention setting any more. Since 16 September 2026, Vercel keeps 3 production and 3
+  recent deployments per project, plus the latest Preview of each active branch, and deletes the
+  rest.
+- So the user deleted the 12 remaining Preview deployments by hand. Delete is on each deployment's
+  own page, under its ⋯ menu.
+- The figure is a 30-day rolling one, so it falls over the following days.
 
 **Not chosen:**
 - **A second Vercel account.** The same pushes would fill it, and the site's address, its secrets
@@ -4007,7 +4038,8 @@ guessed from the symptom.
 - **Pro.** It stays the fallback, and the choice is the user's.
 
 ### D-102 · A counter that exists only after its first event is said, then proven
-**2026-09-24** · 🚧 fixed and unit-tested; the next kind-e2e run proves it
+**2026-09-24** · ✅ fixed, unit-tested and proven by run 6 (D-099): `k8s:verify` said "not published
+yet" and why, and `cd:verify` read the counter at 1, 30 s after its failed release
 
 **The cause.** Run 5's one failure was the Delivery dashboard's "failed" bars, which read
 `default_jenkins_builds_failed_build_count_total`. In Jenkins' Prometheus plugin (the pinned commit),
