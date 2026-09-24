@@ -25,6 +25,10 @@ admissionController:
       # No CPU limit, as elsewhere (D-053).
       limits:
         memory: 512Mi
+  # Its metrics, for Prometheus: /ops shows how many admission requests it
+  # answered in the last day, and how many it refused (D-097).
+  serviceMonitor:
+    enabled: true
 
 # PolicyReports for what is already running: evidence that the pods in the
 # cluster satisfy the policy, not just that new ones would.

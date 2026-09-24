@@ -67,3 +67,5 @@ __pycache__/
 
 # cluster-up --target eks: its temporary kustomization for the release to run
 .cluster-up-eks-*/
+# cluster-up, either target: the same for the ops image (D-097)
+.cluster-up-ops-*/

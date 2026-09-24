@@ -9,8 +9,8 @@
  *
  * Nothing here is generated on the cluster, ever: a secret made up there would
  * change on every aws-up and break what depends on it (the webhook's HMAC, the
- * edge's origin header). The two values nobody has to choose are generated
- * once, into .env, by scripts/aws-secrets.mjs.
+ * edge's origin header). The values nobody has to choose are generated once,
+ * into .env, by scripts/aws-secrets.mjs.
  */
 
 import { renderAlertmanagerConfig } from './alertmanager-config.mjs';
@@ -33,6 +33,7 @@ export const REQUIRED = [
     'JENKINS_TRIGGER_TOKEN',
     'NEXUS_ADMIN_PASSWORD',
     'NEXUS_JENKINS_PASSWORD',
+    'NEXUS_OPS_PASSWORD',
 ];
 
 /** Copied into the app's secret as they are, when present. */
@@ -104,6 +105,8 @@ export function demoSecrets(env, { alertmanagerTemplate }) {
         NEXUS_ADMIN_PASSWORD: value('NEXUS_ADMIN_PASSWORD'),
         // Jenkins' Nexus account: read and add evidence, nothing else (D-096).
         NEXUS_JENKINS_PASSWORD: value('NEXUS_JENKINS_PASSWORD'),
+        // ops-api's Nexus account: read the evidence, nothing else (D-097).
+        NEXUS_OPS_PASSWORD: value('NEXUS_OPS_PASSWORD'),
         // Alertmanager's whole configuration, filled here exactly as k8s:up fills
         // it for Kind (D-052); without the ALERT_* values it routes but emails nobody.
         ALERTMANAGER_YAML: renderAlertmanagerConfig(alertmanagerTemplate, env).config,

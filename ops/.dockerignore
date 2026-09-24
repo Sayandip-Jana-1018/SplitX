@@ -1,0 +1,5 @@
+# Only the code, the manifest and the lock file reach the build.
+node_modules
+Dockerfile
+.dockerignore
+*.md

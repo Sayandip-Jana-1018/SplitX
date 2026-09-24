@@ -1,0 +1,107 @@
+# ═══════════════════════════════════════════════════════════════
+#   The traffic lab (D-097): k6 behind a start and a stop button on /ops,
+#   capped at 30 plans a second for 180 seconds (ops/lab/limits.mjs), with
+#   one fixed target and no credentials of any kind.
+# ═══════════════════════════════════════════════════════════════
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: traffic-lab
+  labels:
+    app.kubernetes.io/name: traffic-lab
+    app.kubernetes.io/part-of: splitx
+# It never calls the Kubernetes API.
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: traffic-lab
+  labels:
+    app.kubernetes.io/name: traffic-lab
+    app.kubernetes.io/part-of: splitx
+spec:
+  selector:
+    app.kubernetes.io/name: traffic-lab
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: traffic-lab
+  labels:
+    app.kubernetes.io/name: traffic-lab
+    app.kubernetes.io/part-of: splitx
+spec:
+  replicas: 1
+  # One lab, never two: a run lives in the process that started it.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: traffic-lab
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: traffic-lab
+        app.kubernetes.io/part-of: splitx
+    spec:
+      serviceAccountName: traffic-lab
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: traffic-lab
+          image: splitx-ops
+          imagePullPolicy: IfNotPresent
+          command: ["node", "lab/server.mjs"]
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            # The one target: the edge on EKS, ingress-nginx on Kind. cluster-up
+            # writes it; no request can change it.
+            - name: TARGET_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: traffic-lab
+                  key: target
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            # k6's summary at the end of a run.
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 30
+            failureThreshold: 4
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi

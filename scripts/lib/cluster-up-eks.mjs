@@ -16,6 +16,8 @@
  *   5. the admission policy first, then the app (k8s/overlays/aws, with the
  *      release to run), the dashboards, Jenkins' EKS additions, and Nexus
  *   6. waits for Redis, the app, the load balancer's address, and Nexus' setup
+ *   7. with the release's ops image, ops-api and the traffic lab (D-097): the
+ *      platform's facts for /ops, and the edge as the lab's one target
  *
  * Idempotent, like the Kind path: every step applies or upgrades.
  */
@@ -23,16 +25,19 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { admittedPrefixList, committedEdge, releaseImage, storeRegion } from './eks-facts.mjs';
+import { applyOps, opsKustomization } from './ops-platform.mjs';
 import { chartsFor, helmInstallArgs, reposOf } from './platform-charts.mjs';
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
- * @param {{ root: string, context?: string, image?: string }} options
+ * @param {{ root: string, context?: string, image?: string, opsImage?: string }} options
  *   image: ghcr.io/sayandip-jana-1018/splitx@sha256:<digest>, the release to run;
  *   without it, the tag k8s/overlays/aws pins.
+ *   opsImage: the same release's ops image (its ops_image); without it,
+ *   ops-api and the traffic lab are left out and /ops says so.
  */
-export async function upEks({ root, context = 'splitx', image = '' }) {
+export async function upEks({ root, context = 'splitx', image = '', opsImage = '' }) {
     let step = 0;
     const heading = (text) => console.log('\n[' + ++step + '] ' + text);
     const fail = (message) => {
@@ -58,6 +63,7 @@ export async function upEks({ root, context = 'splitx', image = '' }) {
     const kubectl = (argv, options) => run('kubectl', ['--context', context, ...argv], options);
     const read = (path) => readFileSync(join(root, path), 'utf8');
     const release = image ? releaseImage(image) : null;
+    if (opsImage) opsKustomization(opsImage);
 
     // ── 1. what the platform is ───────────────────────────────────────────────
     heading('Checking tools');
@@ -98,7 +104,7 @@ export async function upEks({ root, context = 'splitx', image = '' }) {
     // ── 2. namespaces ─────────────────────────────────────────────────────────
     heading('Namespaces, with their Pod Security levels');
     kubectl(['apply', '-f', 'helm/platform/namespaces.yaml', '-f', 'helm/platform/eks/namespaces.yaml', '-f', 'k8s/base/namespace.yaml'], { capture: true });
-    console.log('    monitoring, node-exporter, jenkins, kyverno, nexus, external-secrets, splitx');
+    console.log('    monitoring, node-exporter, jenkins, kyverno, nexus, ops, external-secrets, splitx');
 
     const charts = chartsFor(JSON.parse(read('helm/platform/charts.json')), 'eks');
     const repos = reposOf(charts);
@@ -179,6 +185,33 @@ export async function upEks({ root, context = 'splitx', image = '' }) {
     // Nexus' first start creates its database; the Job then sets it up (D-096).
     kubectl(['-n', 'nexus', 'wait', '--for=condition=complete', 'job/nexus-provision', '--timeout=900s']);
     console.log('    Nexus is set up: licence accepted, anonymous access off, the evidence repository and Jenkins\' account in place');
+
+    // ── 7. the cluster half of /ops ───────────────────────────────────────────
+    heading('ops-api and the traffic lab (D-097)');
+    if (!opsImage) {
+        console.log('    no ops image in this release: left out, and /ops says the cluster is not connected');
+    } else {
+        applyOps({
+            root,
+            kubectl,
+            image: opsImage,
+            // What ops-api shows as the platform, and where its AWS reads go
+            // (its role, splitx-wl-ops-api, comes from EKS Pod Identity).
+            facts: {
+                PLATFORM_TARGET: 'eks',
+                AWS_REGION: outputs.region,
+                CLUSTER_NAME: outputs.cluster_name,
+                KUBERNETES_VERSION: outputs.kubernetes_version,
+                VPC_CIDR: outputs.vpc_cidr,
+                SERVICE_CIDR: outputs.service_cidr,
+                EDGE_DOMAIN: edge.host,
+            },
+            // The way visitors arrive: through CloudFront, which alone carries
+            // the origin header the app requires (D-092).
+            target: edge.url,
+        });
+        console.log('    running ' + opsImage.split('@')[1].slice(0, 19) + '; the lab sends its load through ' + edge.url);
+    }
 
     heading('Cluster state');
     console.log(kubectl(['-n', 'splitx', 'get', 'pods', '-o', 'wide'], { capture: true }).stdout.trim());

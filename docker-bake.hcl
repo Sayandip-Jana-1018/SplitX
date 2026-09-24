@@ -61,6 +61,26 @@ target "release" {
   ]
 }
 
+# ops-api and the traffic lab (ops/, D-097): the cluster half of /ops. A tag of
+# the same package (ops-<commit>), so the admission policy that covers the app
+# covers it too, and GHCR serves it as publicly as the app.
+target "ops" {
+  inherits   = ["_provenance"]
+  context    = "ops"
+  dockerfile = "Dockerfile"
+  target     = "runner"
+  platforms  = ["linux/amd64"]
+  tags       = ["${REGISTRY}${IMAGE}:ops-${GIT_SHA}"]
+}
+
+target "ops-release" {
+  inherits = ["ops"]
+  attest = [
+    "type=provenance,mode=max",
+    "type=sbom",
+  ]
+}
+
 # Comparison exhibit only — see Dockerfile.naive.
 target "naive" {
   context    = "."

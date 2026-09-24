@@ -46,6 +46,16 @@ metadata:
 apiVersion: v1
 kind: Namespace
 metadata:
+  name: ops
+  labels:
+    # ops-api and the traffic lab (D-097): non-root, no host access, and a
+    # read-only root filesystem each.
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/warn: restricted
+---
+apiVersion: v1
+kind: Namespace
+metadata:
   name: nexus
   labels:
     # Nexus (D-096) runs as its image's nexus user with a read-only root

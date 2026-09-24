@@ -1,0 +1,178 @@
+# ═══════════════════════════════════════════════════════════════
+#   Who may talk to what in the ops namespace (D-097). Nothing accepts or
+#   sends traffic unless a rule names it.
+#
+#   One file serves Kind and EKS. The addresses that differ between them
+#   are both named, and each is inert on the other cluster:
+#     the API server   Kind: 10.96.0.1:443 and the node network on 6443;
+#                      EKS: 172.20.0.1:443, judged before translation (D-093)
+#     the kubelet      Kind: the node network (172.16.0.0/12); EKS admits the
+#                      node's own address without a rule
+#     Pod Identity     EKS only: the node's agent at 169.254.170.23:80
+# ═══════════════════════════════════════════════════════════════
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  labels:
+    app.kubernetes.io/part-of: splitx
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ops-api
+  labels:
+    app.kubernetes.io/name: ops-api
+    app.kubernetes.io/part-of: splitx
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: ops-api
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        # The application's pods: /ops reads the cluster through here, and
+        # only for operators (src/lib/ops/access.ts).
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: splitx
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: splitx
+        # The kubelet's probes on Kind.
+        - ipBlock:
+            cidr: 172.16.0.0/12
+      ports:
+        - port: 8080
+          protocol: TCP
+  egress:
+    # Prometheus, Alertmanager and Loki.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - port: 9090
+          protocol: TCP
+        - port: 9093
+          protocol: TCP
+        - port: 3100
+          protocol: TCP
+    # Nexus, as the read-only account.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: nexus
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: nexus
+      ports:
+        - port: 8081
+          protocol: TCP
+    # The traffic lab.
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: traffic-lab
+      ports:
+        - port: 8080
+          protocol: TCP
+    # The API server.
+    - to:
+        - ipBlock:
+            cidr: 172.20.0.1/32
+        - ipBlock:
+            cidr: 10.96.0.1/32
+      ports:
+        - port: 443
+          protocol: TCP
+    - to:
+        - ipBlock:
+            cidr: 172.16.0.0/12
+      ports:
+        - port: 6443
+          protocol: TCP
+    # EKS Pod Identity's agent, for the role's credentials.
+    - to:
+        - ipBlock:
+            cidr: 169.254.170.23/32
+      ports:
+        - port: 80
+          protocol: TCP
+    # AWS's APIs (CloudFormation, EKS, CloudFront, Budgets).
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - port: 443
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: traffic-lab
+  labels:
+    app.kubernetes.io/name: traffic-lab
+    app.kubernetes.io/part-of: splitx
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: traffic-lab
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ops-api
+        # The kubelet's probes on Kind.
+        - ipBlock:
+            cidr: 172.16.0.0/12
+      ports:
+        - port: 8080
+          protocol: TCP
+  egress:
+    # The target on EKS: the edge, over HTTPS, the way visitors arrive.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - port: 443
+          protocol: TCP
+    # The target on Kind: ingress-nginx.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - port: 80
+          protocol: TCP

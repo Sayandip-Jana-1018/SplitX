@@ -6,8 +6,11 @@
  *   node scripts/cluster-up.mjs              create/update the cluster
  *   node scripts/cluster-up.mjs --recreate   delete the cluster first
  *   node scripts/cluster-up.mjs --image splitx:abc1234
+ *   node scripts/cluster-up.mjs --ops-image ghcr.io/sayandip-jana-1018/splitx@sha256:...
+ *        also runs ops-api and the traffic lab (k8s/ops, D-097) from a signed
+ *        release's ops image; without it they are left out, and /ops says so
  *
- *   node scripts/cluster-up.mjs --target eks [--image ghcr.io/...@sha256:...]
+ *   node scripts/cluster-up.mjs --target eks [--image ghcr.io/...@sha256:...] [--ops-image ...]
  *        the same platform on the EKS cluster aws-up builds (D-093); what differs
  *        is in scripts/lib/cluster-up-eks.mjs. Everything below is the Kind path.
  *
@@ -33,6 +36,7 @@
  *      (policy/), what Jenkins needs beyond its chart (jenkins/) and Nexus
  *      (nexus/), and waits for the database, the schema Job, the deployment
  *      and Nexus' setup
+ *      and, with --ops-image, ops-api and the traffic lab (scripts/lib/ops-platform.mjs)
  *   9. rolls the deployment if the pods run an older build than the one loaded
  *  10. opens fresh connections from every pod, because readiness cannot prove it
  */
@@ -43,6 +47,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { renderAlertmanagerConfig } from './lib/alertmanager-config.mjs';
 import { checkNewConnections, describe } from './lib/cluster-network.mjs';
+import { applyOps, opsKustomization } from './lib/ops-platform.mjs';
 import { chartsFor, helmInstallArgs, reposOf } from './lib/platform-charts.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -59,6 +64,7 @@ const option = (name, fallback) => {
 };
 
 const IMAGE = option('--image', 'splitx:local');
+const OPS_IMAGE = option('--ops-image', '');
 
 let step = 0;
 const heading = (text) => console.log('\n[' + ++step + '] ' + text);
@@ -66,6 +72,12 @@ const fail = (message) => {
     console.error('\nx ' + message);
     process.exit(1);
 };
+// Checked before anything is touched: our registry, by digest, never a tag.
+try {
+    if (OPS_IMAGE) opsKustomization(OPS_IMAGE);
+} catch (error) {
+    fail(error.message);
+}
 
 function run(file, argv, options = {}) {
     const { input, capture = false, allowFailure = false } = options;
@@ -89,7 +101,7 @@ const kubectl = (argv, options) => run('kubectl', ['--context', CONTEXT, ...argv
 const TARGET = option('--target', 'kind');
 if (TARGET === 'eks') {
     const { upEks } = await import('./lib/cluster-up-eks.mjs');
-    await upEks({ root, context: option('--context', 'splitx'), image: option('--image', '') });
+    await upEks({ root, context: option('--context', 'splitx'), image: option('--image', ''), opsImage: OPS_IMAGE });
     process.exit(0);
 }
 if (TARGET !== 'kind') fail('--target is kind (the default) or eks, not ' + TARGET);
@@ -222,6 +234,7 @@ ensureEnv('JENKINS_TRIGGER_TOKEN', randomBytes(24).toString('hex'), 'The token t
 // account Jenkins uses, which may only read and add evidence.
 ensureEnv('NEXUS_ADMIN_PASSWORD', randomBytes(24).toString('base64url'), 'The Nexus admin password (user admin)');
 ensureEnv('NEXUS_JENKINS_PASSWORD', randomBytes(24).toString('base64url'), "The password of Jenkins' Nexus account, which may only read and add release evidence");
+ensureEnv('NEXUS_OPS_PASSWORD', randomBytes(24).toString('base64url'), "The password of ops-api's Nexus account, which may only read release evidence");
 if (!process.env.SMEE_URL) {
     // smee.io answers /new with a redirect to a fresh channel.
     const channel = await fetch('https://smee.io/new', { redirect: 'manual' })
@@ -246,8 +259,13 @@ const jenkinsSecretsChanged = [
         'nexus-password': process.env.NEXUS_JENKINS_PASSWORD,
     }),
 ].some((result) => result.stdout.includes('configured'));
-applySecret('nexus', 'nexus-admin', { 'password': process.env.NEXUS_ADMIN_PASSWORD, 'jenkins-password': process.env.NEXUS_JENKINS_PASSWORD });
-console.log("    nexus-admin: Nexus' admin password, and the one its setup Job gives Jenkins' account");
+applySecret('nexus', 'nexus-admin', {
+    'password': process.env.NEXUS_ADMIN_PASSWORD,
+    'jenkins-password': process.env.NEXUS_JENKINS_PASSWORD,
+    'ops-password': process.env.NEXUS_OPS_PASSWORD,
+});
+applySecret('ops', 'ops-api', { 'nexus-password': process.env.NEXUS_OPS_PASSWORD });
+console.log("    nexus-admin, ops-api: Nexus' admin password, and those its setup Job gives Jenkins' and ops-api's accounts");
 // Read as environment variables, so a change needs a new relay pod (step 8).
 const relaySecretChanged = applySecret('jenkins', 'webhook-relay', { 'smee-url': process.env.SMEE_URL, 'trigger-token': process.env.JENKINS_TRIGGER_TOKEN })
     .stdout.includes('configured');
@@ -364,6 +382,22 @@ kubectl(['-n', NAMESPACE, 'wait', '--for=condition=complete', 'job/splitx-schema
 kubectl(['-n', NAMESPACE, 'rollout', 'status', 'deployment/splitx', '--timeout=300s']);
 // A first start of Nexus creates its database; the Job then sets it up.
 kubectl(['-n', 'nexus', 'wait', '--for=condition=complete', 'job/nexus-provision', '--timeout=900s']);
+
+heading('ops-api and the traffic lab (the cluster half of /ops, D-097)');
+if (!OPS_IMAGE) {
+    console.log('    no --ops-image, so left out: /ops says the cluster is not connected. Each release names one (its ops_image).');
+} else {
+    const server = JSON.parse(kubectl(['version', '-o', 'json'], { capture: true }).stdout).serverVersion;
+    applyOps({
+        root,
+        kubectl,
+        image: OPS_IMAGE,
+        facts: { PLATFORM_TARGET: 'kind', KUBERNETES_VERSION: server?.gitVersion },
+        // Visitors' way in on Kind; its Ingress rules have no host.
+        target: 'http://ingress-nginx-controller.ingress-nginx.svc.cluster.local',
+    });
+    console.log('    running ' + OPS_IMAGE.split('@')[1].slice(0, 19) + '; the lab sends its load through ingress-nginx');
+}
 
 heading('Are the pods running the image just loaded?');
 // The local overlay deploys a tag, splitx:local, and a new build is loaded under

@@ -70,7 +70,7 @@ describe('the Secrets on EKS match the ones Kind builds', () => {
     const externalSecrets = read('k8s/eks/secrets/externalsecrets.yaml');
     const platform = demoSecrets(
         Object.fromEntries(['DEMO_DATABASE_URL', 'NEXTAUTH_SECRET', 'METRICS_TOKEN', 'REDIS_PASSWORD', 'ORIGIN_VERIFY_SECRET', 'GF_ADMIN_PASSWORD',
-            'JENKINS_ADMIN_PASSWORD', 'GITHUB_WEBHOOK_SECRET', 'JENKINS_TRIGGER_TOKEN', 'NEXUS_ADMIN_PASSWORD', 'NEXUS_JENKINS_PASSWORD'].map((key) => [key, key === 'DEMO_DATABASE_URL' ? 'postgresql://demo@demo.example/splitx' : 'value'])),
+            'JENKINS_ADMIN_PASSWORD', 'GITHUB_WEBHOOK_SECRET', 'JENKINS_TRIGGER_TOKEN', 'NEXUS_ADMIN_PASSWORD', 'NEXUS_JENKINS_PASSWORD', 'NEXUS_OPS_PASSWORD'].map((key) => [key, key === 'DEMO_DATABASE_URL' ? 'postgresql://demo@demo.example/splitx' : 'value'])),
         { alertmanagerTemplate: read('monitoring/alertmanager/alertmanager.yaml') },
     ).platform!;
 
@@ -89,7 +89,8 @@ describe('the Secrets on EKS match the ones Kind builds', () => {
             ['alertmanager-splitx', ['alertmanager.yaml']],
             ['jenkins-admin', ['jenkins-admin-user', 'jenkins-admin-password']],
             ['jenkins-secrets', ['webhook-secret', 'trigger-token', 'github-token', 'nexus-password']],
-            ['nexus-admin', ['password', 'jenkins-password']],
+            ['nexus-admin', ['password', 'jenkins-password', 'ops-password']],
+            ['ops-api', ['nexus-password']],
         ] as const) {
             expect(externalSecrets).toContain(`    name: ${name}\n`);
             expect(kind).toContain(`'${name}'`);

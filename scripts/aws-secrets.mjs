@@ -6,10 +6,10 @@
  *   npm run aws:secrets             write splitx/demo/app and splitx/demo/platform
  *   npm run aws:secrets -- --check  say what would be written, by key name, and what is missing
  *
- * What goes where is decided in scripts/lib/demo-secrets.mjs. Three values nobody
+ * What goes where is decided in scripts/lib/demo-secrets.mjs. The values nobody
  * has to choose are generated into .env on the first run: ORIGIN_VERIFY_SECRET
- * (the header CloudFront sends the load balancer), NEXUS_ADMIN_PASSWORD and
- * NEXUS_JENKINS_PASSWORD (Jenkins' Nexus account, D-096).
+ * (the header CloudFront sends the load balancer), NEXUS_ADMIN_PASSWORD, and
+ * the passwords of Jenkins' and ops-api's Nexus accounts (D-096, D-097).
  *
  * Values are never printed, never put on a command line and never written to a
  * file but .env. They reach AWS only in the body of a signed HTTPS request
@@ -43,6 +43,7 @@ function ensureEnv(key, comment) {
 ensureEnv('ORIGIN_VERIFY_SECRET', 'CloudFront sends this to the load balancer, and the app refuses requests without it');
 ensureEnv('NEXUS_ADMIN_PASSWORD', 'The Nexus admin password on the demo platform (user admin)');
 ensureEnv('NEXUS_JENKINS_PASSWORD', 'The password of Jenkins\' Nexus account, which may only read and add release evidence');
+ensureEnv('NEXUS_OPS_PASSWORD', 'The password of ops-api\'s Nexus account, which may only read release evidence');
 if (generated.length) console.log(`${CHECK ? 'Would generate' : 'Generated'} into .env: ${generated.join(', ')}`);
 
 let secrets;

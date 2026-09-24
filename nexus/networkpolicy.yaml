@@ -1,7 +1,8 @@
 # ═══════════════════════════════════════════════════════════════
 #   Who may reach Nexus (D-096): Jenkins' build agents, which archive each
-#   deployment's evidence, and the setup Job. Nothing else, and Nexus itself
-#   reaches nothing but DNS: it has no reason to call out.
+#   deployment's evidence, ops-api, which shows it on /ops (D-097), and the
+#   setup Job. Nothing else, and Nexus itself reaches nothing but DNS: it has
+#   no reason to call out.
 #
 #   The same file serves Kind and EKS. On Kind the kubelet probes from the
 #   node network (172.16.0.0/12); on EKS the VPC CNI's agent always admits
@@ -55,6 +56,13 @@ spec:
           podSelector:
             matchLabels:
               jenkins/jenkins-jenkins-agent: "true"
+        # ops-api, as its read-only account, for /ops (D-097).
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ops
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ops-api
         # The setup Job.
         - podSelector:
             matchLabels:

@@ -47,6 +47,13 @@ spec:
                 secretKeyRef:
                   name: nexus-admin
                   key: jenkins-password
+            # ops-api's read-only account (D-097).
+            - name: NEXUS_OPS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: nexus-admin
+                  key: ops-password
+                  optional: true
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true

@@ -1,0 +1,159 @@
+# ═══════════════════════════════════════════════════════════════
+#   ops-api (D-097): reads the cluster, Prometheus, Alertmanager, Loki,
+#   Nexus and, on EKS, AWS, for the /ops page. Read-only everywhere.
+# ═══════════════════════════════════════════════════════════════
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  # The name the Pod Identity association in terraform/platform/workloads.tf
+  # expects (the role splitx-wl-ops-api, EKS only).
+  name: ops-api
+  labels:
+    app.kubernetes.io/name: ops-api
+    app.kubernetes.io/part-of: splitx
+automountServiceAccountToken: true
+---
+# Kubernetes' own read-only role: everything in every namespace except
+# Secrets (and RBAC itself).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ops-api-view
+  labels:
+    app.kubernetes.io/part-of: splitx
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: view
+subjects:
+  - kind: ServiceAccount
+    name: ops-api
+    namespace: ops
+---
+# `view` covers namespaced objects only; the nodes and their metrics are
+# cluster-wide.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ops-api-nodes
+  labels:
+    app.kubernetes.io/part-of: splitx
+rules:
+  - apiGroups: [""]
+    resources: [nodes]
+    verbs: [get, list]
+  - apiGroups: [metrics.k8s.io]
+    resources: [nodes, pods]
+    verbs: [get, list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ops-api-nodes
+  labels:
+    app.kubernetes.io/part-of: splitx
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: ops-api-nodes
+subjects:
+  - kind: ServiceAccount
+    name: ops-api
+    namespace: ops
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ops-api
+  labels:
+    app.kubernetes.io/name: ops-api
+    app.kubernetes.io/part-of: splitx
+spec:
+  selector:
+    app.kubernetes.io/name: ops-api
+  ports:
+    # The same number on both sides, as the EKS policy agent needs (D-093).
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ops-api
+  labels:
+    app.kubernetes.io/name: ops-api
+    app.kubernetes.io/part-of: splitx
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ops-api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ops-api
+        app.kubernetes.io/part-of: splitx
+    spec:
+      serviceAccountName: ops-api
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: ops-api
+          # cluster-up sets the signed release's digest (the release job
+          # publishes it as a tag of the splitx package, D-097).
+          image: splitx-ops
+          imagePullPolicy: IfNotPresent
+          command: ["node", "api/server.mjs"]
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          # The platform's facts (target, region, versions, ranges, the edge's
+          # domain), written by cluster-up for the cluster it built.
+          envFrom:
+            - configMapRef:
+                name: platform-facts
+                optional: true
+          env:
+            # ops-api's own Nexus account, which may only read the evidence.
+            - name: NEXUS_OPS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ops-api
+                  key: nexus-password
+                  optional: true
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 384Mi
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 30
+            failureThreshold: 4
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi

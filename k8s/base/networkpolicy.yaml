@@ -76,6 +76,17 @@ spec:
       ports:
         - port: 6379
           protocol: TCP
+    # ops-api, which /ops reads the cluster through (D-097).
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ops
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ops-api
+      ports:
+        - port: 8080
+          protocol: TCP
     # The internet, for Neon, Supabase Storage and the Gemini API — but not the
     # private ranges, so a compromised pod cannot reach the node network, the
     # control plane or another namespace's databases.

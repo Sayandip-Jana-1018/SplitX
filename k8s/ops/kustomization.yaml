@@ -1,0 +1,30 @@
+# ═══════════════════════════════════════════════════════════════
+#   ops-api and the traffic lab (D-097), the cluster half of /ops, applied
+#   by `node scripts/cluster-up.mjs` on Kind and on EKS with the signed
+#   release's ops image (--ops-image), the way the app's image is pinned:
+#
+#     ops-api.yaml         reads the cluster and its tools; read-only
+#     traffic-lab.yaml     k6 behind a button, capped, one fixed target
+#     networkpolicy.yaml   who may reach them, and what they may reach
+#
+#   cluster-up also writes two ConfigMaps here, per cluster: platform-facts
+#   (target, region, versions, ranges, the edge) and traffic-lab (its
+#   target), and the Secret ops-api (its Nexus password). The namespace is
+#   created with the others (helm/platform/namespaces.yaml).
+# ═══════════════════════════════════════════════════════════════
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: ops
+
+resources:
+  - ops-api.yaml
+  - traffic-lab.yaml
+  - networkpolicy.yaml
+
+images:
+  - name: splitx-ops
+    newName: ghcr.io/sayandip-jana-1018/splitx
+    # Replaced by the digest cluster-up is given; a real tag of the package
+    # only once the first ops image is published (none exists before D-097).
+    newTag: ops-unpublished

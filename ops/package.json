@@ -1,0 +1,20 @@
+{
+  "name": "splitx-ops",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ops-api and the traffic lab: the cluster half of SplitX's /ops page (docs/DECISIONS.md, D-097)",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "api": "node api/server.mjs",
+    "lab": "node lab/server.mjs"
+  },
+  "dependencies": {
+    "@aws-sdk/client-budgets": "3.1139.0",
+    "@aws-sdk/client-cloudformation": "3.1139.0",
+    "@aws-sdk/client-cloudfront": "3.1139.0",
+    "@aws-sdk/client-eks": "3.1139.0"
+  }
+}

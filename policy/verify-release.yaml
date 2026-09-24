@@ -37,18 +37,22 @@ spec:
     - Deny
   webhookConfiguration:
     timeoutSeconds: 30
-  # Refuse what cannot be checked. The rule covers the splitx namespace
-  # only, so a Kyverno outage cannot stop the rest of the cluster from
-  # starting pods.
+  # Refuse what cannot be checked. The rule covers only the two namespaces
+  # that run our images, so a Kyverno outage cannot stop the rest of the
+  # cluster from starting pods.
   failurePolicy: Fail
   evaluation:
     # Admission only: nothing to re-check in the background.
     background:
       enabled: false
   matchConstraints:
+    # The app, and ops: ops-api and the traffic lab, whose image the same
+    # release job builds and signs (D-097).
     namespaceSelector:
-      matchLabels:
-        kubernetes.io/metadata.name: splitx
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values: [splitx, ops]
     resourceRules:
       - apiGroups: [""]
         apiVersions: ["v1"]

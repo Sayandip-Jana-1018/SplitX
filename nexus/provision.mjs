@@ -14,6 +14,9 @@
  *   5. creates the role splitx-evidence-writer (read and add, in that
  *      repository only) and the user jenkins with it, whose password Jenkins
  *      holds; a changed password is updated
+ *   6. when NEXUS_OPS_PASSWORD is set, the same for splitx-evidence-reader
+ *      (read only) and the user ops, which ops-api shows the evidence with
+ *      on /ops (D-097)
  *
  * Needs NEXUS_URL, NEXUS_ADMIN_PASSWORD and NEXUS_JENKINS_PASSWORD. The
  * passwords are never printed; the log names each step and its outcome.
@@ -110,31 +113,45 @@ if (repository.ok) {
     say('created: raw, stored in the default blob store, and nothing in it is ever overwritten');
 }
 
-// ── 5. role and user ─────────────────────────────────────────────────────────
-console.log('[5] Role ' + ROLE + ' and user ' + USER);
-const privileges = ['read', 'browse', 'add'].map((action) => `nx-repository-view-raw-${REPOSITORY}-${action}`);
-const role = { id: ROLE, name: ROLE, description: 'Read and add release evidence in ' + REPOSITORY + ', and nothing else', privileges, roles: [] };
-const existingRole = await api('GET', '/v1/security/roles/' + ROLE);
-await must('saving the role', existingRole.ok ? api('PUT', '/v1/security/roles/' + ROLE, role) : api('POST', '/v1/security/roles', role));
-say((existingRole.ok ? 'updated' : 'created') + ': ' + privileges.join(', '));
+// ── 5 and 6. roles and users ─────────────────────────────────────────────────
+/** A role with these actions on the repository, and one user holding only it. */
+async function account({ role: roleId, actions, what, userId, firstName, password }) {
+    console.log('    role ' + roleId + ', user ' + userId);
+    const privileges = actions.map((action) => `nx-repository-view-raw-${REPOSITORY}-${action}`);
+    const role = { id: roleId, name: roleId, description: what + ' in ' + REPOSITORY + ', and nothing else', privileges, roles: [] };
+    const existingRole = await api('GET', '/v1/security/roles/' + roleId);
+    await must('saving the role ' + roleId, existingRole.ok ? api('PUT', '/v1/security/roles/' + roleId, role) : api('POST', '/v1/security/roles', role));
+    say('role ' + (existingRole.ok ? 'updated' : 'created') + ': ' + privileges.join(', '));
 
-const users = await must('listing users', api('GET', '/v1/security/users?userId=' + USER));
-if (users.json?.some((user) => user.userId === USER)) {
-    const [user] = users.json.filter((entry) => entry.userId === USER);
-    await must('updating the user', api('PUT', '/v1/security/users/' + USER, { ...user, roles: [ROLE], status: 'active' }));
-    await must('setting the user\'s password', api('PUT', '/v1/security/users/' + USER + '/change-password', jenkinsPassword, { type: 'text/plain' }));
-    say('updated, with the password from the Secret');
+    const users = await must('listing users', api('GET', '/v1/security/users?userId=' + userId));
+    const [existing] = (users.json ?? []).filter((entry) => entry.userId === userId);
+    if (existing) {
+        await must('updating the user ' + userId, api('PUT', '/v1/security/users/' + userId, { ...existing, roles: [roleId], status: 'active' }));
+        await must('setting ' + userId + '\'s password', api('PUT', '/v1/security/users/' + userId + '/change-password', password, { type: 'text/plain' }));
+        say('user updated, with the password from the Secret');
+    } else {
+        await must('creating the user ' + userId, api('POST', '/v1/security/users', {
+            userId,
+            firstName,
+            lastName: 'SplitX',
+            emailAddress: userId + '@splitx.invalid',
+            password,
+            status: 'active',
+            roles: [roleId],
+        }));
+        say('user created, with the password from the Secret');
+    }
+}
+
+console.log('[5] Jenkins\' account');
+await account({ role: ROLE, actions: ['read', 'browse', 'add'], what: 'Read and add release evidence', userId: USER, firstName: 'Jenkins', password: jenkinsPassword });
+
+const opsPassword = process.env.NEXUS_OPS_PASSWORD;
+if (opsPassword) {
+    console.log('[6] ops-api\'s account');
+    await account({ role: 'splitx-evidence-reader', actions: ['read', 'browse'], what: 'Read release evidence', userId: 'ops', firstName: 'ops-api', password: opsPassword });
 } else {
-    await must('creating the user', api('POST', '/v1/security/users', {
-        userId: USER,
-        firstName: 'Jenkins',
-        lastName: 'SplitX',
-        emailAddress: 'jenkins@splitx.invalid',
-        password: jenkinsPassword,
-        status: 'active',
-        roles: [ROLE],
-    }));
-    say('created, with the password from the Secret');
+    console.log('[6] ops-api\'s account: no NEXUS_OPS_PASSWORD, so /ops will not show the evidence');
 }
 
 // ── check ────────────────────────────────────────────────────────────────────

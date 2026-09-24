@@ -139,23 +139,32 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          read -r sha image < <(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=kind&per_page=1" --jq '.[0] | "\(.sha) \(.payload.image)"')
+          read -r sha image ops < <(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=kind&per_page=1" --jq '.[0] | "\(.sha) \(.payload.image) \(.payload.ops_image // "none")"')
           if [[ ! "$sha" =~ ^[0-9a-f]{40}$ || ! "$image" =~ ^ghcr\.io/sayandip-jana-1018/splitx@sha256:[0-9a-f]{64}$ ]]; then
             echo "::error::No signed release found: the newest kind deployment names '$sha' '$image'."
             exit 1
           fi
-          echo "The newest release: ${sha:0:12}, $image"
+          # Releases before D-097 have no ops image: then /ops says the cluster
+          # isn't connected, and everything else comes up as before.
+          if [[ ! "$ops" =~ ^ghcr\.io/sayandip-jana-1018/splitx@sha256:[0-9a-f]{64}$ ]]; then
+            echo "::warning::The newest release has no ops image, so ops-api and the traffic lab won't run."
+            ops=""
+          fi
+          echo "The newest release: ${sha:0:12}, $image, ops ${ops:-none}"
           {
             echo "sha=$sha"
             echo "image=$image"
+            echo "ops_image=$ops"
           } >> "$GITHUB_OUTPUT"
 
       - name: The platform's software
         # External Secrets first (the Secrets come from npm run aws:secrets),
-        # then the pinned charts, the app with that release, and Jenkins (D-093).
+        # then the pinned charts, the app with that release, Jenkins, and the
+        # release's ops-api and traffic lab (D-093, D-097).
         env:
           IMAGE: ${{ steps.release.outputs.image }}
-        run: node scripts/cluster-up.mjs --target eks --image "$IMAGE"
+          OPS_IMAGE: ${{ steps.release.outputs.ops_image }}
+        run: node scripts/cluster-up.mjs --target eks --image "$IMAGE" ${OPS_IMAGE:+--ops-image "$OPS_IMAGE"}
 
       - name: The load balancer's alarms
         # The controller made the load balancer at run time; now Terraform can
