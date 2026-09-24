@@ -40,6 +40,22 @@ rules:
   - apiGroups: [batch]
     resources: [jobs]
     verbs: [get, list, watch, create, patch, update, delete]
+  # The daily scan of what is running (k8s/base/release-scan.yaml, D-061): a
+  # CronJob, and the Role and RoleBinding that let it read one Deployment.
+  # Added with D-093, after it turned out every release since D-061 carried
+  # these three and this Role could not apply them. Kubernetes lets an account
+  # grant only permissions it already holds, so this cannot widen what a
+  # deploy build may do; the names limit which ones it may change.
+  - apiGroups: [batch]
+    resources: [cronjobs]
+    verbs: [get, list, watch, create, patch, update]
+  - apiGroups: [rbac.authorization.k8s.io]
+    resources: [roles, rolebindings]
+    verbs: [create]
+  - apiGroups: [rbac.authorization.k8s.io]
+    resources: [roles, rolebindings]
+    resourceNames: [release-scan]
+    verbs: [get, patch, update]
   # Watching a rollout, and knowing which pods run which image.
   - apiGroups: [apps]
     resources: [replicasets]

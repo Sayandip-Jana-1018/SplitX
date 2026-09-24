@@ -355,6 +355,7 @@ const permissions = [
     { allowed: true, what: 'patch deployments in splitx', got: canI('patch', 'deployments', NS) },
     { allowed: true, what: 'delete the schema job in splitx', got: canI('delete', 'jobs', NS) },
     { allowed: true, what: 'read pods in splitx', got: canI('get', 'pods', NS) },
+    { allowed: true, what: 'apply the release scan in splitx', got: canI('patch', 'cronjobs', NS) },
     { allowed: false, what: 'read secrets in splitx', got: canI('get', 'secrets', NS) },
     { allowed: false, what: 'exec into a pod in splitx', got: canI('create', 'pods/exec', NS) },
     { allowed: false, what: 'change anything in monitoring', got: canI('patch', 'deployments', 'monitoring') },
@@ -365,14 +366,14 @@ const wrong = permissions.filter((p) => p.allowed !== p.got);
 record(
     'A deploy build may change the application, and nothing else',
     wrong.length === 0,
-    wrong.length ? wrong.map((p) => p.what + ': ' + (p.got ? 'allowed' : 'refused')).join('; ') : permissions.filter((p) => p.allowed).length + ' allowed, ' + permissions.filter((p) => !p.allowed).length + ' refused, as declared in jenkins/rbac.yaml'
+    wrong.length ? wrong.map((p) => p.what + ': ' + (p.got ? 'allowed' : 'refused')).join('; ') : permissions.filter((p) => p.allowed).length + ' allowed, ' + permissions.filter((p) => !p.allowed).length + ' refused, as declared in jenkins/rbac/rbac.yaml'
 );
 
 sections.push({
     title: 'The deploy account',
     body: [
         'Deploy builds run as `jenkins/jenkins-deployer`, which the chart creates without permissions. The Role in',
-        '`jenkins/rbac.yaml` gives it exactly what applying the release needs, in the `splitx` namespace only.',
+        '`jenkins/rbac/rbac.yaml` gives it exactly what applying the release needs, in the `splitx` namespace only.',
         'The API server was asked about each of these:',
         '',
         '| May it… | |',

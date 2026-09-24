@@ -342,7 +342,7 @@ agent:
       memory: 512Mi
 
 # The identity deploy builds run as. Its only permissions are in the splitx
-# namespace, granted in jenkins/rbac.yaml.
+# namespace, granted in jenkins/rbac/rbac.yaml.
 serviceAccountAgent:
   create: true
   name: jenkins-deployer
