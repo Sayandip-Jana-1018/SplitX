@@ -1,0 +1,141 @@
+# ═══════════════════════════════════════════════════════════════
+#   Nexus Repository, Community Edition: where each deployment's evidence
+#   is kept (D-096). For every release Jenkins deploys, it verifies the
+#   SBOM and the vulnerability report that GitHub Actions attested to the
+#   image, then stores both here with the deployment's own record:
+#   splitx-evidence/<commit>/<deployment>/ (jenkins/deploy.mjs, archive).
+#
+#   The same manifests run on Kind and on EKS. Nexus is not public: only
+#   Jenkins' build agents and its setup Job may reach it
+#   (nexus/networkpolicy.yaml), and anonymous access is off.
+# ═══════════════════════════════════════════════════════════════
+apiVersion: v1
+kind: Service
+metadata:
+  name: nexus
+  labels:
+    app.kubernetes.io/name: nexus
+    app.kubernetes.io/part-of: splitx
+spec:
+  selector:
+    app.kubernetes.io/name: nexus
+  ports:
+    # The same number on both sides: the EKS policy agent needs a Service's
+    # port to equal its pods' (D-093).
+    - name: http
+      port: 8081
+      targetPort: http
+      protocol: TCP
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: nexus
+  labels:
+    app.kubernetes.io/name: nexus
+    app.kubernetes.io/part-of: splitx
+spec:
+  serviceName: nexus
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: nexus
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: nexus
+        app.kubernetes.io/part-of: splitx
+    spec:
+      # Nexus never calls the Kubernetes API.
+      automountServiceAccountToken: false
+      securityContext:
+        # The image's nexus user and group; fsGroup makes the volume theirs.
+        runAsNonRoot: true
+        runAsUser: 200
+        runAsGroup: 200
+        fsGroup: 200
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: nexus
+          # Community Edition 3.96.3 (2026-09-22), by digest.
+          image: sonatype/nexus3:3.96.3@sha256:a406f4e9dc149e050723a93bf57964311f6d1c88e1dcbed2e42ea373319a1772
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8081
+              protocol: TCP
+          env:
+            # Heap and direct memory at 1 GiB each: a few files per release
+            # need far less than the 2.7 GiB Sonatype suggests for real
+            # repositories, and the node has room for it (D-096). The
+            # preferences path is the image's own default, kept.
+            - name: INSTALL4J_ADD_VM_PARAMS
+              value: -Xms1g -Xmx1g -XX:MaxDirectMemorySize=1g -Djava.util.prefs.userRoot=/nexus-data/javaprefs -Djava.io.tmpdir=/nexus-data/tmp
+            # The admin password is set from the Secret at the first start.
+            # Nexus would otherwise write a random one to admin.password on
+            # its volume, which only a shell in the pod could read.
+            - name: NEXUS_SECURITY_INITIAL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: nexus-admin
+                  key: password
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: data
+              mountPath: /nexus-data
+            # The JVM's own scratch files (hsperfdata) go to /tmp whatever
+            # java.io.tmpdir says.
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            requests:
+              cpu: 250m
+              memory: 2Gi
+            # No CPU limit, as elsewhere (D-053). Heap + direct + the JVM's
+            # own memory stay well inside 3 GiB.
+            limits:
+              memory: 3Gi
+          # A first start creates its database and takes a few minutes.
+          startupProbe:
+            httpGet:
+              path: /service/rest/v1/status
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            httpGet:
+              path: /service/rest/v1/status/writable
+              port: http
+            periodSeconds: 15
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /service/rest/v1/status
+              port: http
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 6
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 256Mi
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          app.kubernetes.io/name: nexus
+          app.kubernetes.io/part-of: splitx
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        # The default class: encrypted gp3 on EKS (k8s/eks/storageclass.yaml),
+        # local storage on Kind.
+        resources:
+          requests:
+            storage: 20Gi

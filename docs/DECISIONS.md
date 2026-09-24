@@ -3383,6 +3383,112 @@ The rehearsal counts them.
 - **`cd:verify` proves it:** the new permission is among the ones it checks.
 - **The file moved** to `jenkins/rbac/rbac.yaml`, shared by Kind (`jenkins/`) and EKS (`jenkins/eks`).
 
+### D-095 · What the account's AWS Free plan allows, and what the platform changed for it
+**2026-09-24** · ✅ checked read-only against the account; 🚧 two gates wait on the user (below)
+
+The first `aws-edge` run (the user started and approved it at 09:58 IST) created 15 of its 16
+resources and then stopped at the CloudFront distribution: **"Your account must be verified before you
+can add new CloudFront resources. To verify your account, please contact AWS Support."** That led to
+reading what this account may do, before an AWS day finds out the expensive way.
+
+**The account is on AWS's Free plan** (new accounts since 2025-07-15): no charges, credits only, and the
+account closes when the plan ends (6 months, or the credits run out) unless it is upgraded to the Paid
+plan. The user reported 32 days and about $60 of credit left on 2026-09-24.
+
+| What was checked | Found | What it means |
+|---|---|---|
+| EC2 types the account may launch (`free-tier-eligible` filter, ap-south-1) | `m7i-flex.large`, `c7i-flex.large`, and micro and small sizes of t3, t4g and t8i | **`t3.large` is not allowed** on this plan ("The specified instance type is not eligible for Free Tier"), so the node group would have failed |
+| The EKS 1.35 AL2023 node images (September 2026 builds) | free-tier eligible | the node image is allowed |
+| vCPU quota, running on-demand standard instances | **5** | three nodes need 6 and four need 8; `aws-up` stops at its quota check before building anything |
+| CloudFront | needs account verification by AWS Support | the edge waits for it |
+| EKS itself | not checkable without creating a cluster | the rehearsal's first hour (a platform-only `aws-up`) answers it |
+
+**Changed:**
+- **Nodes are `m7i-flex.large`**, not `t3.large`, in `terraform/platform` (the default of
+  `node_instance_type`). It has the same 2 vCPUs and 8 GiB, is allowed on both plans, has no CPU
+  credits to run out of under the traffic lab's load, and fits 29 pods per node (3 network interfaces
+  × 10 addresses), against 35 for `t3.large`. It is offered in all three Mumbai zones. It costs a little
+  more per hour; the budget alarm and the rehearsal's own report remain the check.
+- **Nothing else changes:** the edge's buckets, function and policy that the run created cost nothing
+  while unused, and the next run continues from Terraform's state.
+
+**Waiting on the user (asked 2026-09-24):**
+1. An AWS Support case (Account and billing, free on the basic plan) asking for CloudFront
+   verification, quoting the error and its request ID, `d8312e9d-e292-461d-8a7d-f21e90119ddd`.
+2. A vCPU quota increase to 8: Service Quotas, EC2, "Running On-Demand Standard (A, C, D, H, I, M, R,
+   T, Z) instances", in Mumbai.
+3. Later, their call: upgrade to the Paid plan (any instance type; charges beyond the credits are
+   billed, and the $15 budget warns first), or stay on the Free plan until it ends. Everything above
+   works on either.
+
+**Also recorded here, 2026-09-24:** the user accepted Sonatype's Nexus Repository Community Edition
+licence ("accept the nexus agreement"), so SplitX's Nexus instances accept it when they are set up
+(D-096).
+
+**Later the same morning:**
+- The user confirmed the SNS subscription, which AWS reported as confirmed for the `BUDGET_EMAIL`
+  address.
+- The user opened the CloudFront verification case (Account and billing, Other Account Issues).
+- The vCPU quota request was still the user's to make.
+
+### D-096 · Nexus keeps each deployment's evidence, verified before it is stored
+**2026-09-24** · 🚧 written and unit-tested (the setup script against a stand-in Nexus, 4 cases); it
+first runs in plan Phase 7 (Kind on GitHub's runners) or on an AWS day
+
+**What runs.**
+- **Where:** Nexus Repository Community Edition 3.96.3 (released 2026-09-22, pinned by digest), as a
+  StatefulSet in the namespace `nexus` at the restricted Pod Security level.
+- **Storage:** 20 GiB, which is gp3 on EKS.
+- **Memory:** heap and direct memory are capped at 1 GiB each. It requests 2 GiB with a 3 GiB limit,
+  and has no CPU limit (D-053).
+- **Both clusters:** the same manifests (`nexus/`) run on Kind and on EKS.
+- **The admin password:** set from the Secret at the first start (`NEXUS_SECURITY_INITIAL_PASSWORD`,
+  which Nexus' source reads in `StaticSecurityConfigurationSource`). Nobody reads a random password
+  off the volume.
+
+**The setup Job** (`nexus/provision.mjs`, on the Node image, safe to run again):
+1. waits until Nexus can write;
+2. **accepts the Community Edition licence.** Nexus refuses uploads until an administrator does. This
+   is the owner's decision of 2026-09-24 (D-095), made after being told exactly that; the Job logs
+   Sonatype's own disclaimer each time it accepts;
+3. turns anonymous access off;
+4. creates the raw repository `splitx-evidence` with the write policy "allow once", so evidence is
+   never overwritten;
+5. creates the role `splitx-evidence-writer` (read, browse and add, in that repository only) and the
+   user `jenkins` with it, taking its password from the Secret;
+6. proves the result: anonymous is refused, and `jenkins` can browse.
+
+The test runs the real script against a stand-in for Nexus' REST API. It checks all of the above:
+that a second run changes nothing but the password; that a wrong admin password stops it before it
+touches the licence; and that no password is ever printed.
+
+**Jenkins' new `Archive` stage** (after `Check`):
+- **What it verifies:** cosign checks the CycloneDX SBOM and the vulnerability report that the release
+  job attested, with the same identity, issuer and commit it demands of the image.
+- **What it stores:** those two, plus the deployment's own record (id, commit, digest, the image it
+  replaced, the pods that serve it, the build), at `splitx-evidence/<commit>/<deployment>/`.
+- **When it fails:** the stage shows unstable, and the GitHub status says "evidence NOT archived". A
+  healthy release is not rolled back for missing paperwork.
+
+**Credentials and network.**
+- **Two passwords,** generated into `.env` by `k8s:up` or `aws:secrets`: `NEXUS_ADMIN_PASSWORD` and
+  `NEXUS_JENKINS_PASSWORD`.
+- **Where they go:**
+  - on Kind, `k8s:up` builds `nexus/nexus-admin` and adds `nexus-password` to `jenkins-secrets`;
+  - on EKS, the same keys arrive as ExternalSecrets;
+  - JCasC turns `nexus-password` into the credential `nexus-evidence`.
+- **Who may reach Nexus:** only Jenkins' agents and the setup Job. Nexus itself may reach only DNS.
+
+**Rejected:**
+- **Nexus as the image registry.** GHCR stays: the signed digests, the attestations and Kyverno's
+  policy all live there (D-054, D-060).
+- **Sonatype's Helm chart.** Its current chart targets the Pro edition's high-availability setup.
+
+**Not proven until the first run (B-031):**
+- Nexus 3.96 with a read-only root filesystem (writable `/nexus-data` and `/tmp` only);
+- `cosign verify-attestation`'s output format for the release job's attestations (both the plain
+  envelope and the bundle form are parsed).
+
 ---
 
 ## Open problems
@@ -3419,7 +3525,7 @@ The rehearsal counts them.
 | B-028 | The AI chat builds its own balances: pairwise instead of the group plan, over every expense including deleted ones, in deleted groups too, with ±1 paisa counted as settled. | Its answers to "who owes me?" can disagree with Settle Up, and count expenses that were deleted. | ✅ Resolved 2026-09-22 — D-067. The chat's context is the ledger: balances per group over live expenses, and each group's settle-up plan. |
 | B-029 | Removing a member used to re-split their shares among the others (D-063). Groups that had a member removed may hold shares that were moved between people, and former members may still owe or be owed. | Balances in those groups reflect the old re-split, not what people agreed to. | ✅ Checked 2026-09-22 — D-069. `npm run ledger:audit -- --https` read production (1 group, 37 expenses, 62 shares, 0 settlements, 9 accounts) in a read-only transaction: no share of a former member, no former member with a balance, every expense adding up, every group netting to zero. Nothing to repair. |
 | B-030 | `npm audit` still reports one high advisory: `deepmerge-ts` below 8 (GHSA-ggr8-5vv4-36mx, stack exhaustion when merging self-referencing objects), through `prisma` → `@prisma/config`. | The Prisma CLI is a development and migration tool; the app's runtime (`@prisma/client`) doesn't use it, and the only objects it merges are our own config. | Accepted 2026-09-22 (D-070). The fix is Prisma 7, a major upgrade with its own changes. Still accepted after the migration baseline (D-072), which was done on Prisma 6: the upgrade is its own change. The CLI stays out of the runtime image. |
-| B-031 | Phase 4 (D-088 to D-090) is written and validated, but nothing in it has been applied. Only a real run proves: the `iam:PassedToService` value for the flow log's role (both candidates are allowed); that `splitx-ci-teardown`'s permissions cover a whole `terraform destroy` and the edge's offline apply; the ALB's lookup by the controller's tags (`ingress.k8s.aws/stack = splitx`); that the pinned add-on versions are still offered on the day; and the edge function in CloudFront's own runtime (it is tested in Node). | An AWS day that meets any of these unprepared loses hours of a rehearsal or the demo. | Open. `aws-edge` proves the edge's part as soon as the stacks and the `AWS_ACCOUNT_ID` secret exist. The rehearsal's first hour, a platform-only `aws-up` then `aws-down`, proves the rest (plan Phase 10). **2026-09-24, D-093 adds to the list:** the External Secrets Operator's Pod Identity credentials; the load balancer controller's IAM policy (the module's) against controller 3.5.0; the pod readiness gates; the VPC CNI agent admitting the kubelet and judging `172.20.0.1` as the API server; the prefix-list rule fitting the security group (weight 55 of 60); image volumes on the EKS node image; Docker Hub pulls through the NAT address; GitHub's webhook through CloudFront to Jenkins; and the Jenkins deploy RBAC of D-094. |
+| B-031 | Phase 4 (D-088 to D-090) is written and validated, but nothing in it has been applied. Only a real run proves: the `iam:PassedToService` value for the flow log's role (both candidates are allowed); that `splitx-ci-teardown`'s permissions cover a whole `terraform destroy` and the edge's offline apply; the ALB's lookup by the controller's tags (`ingress.k8s.aws/stack = splitx`); that the pinned add-on versions are still offered on the day; and the edge function in CloudFront's own runtime (it is tested in Node). | An AWS day that meets any of these unprepared loses hours of a rehearsal or the demo. | Open. `aws-edge` proves the edge's part as soon as the stacks and the `AWS_ACCOUNT_ID` secret exist. The rehearsal's first hour, a platform-only `aws-up` then `aws-down`, proves the rest (plan Phase 10). **2026-09-24, D-093 adds to the list:** the External Secrets Operator's Pod Identity credentials; the load balancer controller's IAM policy (the module's) against controller 3.5.0; the pod readiness gates; the VPC CNI agent admitting the kubelet and judging `172.20.0.1` as the API server; the prefix-list rule fitting the security group (weight 55 of 60); image volumes on the EKS node image; Docker Hub pulls through the NAT address; GitHub's webhook through CloudFront to Jenkins; and the Jenkins deploy RBAC of D-094. **D-095 and D-096 add:** whether EKS itself is allowed on the account's Free plan; the `m7i-flex.large` nodes; Nexus with a read-only root filesystem; and cosign's attestation output in the archive step. |
 
 ## Environment notes (this machine)
 

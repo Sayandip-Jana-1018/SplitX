@@ -1,0 +1,32 @@
+# ═══════════════════════════════════════════════════════════════
+#   Nexus, the store for each deployment's evidence (D-096), applied by
+#   `node scripts/cluster-up.mjs` on Kind and on EKS after the charts:
+#
+#     statefulset.yaml     Nexus Community Edition, 20 GiB, anonymous off
+#     provision.yaml       the setup Job (provision.mjs, beside this file)
+#     networkpolicy.yaml   only Jenkins' agents and the Job may reach it
+#
+#   Its Secret nexus-admin (the admin password and Jenkins' password) comes
+#   from .env on Kind (k8s:up) and from Secrets Manager on EKS
+#   (k8s/eks/secrets). The namespace is created with the others, at the
+#   restricted Pod Security level (helm/platform/namespaces.yaml).
+# ═══════════════════════════════════════════════════════════════
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: nexus
+
+resources:
+  - statefulset.yaml
+  - provision.yaml
+  - networkpolicy.yaml
+
+configMapGenerator:
+  # Hashed name: a change to the script is a new ConfigMap for the next Job.
+  - name: nexus-provision
+    files:
+      - provision.mjs
+    options:
+      labels:
+        app.kubernetes.io/name: nexus-provision
+        app.kubernetes.io/part-of: splitx

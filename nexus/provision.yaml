@@ -1,0 +1,68 @@
+# ═══════════════════════════════════════════════════════════════
+#   Sets up a fresh Nexus (nexus/provision.mjs): accepts the Community
+#   Edition licence as SplitX's owner decided (D-095), turns anonymous
+#   access off, and creates the evidence repository and Jenkins' user.
+#   Safe to run again. A Job's pod template can't change, so cluster-up
+#   deletes it before applying this.
+# ═══════════════════════════════════════════════════════════════
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: nexus-provision
+  labels:
+    app.kubernetes.io/name: nexus-provision
+    app.kubernetes.io/part-of: splitx
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: nexus-provision
+        app.kubernetes.io/part-of: splitx
+    spec:
+      restartPolicy: OnFailure
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: provision
+          # The Node image the application is built on (Dockerfile), by digest.
+          image: node:24.21.0-alpine3.24@sha256:be80f76cf40ec8e42b9bec49f60a55e0660f30af58d3e5a25530785b30ea67e2
+          command: ["node", "/provision/provision.mjs"]
+          env:
+            - name: NEXUS_URL
+              value: http://nexus.nexus.svc.cluster.local:8081
+            - name: NEXUS_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: nexus-admin
+                  key: password
+            - name: NEXUS_JENKINS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: nexus-admin
+                  key: jenkins-password
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: script
+              mountPath: /provision
+              readOnly: true
+          resources:
+            requests:
+              cpu: 20m
+              memory: 64Mi
+            limits:
+              memory: 128Mi
+      volumes:
+        - name: script
+          configMap:
+            name: nexus-provision

@@ -135,6 +135,18 @@ spec:
       ports:
         - port: 443
           protocol: TCP
+    # Nexus, where the archive step stores each deployment's evidence (D-096).
+    # Its Service's port is its pods' port, as the policy agent needs.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: nexus
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: nexus
+      ports:
+        - port: 8081
+          protocol: TCP
     # The internet: the release's source on GitHub, its image and signature on
     # ghcr.io, Sigstore's trust root and log, GitHub's API for statuses, and
     # the smoke test, which goes through CloudFront over HTTPS like a visitor.

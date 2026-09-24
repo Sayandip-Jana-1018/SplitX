@@ -27,7 +27,7 @@ controller:
     # log in.
     createSecret: true
   # Every key of this Secret becomes a JCasC variable: ${webhook-secret},
-  # ${trigger-token}, ${github-token}.
+  # ${trigger-token}, ${github-token}, ${nexus-password}.
   existingSecret: jenkins-secrets
 
   # Where this Jenkins deploys, handed to every build (JCasC below). The same
@@ -44,6 +44,9 @@ controller:
       value: http://ingress-nginx-controller.ingress-nginx.svc.cluster.local
     - name: DEPLOY_EDGE_HOST
       value: localhost
+    # Where each deployment's evidence is stored (nexus/, D-096).
+    - name: DEPLOY_NEXUS_URL
+      value: http://nexus.nexus.svc.cluster.local:8081
     # The branch the job reads its Jenkinsfile and steps from. A pipeline change
     # can be rehearsed from its branch before it is merged; releases are only
     # ever signed on main, so this cannot widen what gets deployed.
@@ -242,6 +245,8 @@ controller:
                     value: "${DEPLOY_EDGE_URL}"
                   - key: DEPLOY_EDGE_HOST
                     value: "${DEPLOY_EDGE_HOST}"
+                  - key: DEPLOY_NEXUS_URL
+                    value: "${DEPLOY_NEXUS_URL}"
 
         credentials:
           system:
@@ -259,6 +264,12 @@ controller:
                       id: github-deployments-token
                       description: Reports deployment statuses to GitHub; empty means not reported
                       secret: "${github-token}"
+                  - usernamePassword:
+                      id: nexus-evidence
+                      description: Jenkins' Nexus account, which may only read and add release evidence (D-096)
+                      scope: GLOBAL
+                      username: jenkins
+                      password: "${nexus-password}"
 
         unclassified:
           # Generic Webhook Trigger: a delivery without a valid GitHub signature

@@ -67,7 +67,7 @@ describe('what goes into the demo secrets', () => {
         const { platform } = demoSecrets(complete);
         expect(Object.keys(platform!).sort()).toEqual([
             'ALERTMANAGER_YAML', 'GF_ADMIN_PASSWORD', 'GITHUB_WEBHOOK_SECRET', 'JENKINS_ADMIN_PASSWORD',
-            'JENKINS_GITHUB_TOKEN', 'JENKINS_TRIGGER_TOKEN', 'NEXUS_ADMIN_PASSWORD',
+            'JENKINS_GITHUB_TOKEN', 'JENKINS_TRIGGER_TOKEN', 'NEXUS_ADMIN_PASSWORD', 'NEXUS_JENKINS_PASSWORD',
         ]);
         expect(platform!.JENKINS_GITHUB_TOKEN).toBe('');
     });

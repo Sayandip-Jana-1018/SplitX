@@ -156,6 +156,17 @@ spec:
       ports:
         - port: 80
           protocol: TCP
+    # Nexus, where the archive step stores each deployment's evidence (D-096).
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: nexus
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: nexus
+      ports:
+        - port: 8081
+          protocol: TCP
     # The internet: the release's source on GitHub, its image and signature
     # on ghcr.io, Sigstore's trust root and log, and GitHub's API for statuses.
     - to:

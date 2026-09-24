@@ -8,6 +8,8 @@
  *   node jenkins/deploy.mjs wait       the database and the schema Job (where the overlay has them) and the application roll out
  *   node jenkins/deploy.mjs check      every ready pod runs the image, and the edge serves only them
  *                                      (Kind: through ingress-nginx; EKS: through CloudFront over HTTPS)
+ *   node jenkins/deploy.mjs archive    cosign verifies the release's SBOM and vulnerability report; both go to
+ *                                      Nexus with the deployment's record (D-096)
  *   node jenkins/deploy.mjs rollback   put the application back to the revision it had before `deploy`
  *   node jenkins/deploy.mjs report     tell the GitHub deployment how it went
  *
@@ -15,7 +17,8 @@
  * deployment_image, deployment_environment, fault), which arrive from a
  * webhook and are checked before use; DEPLOY_* from Jenkins' configuration;
  * BUILD_URL and BUILD_RESULT from the pipeline; GITHUB_TOKEN when the
- * github-deployments-token credential is set. kubectl and cosign are on PATH.
+ * github-deployments-token credential is set; NEXUS_USER and NEXUS_PASSWORD
+ * from the nexus-evidence credential. kubectl and cosign are on PATH.
  * What one step learns for a later one is kept in deploy-state.json.
  *
  * Exit status: 0 done, 1 failed, 3 superseded (a newer deployment exists, so
@@ -238,6 +241,9 @@ async function stepCheck() {
     if (!running.length) fail('no ready pod');
     if (stray.length) fail('ready pods not running ' + digest + ': ' + stray.map((pod) => pod.name + ' ' + pod.imageID).join(', '));
     say(running.length + ' ready pod(s), all running ' + digest.slice(0, 19) + '…: ' + running.map((pod) => pod.name).join(', '));
+    // For the deployment's record in Nexus (archive).
+    state.pods = running.map((pod) => pod.name);
+    save();
 
     // The edge must serve them, and only them: ten answers in a row from the
     // new pods, allowing a few seconds for the ingress to drop the old ones.
@@ -254,6 +260,80 @@ async function stepCheck() {
     const planned = plan.status === 200 ? JSON.parse(plan.text) : null;
     if (!planned?.success || !names.has(plan.servedBy)) fail('a settlement preview through the edge failed: HTTP ' + plan.status + ' ' + plan.text.slice(0, 200));
     say('the edge serves only the new pods; a 50-person plan came back from ' + plan.servedBy + ' with ' + planned.data.summary.transfers + ' transfers');
+}
+
+// ── archive ────────────────────────────────────────────────────────────────
+const EVIDENCE_REPOSITORY = 'splitx-evidence';
+
+/**
+ * The newest attestation of one type that cosign verifies for this release,
+ * decoded to what it attests: signed by the release job on main, for exactly
+ * this commit, like the image itself (stepVerify).
+ */
+function verifiedPredicate(type) {
+    const result = spawnSync('cosign', [
+        'verify-attestation',
+        '--type', type,
+        '--certificate-identity', SIGNER,
+        '--certificate-oidc-issuer', SIGNER_ISSUER,
+        '--certificate-github-workflow-sha', deployment.sha,
+        '--certificate-github-workflow-repository', REPOSITORY,
+        deployment.image,
+    ], { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 });
+    if (result.status !== 0) throw new Error('the ' + type + ' attestation did not verify: ' + result.stderr.trim().split('\n').pop());
+    // One JSON document per verified attestation: a DSSE envelope, or a bundle
+    // holding one, whose payload is the in-toto statement.
+    const statements = result.stdout.split('\n').filter((line) => line.trim().startsWith('{')).map((line) => {
+        const envelope = JSON.parse(line);
+        const payload = envelope.payload ?? envelope.dsseEnvelope?.payload;
+        return JSON.parse(Buffer.from(payload, 'base64').toString('utf8'));
+    });
+    if (!statements.length) throw new Error('cosign verified no ' + type + ' attestation');
+    return statements.at(-1).predicate;
+}
+
+async function nexusPut(path, body) {
+    const url = env.DEPLOY_NEXUS_URL + '/repository/' + EVIDENCE_REPOSITORY + '/' + path;
+    const authorization = 'Basic ' + Buffer.from(env.NEXUS_USER + ':' + env.NEXUS_PASSWORD).toString('base64');
+    const res = await fetch(url, { method: 'PUT', headers: { authorization, 'content-type': 'application/json' }, body, signal: AbortSignal.timeout(60_000) });
+    // The repository never overwrites (write policy "allow once"): a second
+    // attempt for the same deployment finds its evidence already there.
+    if (res.status === 400) {
+        const existing = await fetch(url, { method: 'HEAD', headers: { authorization }, signal: AbortSignal.timeout(30_000) });
+        if (existing.ok) return 'already stored';
+    }
+    if (!res.ok) throw new Error('Nexus answered ' + res.status + ' to storing ' + path);
+    return 'stored';
+}
+
+async function stepArchive() {
+    try {
+        if (!env.DEPLOY_NEXUS_URL || !env.NEXUS_USER || !env.NEXUS_PASSWORD) {
+            throw new Error('no Nexus to store it in: DEPLOY_NEXUS_URL or the nexus-evidence credential is missing');
+        }
+        const evidence = {
+            'sbom.cdx.json': verifiedPredicate('cyclonedx'),
+            'vuln.json': verifiedPredicate('vuln'),
+        };
+        say('cosign verified the SBOM and the vulnerability report, both attested by ' + SIGNER + ' at ' + deployment.sha.slice(0, 12));
+        evidence['deployment.json'] = {
+            deployment: { id: Number(deployment.id), sha: deployment.sha, image: deployment.image, environment: deployment.environment },
+            deployedBy: env.BUILD_URL ?? null,
+            replaced: state.imageBefore ?? null,
+            pods: state.pods ?? [],
+            attestationsVerified: { identity: SIGNER, issuer: SIGNER_ISSUER, commit: deployment.sha },
+            archivedAt: new Date().toISOString(),
+        };
+        const prefix = deployment.sha + '/' + deployment.id + '/';
+        for (const [name, content] of Object.entries(evidence)) say(name + ': ' + await nexusPut(prefix + name, JSON.stringify(content, null, 2)));
+        state.archived = EVIDENCE_REPOSITORY + '/' + prefix;
+        save();
+        say('the evidence is in Nexus: ' + state.archived);
+    } catch (error) {
+        state.archiveError = error.message;
+        save();
+        fail('evidence not archived: ' + error.message);
+    }
 }
 
 // ── rollback ───────────────────────────────────────────────────────────────
@@ -294,13 +374,16 @@ async function report(status, description) {
 async function stepReport() {
     const result = env.BUILD_RESULT;
     if (state.superseded) return report('inactive', 'Superseded by deployment ' + state.superseded);
-    if (result === 'SUCCESS') return report('success', 'Deployed ' + deployment.sha.slice(0, 12) + ' and checked through the edge');
+    if (result === 'SUCCESS') {
+        const evidence = state.archived ? '; evidence in Nexus' : state.archiveError ? '; evidence NOT archived' : '';
+        return report('success', 'Deployed ' + deployment.sha.slice(0, 12) + ' and checked through the edge' + evidence);
+    }
     const outcome = state.rolledBack ? '; rolled back to ' + String(state.imageBefore).split('@').pop().slice(0, 19)
         : state.changed ? '; rollback did not complete' : '; nothing was changed';
     return report(result === 'ABORTED' ? 'error' : 'failure', 'Failed' + outcome);
 }
 
-const steps = { request: stepRequest, verify: stepVerify, deploy: stepDeploy, wait: stepWait, check: stepCheck, rollback: stepRollback, report: stepReport };
+const steps = { request: stepRequest, verify: stepVerify, deploy: stepDeploy, wait: stepWait, check: stepCheck, archive: stepArchive, rollback: stepRollback, report: stepReport };
 const step = steps[process.argv[2]];
 if (!step) fail('usage: node jenkins/deploy.mjs ' + Object.keys(steps).join('|'));
 try {

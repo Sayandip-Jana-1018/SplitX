@@ -36,6 +36,9 @@ controller:
         configMapKeyRef:
           name: splitx-edge
           key: host
+    # Where each deployment's evidence is stored, as on Kind (nexus/, D-096).
+    - name: DEPLOY_NEXUS_URL
+      value: http://nexus.nexus.svc.cluster.local:8081
     - name: DEPLOY_PIPELINE_BRANCH
       value: main
 

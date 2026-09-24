@@ -246,11 +246,11 @@ jobs:
 
       - name: Render and validate every overlay, and the platform's own manifests
         # The platform's: Jenkins' permissions, network policy, relay and alerts
-        # (jenkins/, and jenkins/eks for EKS), the Grafana dashboards
-        # (monitoring/), and the EKS cluster's own settings and Secrets
-        # (k8s/eks, k8s/eks/secrets).
+        # (jenkins/, and jenkins/eks for EKS), Nexus (nexus/), the Grafana
+        # dashboards (monitoring/), and the EKS cluster's own settings and
+        # Secrets (k8s/eks, k8s/eks/secrets).
         run: |
-          for kustomization in k8s/overlays/local k8s/overlays/aws k8s/overlays/loadtest k8s/overlays/saturation jenkins jenkins/eks monitoring k8s/eks k8s/eks/secrets; do
+          for kustomization in k8s/overlays/local k8s/overlays/aws k8s/overlays/loadtest k8s/overlays/saturation jenkins jenkins/eks nexus monitoring k8s/eks k8s/eks/secrets; do
             echo "── $kustomization ──"
             kubectl kustomize "$kustomization" > /tmp/rendered.yaml
             docker run --rm -i "$KUBECONFORM" \

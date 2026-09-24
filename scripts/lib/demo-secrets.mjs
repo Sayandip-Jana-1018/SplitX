@@ -32,6 +32,7 @@ export const REQUIRED = [
     'GITHUB_WEBHOOK_SECRET',
     'JENKINS_TRIGGER_TOKEN',
     'NEXUS_ADMIN_PASSWORD',
+    'NEXUS_JENKINS_PASSWORD',
 ];
 
 /** Copied into the app's secret as they are, when present. */
@@ -101,6 +102,8 @@ export function demoSecrets(env, { alertmanagerTemplate }) {
         // Empty: Jenkins deploys, but reads GitHub anonymously and reports nothing (B-026).
         JENKINS_GITHUB_TOKEN: value('JENKINS_GITHUB_TOKEN'),
         NEXUS_ADMIN_PASSWORD: value('NEXUS_ADMIN_PASSWORD'),
+        // Jenkins' Nexus account: read and add evidence, nothing else (D-096).
+        NEXUS_JENKINS_PASSWORD: value('NEXUS_JENKINS_PASSWORD'),
         // Alertmanager's whole configuration, filled here exactly as k8s:up fills
         // it for Kind (D-052); without the ALERT_* values it routes but emails nobody.
         ALERTMANAGER_YAML: renderAlertmanagerConfig(alertmanagerTemplate, env).config,

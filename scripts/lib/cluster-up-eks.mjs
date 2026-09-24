@@ -14,8 +14,8 @@
  *      generates a secret: a missing one stops the run.
  *   4. the other charts for eks, in helm/platform/charts.json's order
  *   5. the admission policy first, then the app (k8s/overlays/aws, with the
- *      release to run), the dashboards, and Jenkins' EKS additions
- *   6. waits for Redis, the app, and the load balancer's address
+ *      release to run), the dashboards, Jenkins' EKS additions, and Nexus
+ *   6. waits for Redis, the app, the load balancer's address, and Nexus' setup
  *
  * Idempotent, like the Kind path: every step applies or upgrades.
  */
@@ -98,7 +98,7 @@ export async function upEks({ root, context = 'splitx', image = '' }) {
     // ── 2. namespaces ─────────────────────────────────────────────────────────
     heading('Namespaces, with their Pod Security levels');
     kubectl(['apply', '-f', 'helm/platform/namespaces.yaml', '-f', 'helm/platform/eks/namespaces.yaml', '-f', 'k8s/base/namespace.yaml'], { capture: true });
-    console.log('    monitoring, node-exporter, jenkins, kyverno, external-secrets, splitx');
+    console.log('    monitoring, node-exporter, jenkins, kyverno, nexus, external-secrets, splitx');
 
     const charts = chartsFor(JSON.parse(read('helm/platform/charts.json')), 'eks');
     const repos = reposOf(charts);
@@ -160,6 +160,10 @@ export async function upEks({ root, context = 'splitx', image = '' }) {
     }
     kubectl(['apply', '-k', 'monitoring']);
     kubectl(['apply', '-k', 'jenkins/eks']);
+    // Nexus and its setup Job (nexus/, the same as on Kind). A Job's pod
+    // template can't change, so the Job is replaced.
+    kubectl(['delete', 'job', 'nexus-provision', '-n', 'nexus', '--ignore-not-found'], { capture: true });
+    kubectl(['apply', '-k', 'nexus']);
 
     // ── 6. waits ──────────────────────────────────────────────────────────────
     heading('Waiting for Redis, the app and the load balancer');
@@ -172,6 +176,9 @@ export async function upEks({ root, context = 'splitx', image = '' }) {
     }
     if (!alb) fail('no load balancer after 10 minutes; its controller says why: kubectl -n kube-system logs deployment/aws-load-balancer-controller');
     console.log('    the load balancer: ' + alb);
+    // Nexus' first start creates its database; the Job then sets it up (D-096).
+    kubectl(['-n', 'nexus', 'wait', '--for=condition=complete', 'job/nexus-provision', '--timeout=900s']);
+    console.log('    Nexus is set up: licence accepted, anonymous access off, the evidence repository and Jenkins\' account in place');
 
     heading('Cluster state');
     console.log(kubectl(['-n', 'splitx', 'get', 'pods', '-o', 'wide'], { capture: true }).stdout.trim());

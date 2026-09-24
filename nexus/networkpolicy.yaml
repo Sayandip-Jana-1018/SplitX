@@ -1,0 +1,89 @@
+# ═══════════════════════════════════════════════════════════════
+#   Who may reach Nexus (D-096): Jenkins' build agents, which archive each
+#   deployment's evidence, and the setup Job. Nothing else, and Nexus itself
+#   reaches nothing but DNS: it has no reason to call out.
+#
+#   The same file serves Kind and EKS. On Kind the kubelet probes from the
+#   node network (172.16.0.0/12); on EKS the VPC CNI's agent always admits
+#   the node's own address, and 172.16.0.0/12 there holds only Service
+#   addresses, which never originate a connection (D-093).
+# ═══════════════════════════════════════════════════════════════
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  labels:
+    app.kubernetes.io/part-of: splitx
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: nexus
+  labels:
+    app.kubernetes.io/name: nexus
+    app.kubernetes.io/part-of: splitx
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: nexus
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        # Jenkins' build agents (the archive step of jenkins/deploy.mjs).
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: jenkins
+          podSelector:
+            matchLabels:
+              jenkins/jenkins-jenkins-agent: "true"
+        # The setup Job.
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: nexus-provision
+        # The kubelet's probes on Kind.
+        - ipBlock:
+            cidr: 172.16.0.0/12
+      ports:
+        - port: http
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: nexus-provision
+  labels:
+    app.kubernetes.io/name: nexus-provision
+    app.kubernetes.io/part-of: splitx
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: nexus-provision
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: nexus
+      ports:
+        - port: 8081
+          protocol: TCP

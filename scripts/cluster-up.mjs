@@ -20,9 +20,9 @@
  *      Kind's default limits it falls behind until new connections time out
  *   4. creates the platform namespaces with their Pod Security levels, and the
  *      Secrets the platform charts read: the Grafana admin password, the
- *      Alertmanager configuration filled with the ALERT_* values from .env, and
- *      Jenkins' admin password, webhook secret and relay settings (the random
- *      ones are generated into .env on the first run)
+ *      Alertmanager configuration filled with the ALERT_* values from .env,
+ *      Jenkins' admin password, webhook secret and relay settings, and Nexus'
+ *      two passwords (the random ones are generated into .env on the first run)
  *   5. installs the pinned platform charts listed in helm/platform/charts.json
  *   6. loads the application image into the nodes — Kind has no registry, and
  *      the manifests never pull, so this is how a build reaches a pod
@@ -30,8 +30,9 @@
  *      Values are never written to a file, never passed as an argument and
  *      never printed; only the key names appear in the output.
  *   8. applies k8s/overlays/local, the Grafana dashboards, the admission policy
- *      (policy/) and what Jenkins needs beyond its chart (jenkins/), and waits
- *      for the database, the schema Job and the deployment
+ *      (policy/), what Jenkins needs beyond its chart (jenkins/) and Nexus
+ *      (nexus/), and waits for the database, the schema Job, the deployment
+ *      and Nexus' setup
  *   9. rolls the deployment if the pods run an older build than the one loaded
  *  10. opens fresh connections from every pod, because readiness cannot prove it
  */
@@ -217,6 +218,10 @@ function ensureEnv(key, value, comment) {
 ensureEnv('JENKINS_ADMIN_PASSWORD', randomBytes(18).toString('base64url'), 'Jenkins admin password, user admin, at http://jenkins.localhost');
 ensureEnv('GITHUB_WEBHOOK_SECRET', randomBytes(32).toString('hex'), 'The Secret of the repository webhook that announces deployments to Jenkins');
 ensureEnv('JENKINS_TRIGGER_TOKEN', randomBytes(24).toString('hex'), 'The token the webhook relay presents to Jenkins');
+// Nexus, where each deployment's evidence is kept (D-096): its admin, and the
+// account Jenkins uses, which may only read and add evidence.
+ensureEnv('NEXUS_ADMIN_PASSWORD', randomBytes(24).toString('base64url'), 'The Nexus admin password (user admin)');
+ensureEnv('NEXUS_JENKINS_PASSWORD', randomBytes(24).toString('base64url'), "The password of Jenkins' Nexus account, which may only read and add release evidence");
 if (!process.env.SMEE_URL) {
     // smee.io answers /new with a redirect to a fresh channel.
     const channel = await fetch('https://smee.io/new', { redirect: 'manual' })
@@ -237,8 +242,12 @@ const jenkinsSecretsChanged = [
         // comes out of the anonymous allowance this network shares (B-026). With
         // it Jenkins also reports each outcome back to GitHub.
         'github-token': process.env.JENKINS_GITHUB_TOKEN ?? '',
+        // Jenkins' Nexus account (nexus/provision.mjs creates it with this password).
+        'nexus-password': process.env.NEXUS_JENKINS_PASSWORD,
     }),
 ].some((result) => result.stdout.includes('configured'));
+applySecret('nexus', 'nexus-admin', { 'password': process.env.NEXUS_ADMIN_PASSWORD, 'jenkins-password': process.env.NEXUS_JENKINS_PASSWORD });
+console.log("    nexus-admin: Nexus' admin password, and the one its setup Job gives Jenkins' account");
 // Read as environment variables, so a change needs a new relay pod (step 8).
 const relaySecretChanged = applySecret('jenkins', 'webhook-relay', { 'smee-url': process.env.SMEE_URL, 'trigger-token': process.env.JENKINS_TRIGGER_TOKEN })
     .stdout.includes('configured');
@@ -342,6 +351,10 @@ kubectl(['apply', '-k', 'monitoring']);
 kubectl(['apply', '-k', 'policy']);
 // Jenkins' permissions, network policy, webhook relay and alerts (jenkins/kustomization.yaml).
 kubectl(['apply', '-k', 'jenkins']);
+// Nexus and its setup Job (nexus/kustomization.yaml). A Job's pod template
+// can't change, so the Job is replaced.
+kubectl(['delete', 'job', 'nexus-provision', '-n', 'nexus', '--ignore-not-found'], { capture: true });
+kubectl(['apply', '-k', 'nexus']);
 if (relaySecretChanged) kubectl(['-n', 'jenkins', 'rollout', 'restart', 'deployment/webhook-relay'], { capture: true });
 
 heading('Waiting for the database, the schema and the app');
@@ -349,6 +362,8 @@ kubectl(['-n', NAMESPACE, 'rollout', 'status', 'statefulset/splitx-postgres', '-
 kubectl(['-n', NAMESPACE, 'rollout', 'status', 'deployment/splitx-redis', '--timeout=120s']);
 kubectl(['-n', NAMESPACE, 'wait', '--for=condition=complete', 'job/splitx-schema-init', '--timeout=240s']);
 kubectl(['-n', NAMESPACE, 'rollout', 'status', 'deployment/splitx', '--timeout=300s']);
+// A first start of Nexus creates its database; the Job then sets it up.
+kubectl(['-n', 'nexus', 'wait', '--for=condition=complete', 'job/nexus-provision', '--timeout=900s']);
 
 heading('Are the pods running the image just loaded?');
 // The local overlay deploys a tag, splitx:local, and a new build is loaded under
