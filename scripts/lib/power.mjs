@@ -10,8 +10,17 @@ import { spawnSync } from 'node:child_process';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-/** @returns {{ source: 'ac' | 'battery' | 'unknown', detail: string }} */
-export function powerSource() {
+/**
+ * @param {Record<string, string | undefined>} [env]
+ * @returns {{ source: 'ac' | 'battery' | 'unknown', detail: string }}
+ */
+export function powerSource(env = process.env) {
+    // A GitHub-hosted runner is a virtual machine in a data centre: it has no
+    // battery and no power plan to throttle it (kind-e2e.yml, D-099). A
+    // self-hosted runner could be a laptop, so only GitHub's own count.
+    if (env.GITHUB_ACTIONS === 'true' && env.RUNNER_ENVIRONMENT === 'github-hosted') {
+        return { source: 'ac', detail: 'a GitHub-hosted runner, a data-centre VM with no battery' };
+    }
     try {
         if (process.platform === 'win32') return windows();
         if (process.platform === 'darwin') return mac();

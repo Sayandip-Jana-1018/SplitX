@@ -3717,6 +3717,77 @@ Chromium, driven over the DevTools protocol at 390 px and a device scale of 2.
 
 ---
 
+## Phase 14 — The whole platform, end to end, on GitHub's runners
+
+### D-099 · kind-e2e: the Kind platform, a real GitHub delivery and every verifier, on a runner
+**2026-09-24** · 🚧 written and unit-tested (1,282 → 1,302 tests); its first runs follow
+
+The laptop can't run the cluster any more (B-027, and one fan missing), so the whole platform is
+proven where it costs nothing: a GitHub-hosted runner with 4 CPUs and 16 GB.
+`.github/workflows/kind-e2e.yml` runs the same `k8s:up` as the laptop did, with a signed release,
+then every verifier against it.
+
+**When it runs:**
+- **by hand**, for the newest release or a named commit's;
+- **nightly** at 03:10 IST;
+- **on a push to main that changes the platform:** the workflow, the cluster scripts, `k8s/`, `helm/`,
+  `jenkins/`, `nexus/`, `ops/`, `policy/` or `monitoring/`. That run waits for CI to release the
+  pushed commit, then runs that release.
+
+**What one run does:**
+1. **Checks both images** are the release job's, signed on main for that commit. This is the same
+   cosign check Jenkins makes.
+2. **Writes the run's `.env`** (`scripts/e2e.mjs env`):
+   - fresh passwords and tokens for the run;
+   - the repository webhook's own Payload URL and secret, from the Actions secrets `SMEE_URL` and
+     `GIT_WEBHOOK_SECRET`. GitHub keeps names starting `GITHUB_` for itself, so the workflow renames it
+     to `.env`'s `GITHUB_WEBHOOK_SECRET` inside the run;
+   - for Jenkins, the job's own `GITHUB_TOKEN`, with `deployments: write`. It ends with the job, so no
+     long-lived token is added.
+   
+   Every value is masked in the log before it is written.
+3. **Samples the machine's memory every 10 s**, from before the cluster exists (B-027): see below.
+4. **Runs `k8s:up`** with the release's app image, tagged `splitx:local` as the cluster's first
+   build, and its ops image by digest.
+5. **Delivers the release the way a merge does** (`scripts/e2e.mjs deliver`).
+   - It creates a GitHub deployment for `kind` with both images.
+   - GitHub posts it to the webhook, smee.io hands it to the relay in the runner's cluster, and
+     Jenkins checks both signatures, deploys, archives the evidence in Nexus and reports back.
+   - While it waits, it asks Jenkins directly how the build is going. Jenkins reports to GitHub only
+     at the end, so this tells "no delivery yet" from "still deploying".
+6. **Checks everything:**
+   - `k8s:verify`;
+   - `cd:verify --rollback`, including a release that can't come up;
+   - `ops-verify`, which is new: it signs in as a test operator that exists only in the run's own
+     database, reads all 16 readings through the app, starts the traffic lab from `/api/ops/traffic`,
+     watches the autoscaler, and finds the delivery's evidence in Nexus.
+7. **Uploads the evidence** (`kubernetes.md`, `delivery.md`, `ops.md`, and the memory report and
+   samples) and writes a summary.
+8. **Marks the run's deployment inactive,** because its cluster ends with the runner.
+
+**Changed for the runner:**
+- A GitHub-hosted runner counts as mains power: it is a data-centre VM with no battery. A
+  self-hosted runner could be a laptop, so only GitHub's own count (`scripts/lib/power.mjs`).
+- `k8s:verify` can now report a check as **skipped**, never counted as passed. It does so for exactly
+  one: the alert emails, when a run has no receiver because the repository has no `ALERT_*` secrets.
+  The table says why.
+
+**One rule for whoever pushes:** nothing goes to main while a run is in progress. Every push's
+release is announced to `kind`, GitHub sends that announcement to the running cluster's Jenkins, and
+it would deploy over the release under test.
+
+**B-027, measured instead of guessed.** `scripts/memory-sample.mjs` records:
+- the machine's memory in use, anonymous, shared, cached and swapped;
+- each Kind node's anonymous, file and shared memory from its own cgroup;
+- the phase the run was in;
+- the pods holding the most memory at the end.
+
+**Not proven until a run passes:** every step after `k8s:up` on a runner, and the four items D-097
+left: Kyverno's admission metrics reaching Prometheus; ops-api reading through Kind's API server;
+the lab driving the autoscaler; and the evidence reaching Nexus.
+
+---
+
 ## Open problems
 
 | ID | Problem | Why it matters | Status / planned fix |

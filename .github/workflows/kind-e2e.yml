@@ -1,0 +1,299 @@
+# ═══════════════════════════════════════════════════════════════
+#   SplitX — the whole platform, end to end, on a GitHub runner (D-099)
+#
+#   The same `k8s:up` as on a laptop builds the Kind cluster on a
+#   GitHub-hosted runner (4 CPUs, 16 GB) with a signed release. Then:
+#     - the release is announced to "kind" exactly as a merge does it, and
+#       GitHub's own webhook reaches the runner's Jenkins through smee.io
+#       and the relay. Jenkins verifies the signatures, deploys, archives
+#       the evidence in Nexus and reports back to the deployment;
+#     - k8s:verify, cd:verify --rollback and ops-verify check the result;
+#     - the machine's memory is sampled from before the cluster exists (B-027).
+#   The evidence is uploaded. The cluster ends with the runner; nothing
+#   touches the laptop or AWS.
+#
+#   It needs two repository secrets, the webhook's own: SMEE_URL (its
+#   Payload URL) and GIT_WEBHOOK_SECRET (its secret; GitHub keeps names
+#   starting GITHUB_ for itself, so .env's GITHUB_WEBHOOK_SECRET is stored
+#   under this name). With ALERT_SMTP_USERNAME, ALERT_SMTP_PASSWORD and
+#   ALERT_EMAIL_TO too, the alerts it fires are emailed.
+# ═══════════════════════════════════════════════════════════════
+name: Kind end-to-end
+
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: A commit on main whose signed release to run (empty for the newest)
+        required: false
+        default: ''
+  schedule:
+    # 03:10 IST, when nobody is merging.
+    - cron: '40 21 * * *'
+  # A change to the platform itself is proven on it at once, with that
+  # commit's own release: this run waits for CI to sign it.
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/kind-e2e.yml
+      - scripts/cluster-up.mjs
+      - scripts/cluster-verify.mjs
+      - scripts/delivery-verify.mjs
+      - scripts/e2e.mjs
+      - scripts/ops-verify.mjs
+      - scripts/memory-sample.mjs
+      - scripts/lib/**
+      - k8s/**
+      - helm/**
+      - jenkins/**
+      - nexus/**
+      - ops/**
+      - policy/**
+      - monitoring/**
+
+permissions:
+  contents: read
+  # To announce the release to "kind"; Jenkins reports back to it with this
+  # same token, which ends with the job.
+  deployments: write
+
+concurrency:
+  # One cluster at a time: both would deploy whatever the webhook announces.
+  group: kind-e2e
+  cancel-in-progress: false
+
+jobs:
+  e2e:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      KIND_VERSION: v0.31.0
+      KIND_SHA256: eb244cbafcc157dff60cf68693c14c9a75c4e6e6fedaf9cd71c58117cb93e3fa
+      KUBECTL_VERSION: v1.35.8
+      KUBECTL_SHA256: 874d5e72dbb819f43cff16bcd1e4f8bac5b7f2361fe1e55049b0a6c676fb0cbf
+      HELM_VERSION: v4.3.0
+      HELM_SHA256: 86584a54def73570558f66f5111cc53dfed56689637ae32c1201205d494f54fb
+      COSIGN_VERSION: v3.1.3
+      EVIDENCE: e2e-evidence
+      NEXT_TELEMETRY_DISABLED: 1
+
+    steps:
+      - name: Make room on the disk
+        # The runner image carries toolchains this job never uses (.NET,
+        # Android, GHC); the cluster's images need the space.
+        run: |
+          df -h / | tail -1
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup
+          df -h / | tail -1
+
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - name: Node
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        # ops-verify signs its sessions with the app's own next-auth.
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Install kind, kubectl and Helm (checksums pinned)
+        run: |
+          bin="$RUNNER_TEMP/bin"
+          mkdir -p "$bin"
+          curl -sSfLo "$bin/kind" "https://github.com/kubernetes-sigs/kind/releases/download/$KIND_VERSION/kind-linux-amd64"
+          echo "$KIND_SHA256  $bin/kind" | sha256sum --check --strict -
+          curl -sSfLo "$bin/kubectl" "https://dl.k8s.io/release/$KUBECTL_VERSION/bin/linux/amd64/kubectl"
+          echo "$KUBECTL_SHA256  $bin/kubectl" | sha256sum --check --strict -
+          curl -sSfLo "$RUNNER_TEMP/helm.tar.gz" "https://get.helm.sh/helm-$HELM_VERSION-linux-amd64.tar.gz"
+          echo "$HELM_SHA256  $RUNNER_TEMP/helm.tar.gz" | sha256sum --check --strict -
+          tar -xzf "$RUNNER_TEMP/helm.tar.gz" -C "$RUNNER_TEMP" linux-amd64/helm
+          mv "$RUNNER_TEMP/linux-amd64/helm" "$bin/helm"
+          chmod 0755 "$bin/kind" "$bin/kubectl" "$bin/helm"
+          echo "$bin" >> "$GITHUB_PATH"
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: ${{ env.COSIGN_VERSION }}
+
+      - name: Find the release
+        # A push runs the commit it brought, once CI has released it; anything
+        # else the commit it names, or the newest release.
+        id: release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE: ${{ inputs.release }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            node scripts/e2e.mjs release "$GITHUB_SHA" --wait
+          else
+            node scripts/e2e.mjs release "$RELEASE"
+          fi
+
+      - name: Check both images are the release job's, signed for that commit
+        # The same check Jenkins makes before it deploys (jenkins/deploy.mjs).
+        env:
+          SHA: ${{ steps.release.outputs.sha }}
+          IMAGE: ${{ steps.release.outputs.image }}
+          OPS_IMAGE: ${{ steps.release.outputs.ops_image }}
+        run: |
+          for ref in "$IMAGE" "$OPS_IMAGE"; do
+            cosign verify \
+              --certificate-identity "https://github.com/$GITHUB_REPOSITORY/.github/workflows/ci.yml@refs/heads/main" \
+              --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+              --certificate-github-workflow-sha "$SHA" \
+              --certificate-github-workflow-repository "$GITHUB_REPOSITORY" \
+              "$ref" > /dev/null
+            echo "signed by ci.yml on main at ${SHA:0:12}: $ref"
+          done
+
+      - name: Write this run's .env
+        env:
+          SMEE_URL: ${{ secrets.SMEE_URL }}
+          GITHUB_WEBHOOK_SECRET: ${{ secrets.GIT_WEBHOOK_SECRET }}
+          JENKINS_GITHUB_TOKEN: ${{ github.token }}
+          ALERT_SMTP_USERNAME: ${{ secrets.ALERT_SMTP_USERNAME }}
+          ALERT_SMTP_PASSWORD: ${{ secrets.ALERT_SMTP_PASSWORD }}
+          ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
+        run: node scripts/e2e.mjs env
+
+      - name: Sample the machine's memory from here on (B-027)
+        run: |
+          mkdir -p "$EVIDENCE"
+          echo "before the cluster" > "$EVIDENCE/memory.csv.phase"
+          nohup node scripts/memory-sample.mjs run "$EVIDENCE/memory.csv" > "$EVIDENCE/memory-sampler.log" 2>&1 &
+          echo $! > "$EVIDENCE/memory-sampler.pid"
+
+      - name: The release's app image, as the cluster's first build
+        # k8s:up starts the app from the local tag splitx:local; these are the
+        # release's own bytes. Jenkins then replaces it with the signed digest.
+        env:
+          IMAGE: ${{ steps.release.outputs.image }}
+        run: |
+          docker pull --quiet "$IMAGE"
+          docker tag "$IMAGE" splitx:local
+
+      - name: k8s:up
+        env:
+          OPS_IMAGE: ${{ steps.release.outputs.ops_image }}
+        run: |
+          echo "k8s:up" > "$EVIDENCE/memory.csv.phase"
+          node scripts/cluster-up.mjs --ops-image "$OPS_IMAGE"
+
+      - name: Deliver the release through GitHub's webhook
+        id: deliver
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+          RELEASE_IMAGE: ${{ steps.release.outputs.image }}
+          RELEASE_OPS_IMAGE: ${{ steps.release.outputs.ops_image }}
+        run: |
+          echo "delivery" > "$EVIDENCE/memory.csv.phase"
+          node scripts/e2e.mjs deliver
+
+      - name: k8s:verify
+        id: k8s_verify
+        if: ${{ !cancelled() && steps.deliver.outcome != 'skipped' }}
+        continue-on-error: true
+        run: |
+          echo "k8s:verify" > "$EVIDENCE/memory.csv.phase"
+          node scripts/cluster-verify.mjs
+
+      - name: cd:verify --rollback
+        id: cd_verify
+        if: ${{ !cancelled() && steps.deliver.outcome == 'success' }}
+        continue-on-error: true
+        run: |
+          echo "cd:verify" > "$EVIDENCE/memory.csv.phase"
+          node scripts/delivery-verify.mjs --rollback
+
+      - name: ops-verify
+        id: ops_verify
+        if: ${{ !cancelled() && steps.deliver.outcome == 'success' }}
+        continue-on-error: true
+        env:
+          SHA: ${{ steps.release.outputs.sha }}
+          DEPLOYMENT: ${{ steps.deliver.outputs.deployment }}
+        run: |
+          echo "ops-verify" > "$EVIDENCE/memory.csv.phase"
+          node scripts/ops-verify.mjs --delivered "$SHA" --deployment "$DEPLOYMENT"
+
+      - name: What the memory was made of
+        if: ${{ always() }}
+        run: |
+          if [ -f "$EVIDENCE/memory-sampler.pid" ]; then kill "$(cat "$EVIDENCE/memory-sampler.pid")" || true; fi
+          kubectl --context kind-splitx top pods -A --sort-by=memory > "$EVIDENCE/top-pods.txt" 2>&1 || true
+          if [ -f "$EVIDENCE/memory.csv" ]; then
+            node scripts/memory-sample.mjs report "$EVIDENCE/memory.csv" "$EVIDENCE/memory.md" "$EVIDENCE/top-pods.txt"
+          fi
+
+      - name: The cluster's state, for anyone reading a failure
+        if: ${{ failure() || steps.k8s_verify.outcome == 'failure' || steps.cd_verify.outcome == 'failure' || steps.ops_verify.outcome == 'failure' }}
+        run: |
+          k() { kubectl --context kind-splitx "$@" 2>&1 || true; }
+          {
+            echo "## pods"; k get pods -A -o wide
+            echo; echo "## events, newest last"; k get events -A --sort-by=.lastTimestamp | tail -80
+            echo; echo "## the relay"; k -n jenkins logs deployment/webhook-relay --tail=60
+            echo; echo "## ops-api"; k -n ops logs deployment/ops-api --tail=60
+            echo; echo "## the traffic lab"; k -n ops logs deployment/traffic-lab --tail=60
+          } > "$EVIDENCE/cluster-state.txt"
+          tail -60 "$EVIDENCE/cluster-state.txt"
+
+      - name: Retire the run's deployment
+        # The cluster it went to ends with this job.
+        if: ${{ always() && steps.deliver.outputs.deployment != '' }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          DEPLOYMENT: ${{ steps.deliver.outputs.deployment }}
+        run: node scripts/e2e.mjs retire "$DEPLOYMENT"
+
+      - name: Summary
+        if: ${{ always() }}
+        env:
+          SHA: ${{ steps.release.outputs.sha }}
+        run: |
+          {
+            echo "## Kind end-to-end, release ${SHA:0:12}"
+            echo
+            echo "| Step | Outcome |"
+            echo "|---|---|"
+            echo "| k8s:up and delivery through GitHub's webhook | ${{ steps.deliver.outcome }} |"
+            echo "| k8s:verify | ${{ steps.k8s_verify.outcome }} |"
+            echo "| cd:verify --rollback | ${{ steps.cd_verify.outcome }} |"
+            echo "| ops-verify | ${{ steps.ops_verify.outcome }} |"
+            for file in docs/evidence/kubernetes.md docs/evidence/delivery.md docs/evidence/ops.md; do
+              if [ -f "$file" ] && [ "$(git status --porcelain -- "$file")" != "" ]; then
+                echo; echo "### $(head -1 "$file" | sed 's/^# //')"; echo
+                sed -n '/^## Result/,/^## /p' "$file" | sed '1d;$d'
+              fi
+            done
+            if [ -f "$EVIDENCE/memory.md" ]; then echo; sed -n '1,/^Phases/p' "$EVIDENCE/memory.md" | sed 's/^# /### /'; fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: kind-e2e-${{ github.run_id }}
+          path: |
+            e2e-evidence/
+            docs/evidence/kubernetes.md
+            docs/evidence/delivery.md
+            docs/evidence/ops.md
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: Every check passed
+        if: ${{ always() }}
+        run: |
+          for outcome in "${{ steps.deliver.outcome }}" "${{ steps.k8s_verify.outcome }}" "${{ steps.cd_verify.outcome }}" "${{ steps.ops_verify.outcome }}"; do
+            if [ "$outcome" != "success" ]; then
+              echo "A step did not pass ($outcome): see the summary and the evidence." >&2
+              exit 1
+            fi
+          done

@@ -69,3 +69,5 @@ __pycache__/
 .cluster-up-eks-*/
 # cluster-up, either target: the same for the ops image (D-097)
 .cluster-up-ops-*/
+# kind-e2e.yml: what a run measures on its runner, uploaded as an artifact (D-099)
+e2e-evidence/

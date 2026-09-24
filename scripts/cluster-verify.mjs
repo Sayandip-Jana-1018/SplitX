@@ -31,10 +31,13 @@ const checks = [];
 const sections = [];
 let failures = 0;
 
+// `passed` null means skipped: the check does not apply to this cluster, and
+// the detail says why. It is never counted as passed.
+const VERDICT = new Map([[true, 'PASS'], [false, 'FAIL'], [null, 'SKIP']]);
 function record(name, passed, detail) {
     checks.push({ name, passed, detail });
-    if (!passed) failures += 1;
-    console.log((passed ? '  PASS  ' : '  FAIL  ') + name + (detail ? ' — ' + detail : ''));
+    if (passed === false) failures += 1;
+    console.log('  ' + VERDICT.get(passed) + '  ' + name + (detail ? ' — ' + detail : ''));
 }
 
 function sh(file, argv, options = {}) {
@@ -565,13 +568,19 @@ const emailFailed = Number(promQuery('sum(alertmanager_notifications_failed_tota
 // The counts live in Alertmanager's memory and start again from 0 when it restarts.
 const alertmanagerStarted = json(['get', 'pods', '-n', 'monitoring', '-l', 'app.kubernetes.io/name=alertmanager']).items?.[0]
     ?.status.containerStatuses?.find((c) => c.name === 'alertmanager')?.state?.running?.startedAt;
+// A laptop's .env names a receiver. A kind-e2e run has one only if the
+// repository gives it the ALERT_* secrets (D-099); without them there is no
+// email to check, and the check says so instead of failing or passing.
+const receiverChosen = Boolean(process.env.ALERT_SMTP_USERNAME && process.env.ALERT_SMTP_PASSWORD && process.env.ALERT_EMAIL_TO);
 record(
     'Alerts are routed to email, and every email was accepted',
-    alertmanagerConfig.includes('email_configs') && emailFailed === 0,
+    receiverChosen || process.env.GITHUB_ACTIONS !== 'true' ? alertmanagerConfig.includes('email_configs') && emailFailed === 0 : null,
     alertmanagerConfig.includes('email_configs')
         ? emailSent + ' notification(s) sent through Gmail and ' + emailFailed + ' failed since Alertmanager '
             + (alertmanagerStarted ? 'started at ' + alertmanagerStarted.replace('T', ' ').replace(/:\d\dZ$/, ' UTC') : 'last started')
-        : 'no email receiver: .env has no ALERT_SMTP_USERNAME, ALERT_SMTP_PASSWORD and ALERT_EMAIL_TO'
+        : process.env.GITHUB_ACTIONS === 'true'
+            ? 'this run has no email receiver: the repository has no ALERT_SMTP_USERNAME, ALERT_SMTP_PASSWORD and ALERT_EMAIL_TO secrets'
+            : 'no email receiver: .env has no ALERT_SMTP_USERNAME, ALERT_SMTP_PASSWORD and ALERT_EMAIL_TO'
 );
 
 function grafana(path) {
@@ -765,7 +774,7 @@ const report = [
     '',
     '| Check | Result | Detail |',
     '|---|---|---|',
-    ...checks.map((c) => '| ' + c.name + ' | ' + (c.passed ? 'pass' : '**fail**') + ' | ' + c.detail + ' |'),
+    ...checks.map((c) => '| ' + c.name + ' | ' + new Map([[true, 'pass'], [false, '**fail**'], [null, 'skipped']]).get(c.passed) + ' | ' + c.detail + ' |'),
     '',
     '## The cluster',
     '',
@@ -799,6 +808,7 @@ const report = [
 
 writeFileSync(join(root, 'docs/evidence/kubernetes.md'), report + '\n');
 
-console.log('\n' + checks.filter((c) => c.passed).length + '/' + checks.length + ' checks passed.');
+const skipped = checks.filter((c) => c.passed === null).length;
+console.log('\n' + checks.filter((c) => c.passed === true).length + '/' + (checks.length - skipped) + ' checks passed' + (skipped ? ', ' + skipped + ' skipped' : '') + '.');
 console.log('Report: docs/evidence/kubernetes.md');
 process.exit(failures === 0 ? 0 : 1);
