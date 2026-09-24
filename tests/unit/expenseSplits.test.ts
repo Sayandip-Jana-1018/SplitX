@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MAX_EXPENSE_PAISE, resolveSplits } from '@/lib/expenseSplits';
-import { equalSharesById } from '@/lib/splits';
+import { compareCodeUnits, equalSharesById } from '@/lib/splits';
 import { createRandom } from '../helpers/random';
 
 const members = ['u-carol', 'u-alice', 'u-bob'];
@@ -106,5 +106,18 @@ describe('resolveSplits: amounts', () => {
 describe('equalSharesById', () => {
     it('ignores repeated IDs rather than charging someone twice', () => {
         expect([...equalSharesById(10, ['b', 'a', 'b'])]).toEqual([['a', 5], ['b', 5]]);
+    });
+
+    it('gives the extra paisa by code-unit order, the same in every locale', () => {
+        // Upper case sorts before lower case by code unit; localeCompare would interleave them.
+        expect([...equalSharesById(10, ['b', 'B', 'a'])]).toEqual([['B', 4], ['a', 3], ['b', 3]]);
+    });
+});
+
+describe('compareCodeUnits', () => {
+    it('orders exactly as sort() with no compare function does', () => {
+        const ids = ['cm9b', 'Cm9a', 'cm9a', 'cm10', '', 'é', 'e'];
+        expect([...ids].sort(compareCodeUnits)).toEqual([...ids].sort());
+        expect([compareCodeUnits('a', 'a'), compareCodeUnits('a', 'b'), compareCodeUnits('b', 'a')]).toEqual([0, -1, 1]);
     });
 });

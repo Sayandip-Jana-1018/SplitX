@@ -29,6 +29,15 @@ const COLORS = [
     '#3b82f6', '#22c55e',
 ];
 
+/**
+ * Numbers in [0, 1) from the browser's secure source. Confetti needs no secrecy,
+ * but a scanner can't tell a particle from a token, and 960 numbers a burst cost
+ * nothing, so the findings left in the code are the ones that matter (D-098).
+ */
+function randoms(count: number): number[] {
+    return Array.from(crypto.getRandomValues(new Uint32Array(count)), (value) => value / 2 ** 32);
+}
+
 export default function Confetti({ active, duration = 3500, message, onComplete }: ConfettiProps) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const particlesRef = useRef<Particle[]>([]);
@@ -39,15 +48,16 @@ export default function Confetti({ active, duration = 3500, message, onComplete 
     const createParticles = useCallback(() => {
         const particles: Particle[] = [];
         for (let i = 0; i < 120; i++) {
+            const [x, y, vx, vy, color, size, rotation, spin] = randoms(8);
             particles.push({
-                x: Math.random() * window.innerWidth,
-                y: -20 - Math.random() * 100,
-                vx: (Math.random() - 0.5) * 8,
-                vy: Math.random() * 4 + 2,
-                color: COLORS[Math.floor(Math.random() * COLORS.length)],
-                size: Math.random() * 8 + 4,
-                rotation: Math.random() * 360,
-                rotationSpeed: (Math.random() - 0.5) * 10,
+                x: x * window.innerWidth,
+                y: -20 - y * 100,
+                vx: (vx - 0.5) * 8,
+                vy: vy * 4 + 2,
+                color: COLORS[Math.floor(color * COLORS.length)],
+                size: size * 8 + 4,
+                rotation: rotation * 360,
+                rotationSpeed: (spin - 0.5) * 10,
                 opacity: 1,
             });
         }

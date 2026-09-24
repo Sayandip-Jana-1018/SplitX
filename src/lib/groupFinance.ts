@@ -1,5 +1,6 @@
 import { planSettlement } from '@/lib/settlementPlanner';
 import { isCompletedSettlementStatus } from '@/lib/settlementStatus';
+import { compareCodeUnits } from '@/lib/splits';
 
 export interface FinanceMember {
     id: string;
@@ -198,7 +199,7 @@ export function simplifyGroupBalances(params: {
 }): SimplifiedTransfer[] {
     const personById = new Map(params.people.map((person) => [person.id, person]));
     const accounts = Object.keys(params.balances)
-        .sort()
+        .sort(compareCodeUnits)
         .map((id) => ({ id, amount: Math.round(params.balances[id] || 0) }))
         .filter((account) => account.amount !== 0);
 
@@ -620,7 +621,7 @@ function participantNames(
     if (!snapshot) return '';
     return snapshot.splits
         .map((split) => split.userName || memberNames.get(split.userId) || split.userId)
-        .sort()
+        .sort(compareCodeUnits)
         .join('|');
 }
 

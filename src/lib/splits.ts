@@ -10,13 +10,24 @@ export function equalShares(amount: number, count: number): number[] {
 }
 
 /**
+ * Orders strings by their UTF-16 code units, as `sort()` does with no compare
+ * function, said explicitly. It is not localeCompare on purpose: an order that
+ * decides who gets the extra paisa must be the same on every server and phone,
+ * whatever their locale.
+ */
+export function compareCodeUnits(a: string, b: string): number {
+    if (a === b) return 0;
+    return a < b ? -1 : 1;
+}
+
+/**
  * Equal shares keyed by user, in one fixed order: people sorted by ID. The
  * composer's preview and the server both call this, so the extra paisa lands
  * on the same person whichever of them computes it, and whatever order the
  * members were listed or ticked in.
  */
 export function equalSharesById(amount: number, userIds: readonly string[]): Map<string, number> {
-    const ordered = [...new Set(userIds)].sort();
+    const ordered = [...new Set(userIds)].sort(compareCodeUnits);
     const shares = equalShares(amount, ordered.length);
     return new Map(ordered.map((userId, i) => [userId, shares[i]]));
 }

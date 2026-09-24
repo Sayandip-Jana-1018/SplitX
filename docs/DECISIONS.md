@@ -3667,8 +3667,22 @@ Analysis, the scan SonarQube Cloud runs when a project is imported, not from CI.
 - CI's scan can't run while it is on. That scan is `sonar-project.properties`: `src` and `tests`,
   with the unit tests' coverage and the gate.
 
-The user switches it off (the project's Administration → Analysis Method). CI's `sonar` job, which
-the new repository variables now enable, then scans every push to main.
+The user switched it off (the project's Administration → Analysis Method). CI's `sonar` job, which
+the new repository variables enable, then scanned `9d5b7d4`.
+- **The gate passed on its first CI analysis.** New code was rated A for reliability, security and
+  maintainability, with 97.3 % coverage, 0 % duplication and every hotspot reviewed.
+- **Overall** (40.9k lines of `src` and `tests`, where the automatic scan counted 87k): 70 %
+  coverage and maintainability A.
+  - **Security C.** All eight findings were `Math.random` in the confetti animation. The confetti needs
+    no secrecy, but it now draws from `crypto.getRandomValues`, which costs nothing, so a security
+    finding left in the code is one that matters.
+  - **Reliability D**, from three `sort()` calls without a compare function in the money code. They
+    now pass `compareCodeUnits`, which is the same order, said explicitly. It is deliberately not
+    `localeCompare`: who gets the extra paisa must not depend on a device's locale, and a test pins
+    that.
+  - **Left for the quality pass the user deferred:** 39 medium findings in older code, which grade
+    reliability C. Most are `parseInt` where Sonar wants `Number.parseInt`, and a dozen regular
+    expressions it rates as able to backtrack, mostly in the voice and text parser.
 
 **The layout.** The cards were already centred (19 and 18 px either side at 390 px). What read as off
 centre was their content: section headings, card titles, sources and links sat on the left under a
