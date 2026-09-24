@@ -228,10 +228,16 @@ describe('ops-api\'s readings', () => {
 
 describe('what cluster-up gives ops-api and the lab', () => {
     it('runs the ops image from our registry by digest only', () => {
-        expect(opsKustomization('ghcr.io/sayandip-jana-1018/splitx@' + DIGEST)).toMatchObject({
+        expect(opsKustomization('ghcr.io/sayandip-jana-1018/splitx@' + DIGEST)).toEqual({
+            apiVersion: 'kustomize.config.k8s.io/v1beta1',
+            kind: 'Kustomization',
             resources: ['../k8s/ops'],
-            images: [{ name: 'splitx-ops', newName: 'ghcr.io/sayandip-jana-1018/splitx', digest: DIGEST }],
+            images: [{ name: 'ghcr.io/sayandip-jana-1018/splitx', digest: DIGEST }],
         });
+        // k8s/ops renames `splitx-ops` first, so the pin has to match the name
+        // that rule produces (D-099). CI's manifests job renders the result.
+        const base = read('k8s/ops/kustomization.yaml');
+        expect(base).toContain('- name: splitx-ops\n    newName: ghcr.io/sayandip-jana-1018/splitx\n');
         for (const image of ['ghcr.io/sayandip-jana-1018/splitx:ops-abc', 'docker.io/someone/splitx@' + DIGEST, 'splitx-ops']) {
             expect(() => opsKustomization(image), image).toThrow(/by|must be/);
         }

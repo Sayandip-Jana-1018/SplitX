@@ -3786,6 +3786,21 @@ it would deploy over the release under test.
 left: Kyverno's admission metrics reaching Prometheus; ops-api reading through Kind's API server;
 the lab driving the autoscaler; and the evidence reaching Nexus.
 
+**Run 1 (36023050479, on `7cddd45`) found a Phase 6 bug.**
+- **What worked:** the run found `7cddd45`'s own release and verified both signatures with cosign,
+  then wrote its `.env`. `k8s:up` built the cluster: 3 nodes, the node-CPU caps, kindnet, every
+  platform chart, the app, Postgres, Redis, the schema and Nexus.
+- **What failed:** Kyverno refused ops-api and the traffic lab. It could not resolve
+  `ghcr.io/sayandip-jana-1018/splitx:ops-unpublished`, the placeholder tag.
+- **Why:** `k8s/ops/kustomization.yaml` renames the image `splitx-ops` to the placeholder first. The
+  layer `cluster-up` writes over it (`opsKustomization`) still matched the old name `splitx-ops`, which
+  no longer existed by then, so the digest was never applied, on Kind or on EKS. The unit test had
+  checked the layer's contents, not what kustomize renders from it.
+- **The fix:** the layer matches the name the base produces. CI's `manifests` job now renders
+  `k8s/ops` exactly as cluster-up pins it, and fails unless every image is the digest. Checked
+  locally: before the fix both Deployments rendered the placeholder; after it, the digest. The
+  admission policy did exactly its job: an image it couldn't verify never ran.
+
 ---
 
 ## Open problems

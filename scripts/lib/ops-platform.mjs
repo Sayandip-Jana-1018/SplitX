@@ -42,7 +42,11 @@ export function opsKustomization(image) {
         apiVersion: 'kustomize.config.k8s.io/v1beta1',
         kind: 'Kustomization',
         resources: ['../k8s/ops'],
-        images: [{ name: 'splitx-ops', newName: name, digest }],
+        // Kustomize applies k8s/ops' own image rule first, so by the time this
+        // one runs the image is already `ghcr.io/…/splitx:ops-unpublished`.
+        // Matching the old name `splitx-ops` here changed nothing, and the
+        // first kind-e2e run met the placeholder tag at admission (D-099).
+        images: [{ name, digest }],
     };
 }
 

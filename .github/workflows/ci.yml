@@ -258,6 +258,23 @@ jobs:
               -schema-location default -schema-location "$CRD_SCHEMAS" < /tmp/rendered.yaml
           done
 
+      - name: cluster-up pins the ops image by digest
+        # k8s/ops renames its image to a placeholder tag first; the layer
+        # cluster-up writes over it must replace that, or admission meets the
+        # placeholder. It once didn't, and only the first kind-e2e run found it (D-099).
+        run: |
+          work="$(mktemp -d "$PWD/.cluster-up-ops-XXXX")"
+          digest="sha256:$(printf 'e%.0s' $(seq 64))"
+          node --input-type=module -e "
+            import { writeFileSync } from 'node:fs';
+            import { opsKustomization } from './scripts/lib/ops-platform.mjs';
+            writeFileSync(process.argv[1] + '/kustomization.yaml', JSON.stringify(opsKustomization('ghcr.io/sayandip-jana-1018/splitx@' + process.argv[2])));
+          " "$work" "$digest"
+          images="$(kubectl kustomize "$work" | sed -n 's/^ *image: //p' | sort -u)"
+          rm -rf "$work"
+          echo "$images"
+          test "$images" = "ghcr.io/sayandip-jana-1018/splitx@$digest"
+
       - name: Alert rules fire when they should, and the Alertmanager config is valid
         # promtool and amtool at the versions the cluster runs. The rules are
         # read from the PrometheusRule that is deployed, not from a copy.
