@@ -3515,8 +3515,9 @@ package, so the admission policy covers it too.
     them through EKS Pod Identity (the role `splitx-wl-ops-api`, D-089).
     - It never returns an ARN, the account ID, or the edge's origin header (D-092).
     - It never calls Cost Explorer.
-- **The traffic lab** (`ops/lab/`) is k6 behind a start and a stop button. It runs the pinned 2.2.0
-  the load tests used.
+- **The traffic lab** (`ops/lab/`) is k6 behind a start and a stop button. It runs k6 2.3.0, pinned by
+  digest, the same as the load tests (`scripts/load-run.mjs`); see "The scan gate's first verdict"
+  below for why not 2.2.0.
   - **Limits:** at most 30 settlement plans a second, for at most 3 minutes, one run at a time.
   - **No credentials:** it holds none and gets no Kubernetes token.
   - **One target, fixed by cluster-up:** on EKS the edge, the way visitors arrive (the app refuses
@@ -3565,6 +3566,24 @@ package, so the admission policy covers it too.
 
 **Also fixed:** `/ops` counted `aws` as Jenkins' environment, but the release job has named it `eks`
 since D-093. An EKS deployment would have been labelled as Vercel's.
+
+**The scan gate's first verdict.** The first release with the ops image (`de45f2b`) was refused, as it
+should be: the app image was clean, but the ops image had 17 high vulnerabilities with fixes. The gate
+did not change; the image did.
+- **OpenSSL** (`libcrypto3`/`libssl3` 3.5.7, fixed in 3.5.8), from building on the Node image.
+- **npm's own dependencies** (`tar`, `ip-address`, `brace-expansion`), which ship inside the Node image.
+- **k6 2.2.0**, built with Go 1.26.5 and older `golang.org/x/crypto` and `grpc`.
+
+The ops image is now built the way the app's is (checked by a unit test against `Dockerfile`):
+- the same pinned Alpine, with `apk upgrade`, and only the Node binary, so no npm;
+- k6 2.3.0 (released 2026-09-21, Go 1.27.1, `x/crypto` 0.56.0, `grpc` 1.84.0), which the load tests
+  now use too.
+
+Dependabot now watches `ops/` for its base images and its npm packages.
+
+**/ops on the clusters.** The app on EKS gets `OPS_ADMINS`, `OPS_GITHUB_TOKEN` and `SONAR_PROJECT_KEY`
+from `.env` through `npm run aws:secrets`, and Kind's `k8s:up` now copies the same three. Without
+`OPS_ADMINS`, the page admits nobody.
 
 **Checked.**
 - **Both servers, as real processes on the laptop:**
