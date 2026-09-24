@@ -3623,6 +3623,84 @@ from `.env` through `npm run aws:secrets`, and Kind's `k8s:up` now copies the sa
 - ops-api's reads through Pod Identity;
 - the lab's load reaching CloudFront from the NAT address.
 
+### D-098 · /ops says only what its sources say, and reads down the middle of a phone
+**2026-09-24** · ✅ written, unit-tested (1,264 → 1,280 tests) and checked at 390 px in both themes,
+with and without a cluster
+
+The user opened `/ops` on a phone once their token and operator entry were set, and asked for the
+page to be centred and for nothing on it to be made up. Four things on it were not what the sources
+said:
+- **"aws-demo (Vercel)".** The page called every environment that wasn't Jenkins' Vercel's.
+  `aws-demo` is the GitHub environment the AWS workflows run in; GitHub Actions created that
+  deployment, and its failure was AWS edge #2's.
+  - Each delivery's deployer now comes from GitHub's record of the deployment. Jenkins gets the
+    environments the release job hands it (`kind`, `eks`, and a unit test reads `ci.yml` to keep that
+    list true); otherwise it is the app or account that created the deployment: `vercel[bot]` is
+    Vercel, and the GitHub Actions app is GitHub Actions (`production-database` included).
+  - "no image" under Vercel's rows is gone: Vercel builds from the commit.
+- **"Trivy: no open alerts" whether or not Trivy had ever reported.** The page counted open alerts
+  per tool, so a tool that never uploaded a scan looked clean.
+  - Each tool's newest analysis of main now comes from code scanning's analyses (the token's "Code
+    scanning alerts: read" covers them). A tool without one shows "no scan yet".
+  - CodeQL's time is its analysis too, instead of its workflow's run.
+- **"Dependabot: unavailable" with only "GitHub answered 403".** A refused request now carries
+  GitHub's own words, which say what to fix. Here: *Dependabot alerts are disabled for this
+  repository*. That is a repository setting only the owner can switch on; the token was right.
+- **SonarQube Cloud's "no verdict yet" would have read "gate none".**
+  - The row now names the verdict and the analysis it belongs to (commit and time).
+  - When the gate fails, it lists the failed conditions from Sonar's own list, as "coverage of new
+    code 72.4 % (the gate wants at least 80.0 %)". Ratings read as letters, counts as counts, and
+    only percentages carry %.
+
+Smaller things the check found:
+- a skipped job showed "0 s";
+- an all-zero error rate drew a 0–400 % axis, so a share of requests now has a 0–5 % floor, and
+  every axis labels every tick;
+- deliveries were the newest 20 deployments, which a week of Dependabot previews on Vercel could
+  fill, so they are now the newest 100.
+
+**Why SonarQube Cloud showed 87k lines and "Not computed".** The only analysis came from Automatic
+Analysis, the scan SonarQube Cloud runs when a project is imported, not from CI.
+- It read the whole repository with its defaults. 1,954 of its 2,063 reliability issues are one HTML
+  rule in `synopsis/`, the course document.
+- It measured no coverage.
+- CI's scan can't run while it is on. That scan is `sonar-project.properties`: `src` and `tests`,
+  with the unit tests' coverage and the gate.
+
+The user switches it off (the project's Administration → Analysis Method). CI's `sonar` job, which
+the new repository variables now enable, then scans every push to main.
+
+**The layout.** The cards were already centred (19 and 18 px either side at 390 px). What read as off
+centre was their content: section headings, card titles, sources and links sat on the left under a
+centred page title.
+- **Centred:**
+  - section headings (`Section centered`, new in the kit);
+  - card titles, and every source line;
+  - the release card throughout: commit, verdicts, and a readable digest with a copy button that
+    copies the whole reference;
+  - "the cluster isn't connected", now an empty state;
+  - the links to the tools, as pills.
+- **Still read left to right:** lists and charts.
+  - A list inside a panel sits flush in it instead of drawing a second card.
+  - Rows wrap instead of cutting names short (`ListRow wrap`): node names, a pod's node, alert
+    summaries.
+- **Stat tiles:** two a row, an odd last one across both.
+- **The lab's controls:** one per line, and a full-width Start.
+
+**The code.**
+- `page.tsx` is now the layout alone. The pipeline half is in `SummaryPanels.tsx`, and
+  `ClusterPanels.tsx` has one component per section.
+- Every rule for wording or colouring a state is in `src/lib/ops/present.ts`, and a unit test covers
+  it. New code has to meet the Sonar way gate: ratings of A, 80 % coverage, and no unreviewed
+  hotspots. `src/lib/ops` is at 100 % of lines.
+
+**Checked.** The browser pane was returning stale frames, so screenshots came from a headless
+Chromium, driven over the DevTools protocol at 390 px and a device scale of 2.
+- The throwaway database and seeded operator, with and without the local stand-in for ops-api, in
+  light and dark.
+- The page is exactly 390 px wide, with nothing scrolling sideways.
+- Every section heading and footnote is centred, and no row is cut short.
+
 ---
 
 ## Open problems

@@ -123,21 +123,24 @@ export function Section({
     title,
     subtitle,
     action,
+    centered,
     children,
     className,
     tour,
-}: {
+}: Readonly<{
     title?: ReactNode;
     subtitle?: ReactNode;
     action?: SectionAction;
+    /** Centre the heading over the content, like PageIntro (a single-column page). */
+    centered?: boolean;
     children: ReactNode;
     className?: string;
     tour?: string;
-}) {
+}>) {
     return (
         <section className={cn(styles.section, className)} data-tour={tour}>
             {(title || action) && (
-                <div className={styles.sectionHead}>
+                <div className={cn(styles.sectionHead, centered && styles.sectionHeadCentered)}>
                     <div className={styles.sectionTitles}>
                         {title && <h2 className={styles.sectionTitle}>{title}</h2>}
                         {subtitle && <p className={styles.sectionSubtitle}>{subtitle}</p>}
@@ -181,6 +184,8 @@ interface ListRowProps {
     tone?: 'default' | 'danger';
     card?: boolean;
     disabled?: boolean;
+    /** Let the title and subtitle wrap onto more lines instead of being cut short. */
+    wrap?: boolean;
     className?: string;
 }
 
@@ -197,8 +202,9 @@ export function ListRow({
     tone = 'default',
     card,
     disabled,
+    wrap,
     className,
-}: ListRowProps) {
+}: Readonly<ListRowProps>) {
     const content = (
         <>
             {leading && <span className={styles.rowLeading}>{leading}</span>}
@@ -222,6 +228,7 @@ export function ListRow({
         (href || onClick) && styles.rowInteractive,
         card && styles.rowCard,
         disabled && styles.rowDisabled,
+        wrap && styles.rowWrap,
         className,
     );
 

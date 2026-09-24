@@ -33,8 +33,19 @@ async function github<T>(path: string): Promise<T> {
         cache: 'no-store',
         signal: AbortSignal.timeout(8_000),
     });
-    if (!response.ok) throw new Error(`GitHub answered ${response.status}`);
+    if (!response.ok) throw new Error(await refusal(response));
     return (await response.json()) as T;
+}
+
+/**
+ * A refused request in GitHub's own words, which say what to fix: "GitHub
+ * answered 403: Dependabot alerts are disabled for this repository".
+ */
+async function refusal(response: Response): Promise<string> {
+    const body = (await response.json().catch(() => null)) as { message?: unknown } | null;
+    const message = typeof body?.message === 'string' ? body.message.trim().slice(0, 200) : '';
+    const words = message.endsWith('.') ? message.slice(0, -1) : message;
+    return words ? `GitHub answered ${response.status}: ${words}` : `GitHub answered ${response.status}`;
 }
 
 const secondsBetween = (from?: string | null, to?: string | null) =>
@@ -130,30 +141,54 @@ interface CodeScanningAlert {
     rule: { security_severity_level?: string | null; severity?: string | null };
 }
 
+interface CodeScanningAnalysis {
+    tool: { name: string };
+    commit_sha: string;
+    created_at: string;
+    error?: string;
+}
+
+/** A tool's newest analysis of main: which commit, when, and its error, if it reported one. */
+export interface ToolScan {
+    commit: string;
+    at: string;
+    error: string | null;
+}
+
 export interface CodeScanning {
     /** Open alerts per tool: CodeQL for the code, Trivy for the released image. */
     tools: Record<string, AlertCounts>;
     /** More than one page of alerts exists: the counts are a floor. */
     capped: boolean;
-    lastScan: { conclusion: string | null; at: string; url: string } | null;
+    /**
+     * Each tool's newest analysis of main. A tool without one has never
+     * reported, so the page says so instead of showing "no open alerts".
+     */
+    scans: Record<string, ToolScan>;
 }
 
-/** Open code scanning alerts by tool and severity, and the newest CodeQL run. */
+/** Open code scanning alerts by tool and severity, and each tool's newest analysis of main. */
 export function readCodeScanning(): Promise<Reading<CodeScanning>> {
     return recentReading('github:code-scanning', TTL_MS, () => readSource('GitHub code scanning', async () => {
-        const [alerts, { workflow_runs: [scan] }] = await Promise.all([
+        const [alerts, analyses] = await Promise.all([
             github<CodeScanningAlert[]>('/code-scanning/alerts?state=open&per_page=100'),
-            github<{ workflow_runs: WorkflowRun[] }>('/actions/workflows/codeql.yml/runs?branch=main&per_page=1'),
+            github<CodeScanningAnalysis[]>('/code-scanning/analyses?ref=refs/heads/main&per_page=50'),
         ]);
         const byTool = new Map<string, CodeScanningAlert[]>();
         for (const alert of alerts) byTool.set(alert.tool.name, [...(byTool.get(alert.tool.name) ?? []), alert]);
+        const scans = new Map<string, ToolScan>();
+        for (const analysis of analyses) {
+            const newest = scans.get(analysis.tool.name);
+            if (newest && newest.at >= analysis.created_at) continue;
+            scans.set(analysis.tool.name, { commit: analysis.commit_sha, at: analysis.created_at, error: analysis.error || null });
+        }
         return {
             tools: Object.fromEntries([...byTool].map(([tool, list]) => [
                 tool,
                 countBySeverity(list, (alert) => alert.rule.security_severity_level ?? alert.rule.severity),
             ])),
             capped: alerts.length === 100,
-            lastScan: scan ? { conclusion: scan.conclusion, at: scan.updated_at, url: scan.html_url } : null,
+            scans: Object.fromEntries(scans),
         };
     }));
 }
@@ -172,18 +207,46 @@ interface Deployment {
     environment: string;
     created_at: string;
     payload: unknown;
+    creator?: { login?: string } | null;
+    performed_via_github_app?: { name?: string } | null;
 }
 
 export interface Delivery {
     environment: string;
+    /** Who deploys this environment, from GitHub's record of the deployment (deployerOf). */
+    deployer: string;
     sha: string;
     /** The signed image the release asked for, `ghcr.io/...@sha256:...`. */
     image: string | null;
     createdAt: string;
-    /** The newest status Jenkins reported: success, failure, in_progress… or null when none yet. */
+    /** The deployer's newest status: success, failure, in_progress… or null when none yet. */
     state: string | null;
     description: string | null;
     reportedAt: string | null;
+}
+
+/**
+ * The environments the release job hands to Jenkins: it creates their
+ * deployments in ci.yml and Jenkins reports on them (a unit test keeps the two
+ * in step).
+ */
+export const JENKINS_ENVIRONMENTS: readonly string[] = ['kind', 'eks'];
+
+const BOTS = new Map([
+    ['vercel[bot]', 'Vercel'],
+    ['github-actions[bot]', 'GitHub Actions'],
+]);
+
+/**
+ * Who deploys an environment, from GitHub's own record: Jenkins for the ones
+ * the release job hands it; otherwise the app that created the deployment
+ * (Vercel's bot, or GitHub Actions running a job in that environment), or the
+ * account that did.
+ */
+export function deployerOf(deployment: Pick<Deployment, 'environment' | 'creator' | 'performed_via_github_app'>): string {
+    if (JENKINS_ENVIRONMENTS.includes(deployment.environment)) return 'Jenkins';
+    const login = deployment.creator?.login ?? '';
+    return BOTS.get(login) ?? deployment.performed_via_github_app?.name ?? (login || 'unknown');
 }
 
 function imageOf(payload: unknown): string | null {
@@ -199,10 +262,14 @@ function imageOf(payload: unknown): string | null {
     return typeof image === 'string' ? image : null;
 }
 
-/** The newest deployment for each environment, and what Jenkins last said about it. */
+/**
+ * The newest deployment for each environment, and what its deployer last said
+ * about it. A hundred deployments reach back past a busy week of Vercel
+ * previews, so the Jenkins environments stay in view.
+ */
 export function readDeliveries(): Promise<Reading<Delivery[]>> {
     return recentReading('github:deliveries', TTL_MS, () => readSource('GitHub deployments', async () => {
-        const deployments = await github<Deployment[]>('/deployments?per_page=20');
+        const deployments = await github<Deployment[]>('/deployments?per_page=100');
         const newest = new Map<string, Deployment>();
         for (const deployment of deployments) if (!newest.has(deployment.environment)) newest.set(deployment.environment, deployment);
 
@@ -212,6 +279,7 @@ export function readDeliveries(): Promise<Reading<Delivery[]>> {
             );
             return {
                 environment: deployment.environment,
+                deployer: deployerOf(deployment),
                 sha: deployment.sha,
                 image: imageOf(deployment.payload),
                 createdAt: deployment.created_at,

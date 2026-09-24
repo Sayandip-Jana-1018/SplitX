@@ -158,6 +158,17 @@
     min-width: 0;
 }
 
+.sectionHeadCentered {
+    justify-content: center;
+    text-align: center;
+}
+
+.sectionHeadCentered .sectionSubtitle {
+    max-width: 30rem;
+    margin-inline: auto;
+    text-wrap: balance;
+}
+
 .sectionTitle {
     font-size: 17px;
     font-weight: 700;
@@ -293,6 +304,21 @@
     flex-wrap: wrap;
     gap: 6px;
     margin-top: 5px;
+}
+
+.rowWrap .rowTitle,
+.rowWrap .rowSubtitle {
+    overflow: visible;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+.rowWrap .rowTitle {
+    line-height: 1.35;
+}
+
+.rowWrap .rowSubtitle {
+    line-height: 1.4;
 }
 
 .rowTrailing {
