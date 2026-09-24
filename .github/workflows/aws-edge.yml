@@ -45,6 +45,13 @@ jobs:
           # Nothing yet (the first run), or offline: an empty origin.
           origin="$(terraform -chdir=terraform/edge output -raw origin_domain 2>/dev/null || true)"
           echo "The edge's origin stays: ${origin:-none, offline}"
+          if [[ -n "$origin" ]]; then
+            # Online, the edge also sends the app its origin header, whose value
+            # is in the demo's secrets (npm run aws:secrets). Masked in the log.
+            secret="$(aws secretsmanager get-secret-value --secret-id splitx/demo/app --query SecretString --output text | jq -er .ORIGIN_VERIFY_SECRET)"
+            echo "::add-mask::$secret"
+            export TF_VAR_origin_secret="$secret"
+          fi
           terraform -chdir=terraform/edge plan -input=false -out=edge.tfplan -var "origin_domain=$origin"
 
       - name: Apply

@@ -1,3 +1,4 @@
+import { timingSafeEqual } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
@@ -76,9 +77,33 @@ function clearSessionCookies(request: NextRequest, response: NextResponse) {
     return response;
 }
 
+/**
+ * On the EKS platform, only requests that came through SplitX's own edge. The
+ * load balancer admits CloudFront's addresses, and every CloudFront
+ * distribution shares them, so anyone could put a distribution of their own in
+ * front of it and skip ours: its HTTPS redirect, and the function that refuses
+ * the internal paths. Ours adds this header with a value only it has
+ * (terraform/edge, from Secrets Manager). Where ORIGIN_VERIFY_SECRET is unset
+ * (Vercel, Kind) nothing changes.
+ */
+const ORIGIN_VERIFY_HEADER = 'x-origin-verify';
+// Reached directly, not through the edge: the load balancer's health check and
+// the kubelet's probes, and Prometheus (whose endpoint wants its own token).
+const DIRECT_PATHS = new Set(['/api/health/live', '/api/health/ready', '/api/metrics']);
+
+function fromOurEdge(request: NextRequest): boolean {
+    const expected = process.env.ORIGIN_VERIFY_SECRET;
+    if (!expected || DIRECT_PATHS.has(request.nextUrl.pathname)) return true;
+    const given = Buffer.from(request.headers.get(ORIGIN_VERIFY_HEADER) ?? '');
+    const wanted = Buffer.from(expected);
+    return given.length === wanted.length && timingSafeEqual(given, wanted);
+}
+
 /** Lets the request continue to its route, carrying its trace and arrival time. */
 function forward(request: NextRequest, trace: TraceContext, receivedAt: number, previewAdmission?: string) {
     const headers = new Headers(request.headers);
+    // The routes never see the edge's secret.
+    headers.delete(ORIGIN_VERIFY_HEADER);
     headers.set('traceparent', trace.traceparent);
     headers.delete('tracestate');
     headers.set(REQUEST_ID_HEADER, trace.traceId);
@@ -146,6 +171,19 @@ export async function proxy(request: NextRequest) {
     const receivedAt = arrivalTime(request.headers);
     const { pathname } = request.nextUrl;
     const trace = newTraceContext();
+
+    // ── Only through our edge (EKS) ──
+    // Counted, not logged: someone else's distribution could otherwise turn a
+    // flood of refused requests into a flood of log lines.
+    if (!fromOurEdge(request)) {
+        const response = new NextResponse('Not available', {
+            status: 403,
+            headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' },
+        });
+        response.headers.set(REQUEST_ID_HEADER, trace.traceId);
+        recordProxyDecision('origin_refused', request.method, response.status);
+        return response;
+    }
 
     // ── Auth Route Protection ──
     // Skip auth checks for static assets and API routes (API routes have their own auth)

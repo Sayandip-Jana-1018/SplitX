@@ -265,6 +265,17 @@ resource "aws_cloudfront_distribution" "edge" {
       origin_read_timeout      = 60
       origin_keepalive_timeout = 60
     }
+
+    # Online only: the value that tells the app this request came through us
+    # (src/proxy.ts). CloudFront replaces any header of that name a viewer sends.
+    dynamic "custom_header" {
+      for_each = local.online ? [1] : []
+
+      content {
+        name  = "X-Origin-Verify"
+        value = var.origin_secret
+      }
+    }
   }
 
   # The app: nothing cached, everything forwarded.

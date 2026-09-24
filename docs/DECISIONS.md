@@ -3189,6 +3189,49 @@ How the mapping works (`scripts/lib/demo-secrets.mjs`):
   - a live `ListSecrets` call it signed was answered 200, and the same call with a tampered
     signature was refused with `InvalidSignatureException`.
 
+### D-092 · On EKS the app answers only requests that came through SplitX's own edge
+**2026-09-23** · 🚧 written and unit-tested (`tests/unit/proxy.origin.test.ts`, 10 cases); it takes
+effect the first time the platform runs online (B-031)
+
+**Why.** The load balancer's security group (Phase 5) admits CloudFront's addresses, and every
+CloudFront distribution in the world shares them. Anyone could point a distribution of their own at
+our load balancer and skip our edge: its HTTPS redirect, and the function that refuses the internal
+paths.
+
+**How.**
+- **The edge adds the header.** While online, `terraform/edge` adds `X-Origin-Verify` to every
+  request CloudFront makes to the load balancer, with a value only it has. CloudFront overwrites a
+  header of that name if a viewer sends one.
+- **The app refuses requests without it.** `src/proxy.ts` refuses any request without the exact
+  value with a plain 403, before the page gate or the rate limiter does any work.
+  - The value is compared in constant time.
+  - A refusal is counted (`splitx_proxy_decisions_total{decision="origin_refused"}`), not logged,
+    so someone else's distribution can't turn a flood of refusals into a flood of log lines.
+  - The header is removed before a request reaches a route.
+- **Exempt: what reaches pods directly.** That's the load balancer's health check and the kubelet's
+  probes (`/api/health/live`, `/api/health/ready`), and Prometheus (`/api/metrics`, which needs its
+  own token). `/api/health`, which only the edge serves, is not exempt.
+- **Where the value comes from.**
+  - It is generated once into `.env` by `aws:secrets` (D-091) and stored in `splitx/demo/app`.
+  - `aws-up` (Phase 5), and `aws-edge` while the site is online, read it into
+    `TF_VAR_origin_secret`, masked in the logs.
+  - The edge refuses to go online without it: a validation requires 32 characters or more.
+- **Nothing changes where `ORIGIN_VERIFY_SECRET` is unset** (Vercel, Kind), and a test checks
+  that.
+
+**The limits, stated.**
+- **Who can read the value.** It lives in the distribution's configuration and in Terraform's state,
+  so anything in this account that can read those can read it: `splitx-devops`, the deploy role, and
+  ops-api through `cloudfront:GetDistribution`. So `/ops` must never display an origin's custom
+  headers (a rule for Phase 6).
+- **What the proxy never sees.** Its matcher skips `/_next/static`, `/_next/image`, the PWA files and
+  `/tesseract/`, so those answer without the header. They are public files, and `/_next/image` only
+  resizes images from the sources `next.config` allows. The Jenkins webhook path goes from the load
+  balancer straight to Jenkins, never to the app; its guards are D-055's (GitHub's signature, the
+  token, and the newest-deployment check).
+- **Reading it fails closed.** `aws-edge` reads the value with `jq -e`, so a missing key stops the
+  run instead of sending the text `null`.
+
 ---
 
 ## Open problems

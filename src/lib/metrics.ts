@@ -211,10 +211,10 @@ export function httpMethodLabel(value: unknown) {
     return HTTP_METHODS.has(method) ? method : 'OTHER';
 }
 
-export type ProxyDecision = 'pass' | 'limiter_error' | 'redirect_login' | 'redirect_dashboard' | 'rate_limited' | 'shed_queue' | 'shed_capacity';
+export type ProxyDecision = 'pass' | 'limiter_error' | 'redirect_login' | 'redirect_dashboard' | 'rate_limited' | 'shed_queue' | 'shed_capacity' | 'origin_refused';
 
 /** Decisions where the proxy writes the response itself instead of forwarding. */
-const ANSWERED_BY_PROXY = new Set<ProxyDecision>(['redirect_login', 'redirect_dashboard', 'rate_limited', 'shed_queue', 'shed_capacity']);
+const ANSWERED_BY_PROXY = new Set<ProxyDecision>(['redirect_login', 'redirect_dashboard', 'rate_limited', 'shed_queue', 'shed_capacity', 'origin_refused']);
 
 /**
  * Requests the proxy answers itself (redirects, 429s) never reach a route, so
