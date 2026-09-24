@@ -17,7 +17,7 @@ import { request } from 'node:http';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { checkNewConnections, describe, describeKindnet, kindnetHealth } from './lib/cluster-network.mjs';
-import { dashboardDatasourceUids, dashboardQueries, metricNamesIn, withoutGrafanaVariables } from './lib/dashboards.mjs';
+import { dashboardDatasourceUids, dashboardQueries, FIRST_EVENT_SERIES, metricNamesIn, withoutGrafanaVariables } from './lib/dashboards.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 // The Grafana admin password, for the dashboard checks. Read, never printed.
@@ -635,20 +635,28 @@ const queries = dashboardQueries(root);
 const wanted = [...new Set(queries.flatMap((query) => metricNamesIn(query.expr)))];
 await waitFor(() => {
     for (const name of raw(PROMETHEUS + '/api/v1/label/__name__/values')?.data ?? []) storedNames.add(name);
-    return wanted.every((name) => storedNames.has(name));
+    return wanted.every((name) => storedNames.has(name) || FIRST_EVENT_SERIES.has(name));
 }, { timeoutMs: 90_000, everyMs: 10_000 });
 const queryProblems = [];
+// Series that can't exist before their first event (FIRST_EVENT_SERIES): said,
+// never counted as present, and never a failure (D-102).
+const notYet = new Set();
 for (const query of queries) {
     const answer = promQuery(withoutGrafanaVariables(query.expr));
     if (answer?.status !== 'success') queryProblems.push(query.panel + ': ' + (answer?.error ?? 'no answer'));
     for (const name of metricNamesIn(query.expr)) {
-        if (!storedNames.has(name)) queryProblems.push(query.panel + ': no metric named ' + name);
+        if (storedNames.has(name)) continue;
+        if (FIRST_EVENT_SERIES.has(name)) notYet.add(name);
+        else queryProblems.push(query.panel + ': no metric named ' + name);
     }
 }
 record(
     'Every dashboard query runs, and reads metrics that exist',
     queries.length > 0 && queryProblems.length === 0,
-    queryProblems.length ? queryProblems.join('; ') : queries.length + ' queries on ' + new Set(queries.flatMap((q) => metricNamesIn(q.expr))).size + ' metrics'
+    queryProblems.length
+        ? queryProblems.join('; ')
+        : queries.length + ' queries on ' + wanted.length + ' metrics'
+            + [...notYet].map((name) => '; not published yet: ' + name + ', because ' + FIRST_EVENT_SERIES.get(name)).join('')
 );
 
 // Logs: Alloy reads them through the Kubernetes API and ships them to Loki.

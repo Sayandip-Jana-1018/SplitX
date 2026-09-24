@@ -600,6 +600,26 @@ if (withRollback) {
                 + (rolledBack ? 'rolled back to what ran before' : 'no rollback in the log') + '; '
                 + served + ' of ' + seen.length + ' requests answered 200 while it happened'
         );
+
+        // The Delivery dashboard's "failed" bars. Jenkins publishes its
+        // failed-build counter only once a build has failed (FIRST_EVENT_SERIES,
+        // D-102), gathering every 30 s for a 30 s scrape: after this build it
+        // must appear, even on a cluster where nothing failed before.
+        const counted = Date.now();
+        let failedBuilds = null;
+        while (build?.result === 'FAILURE' && failedBuilds === null && Date.now() - counted < 150_000) {
+            const value = promQuery('sum(default_jenkins_builds_failed_build_count_total{jenkins_job="' + JOB + '"})')?.data?.result?.[0]?.value?.[1];
+            if (Number(value) >= 1) failedBuilds = Number(value);
+            else await sleep(10_000);
+        }
+        const waited = Math.round((Date.now() - counted) / 1000) + ' s after build #' + nextBuild + ' ended ' + (build?.result ?? 'unfinished');
+        record(
+            'Jenkins counts the failed release, for the Delivery dashboard',
+            failedBuilds !== null,
+            failedBuilds === null
+                ? 'no failed-build count in Prometheus ' + waited
+                : 'default_jenkins_builds_failed_build_count_total reads ' + failedBuilds + ', ' + waited
+        );
     }
 }
 if (rollback) {

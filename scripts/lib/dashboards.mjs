@@ -44,6 +44,19 @@ export function dashboardDatasourceUids(root) {
     return [...uids].sort();
 }
 
+/**
+ * Series a source publishes only once the event they count has happened, so a
+ * fresh cluster can't have them yet, each with the source's reason. k8s:verify
+ * reports them as not published yet, and cd:verify proves the Jenkins one
+ * appears with the first failed deploy (D-102).
+ */
+export const FIRST_EVENT_SERIES = new Map([
+    [
+        'default_jenkins_builds_failed_build_count_total',
+        'Jenkins publishes it with its first failed build (its Prometheus plugin makes the series in BuildFailedCounter only for a failure, and leaves out empty families)',
+    ],
+]);
+
 // PromQL words that are not metric names.
 const NOT_METRICS = new Set([
     'sum', 'min', 'max', 'avg', 'count', 'stddev', 'stdvar', 'topk', 'bottomk', 'quantile', 'count_values', 'group',

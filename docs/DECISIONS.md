@@ -3859,6 +3859,33 @@ the webhook to JSON.
 
 D-100 has the five causes and their fixes.
 
+**Run 5 (36036913652, on `1482ae4`, D-100's fixes) passed everything but one check.**
+- **`k8s:up`** passed. So did Nexus' setup Job, which now proves Jenkins can store, only once, and
+  ops-api can't.
+- **The delivery:** Jenkins delivered the release in 63 s and reported "evidence in Nexus".
+  - cosign 3.1.3 verified both attestations, and all three files were stored.
+  - That was the last unproven piece of D-096.
+- **`k8s:verify`:** 34 of 35, and 1 skipped (email).
+  - The Jenkins panels now have their metrics.
+  - The failure was the failed-build counter alone. No build had failed yet, and Jenkins publishes
+    that counter only after one does. D-102 fixes the check.
+- **`cd:verify --rollback`:** 15 of 15. The broken release was rolled back after 185 s, and 634 of
+  634 requests got 200 meanwhile.
+- **`ops-verify`: all 24 passed, the first time its whole chain ran for real.**
+  - Access: signed out 401, a visitor 403, the operator 200.
+  - All 12 Kind readings came from their sources, and the 4 AWS ones said why they were
+    unavailable.
+  - Kyverno reported 38 admissions allowed and 0 refused.
+  - The traffic lab ran 5,384 plans at 30 a second: 5,376 served, 8 refused on purpose, 0 failed,
+    p95 163 ms.
+  - The autoscaler went from 2 pods to its maximum of 10, and all 10 answered.
+  - The page's requests chart peaked at 60.3 a second: the 30 plans and the 30 page visits before
+    them.
+  - The evidence was in Nexus, complete. Jenkins' last result reached the page.
+- **Jenkins' consoles** for both builds were kept in the evidence.
+- **B-027:** memory peaked at 8.1 GB in use, 6.75 GB of it anonymous, with no swap, while the lab
+  held 10 app pods.
+
 ### D-100 · What kind-e2e run 4 found: five causes, each read in the source of what was involved
 **2026-09-24** · 🚧 fixed and unit-tested (1,302 → 1,311 tests); the next kind-e2e run proves them
 
@@ -3942,6 +3969,67 @@ guessed from the symptom.
 
 **Left unchanged:** Kyverno's admission metric really has the label `request_allowed`
 (`pkg/metrics/admission.go` in Kyverno 1.19.1), so ops-api's query stands.
+
+### D-101 · Vercel deploys `main` only
+**2026-09-24** · 🚧 committed; the next push proves it (one Production deployment, no Preview)
+
+**What happened.**
+- Vercel emailed that the Hobby team had used 100 % of its 10 GB of Functions Storage. The
+  dashboard read 7.02 GB at the time.
+- Functions Storage is the function bundles kept with every retained deployment, counted in
+  GB-months (each project's daily peak, summed over the period).
+
+**Why SplitX filled it.**
+- Every push goes to both branches (the push-to-main policy), so Vercel built each commit twice: a
+  Production deployment on `main`, and a Preview of the same code on `feat/devops-platform`.
+- Every Dependabot branch got Previews too.
+- Vercel keeps the latest Preview of every active branch whatever the retention policy says, and
+  there are about ten such branches.
+- Since 16 September 2026, a Hobby team over its 10 GB has its other deployments deleted at once,
+  and sustained use past a limit can pause the project. That would take down the live site and
+  `/ops`.
+
+**The fix.**
+- `vercel.json` sets `git.deploymentEnabled` to `{"**": false, "main": true}`, so only `main`
+  deploys. Vercel deploys a branch when any rule it matches is true, and `**` matches branch names
+  with slashes, such as Dependabot's.
+- Previews of pull requests are gone. CI still runs on every one, and nothing here used them.
+
+**The user's part:**
+- check the per-project usage;
+- set Pre-Production, Canceled and Errored retention to the shortest option in SplitX's settings,
+  and keep Production at a week or more for rollback;
+- delete the old Preview deployments.
+
+**Not chosen:**
+- **A second Vercel account.** The same pushes would fill it, and the site's address, its secrets
+  and both OAuth callbacks would all have to move right before the demo.
+- **Pro.** It stays the fallback, and the choice is the user's.
+
+### D-102 · A counter that exists only after its first event is said, then proven
+**2026-09-24** · 🚧 fixed and unit-tested; the next kind-e2e run proves it
+
+**The cause.** Run 5's one failure was the Delivery dashboard's "failed" bars, which read
+`default_jenkins_builds_failed_build_count_total`. In Jenkins' Prometheus plugin (the pinned commit),
+`BuildFailedCounter` creates its series only when a build fails, and `JobCollector.addSamples` leaves
+out any metric family without samples. So before the first failure, Jenkins publishes nothing by that
+name, not even a declaration, and `k8s:verify` runs before `cd:verify`'s deliberately broken release.
+The dashboard is right; the check asked for something that can't exist yet.
+
+**The fix.**
+- `scripts/lib/dashboards.mjs` names such series in `FIRST_EVENT_SERIES`, each with the source's
+  reason.
+- `k8s:verify` no longer counts one as missing: it says "not published yet" and why. Every other
+  name must still exist, and the 90 s wait (D-100) no longer waits for these.
+- `cd:verify` proves the series right after its failed release. A new check, "Jenkins counts the
+  failed release, for the Delivery dashboard", waits up to 150 s for the counter to read at least 1.
+- A unit test keeps every listed series in use by a committed dashboard.
+
+**Rejected:**
+- **Running `cd:verify` before `k8s:verify`.** It would pass on the runner and still fail on any
+  fresh cluster.
+- **Writing `or vector(0)` into the query.** It hides a typo in the name just as well as a missing
+  series.
 
 ---
 
