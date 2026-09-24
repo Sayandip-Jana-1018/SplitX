@@ -28,9 +28,9 @@ variable "kubernetes_version" {
 }
 
 variable "node_instance_type" {
-  description = "Worker instance type. t3.large has 2 vCPUs and 8 GiB, enough for the app, Jenkins, monitoring and Nexus across three nodes."
+  description = "Worker instance type. m7i-flex.large has 2 vCPUs and 8 GiB, enough for the app, Jenkins, monitoring and Nexus across three nodes, and is one of the types an AWS Free plan account may launch (t3.large is not; D-095)."
   type        = string
-  default     = "t3.large"
+  default     = "m7i-flex.large"
 }
 
 variable "node_min_size" {
@@ -40,7 +40,7 @@ variable "node_min_size" {
 }
 
 variable "node_max_size" {
-  description = "Nodes the Cluster Autoscaler may reach. The fourth is the traffic lab's node-scaling moment; 4 x t3.large need 8 vCPUs of quota."
+  description = "Nodes the Cluster Autoscaler may reach. The fourth is the traffic lab's node-scaling moment; 4 x m7i-flex.large need 8 vCPUs of quota."
   type        = number
   default     = 4
 

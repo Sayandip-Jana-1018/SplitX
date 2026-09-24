@@ -38,7 +38,7 @@ this folder is its source of truth.
 - GitHub's OIDC provider and service-linked roles are allowed because keyless
   CI and EKS need them.
 - `servicequotas:GetServiceQuota` (read only) checks the account's vCPU quota
-  before an AWS day: four `t3.large` nodes need 8.
+  before an AWS day: four `m7i-flex.large` nodes need 8.
 
 Verified on 2026-09-13 (version 1): `iam:ListUsers` is denied, `ec2:DescribeVpcs`
 and the state bucket are allowed.

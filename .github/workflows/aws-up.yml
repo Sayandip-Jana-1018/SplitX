@@ -59,8 +59,8 @@ jobs:
 
       - name: Enough vCPU quota for four nodes
         # Running On-Demand Standard (A, C, D, H, I, M, R, T, Z) instances: four
-        # t3.large nodes need 8. A new account can have less, and the node group
-        # would then fail twenty minutes in.
+        # m7i-flex.large nodes need 8. A new account can have less (this one had
+        # 5 on 2026-09-24), and the node group would then fail twenty minutes in.
         run: |
           quota="$(aws service-quotas get-service-quota --service-code ec2 --quota-code L-1216C47A --query Quota.Value --output text)"
           echo "vCPU quota for standard on-demand instances in $AWS_REGION: $quota"

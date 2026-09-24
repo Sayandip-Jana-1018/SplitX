@@ -1,7 +1,7 @@
 # ═══════════════════════════════════════════════════════════════
 #   Cluster Autoscaler on EKS (D-093).
 #
-#   The node group runs 3 t3.large nodes and may grow to 4
+#   The node group runs 3 m7i-flex.large nodes and may grow to 4
 #   (terraform/platform, node_min_size and node_max_size). When the
 #   HorizontalPodAutoscaler asks for application pods that no node has room
 #   for, this adds the fourth node; when the fourth is no longer needed, it
