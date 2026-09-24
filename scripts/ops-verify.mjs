@@ -26,6 +26,7 @@ import { existsSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { JENKINS_RESULTS } from '../ops/api/summaries.mjs';
 import { E2E_OPERATOR, E2E_VISITOR, READINGS_ON_AWS_ONLY, READINGS_ON_KIND } from './lib/e2e.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -196,11 +197,14 @@ if (delivered) {
         Boolean(entry?.complete),
         entry ? entry.commit + '/' + entry.deployment + ': ' + entry.files.join(', ') : 'Nexus lists ' + (evidence.map((row) => row.commit + '/' + row.deployment).join(', ') || 'nothing')
     );
+    // Jenkins publishes these only once it has built something. Its last build
+    // is whichever ran last: after cd:verify --rollback, that is the release
+    // made to fail on purpose, so any real result passes and the page shows it.
     const deliveryReading = last?.ok && last.data.delivery.ok ? last.data.delivery.data : null;
     record(
-        'Jenkins\' own metrics show the deploy',
-        deliveryReading?.lastResult === 'success',
-        deliveryReading ? 'last result ' + deliveryReading.lastResult + ', ' + deliveryReading.lastSeconds + ' s' : 'no reading'
+        'Jenkins\' own build metrics reach the page, through Prometheus',
+        JENKINS_RESULTS.includes(deliveryReading?.lastResult ?? ''),
+        deliveryReading ? 'its last build: ' + deliveryReading.lastResult + ', ' + deliveryReading.lastSeconds + ' s' : 'no reading'
     );
 }
 

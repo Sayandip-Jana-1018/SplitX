@@ -3837,6 +3837,15 @@ the lab driving the autoscaler; and the evidence reaching Nexus.
   - So the platform has outgrown the laptop's 6 GB WSL VM: its anonymous memory alone nearly fills
     it, before page cache, and that VM swapped. The runner, with 16 GB, holds it with room to spare.
 
+**Run 3 (36029581045, on `2f54808`)** stopped 60 seconds after the delivery, with the new message:
+"the repository webhook sends application/x-www-form-urlencoded … set the webhook's Content type to
+application/json". The webhook hadn't been changed yet.
+- The platform's own alert `WebhookDeliveryRefused` fired for that refusal, through the relay's
+  metrics, Prometheus and Alertmanager. `k8s:verify` reported it as the one alert firing.
+- The run also showed a wrong expectation in `ops-verify`. `cd:verify --rollback` runs before it and
+  makes a Jenkins build fail on purpose, so Jenkins' last result is then "failure". The check now
+  passes on any real result Jenkins' metrics carry, and shows which.
+
 ---
 
 ## Open problems
