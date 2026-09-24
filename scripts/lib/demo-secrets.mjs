@@ -42,7 +42,8 @@ const APP_OPTIONAL = [
     'NEXT_PUBLIC_SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY',
     'GEMINI_API_KEY', 'OPENAI_API_KEY',
     'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASSWORD', 'RESEND_API_KEY', 'EMAIL_FROM',
-    'OPS_ADMINS', 'OPS_GITHUB_TOKEN',
+    // /ops: who may open it, how it reads GitHub, and SonarQube Cloud's gate.
+    'OPS_ADMINS', 'OPS_GITHUB_TOKEN', 'SONAR_PROJECT_KEY',
 ];
 
 /**

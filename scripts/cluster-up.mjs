@@ -314,6 +314,9 @@ const OPTIONAL = [
     'NEXT_PUBLIC_SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'GEMINI_API_KEY', 'OPENAI_API_KEY',
     'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GITHUB_ID', 'GITHUB_SECRET',
     'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASSWORD', 'RESEND_API_KEY', 'EMAIL_FROM',
+    // /ops (D-086, D-097): its operators, its GitHub token and the Sonar project,
+    // as on Vercel and EKS; without them the page admits nobody here.
+    'OPS_ADMINS', 'OPS_GITHUB_TOKEN', 'SONAR_PROJECT_KEY',
 ];
 const missing = REQUIRED.filter((key) => !process.env[key]);
 if (missing.length) fail('.env is missing: ' + missing.join(', '));

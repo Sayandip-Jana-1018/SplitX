@@ -53,6 +53,12 @@ describe('what goes into the demo secrets', () => {
         expect(withApp.GITHUB_SECRET).toBe('aws-secret');
     });
 
+    it('gives the app what /ops needs on EKS, when .env has it: its operators, its GitHub token, the Sonar project', () => {
+        const { app } = demoSecrets({ ...complete, OPS_ADMINS: 'github:1', OPS_GITHUB_TOKEN: 'token', SONAR_PROJECT_KEY: 'splitx' });
+        expect(app).toMatchObject({ OPS_ADMINS: 'github:1', OPS_GITHUB_TOKEN: 'token', SONAR_PROJECT_KEY: 'splitx' });
+        expect(demoSecrets(complete).app).not.toHaveProperty('OPS_ADMINS');
+    });
+
     it('keeps the platform\'s credentials out of the app\'s secret', () => {
         const { app, platform } = demoSecrets({ ...complete, ALERT_SMTP_USERNAME: 'u', ALERT_SMTP_PASSWORD: 'abcd efgh ijkl mnop', ALERT_EMAIL_TO: 't' });
         for (const key of ['GF_ADMIN_PASSWORD', 'JENKINS_ADMIN_PASSWORD', 'GITHUB_WEBHOOK_SECRET', 'NEXUS_ADMIN_PASSWORD']) {
