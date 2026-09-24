@@ -41,10 +41,11 @@ describe('GET /api/ops/summary', () => {
         expect(res.status).toBe(200);
         expect(res.headers.get('Cache-Control')).toBe('no-store');
         expect(body.site).toBe('https://splitx.example');
-        for (const key of ['pipeline', 'codeScanning', 'dependabot', 'deliveries', 'qualityGate', 'cluster']) {
+        for (const key of ['pipeline', 'codeScanning', 'dependabot', 'deliveries', 'qualityGate']) {
             expect(body[key]).toMatchObject({ ok: false, source: expect.any(String), fetchedAt: expect.any(String), error: expect.any(String) });
         }
         expect(body.pipeline.error).toBe('OPS_GITHUB_TOKEN is not set');
-        expect(body.cluster.error).toMatch(/runs on AWS on demo days/);
+        // The cluster half has its own route, read more often (/api/ops/cluster, D-097).
+        expect(body).not.toHaveProperty('cluster');
     });
 });

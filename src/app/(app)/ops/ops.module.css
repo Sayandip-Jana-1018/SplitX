@@ -8,6 +8,16 @@
     gap: var(--section-gap);
     padding-top: 6px;
     min-width: 0;
+    /* The charts' two series colours, the same whichever accent is chosen:
+       a pair checked for colour-blind and normal-vision separation and for
+       3:1 contrast on the card, in each theme (D-097). */
+    --ops-series-1: #2a78d6;
+    --ops-series-2: #eb6834;
+}
+
+:global([data-theme="dark"]) .page {
+    --ops-series-1: #3987e5;
+    --ops-series-2: #d95926;
 }
 
 .grid {
@@ -143,4 +153,191 @@
 
 .link:hover {
     text-decoration: underline;
+}
+
+/* ── The cluster half (ClusterPanels.tsx, D-097) ─────────────────── */
+
+.charts {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-4);
+}
+
+@media (min-width: 900px) {
+    .charts {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+.chart {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    min-width: 0;
+    padding: var(--space-4);
+    border-radius: var(--radius-xl);
+    background: var(--surface-card);
+    border: 1px solid var(--border-subtle);
+    box-shadow: var(--shadow-card);
+}
+
+.chartHead {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-2);
+}
+
+.chartTitle {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--fg-secondary);
+}
+
+.chartNow {
+    font-size: var(--text-lg);
+    font-weight: 600;
+    color: var(--fg-primary);
+}
+
+/* The plot and its axis labels together, so nothing is cut off or scrolls. */
+.chartPlot {
+    height: 168px;
+    min-width: 0;
+}
+
+.legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    font-size: var(--text-xs);
+    color: var(--fg-secondary);
+}
+
+.legendItem {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.legendItem strong {
+    color: var(--fg-primary);
+}
+
+.lineKey {
+    display: inline-block;
+    width: 14px;
+    height: 2px;
+    border-radius: 1px;
+    flex-shrink: 0;
+}
+
+.tooltip {
+    display: grid;
+    gap: 4px;
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-lg);
+    background: var(--surface-card);
+    border: 1px solid var(--border-default);
+    box-shadow: var(--shadow-card);
+    font-size: var(--text-xs);
+}
+
+.tooltipTime {
+    color: var(--fg-tertiary);
+    font-variant-numeric: tabular-nums;
+}
+
+.tooltipRow {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.tooltipValue {
+    color: var(--fg-primary);
+    font-weight: 600;
+}
+
+.tooltipName {
+    color: var(--fg-secondary);
+}
+
+.tableView {
+    font-size: var(--text-xs);
+    color: var(--fg-secondary);
+}
+
+.tableView summary {
+    cursor: pointer;
+    color: var(--fg-tertiary);
+    width: fit-content;
+}
+
+.tableView table {
+    width: 100%;
+    margin-top: var(--space-2);
+    border-collapse: collapse;
+    font-variant-numeric: tabular-nums;
+}
+
+.tableView th,
+.tableView td {
+    padding: 4px 6px;
+    text-align: left;
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.tableView th {
+    color: var(--fg-tertiary);
+    font-weight: 500;
+}
+
+.labControls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: var(--space-3);
+}
+
+.logs {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: 2px;
+    max-height: 320px;
+    overflow-y: auto;
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+}
+
+.logs li {
+    display: grid;
+    grid-template-columns: auto auto minmax(0, 1fr);
+    gap: var(--space-2);
+    padding: 2px 0;
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.logTime {
+    color: var(--fg-tertiary);
+}
+
+.logLevel {
+    color: var(--fg-secondary);
+    text-transform: uppercase;
+}
+
+.logMessage {
+    color: var(--fg-primary);
+    overflow-wrap: anywhere;
 }

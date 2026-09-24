@@ -41,6 +41,11 @@ export function recentReading<T>(key: string, ttlMs: number, read: () => Promise
     return reading;
 }
 
+/** Forget one cached reading, after something changed what it would say. */
+export function forgetReading(key: string) {
+    recent.delete(key);
+}
+
 /** Test hook: forget every cached reading. */
 export function forgetReadings() {
     recent.clear();

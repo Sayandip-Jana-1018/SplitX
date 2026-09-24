@@ -6,13 +6,16 @@ import { QRCodeSVG } from 'qrcode.react';
 import { Boxes, GitBranch, PackageCheck, Rocket, ShieldCheck, Workflow } from 'lucide-react';
 import ErrorState from '@/components/ui/ErrorState';
 import Skeleton from '@/components/ui/Skeleton';
-import { IconTile, ListGroup, ListRow, Notice, PageIntro, Section, Tag, type Tone } from '@/components/ui/kit';
+import { IconTile, ListGroup, ListRow, PageIntro, Section, Tag, type Tone } from '@/components/ui/kit';
+import type { ClusterReadings } from '@/lib/ops/cluster';
 import type { AlertCounts, CodeScanning, Delivery, Pipeline } from '@/lib/ops/github';
 import type { QualityGate } from '@/lib/ops/quality';
 import type { Reading } from '@/lib/ops/reading';
 import { getNetworkErrorCopy, NetworkTaggedError } from '@/lib/networkErrors';
 import { fetcher } from '@/lib/swr';
 import { timeAgo } from '@/lib/utils';
+import ClusterPanels from './ClusterPanels';
+import { REPOSITORY_URL, Source, Unavailable } from './parts';
 import styles from './ops.module.css';
 
 interface Summary {
@@ -21,14 +24,11 @@ interface Summary {
     dependabot: Reading<AlertCounts & { capped: boolean }>;
     deliveries: Reading<Delivery[]>;
     qualityGate: Reading<QualityGate>;
-    cluster: Reading<never>;
     site: string | null;
 }
 
-const REPOSITORY_URL = 'https://github.com/Sayandip-Jana-1018/SplitX';
-
 /** Environments the release job asks Jenkins to deploy; Vercel reports its own (Production, Preview). */
-const JENKINS_ENVIRONMENTS = new Set(['kind', 'aws']);
+const JENKINS_ENVIRONMENTS = new Set(['kind', 'eks']);
 const deployer = (environment: string) => (JENKINS_ENVIRONMENTS.has(environment) ? 'Jenkins' : 'Vercel');
 const SEVERITY_ORDER = ['critical', 'high', 'medium', 'error', 'moderate', 'warning', 'low', 'note', 'unknown'];
 
@@ -53,22 +53,7 @@ function toneOf(state: string | null | undefined): Tone {
 }
 
 const label = (state: string | null | undefined) => (state ? state.replace(/_/g, ' ') : 'no result yet');
-const clock = (iso: string) => new Date(iso).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 const duration = (seconds: number | null) => (seconds === null ? '—' : seconds < 60 ? `${seconds} s` : `${Math.floor(seconds / 60)} min ${seconds % 60} s`);
-
-/** Where a panel's numbers came from, and when; or why they aren't there. */
-function Source({ reading }: { reading: Reading<unknown> }) {
-    return (
-        <span className={styles.meta}>
-            {reading.source} · read {clock(reading.fetchedAt)}
-        </span>
-    );
-}
-
-function Unavailable({ reading }: { reading: Reading<unknown> }) {
-    if (reading.ok) return null;
-    return <p className={styles.unavailable}>Unavailable: {reading.error}.</p>;
-}
 
 function Counts({ counts, capped }: { counts: AlertCounts; capped?: boolean }) {
     if (counts.total === 0) return <Tag tone="success">no open alerts</Tag>;
@@ -95,6 +80,8 @@ function Card({ title, children }: { title: string; children: ReactNode }) {
 
 export default function OpsPage() {
     const { data, error, mutate } = useSWR<Summary>('/api/ops/summary', fetcher, { refreshInterval: 15_000 });
+    // The cluster moves faster than the pipeline: ops-api is read every 5 seconds.
+    const { data: live, mutate: refreshCluster } = useSWR<{ cluster: Reading<ClusterReadings> }>('/api/ops/cluster', fetcher, { refreshInterval: 5_000 });
 
     if (error && !data) {
         const variant = error instanceof NetworkTaggedError ? error.variant : 'default';
@@ -111,7 +98,9 @@ export default function OpsPage() {
         );
     }
 
-    const { pipeline, codeScanning, dependabot, deliveries, qualityGate, cluster, site } = data;
+    const { pipeline, codeScanning, dependabot, deliveries, qualityGate, site } = data;
+    const cluster = live?.cluster;
+    const platform = cluster?.ok && cluster.data.platform.ok ? cluster.data.platform.data : null;
     const run = pipeline.ok ? pipeline.data : null;
     const released = deliveries.ok && run ? deliveries.data.find((delivery) => delivery.sha === run.commit.sha) : undefined;
     const newest = (environments: (environment: string) => boolean) => deliveries.ok
@@ -127,7 +116,7 @@ export default function OpsPage() {
             <PageIntro
                 eyebrow="Operations"
                 title="SplitX, live"
-                subtitle="Every number is read from its source as the page refreshes, every 15 seconds. Where a source can't be read, it says so."
+                subtitle="Every number is read from its source as the page refreshes: the pipeline every 15 seconds, the cluster every 5. Where a source can't be read, it says so."
             />
 
             <div className={styles.grid}>
@@ -222,8 +211,8 @@ export default function OpsPage() {
                     <ListRow
                         leading={<IconTile tone="neutral"><Boxes size={18} /></IconTile>}
                         title="Kubernetes, Prometheus, Grafana, Loki, Kyverno"
-                        subtitle="The platform"
-                        trailing={<Tag>not connected here</Tag>}
+                        subtitle={platform ? `The platform, on ${platform.target === 'eks' ? 'Amazon EKS' : platform.target === 'kind' ? 'Kind' : platform.target}` : 'The platform'}
+                        trailing={cluster?.ok ? <Tag tone="success">connected</Tag> : <Tag>not connected here</Tag>}
                     />
                 </ListGroup>
                 {[codeScanning, dependabot, qualityGate].filter((reading) => !reading.ok).map((reading) => (
@@ -273,14 +262,7 @@ export default function OpsPage() {
                 <Source reading={deliveries} />
             </Section>
 
-            <Section title="Cluster and traffic lab">
-                <Notice tone="info" title="Not connected here">
-                    {cluster.ok ? null : cluster.error} When it is, this page shows the nodes and pods, the autoscaler,
-                    Kyverno&apos;s admissions, live traffic with its latency and errors, the alerts, the logs, and the
-                    AWS stacks behind it.
-                </Notice>
-                <Source reading={cluster} />
-            </Section>
+            <ClusterPanels reading={cluster} onChanged={() => refreshCluster()} />
 
             <p className={styles.meta}>
                 <a className={styles.link} href={`${REPOSITORY_URL}/security`} target="_blank" rel="noreferrer">Security tab</a>
