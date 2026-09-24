@@ -3491,6 +3491,104 @@ touches the licence; and that no password is ever printed.
 
 ---
 
+## Phase 13 — The control room's cluster half
+
+### D-097 · ops-api reads the cluster for /ops, and a traffic lab drives it
+**2026-09-24** · 🚧 written and unit-tested (1,224 → 1,261 tests). Both servers were run as processes on
+the laptop, and the page was checked in a browser against a local stand-in for ops-api. The first real
+run is plan Phase 7 (Kind on GitHub's runners) or an AWS day.
+
+**What runs.** One image, built from `ops/` by the release job with the app's image, scanned by the
+same gate and signed the same way. It is published as `splitx:ops-<commit>`, a tag of the same public
+package, so the admission policy covers it too.
+- **ops-api** (`ops/api/`, namespace `ops`) answers with 16 readings, at most 5 s old. Each names its
+  source and the time it was read, or says why it could not be read:
+  - **Kubernetes:** the nodes (with metrics-server), the app's pods and the autoscaler. It reads them as
+    its own service account, with the built-in `view` role plus nodes, and never reads Secrets.
+  - **Prometheus:** the Grafana service dashboard's queries, word for word. A unit test fails if either
+    side changes alone. Also Kyverno's admissions and Jenkins' last deploy.
+  - **Alertmanager:** the alerts firing.
+  - **Loki:** the app's last 15 minutes.
+  - **Nexus:** the release evidence, read with its own read-only account `ops`, which the setup Job
+    now creates (D-096).
+  - **AWS, on EKS only:** the two stacks and their drift, the cluster, the edge and the budget. It reads
+    them through EKS Pod Identity (the role `splitx-wl-ops-api`, D-089).
+    - It never returns an ARN, the account ID, or the edge's origin header (D-092).
+    - It never calls Cost Explorer.
+- **The traffic lab** (`ops/lab/`) is k6 behind a start and a stop button. It runs the pinned 2.2.0
+  the load tests used.
+  - **Limits:** at most 30 settlement plans a second, for at most 3 minutes, one run at a time.
+  - **No credentials:** it holds none and gets no Kubernetes token.
+  - **One target, fixed by cluster-up:** on EKS the edge, the way visitors arrive (the app refuses
+    anything else, D-092); on Kind ingress-nginx.
+  - **Why 30 a second:** at D-051's rate of about 4 plans a second per pod, 30 asks for about 8 pods.
+    That is enough to watch the autoscaler, and under the network ceiling of 2,400 a minute (D-045).
+- **Network policies:**
+  - only the app's pods reach ops-api, and only ops-api reaches the lab;
+  - ops-api reaches monitoring, Nexus, the API server, Pod Identity's agent and AWS's public APIs;
+  - the lab reaches only its target.
+
+**The page.**
+- **`/api/ops/cluster`** is operators only, and the page polls it every 5 seconds. It passes on exactly
+  the 16 readings the page knows.
+  - If ops-api can't be reached, one reading says why ("ops-api could not be reached (ECONNREFUSED)").
+  - Vercel has no `OPS_API_URL`, so there the page still says "not connected here".
+- **`/api/ops/traffic`** is operators only. It takes JSON only (415 otherwise), with `rate` from 1 to 30
+  and `seconds` from 30 to 180, and nothing else. It relays the request to ops-api and logs each one.
+- **Four new sections**, each panel linking to the code that produces it:
+  - **Traffic and the autoscaler:** the lab, the pods answering now, and four charts (requests a
+    second, p95, unintended errors, and ready pods against the autoscaler's wish);
+  - **The cluster:** the autoscaler, the admission policy's last 24 hours, the nodes and the pods;
+  - **Alerts, logs and evidence;**
+  - **Infrastructure:** the platform's facts, the budget, the stacks, CloudFront and EKS.
+- **Chart colours:** a fixed blue and orange pair, used in every accent. It passed the colour validator
+  in both themes:
+  - colour-blind separation ΔE 24.7 (light) and 26.8 (dark);
+  - normal-vision separation of at least 31.8;
+  - at least 3:1 contrast on the card.
+  
+  A neutral second line against the chosen accent failed those checks with some accents.
+- **Chart marks:** 2 px lines, a 10% wash, and a crosshair tooltip that puts the value first. Every chart
+  has a table view.
+
+**Wiring.**
+- **Kyverno:** the admission policy covers `ops` as well as `splitx`, and the admission controller's
+  ServiceMonitor is on, so Prometheus has its counts.
+- **Releases to clusters:**
+  - each release's deployment payload names its ops image (`ops_image`);
+  - aws-up passes it on as `cluster-up --ops-image`;
+  - cluster-up writes two ConfigMaps (the platform's facts, and the lab's target), then applies
+    `k8s/ops` pinned by digest (`scripts/lib/ops-platform.mjs`, on both clusters);
+  - a release without an ops image (anything before D-097) leaves ops-api out, and the page says so.
+- **Secrets:** `NEXUS_OPS_PASSWORD` joins the generated passwords, in `.env`, `splitx/demo/platform`
+  and the ExternalSecrets.
+
+**Also fixed:** `/ops` counted `aws` as Jenkins' environment, but the release job has named it `eks`
+since D-093. An EKS deployment would have been labelled as Vercel's.
+
+**Checked.**
+- **Both servers, as real processes on the laptop:**
+  - Outside a cluster, ops-api answered all 16 readings, each unavailable with its reason.
+  - The lab refused 31 a second, a `target`, and a body that wasn't JSON.
+  - With k6 missing, the lab ended the run as failed and kept serving.
+  - With the lab down, ops-api answered 502 instead of crashing.
+- **The page, in a browser,** with the throwaway database, a seeded operator, and a local stand-in for
+  ops-api built from ops-api's own summaries:
+  - every section rendered, and the four charts drew;
+  - start and stop worked, and showed the run's summary;
+  - the tooltip put the value first;
+  - nothing scrolled sideways at 375 px;
+  - both themes resolved to the validated colours;
+  - the console showed no errors.
+
+**Not proven until the first run** (added to B-031):
+- Kyverno's metrics reaching Prometheus;
+- the ops image passing the release's Trivy gate (its k6 is a Go binary);
+- ops-api's reads through Pod Identity;
+- the lab's load reaching CloudFront from the NAT address.
+
+---
+
 ## Open problems
 
 | ID | Problem | Why it matters | Status / planned fix |
@@ -3525,7 +3623,7 @@ touches the licence; and that no password is ever printed.
 | B-028 | The AI chat builds its own balances: pairwise instead of the group plan, over every expense including deleted ones, in deleted groups too, with ±1 paisa counted as settled. | Its answers to "who owes me?" can disagree with Settle Up, and count expenses that were deleted. | ✅ Resolved 2026-09-22 — D-067. The chat's context is the ledger: balances per group over live expenses, and each group's settle-up plan. |
 | B-029 | Removing a member used to re-split their shares among the others (D-063). Groups that had a member removed may hold shares that were moved between people, and former members may still owe or be owed. | Balances in those groups reflect the old re-split, not what people agreed to. | ✅ Checked 2026-09-22 — D-069. `npm run ledger:audit -- --https` read production (1 group, 37 expenses, 62 shares, 0 settlements, 9 accounts) in a read-only transaction: no share of a former member, no former member with a balance, every expense adding up, every group netting to zero. Nothing to repair. |
 | B-030 | `npm audit` still reports one high advisory: `deepmerge-ts` below 8 (GHSA-ggr8-5vv4-36mx, stack exhaustion when merging self-referencing objects), through `prisma` → `@prisma/config`. | The Prisma CLI is a development and migration tool; the app's runtime (`@prisma/client`) doesn't use it, and the only objects it merges are our own config. | Accepted 2026-09-22 (D-070). The fix is Prisma 7, a major upgrade with its own changes. Still accepted after the migration baseline (D-072), which was done on Prisma 6: the upgrade is its own change. The CLI stays out of the runtime image. |
-| B-031 | Phase 4 (D-088 to D-090) is written and validated, but nothing in it has been applied. Only a real run proves: the `iam:PassedToService` value for the flow log's role (both candidates are allowed); that `splitx-ci-teardown`'s permissions cover a whole `terraform destroy` and the edge's offline apply; the ALB's lookup by the controller's tags (`ingress.k8s.aws/stack = splitx`); that the pinned add-on versions are still offered on the day; and the edge function in CloudFront's own runtime (it is tested in Node). | An AWS day that meets any of these unprepared loses hours of a rehearsal or the demo. | Open. `aws-edge` proves the edge's part as soon as the stacks and the `AWS_ACCOUNT_ID` secret exist. The rehearsal's first hour, a platform-only `aws-up` then `aws-down`, proves the rest (plan Phase 10). **2026-09-24, D-093 adds to the list:** the External Secrets Operator's Pod Identity credentials; the load balancer controller's IAM policy (the module's) against controller 3.5.0; the pod readiness gates; the VPC CNI agent admitting the kubelet and judging `172.20.0.1` as the API server; the prefix-list rule fitting the security group (weight 55 of 60); image volumes on the EKS node image; Docker Hub pulls through the NAT address; GitHub's webhook through CloudFront to Jenkins; and the Jenkins deploy RBAC of D-094. **D-095 and D-096 add:** whether EKS itself is allowed on the account's Free plan; the `m7i-flex.large` nodes; Nexus with a read-only root filesystem; and cosign's attestation output in the archive step. |
+| B-031 | Phase 4 (D-088 to D-090) is written and validated, but nothing in it has been applied. Only a real run proves: the `iam:PassedToService` value for the flow log's role (both candidates are allowed); that `splitx-ci-teardown`'s permissions cover a whole `terraform destroy` and the edge's offline apply; the ALB's lookup by the controller's tags (`ingress.k8s.aws/stack = splitx`); that the pinned add-on versions are still offered on the day; and the edge function in CloudFront's own runtime (it is tested in Node). | An AWS day that meets any of these unprepared loses hours of a rehearsal or the demo. | Open. `aws-edge` proves the edge's part as soon as the stacks and the `AWS_ACCOUNT_ID` secret exist. The rehearsal's first hour, a platform-only `aws-up` then `aws-down`, proves the rest (plan Phase 10). **2026-09-24, D-093 adds to the list:** the External Secrets Operator's Pod Identity credentials; the load balancer controller's IAM policy (the module's) against controller 3.5.0; the pod readiness gates; the VPC CNI agent admitting the kubelet and judging `172.20.0.1` as the API server; the prefix-list rule fitting the security group (weight 55 of 60); image volumes on the EKS node image; Docker Hub pulls through the NAT address; GitHub's webhook through CloudFront to Jenkins; and the Jenkins deploy RBAC of D-094. **D-095 and D-096 add:** whether EKS itself is allowed on the account's Free plan; the `m7i-flex.large` nodes; Nexus with a read-only root filesystem; and cosign's attestation output in the archive step. **D-097 adds:** Kyverno's admission metrics reaching Prometheus; the ops image passing the release's Trivy gate; ops-api's AWS reads through Pod Identity; and the traffic lab's load reaching CloudFront from the NAT address. |
 
 ## Environment notes (this machine)
 
