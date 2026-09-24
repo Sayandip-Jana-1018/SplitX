@@ -16,11 +16,12 @@
  * `release` and `deliver` write their results to $GITHUB_OUTPUT. GitHub is
  * read and written with GITHUB_TOKEN, the job's own token.
  */
+import { spawnSync } from 'node:child_process';
 import { appendFileSync, existsSync, writeFileSync } from 'node:fs';
 import { request as httpRequest } from 'node:http';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { deliveryState, e2eEnvironment, envLine, OPTIONAL, pickRelease } from './lib/e2e.mjs';
+import { deliveryState, e2eEnvironment, envLine, OPTIONAL, pickRelease, relayVerdict } from './lib/e2e.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 // The run's Jenkins password, for asking Jenkins how the delivery is going. Read, never printed.
@@ -155,7 +156,11 @@ if (command === 'env') {
     let last = '';
     while (Date.now() - started < 20 * 60_000) {
         const state = deliveryState(await github('GET', '/deployments/' + deployment.id + '/statuses?per_page=5'));
-        const line = state.state + (state.said ? ': ' + state.said : '') + (state.done ? '' : '; Jenkins: ' + await jenkinsBuilds());
+        // The relay's log since the deployment was made: a refused delivery ends the wait at once.
+        const relay = relayVerdict(spawnSync('kubectl', ['--context', 'kind-splitx', '-n', 'jenkins', 'logs', 'deployment/webhook-relay', '--since-time=' + deployment.created_at],
+            { encoding: 'utf8', timeout: 20_000 }).stdout ?? '');
+        if (relay.refused && !state.done) fail('GitHub\'s delivery reached the cluster, but ' + relay.said);
+        const line = state.state + (state.said ? ': ' + state.said : '') + (state.done ? '' : '; relay: ' + relay.said + '; Jenkins: ' + await jenkinsBuilds());
         if (line !== last) console.log('    ' + Math.round((Date.now() - started) / 1000) + ' s  ' + line);
         last = line;
         if (state.done) {

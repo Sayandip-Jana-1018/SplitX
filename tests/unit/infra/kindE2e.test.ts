@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { CLUSTER_KEYS } from '@/lib/ops/cluster';
 import {
-    deliveryState, E2E_OPERATOR, e2eEnvironment, envLine, FROM_REPOSITORY, OPTIONAL, pickRelease, READINGS_ON_AWS_ONLY, READINGS_ON_KIND,
+    deliveryState, E2E_OPERATOR, e2eEnvironment, envLine, FROM_REPOSITORY, OPTIONAL, pickRelease, READINGS_ON_AWS_ONLY, READINGS_ON_KIND, relayVerdict,
 } from '../../../scripts/lib/e2e.mjs';
 import { columns, parseMeminfo, parseMemoryStat, summarise } from '../../../scripts/lib/memory.mjs';
 import { powerSource } from '../../../scripts/lib/power.mjs';
@@ -85,6 +85,28 @@ describe("Jenkins' verdict on a delivery", () => {
     it('ends on success, and on failure, error or a newer release superseding it', () => {
         expect(deliveryState([{ state: 'success', description: 'Deployed' }, { state: 'in_progress' }])).toMatchObject({ done: true, ok: true });
         for (const state of ['failure', 'error', 'inactive']) expect(deliveryState([{ state, description: null }])).toMatchObject({ done: true, ok: false, state, said: '' });
+    });
+});
+
+describe("the relay's word on GitHub's deliveries", () => {
+    // What the relay logged in run 36025050812, when the repository webhook sent a form.
+    const RUN_2 = [
+        '{"ts":"2026-09-24T16:16:04.959Z","level":"info","msg":"listening on the smee.io channel","service":"webhook-relay"}',
+        '{"ts":"2026-09-24T16:17:13.209Z","level":"warn","msg":"the webhook must send application/json","service":"webhook-relay","event":"deployment","contentType":"application/x-www-form-urlencoded"}',
+        '{"ts":"2026-09-24T16:17:13.272Z","level":"warn","msg":"delivery relayed","service":"webhook-relay","event":"deployment","delivery":"66564a10","status":403,"result":"refused"}',
+    ].join('\n');
+
+    it('names a form-encoded webhook as the reason Jenkins refused it', () => {
+        const verdict = relayVerdict(RUN_2);
+        expect(verdict.refused).toBe(true);
+        expect(verdict.said).toMatch(/application\/x-www-form-urlencoded.*HTTP 403.*Content type to application\/json/);
+    });
+
+    it('reports any other refusal by its status, and waits while nothing has come', () => {
+        expect(relayVerdict('{"msg":"delivery relayed","event":"deployment","status":0,"result":"unreachable"}')).toEqual({ refused: true, said: 'Jenkins answered HTTP 0 to GitHub\'s delivery (unreachable)' });
+        expect(relayVerdict('')).toEqual({ refused: false, said: 'no deployment delivery yet' });
+        expect(relayVerdict('not json\n{"msg":"delivery relayed","event":"ping","status":403,"result":"refused"}').refused).toBe(false);
+        expect(relayVerdict('{"msg":"delivery relayed","event":"deployment","status":200,"result":"accepted"}')).toEqual({ refused: false, said: '1 deployment delivery(ies) accepted by Jenkins' });
     });
 });
 

@@ -101,6 +101,34 @@ export function pickRelease(deployments, sha = '') {
 }
 
 /**
+ * What the relay's log (jenkins/relay/relay.mjs, one JSON object a line) says
+ * about deployment deliveries: none yet, all accepted, or one refused and why.
+ * A form-encoded webhook is the refusal the first runs met (D-099): GitHub
+ * signs the form's bytes, the relay hands Jenkins JSON, and Jenkins refuses
+ * the signature, as it should.
+ */
+export function relayVerdict(logText) {
+    const lines = logText.split('\n').flatMap((line) => {
+        try {
+            return [JSON.parse(line)];
+        } catch {
+            return [];
+        }
+    });
+    const relayed = lines.filter((line) => line.msg === 'delivery relayed' && line.event === 'deployment');
+    const refused = relayed.find((line) => line.result !== 'accepted');
+    if (!refused) return { refused: false, said: relayed.length ? relayed.length + ' deployment delivery(ies) accepted by Jenkins' : 'no deployment delivery yet' };
+    const formEncoded = lines.find((line) => line.msg === 'the webhook must send application/json');
+    return {
+        refused: true,
+        said: formEncoded
+            ? 'the repository webhook sends ' + formEncoded.contentType + ', so GitHub\'s signature can\'t survive the relay and Jenkins refused it (HTTP '
+                + refused.status + '): set the webhook\'s Content type to application/json'
+            : 'Jenkins answered HTTP ' + refused.status + ' to GitHub\'s delivery (' + refused.result + ')',
+    };
+}
+
+/**
  * Where a delivery stands, from its statuses (newest first, as GitHub lists
  * them): done, failed, or still waiting, and what the deployer last said.
  */

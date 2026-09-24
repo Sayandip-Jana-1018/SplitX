@@ -3801,6 +3801,42 @@ the lab driving the autoscaler; and the evidence reaching Nexus.
   locally: before the fix both Deployments rendered the placeholder; after it, the digest. The
   admission policy did exactly its job: an image it couldn't verify never ran.
 
+**Run 2 (36025050812, on `7ba764a`) built the whole platform, and found the webhook's setting.**
+- **`k8s:up` passed,** ops-api and the traffic lab included: the cluster was up in about 7 minutes.
+- **The delivery reached the cluster, and Jenkins refused it.**
+  - GitHub posted the deployment event about a second after the run created it, smee.io handed it
+    on, and the relay received it.
+  - The relay logged `the webhook must send application/json`: the repository webhook's content type
+    was `application/x-www-form-urlencoded`. GitHub signs the form's bytes, and the relay hands Jenkins
+    JSON, so the signature couldn't match. Jenkins answered 403, as D-055 designed it to.
+  - The user sets the webhook's content type to `application/json`. That is a repository setting,
+    the user's to change.
+  - The run had waited 20 minutes for a verdict that could never come. `e2e.mjs deliver` now reads the
+    relay's log as it waits (`relayVerdict`), and ends at once with the reason when a delivery was
+    refused. Unit tests replay run 2's relay lines.
+- **`k8s:verify` ran on the runner anyway: 34 of 36 checks passed, 1 was skipped and 1 failed.**
+  - The skipped one is the email check: the run has no receiver.
+  - The failed one is the Delivery dashboard's two Jenkins panels, which read
+    `default_jenkins_builds_last_build_*`. Jenkins publishes those only after its first build, which
+    the refused delivery never started.
+  - Among what passed:
+    - the database outage: every replica left the Service, none was restarted, and the same pods
+      served again;
+    - a full rolling replacement with 0 of 2,351 requests lost;
+    - one request followed in Loki from the ingress to its pod;
+    - every one of 31 scrape targets up;
+    - the namespace refusing a privileged pod;
+    - another namespace unable to reach the app, Postgres or Redis.
+- **B-027, measured:** 167 samples on a 16 GB runner, from before the cluster to the end of
+  `k8s:verify`.
+  - At peak the machine had 7.0 GB in use, 5.7 GB of it anonymous memory. Shared memory stayed at
+    0.13 GB, and there was no swap.
+  - By node, in anonymous memory: worker 2.1 GB, worker2 1.7 GB, control plane 1.5 GB.
+  - The largest pods: Nexus 1.24 GB, the API server 0.99 GB, Jenkins 0.63 GB, Grafana 0.48 GB and
+    Prometheus 0.35 GB.
+  - So the platform has outgrown the laptop's 6 GB WSL VM: its anonymous memory alone nearly fills
+    it, before page cache, and that VM swapped. The runner, with 16 GB, holds it with room to spare.
+
 ---
 
 ## Open problems
@@ -3833,7 +3869,7 @@ the lab driving the autoscaler; and the evidence reaching Nexus.
 | B-024 | In the final saturation run, 155 of 7,442 requests spent over 3 s inside a pod, all 30 to 50 s into the overload, on both pods, with none after. | A transient stall right when a burst arrives is exactly when a classroom notices. | 🚧 Narrowed 2026-09-18 — D-053. Not garbage collection: the stall belongs to freshly started pods at their 1-CPU limit. Without the limit, fresh pods had 0 and 89 requests over 3 s in a pod (175 to 228 with it), the longest 2.9 and 6.3 s, and served 45% more. Left: the remaining cold start; phase 7 measures the ALB slow start for new targets. |
 | B-025 | Sign-up, login and password reset are still limited to 10 a minute per address (D-022). | A room asked to register at once from one campus network would be refused after the first ten. The demo page needs no account, so it is not affected. | ✅ Resolved 2026-09-22 — D-076. Credential routes are limited per device under a network ceiling of 240 a minute; guessing stays capped per account and inbox flooding per address. |
 | B-026 | Jenkins' deploy builds and `cd:verify` read GitHub's deployments without a token, and this network's public address shares GitHub's anonymous allowance (60 an hour) with other devices. | A deploy would fail at its first step whenever someone else on the network had spent the allowance: on 2026-09-21 its hour began eleven minutes before this laptop booted, and it was spent when `cd:verify` ran, which failed 2 of its 15 checks on it. | Open — the user creates a fine-grained token (this repository only, Deployments read and write) and puts it in `.env` as `JENKINS_GITHUB_TOKEN`; `k8s:up` hands it to Jenkins. Both scripts now say when the allowance is spent and until when, instead of a bare 403, and the build log no longer repeats GitHub's message, which names the address. **2026-09-21:** the token is in `.env` and works (5,000 an hour). |
-| B-027 | With the cluster running, the 6 GB WSL VM held about 4 GB in memory and all 8 GB of its swap (2026-09-21), about 12 GB against the 4.6 GB the same cluster used the day before. | The control plane crash-looped and the app answered 503. On Windows, the swap file held the SSD at a queue of 100–245 and 61 ms reads, which froze the laptop. Release `7e3509e` (deployment 6572256500, 15:45 UTC) reached no relay and was never deployed: no delivery was logged after 15:30 UTC. | Open. Next time the cluster runs, watch the VM's anonymous, shared and swapped memory from `k8s:up` on (node-exporter already exports all three), find what grew, and fit the local cluster into 6 GB. Then redeliver 6572256500 from GitHub's webhook page and read Jenkins' statuses on GitHub. |
+| B-027 | With the cluster running, the 6 GB WSL VM held about 4 GB in memory and all 8 GB of its swap (2026-09-21), about 12 GB against the 4.6 GB the same cluster used the day before. | The control plane crash-looped and the app answered 503. On Windows, the swap file held the SSD at a queue of 100–245 and 61 ms reads, which froze the laptop. Release `7e3509e` (deployment 6572256500, 15:45 UTC) reached no relay and was never deployed: no delivery was logged after 15:30 UTC. | ✅ Answered 2026-09-24 — D-099. Measured on a GitHub runner from before the cluster existed: the platform peaks at 7.0 GB in use, 5.7 GB of it anonymous (Nexus 1.24 GB, the API server 0.99 GB, Jenkins 0.63 GB, Grafana 0.48 GB, Prometheus 0.35 GB); shared memory 0.13 GB; no swap. It no longer fits the laptop's 6 GB VM, so the full platform runs on GitHub's runners (kind-e2e), and the laptop runs none of it. Release 7e3509e is long superseded; each kind-e2e run delivers the release it tests through GitHub's own webhook. |
 | B-028 | The AI chat builds its own balances: pairwise instead of the group plan, over every expense including deleted ones, in deleted groups too, with ±1 paisa counted as settled. | Its answers to "who owes me?" can disagree with Settle Up, and count expenses that were deleted. | ✅ Resolved 2026-09-22 — D-067. The chat's context is the ledger: balances per group over live expenses, and each group's settle-up plan. |
 | B-029 | Removing a member used to re-split their shares among the others (D-063). Groups that had a member removed may hold shares that were moved between people, and former members may still owe or be owed. | Balances in those groups reflect the old re-split, not what people agreed to. | ✅ Checked 2026-09-22 — D-069. `npm run ledger:audit -- --https` read production (1 group, 37 expenses, 62 shares, 0 settlements, 9 accounts) in a read-only transaction: no share of a former member, no former member with a balance, every expense adding up, every group netting to zero. Nothing to repair. |
 | B-030 | `npm audit` still reports one high advisory: `deepmerge-ts` below 8 (GHSA-ggr8-5vv4-36mx, stack exhaustion when merging self-referencing objects), through `prisma` → `@prisma/config`. | The Prisma CLI is a development and migration tool; the app's runtime (`@prisma/client`) doesn't use it, and the only objects it merges are our own config. | Accepted 2026-09-22 (D-070). The fix is Prisma 7, a major upgrade with its own changes. Still accepted after the migration baseline (D-072), which was done on Prisma 6: the upgrade is its own change. The CLI stays out of the runtime image. |
