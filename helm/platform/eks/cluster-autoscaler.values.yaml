@@ -1,0 +1,54 @@
+# ═══════════════════════════════════════════════════════════════
+#   Cluster Autoscaler on EKS (D-093).
+#
+#   The node group runs 3 t3.large nodes and may grow to 4
+#   (terraform/platform, node_min_size and node_max_size). When the
+#   HorizontalPodAutoscaler asks for application pods that no node has room
+#   for, this adds the fourth node; when the fourth is no longer needed, it
+#   removes it. It finds the node group by the tags EKS puts on its Auto
+#   Scaling group, and acts through EKS Pod Identity
+#   (splitx-wl-cluster-autoscaler, limited to this cluster's groups).
+#
+#   autoDiscovery.clusterName and awsRegion are set at install time from
+#   terraform/platform's outputs (charts.json, "set").
+# ═══════════════════════════════════════════════════════════════
+cloudProvider: aws
+
+# The autoscaler's minor version follows the cluster's (1.35). The chart ships
+# 1.35.0; 1.35.2 is that line's newest patch (2026-07-23), pinned by digest.
+image:
+  repository: registry.k8s.io/autoscaling/cluster-autoscaler
+  tag: v1.35.2@sha256:aac369dc283927a623deb1af54696efcc722ae79255aa07788422e495bab887d
+
+# The name the Pod Identity association in terraform/platform/workloads.tf expects.
+rbac:
+  serviceAccount:
+    create: true
+    name: cluster-autoscaler
+
+extraArgs:
+  # The application's pods keep a cache in an emptyDir. By default a node with
+  # such a pod is never removed, so the fourth node would stay for the day.
+  skip-nodes-with-local-storage: false
+  # A new node costs the same whichever pods it is for; pick the group that
+  # leaves the least unused (there is one group, so this is for the record).
+  expander: least-waste
+  balance-similar-node-groups: true
+  # Give back the fourth node 5 minutes after it stops being needed, not 10:
+  # a demo's traffic test is over in minutes.
+  scale-down-unneeded-time: 5m
+  scale-down-delay-after-add: 5m
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    memory: 384Mi
+
+# Its metrics (nodes it wants, unschedulable pods it saw) for Prometheus. The
+# chart's default selector label is irrelevant here: Prometheus selects every
+# ServiceMonitor (helm/platform/kube-prometheus-stack.values.yaml).
+serviceMonitor:
+  enabled: true
+  namespace: monitoring

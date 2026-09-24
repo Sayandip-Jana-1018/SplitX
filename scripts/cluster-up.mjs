@@ -7,6 +7,10 @@
  *   node scripts/cluster-up.mjs --recreate   delete the cluster first
  *   node scripts/cluster-up.mjs --image splitx:abc1234
  *
+ *   node scripts/cluster-up.mjs --target eks [--image ghcr.io/...@sha256:...]
+ *        the same platform on the EKS cluster aws-up builds (D-093); what differs
+ *        is in scripts/lib/cluster-up-eks.mjs. Everything below is the Kind path.
+ *
  * What it does, and why each step is here rather than in a README:
  *   1. checks the tools it needs, and says which one is missing
  *   2. creates the Kind cluster from k8s/kind/cluster.yaml (1 control plane, 2 workers),
@@ -36,7 +40,9 @@ import { randomBytes } from 'node:crypto';
 import { appendFileSync, existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { renderAlertmanagerConfig } from './lib/alertmanager-config.mjs';
 import { checkNewConnections, describe } from './lib/cluster-network.mjs';
+import { chartsFor, helmInstallArgs, reposOf } from './lib/platform-charts.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const CLUSTER = 'splitx';
@@ -78,6 +84,14 @@ function run(file, argv, options = {}) {
 }
 
 const kubectl = (argv, options) => run('kubectl', ['--context', CONTEXT, ...argv], options);
+
+const TARGET = option('--target', 'kind');
+if (TARGET === 'eks') {
+    const { upEks } = await import('./lib/cluster-up-eks.mjs');
+    await upEks({ root, context: option('--context', 'splitx'), image: option('--image', '') });
+    process.exit(0);
+}
+if (TARGET !== 'kind') fail('--target is kind (the default) or eks, not ' + TARGET);
 
 // ── 1. tools ──────────────────────────────────────────────────────────────
 heading('Checking tools');
@@ -175,28 +189,18 @@ if (!process.env.GF_ADMIN_PASSWORD) fail('.env is missing: GF_ADMIN_PASSWORD (th
 applySecret('monitoring', 'grafana-admin', { 'admin-user': 'admin', 'admin-password': process.env.GF_ADMIN_PASSWORD });
 console.log('    grafana-admin: the admin password from GF_ADMIN_PASSWORD');
 
-// The routing tree is committed; the addresses and the SMTP password are not.
-const ALERT_KEYS = ['ALERT_SMTP_USERNAME', 'ALERT_SMTP_PASSWORD', 'ALERT_EMAIL_TO'];
-let alertmanagerConfig = readFileSync(join(root, 'monitoring/alertmanager/alertmanager.yaml'), 'utf8');
-const unsetAlertKeys = ALERT_KEYS.filter((key) => !process.env[key]);
-if (unsetAlertKeys.length) {
-    // The email integration is the last block in the file. Without it the
-    // receiver still exists, so routing works and alerts show in Grafana.
-    const lines = alertmanagerConfig.slice(0, alertmanagerConfig.indexOf('\n    email_configs:')).split('\n');
-    while (lines.at(-1).trim().startsWith('#')) lines.pop();
-    alertmanagerConfig = lines.join('\n') + '\n';
-    console.log('    alertmanager-splitx: alerts fire but are NOT emailed; .env is missing ' + unsetAlertKeys.join(', '));
-} else {
-    for (const key of ALERT_KEYS) {
-        // Google shows an App Password in groups of four; the spaces are not part of it.
-        const value = key === 'ALERT_SMTP_PASSWORD' ? process.env[key].replace(/\s+/g, '') : process.env[key];
-        // JSON strings are valid YAML double-quoted scalars, whatever the value holds.
-        alertmanagerConfig = alertmanagerConfig.split('${' + key + '}').join(JSON.stringify(value));
-    }
-    console.log('    alertmanager-splitx: alerts are emailed to ALERT_EMAIL_TO through Gmail');
+// The routing tree is committed; the addresses and the SMTP password are not
+// (scripts/lib/alertmanager-config.mjs, shared with aws:secrets for EKS).
+let alertmanager;
+try {
+    alertmanager = renderAlertmanagerConfig(readFileSync(join(root, 'monitoring/alertmanager/alertmanager.yaml'), 'utf8'), process.env);
+} catch (error) {
+    fail(error.message);
 }
-if (/\$\{[A-Z_]+\}/.test(alertmanagerConfig)) fail('monitoring/alertmanager/alertmanager.yaml has a placeholder k8s:up does not fill');
-applySecret('monitoring', 'alertmanager-splitx', { 'alertmanager.yaml': alertmanagerConfig });
+console.log(alertmanager.emailed
+    ? '    alertmanager-splitx: alerts are emailed to ALERT_EMAIL_TO through Gmail'
+    : '    alertmanager-splitx: alerts fire but are NOT emailed; .env is missing ' + alertmanager.unset.join(', '));
+applySecret('monitoring', 'alertmanager-splitx', { 'alertmanager.yaml': alertmanager.config });
 
 // Jenkins (D-055) and the webhook relay (D-056). Three values are random and
 // nobody has to choose them, so the first run generates them into .env: they
@@ -245,23 +249,16 @@ console.log('    jenkins-admin, jenkins-secrets, webhook-relay: '
 
 // ── 5. platform charts ────────────────────────────────────────────────────
 heading('Platform charts (pinned in helm/platform/charts.json)');
-const { charts } = JSON.parse(readFileSync(join(root, 'helm/platform/charts.json'), 'utf8'));
-const repos = [...new Set(charts.map((chart) => chart.chart.split('/')[0]))];
-for (const chart of charts) {
-    run('helm', ['repo', 'add', chart.chart.split('/')[0], chart.repo], { capture: true, allowFailure: true });
+const charts = chartsFor(JSON.parse(readFileSync(join(root, 'helm/platform/charts.json'), 'utf8')), 'kind');
+const repos = reposOf(charts);
+for (const [name, url] of repos) {
+    run('helm', ['repo', 'add', name, url], { capture: true, allowFailure: true });
 }
 // Only the repositories used here: updating every index on the machine is slow.
-run('helm', ['repo', 'update', ...repos], { capture: true });
+run('helm', ['repo', 'update', ...repos.map(([name]) => name)], { capture: true });
 for (const chart of charts) {
     console.log('    ' + chart.release + ' ' + chart.version + ' -> ' + chart.namespace);
-    run('helm', [
-        '--kube-context', CONTEXT,
-        'upgrade', '--install', chart.release, chart.chart,
-        '--version', chart.version,
-        '--namespace', chart.namespace, '--create-namespace',
-        '--values', chart.values,
-        '--wait', '--timeout', chart.timeout ?? '6m',
-    ], { capture: true });
+    run('helm', ['--kube-context', CONTEXT, ...helmInstallArgs(chart, 'kind')], { capture: true });
 }
 if (jenkinsSecretsChanged) {
     // A new admin password or webhook secret reaches Jenkins only when it starts.

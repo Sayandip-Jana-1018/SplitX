@@ -1,12 +1,14 @@
 # ═══════════════════════════════════════════════════════════════
 #   Alertmanager: who hears about an alert, and how often.
 #
-#   `npm run k8s:up` fills the ${ALERT_*} values from .env and stores the
-#   result as the Secret alertmanager-splitx, so no address or password is
-#   ever written to the repository or to disk. Values are inserted as quoted
-#   strings. If any of the three is missing it removes the email_configs block
-#   at the end of this file and says so: alerts still fire and show in Grafana,
-#   but nobody is emailed.
+#   The ${ALERT_*} values are filled from .env (scripts/lib/alertmanager-config.mjs)
+#   and the result becomes the Secret alertmanager-splitx: on Kind at
+#   `npm run k8s:up`; for EKS at `npm run aws:secrets`, through Secrets Manager
+#   and the External Secrets Operator. No address or password is ever written
+#   to the repository or to disk. Values are inserted as quoted strings. If any
+#   of the three is missing the email_configs block at the end of this file is
+#   removed, and the script says so: alerts still fire and show in Grafana, but
+#   nobody is emailed.
 # ═══════════════════════════════════════════════════════════════
 global:
   resolve_timeout: 5m

@@ -1,14 +1,21 @@
 name: AWS up
 
-# Builds SplitX's demo platform on AWS (terraform/platform: the network, EKS
-# and its add-ons, the node group, the workloads' roles) on the morning of an
-# AWS day, and checks that it works. aws-down removes it that evening, or at
-# 23:30 IST by itself.
+# Builds SplitX's demo platform on AWS on the morning of an AWS day, and
+# checks each part as it goes. aws-down removes it that evening, or at 23:30
+# IST by itself.
 #
-# Phase 5 adds the rest of the day's start after "Check the platform": the
-# charts (External Secrets turning Secrets Manager into Kubernetes Secrets),
-# the Ingresses and their ALB, the ALB's alarms (a second apply with
-# alb_ready=true), and pointing the edge at the ALB.
+#   1. terraform/platform: the network, EKS and its add-ons, the node group,
+#      the workloads' roles; checked before anything is installed on it
+#   2. the software (scripts/cluster-up.mjs --target eks, D-093): External
+#      Secrets turning Secrets Manager into Kubernetes Secrets, the pinned
+#      charts, the app with the newest signed release, Jenkins
+#   3. the load balancer's alarms (a second apply, alb_ready=true)
+#   4. the edge points at the load balancer, and is checked from outside
+#   5. the release is deployed again the way every later one will be: a
+#      GitHub deployment, its signed webhook through CloudFront, and Jenkins
+#
+# Before an AWS day: `npm run aws:secrets` on the laptop (step 2 stops without
+# it), and the repository's second webhook exists (step 5 waits for it).
 
 on:
   workflow_dispatch:
@@ -16,6 +23,7 @@ on:
 permissions:
   contents: read
   id-token: write # GitHub's OIDC token, exchanged for the role splitx-ci-deploy
+  deployments: write # read the newest release; ask Jenkins on EKS to deploy it
 
 concurrency:
   group: aws
@@ -30,11 +38,16 @@ jobs:
     runs-on: ubuntu-latest
     # A reviewer approves before the job starts: this is what spends money.
     environment: aws-demo
-    timeout-minutes: 90
+    timeout-minutes: 120
 
     steps:
       - name: Checkout
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - name: Setup Node
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 24
 
       - name: AWS and Terraform
         uses: ./.github/actions/aws-terraform
@@ -63,7 +76,9 @@ jobs:
         run: terraform -chdir=terraform/platform apply -input=false platform.tfplan
 
       - name: Connect to the cluster
-        run: aws eks update-kubeconfig --name "$CLUSTER_NAME" --region "$AWS_REGION"
+        # The context is called splitx, the name cluster-up expects (its ARN,
+        # the default name, contains the account ID).
+        run: aws eks update-kubeconfig --name "$CLUSTER_NAME" --region "$AWS_REGION" --alias splitx
 
       - name: The cluster's own settings
         # The default encrypted gp3 StorageClass, and what aws-down may do.
@@ -116,3 +131,115 @@ jobs:
             echo "| Teardown access | delete Ingresses and namespaces: yes; create pods or read Secrets: no |"
           } >> "$GITHUB_STEP_SUMMARY"
           cat /tmp/top
+
+      - name: The release to run
+        # The newest release GitHub Actions signed: the release job announces
+        # each one as a deployment for the rehearsal cluster, "kind" (D-054).
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          read -r sha image < <(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=kind&per_page=1" --jq '.[0] | "\(.sha) \(.payload.image)"')
+          if [[ ! "$sha" =~ ^[0-9a-f]{40}$ || ! "$image" =~ ^ghcr\.io/sayandip-jana-1018/splitx@sha256:[0-9a-f]{64}$ ]]; then
+            echo "::error::No signed release found: the newest kind deployment names '$sha' '$image'."
+            exit 1
+          fi
+          echo "The newest release: ${sha:0:12}, $image"
+          {
+            echo "sha=$sha"
+            echo "image=$image"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: The platform's software
+        # External Secrets first (the Secrets come from npm run aws:secrets),
+        # then the pinned charts, the app with that release, and Jenkins (D-093).
+        env:
+          IMAGE: ${{ steps.release.outputs.image }}
+        run: node scripts/cluster-up.mjs --target eks --image "$IMAGE"
+
+      - name: The load balancer's alarms
+        # The controller made the load balancer at run time; now Terraform can
+        # find it by its tags and alarm on it (terraform/platform/alarms.tf).
+        run: |
+          terraform -chdir=terraform/platform plan -input=false -var alb_ready=true -out=alarms.tfplan
+          terraform -chdir=terraform/platform apply -input=false alarms.tfplan
+          echo "Alarms: $(terraform -chdir=terraform/platform output -json alb_alarms | jq -r 'join(", ")')"
+
+      - name: The edge, online
+        # CloudFront's origin becomes the load balancer, and every request to
+        # it carries the origin header the app checks (D-092), read here from
+        # Secrets Manager and masked in this log.
+        run: |
+          fail() { echo "::error::$1"; exit 1; }
+          alb="$(kubectl -n splitx get ingress splitx -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')"
+          [[ -n "$alb" ]] || fail "the Ingress has no load balancer"
+          secret="$(aws secretsmanager get-secret-value --secret-id splitx/demo/app --query SecretString --output text | jq -er .ORIGIN_VERIFY_SECRET)"
+          echo "::add-mask::$secret"
+          export TF_VAR_origin_secret="$secret"
+          terraform -chdir=terraform/edge plan -input=false -out=edge.tfplan -var "origin_domain=$alb"
+          terraform -chdir=terraform/edge apply -input=false edge.tfplan
+          echo "Waiting for the distribution to reach every edge location."
+          aws cloudfront wait distribution-deployed --id "$(terraform -chdir=terraform/edge output -raw distribution_id)"
+          domain="$(terraform -chdir=terraform/edge output -raw domain_name)"
+
+          status() { curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "$@" || true; }
+          for attempt in $(seq 1 30); do
+            live="$(status "https://$domain/api/health/live")"
+            [[ "$live" == 200 ]] && break
+            sleep 10
+          done
+          [[ "$live" == 200 ]] || fail "https://$domain/api/health/live answered $live, not 200"
+          metrics="$(status "https://$domain/api/metrics")"
+          [[ "$metrics" == 403 ]] || fail "/api/metrics answered $metrics through the edge, not 403"
+          # Only CloudFront may reach the load balancer: from this runner it
+          # must not even answer.
+          if curl -sS -o /dev/null --max-time 10 "http://$alb/api/health/live" 2>/dev/null; then
+            fail "the load balancer answered this runner directly; it must admit only CloudFront"
+          fi
+          {
+            echo "### The edge"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Address | https://$domain |"
+            echo "| Origin | the load balancer, which admits only CloudFront |"
+            echo "| Checked | /api/health/live 200 and /api/metrics 403 through the edge; the load balancer did not answer this runner |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: The release, deployed through Jenkins
+        # What every later release goes through on an AWS day: a GitHub
+        # deployment for "eks", GitHub's signed webhook through CloudFront to
+        # Jenkins, which checks the request and the image's signature, applies
+        # the commit's manifests, checks the site through the edge, and reports
+        # back. The release already runs, so nothing rolls; the path is proved.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ steps.release.outputs.sha }}
+          IMAGE: ${{ steps.release.outputs.image }}
+        run: |
+          id="$(jq -n --arg sha "$SHA" --arg image "$IMAGE" '{
+            ref: $sha, environment: "eks", auto_merge: false, required_contexts: [],
+            production_environment: false, transient_environment: true,
+            description: "Signed release, on the AWS platform", payload: {image: $image}
+          }' | gh api "repos/$GITHUB_REPOSITORY/deployments" --input - --jq .id)"
+          echo "GitHub deployment $id: ${SHA:0:12} to eks"
+          state=none
+          for attempt in $(seq 1 60); do
+            state="$(gh api "repos/$GITHUB_REPOSITORY/deployments/$id/statuses?per_page=1" --jq '.[0].state // "none"')"
+            [[ "$state" == success || "$state" == failure || "$state" == error ]] && break
+            sleep 15
+          done
+          description="$(gh api "repos/$GITHUB_REPOSITORY/deployments/$id/statuses?per_page=1" --jq '.[0].description // ""')"
+          case "$state" in
+            success) echo "Jenkins: $description" ;;
+            failure | error) echo "::error::Jenkins reported $state: $description"; exit 1 ;;
+            *) echo "::error::Jenkins reported nothing in 15 minutes (last state: $state). Check that the repository's second webhook exists (Deployments, JSON, the webhook secret; D-093)."; exit 1 ;;
+          esac
+          {
+            echo "### Delivery"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Release | ${SHA:0:12} |"
+            echo "| Deployed by | Jenkins on EKS, from GitHub deployment $id: $description |"
+          } >> "$GITHUB_STEP_SUMMARY"

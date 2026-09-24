@@ -5,6 +5,8 @@ metadata:
 spec:
   template:
     spec:
+      # 20 s of preStop, then up to 25 s to finish what is in flight.
+      terminationGracePeriodSeconds: 45
       topologySpreadConstraints:
         # Across availability zones first — losing one AZ must not take the
         # service with it — and then across nodes inside a zone.
@@ -22,5 +24,14 @@ spec:
               app.kubernetes.io/name: splitx
       containers:
         - name: splitx
-          # ECR is a remote registry, so the tag must actually be fetched.
+          # ghcr.io is a remote registry: a digest not on the node is pulled
+          # once, then reused.
           imagePullPolicy: IfNotPresent
+          lifecycle:
+            preStop:
+              # An ALB learns a pod is leaving later than ingress-nginx does:
+              # the controller deregisters it, then the ALB's nodes stop
+              # sending to it, which takes seconds. The pod keeps serving
+              # through that, and only then shuts down (5 s on Kind).
+              sleep:
+                seconds: 20

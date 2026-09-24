@@ -1,0 +1,47 @@
+# ═══════════════════════════════════════════════════════════════
+#   AWS Load Balancer Controller on EKS (D-093).
+#
+#   It turns the Ingresses of the IngressGroup "splitx" (the app's two in
+#   k8s/overlays/aws and Jenkins' webhook path in jenkins/eks) into one
+#   internet-facing Application Load Balancer. Its security group admits only
+#   CloudFront's origin-facing addresses, and its targets are the pods
+#   themselves. AWS credentials come through EKS Pod Identity
+#   (splitx-wl-alb-controller, terraform/platform/workloads.tf).
+#
+#   clusterName, region and vpcId are set at install time from
+#   terraform/platform's outputs (charts.json, "set"): the nodes' metadata
+#   service answers only one hop away, so the controller can't look them up.
+# ═══════════════════════════════════════════════════════════════
+
+# The name the Pod Identity association in terraform/platform/workloads.tf expects.
+serviceAccount:
+  create: true
+  name: aws-load-balancer-controller
+
+# Two, so a restart never leaves the Ingresses' webhook unanswered.
+replicaCount: 2
+podDisruptionBudget:
+  maxUnavailable: 1
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    memory: 384Mi
+
+# Tags on everything it makes in AWS (the load balancer, target groups,
+# security groups), so aws-down's sweep and report find them by tag too.
+defaultTags:
+  project: splitx
+  stack: platform
+  managed-by: aws-load-balancer-controller
+
+# Nothing here is a Service of type LoadBalancer. The mutating webhook for
+# Services would still have to answer for every Service created in the
+# cluster, and refuses them while the controller is down (failurePolicy
+# Fail), so it is off.
+enableServiceMutatorWebhook: false
+
+# Its own metrics (reconciles, AWS API calls and errors) for Prometheus.
+serviceMonitor:
+  enabled: true

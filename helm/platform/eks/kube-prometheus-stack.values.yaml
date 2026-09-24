@@ -1,0 +1,26 @@
+# ═══════════════════════════════════════════════════════════════
+#   kube-prometheus-stack on EKS: laid over the Kind values
+#   (helm/platform/kube-prometheus-stack.values.yaml), which hold everything
+#   the two clusters share. Only the differences are here.
+#
+#   The Secrets it reads (grafana-admin, alertmanager-splitx) have the same
+#   names and keys on both clusters; on EKS the External Secrets Operator
+#   makes them from Secrets Manager (k8s/eks/secrets).
+# ═══════════════════════════════════════════════════════════════
+
+defaultRules:
+  # The Kind values turn off four alerts that only describe the clock of Docker
+  # Desktop's VM (D-052). EKS nodes keep time with chrony, so there all four
+  # mean what they say, and they are back on.
+  disabled:
+    NodeClockNotSynchronising: false
+    AlertmanagerClusterCrashlooping: false
+    PrometheusOutOfOrderTimestamps: false
+    PrometheusMissingRuleEvaluations: false
+
+grafana:
+  # No grafana.localhost here. On EKS only the application and Jenkins'
+  # webhook path are behind the load balancer; Grafana is reached with
+  # `kubectl port-forward` until /ops embeds its panels (plan Phase 6).
+  ingress:
+    enabled: false

@@ -1,0 +1,28 @@
+# The app's network policy with EKS's addresses (D-093). Egress is as in
+# k8s/base/networkpolicy.yaml; only who may connect in differs.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: splitx
+spec:
+  ingress:
+    - from:
+        # The load balancer. Its addresses are in the VPC's two public
+        # subnets (terraform/platform/network.tf) and it connects to the pods
+        # directly (target-type ip). Nothing else lives in those subnets but
+        # the NAT gateway, which never connects in.
+        - ipBlock:
+            cidr: 10.0.64.0/24
+        - ipBlock:
+            cidr: 10.0.65.0/24
+        # Prometheus scrapes /api/metrics from its own namespace.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      # No rule for the kubelet's probes: the VPC CNI's policy agent always
+      # admits the node's own address (aws/aws-network-policy-agent#65). Kind's
+      # rule admitted the node network, 172.16.0.0/12; here the nodes share
+      # their subnets with every pod, so such a rule would admit every pod.
+      ports:
+        - port: http
+          protocol: TCP

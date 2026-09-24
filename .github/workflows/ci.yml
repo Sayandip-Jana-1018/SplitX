@@ -246,10 +246,11 @@ jobs:
 
       - name: Render and validate every overlay, and the platform's own manifests
         # The platform's: Jenkins' permissions, network policy, relay and alerts
-        # (jenkins/), the Grafana dashboards (monitoring/), and the EKS
-        # cluster's own settings (k8s/eks).
+        # (jenkins/, and jenkins/eks for EKS), the Grafana dashboards
+        # (monitoring/), and the EKS cluster's own settings and Secrets
+        # (k8s/eks, k8s/eks/secrets).
         run: |
-          for kustomization in k8s/overlays/local k8s/overlays/aws k8s/overlays/loadtest k8s/overlays/saturation jenkins monitoring k8s/eks; do
+          for kustomization in k8s/overlays/local k8s/overlays/aws k8s/overlays/loadtest k8s/overlays/saturation jenkins jenkins/eks monitoring k8s/eks k8s/eks/secrets; do
             echo "── $kustomization ──"
             kubectl kustomize "$kustomization" > /tmp/rendered.yaml
             docker run --rm -i "$KUBECONFORM" \
@@ -604,3 +605,31 @@ jobs:
             echo "| Signed by | \`$GITHUB_WORKFLOW_REF\` |"
             echo "| Attested | CycloneDX SBOM, vulnerability report |"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Ask Jenkins on EKS too, while the AWS platform is up
+        # The EKS platform exists only on AWS days (aws-up builds it in the
+        # morning, aws-down removes it at night). While it answers through the
+        # edge, its Jenkins gets the release the same way, as a deployment for
+        # "eks"; on any other day the edge shows its offline page and nothing
+        # is asked of it (D-093). The edge's address is the one committed in
+        # k8s/overlays/aws.
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REF: ${{ steps.image.outputs.ref }}
+        run: |
+          url="$(sed -n 's|^ *- NEXTAUTH_URL=\(https://[a-z0-9.-]*\)$|\1|p' k8s/overlays/aws/kustomization.yaml)"
+          if [[ -z "$url" ]]; then
+            echo "k8s/overlays/aws has no edge address yet: nothing to deploy on AWS."
+            exit 0
+          fi
+          code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 "$url/api/health/live" || true)"
+          if [[ "$code" != 200 ]]; then
+            echo "The AWS platform is offline ($url/api/health/live answered $code): nothing to deploy there."
+            exit 0
+          fi
+          jq -n --arg sha "$GITHUB_SHA" --arg image "$REF" '{
+            ref: $sha, environment: "eks", auto_merge: false, required_contexts: [],
+            production_environment: false, transient_environment: true,
+            description: "Signed release, on the AWS platform", payload: {image: $image}
+          }' | gh api "repos/$GITHUB_REPOSITORY/deployments" --input - --jq '"deployment \(.id) for \(.sha[0:12]) to \(.environment)"' \
+            | tee -a "$GITHUB_STEP_SUMMARY"

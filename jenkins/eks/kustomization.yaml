@@ -1,0 +1,21 @@
+# ═══════════════════════════════════════════════════════════════
+#   What Jenkins needs beyond its chart on EKS (D-093), applied by
+#   `node scripts/cluster-up.mjs --target eks` after the chart
+#   (helm/platform/eks/jenkins.values.yaml lies over the shared values):
+#
+#     ../rbac              the deploy builds' permissions, in splitx only (as on Kind)
+#     networkpolicy.yaml   who may talk to what, with EKS's addresses
+#     ingress.yaml         GitHub's deliveries, through CloudFront and the load balancer
+#
+#   Kind's relay and its alerts (jenkins/relay.yaml, jenkins/prometheusrule.yaml)
+#   are not here: GitHub reaches this Jenkins directly, so there is no smee.io
+#   stream to hold open, and those alerts would fire for a relay that is not
+#   meant to exist.
+# ═══════════════════════════════════════════════════════════════
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../rbac
+  - networkpolicy.yaml
+  - ingress.yaml

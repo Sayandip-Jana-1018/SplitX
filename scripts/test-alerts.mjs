@@ -21,6 +21,7 @@ import { chmodSync, copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSy
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { renderAlertmanagerConfig } from './lib/alertmanager-config.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PROMETHEUS_IMAGE = 'quay.io/prometheus/prometheus:v3.14.0@sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0';
@@ -54,10 +55,9 @@ function alertmanagerConfig() {
         // that cries wolf is one people learn to ignore.
         ALERT_SMTP_PASSWORD: randomBytes(8).toString('hex'),
     };
-    let config = readFileSync(join(root, 'monitoring/alertmanager/alertmanager.yaml'), 'utf8');
-    for (const [key, value] of Object.entries(example)) config = config.split('${' + key + '}').join(JSON.stringify(value));
-    const left = config.match(/\$\{[A-Z_]+\}/);
-    if (left) throw new Error('alertmanager.yaml has a placeholder neither k8s:up nor this test fills: ' + left[0]);
+    // Filled exactly as both clusters fill it (k8s:up on Kind, aws:secrets for EKS).
+    const { config, emailed } = renderAlertmanagerConfig(readFileSync(join(root, 'monitoring/alertmanager/alertmanager.yaml'), 'utf8'), example);
+    if (!emailed) throw new Error('the example values did not produce the email integration');
     return config;
 }
 

@@ -73,6 +73,10 @@ jobs:
     # No reviewer, main only: the only environment splitx-ci-teardown trusts.
     environment: aws-teardown
     timeout-minutes: 100
+    permissions:
+      contents: read
+      id-token: write # GitHub's OIDC token, exchanged for the role splitx-ci-teardown
+      deployments: write # mark the EKS site's GitHub deployment inactive
 
     steps:
       - name: Checkout
@@ -152,3 +156,19 @@ jobs:
       - name: Nothing is left
         if: always()
         run: node scripts/aws-teardown.mjs report --wait 300
+
+      - name: GitHub no longer lists the EKS site as live
+        # The newest "eks" deployment stays active in GitHub's records until
+        # told otherwise, while its address now shows the offline page.
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          id="$(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=eks&per_page=1" --jq '.[0].id // empty')"
+          if [[ -z "$id" ]]; then
+            echo "No eks deployment yet."
+            exit 0
+          fi
+          gh api "repos/$GITHUB_REPOSITORY/deployments/$id/statuses" -f state=inactive -f description="The AWS platform was taken down (aws-down)" > /dev/null
+          echo "GitHub deployment $id is now inactive."

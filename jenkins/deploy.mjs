@@ -5,8 +5,9 @@
  *   node jenkins/deploy.mjs request    the request is well formed, for this cluster, and still the newest
  *   node jenkins/deploy.mjs verify     the image was signed by this repository's release job on main, for this commit
  *   node jenkins/deploy.mjs deploy     apply the commit's manifests with the verified image
- *   node jenkins/deploy.mjs wait       the database, the schema Job and the application roll out
+ *   node jenkins/deploy.mjs wait       the database and the schema Job (where the overlay has them) and the application roll out
  *   node jenkins/deploy.mjs check      every ready pod runs the image, and the edge serves only them
+ *                                      (Kind: through ingress-nginx; EKS: through CloudFront over HTTPS)
  *   node jenkins/deploy.mjs rollback   put the application back to the revision it had before `deploy`
  *   node jenkins/deploy.mjs report     tell the GitHub deployment how it went
  *
@@ -23,6 +24,7 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { request as httpRequest } from 'node:http';
+import { request as httpsRequest } from 'node:https';
 
 const REPOSITORY = 'Sayandip-Jana-1018/SplitX';
 const IMAGE_REPOSITORY = 'ghcr.io/sayandip-jana-1018/splitx';
@@ -53,11 +55,11 @@ function fail(text) {
     process.exit(1);
 }
 
-function kubectl(argv, { json = false, allowFailure = false } = {}) {
+function kubectl(argv, { json = false, allowFailure = false, quiet = false } = {}) {
     const result = spawnSync('kubectl', ['-n', NAMESPACE, ...argv, ...(json ? ['-o', 'json'] : [])], { encoding: 'utf8' });
     if (result.status !== 0 && !allowFailure) fail('kubectl ' + argv.join(' ') + ' failed:\n' + result.stderr.trim());
     if (!json) {
-        if (result.stdout.trim()) say(result.stdout.trim().replace(/\n/g, '\n    '));
+        if (result.stdout.trim() && !quiet) say(result.stdout.trim().replace(/\n/g, '\n    '));
         return result;
     }
     return JSON.parse(result.stdout);
@@ -87,15 +89,19 @@ async function github(method, path, body) {
     return text ? JSON.parse(text) : null;
 }
 
-// Through the ingress controller, the way users arrive.
+// The way users arrive: through the ingress controller on Kind, and through
+// CloudFront over HTTPS on EKS, where DEPLOY_EDGE_URL is the edge itself.
 function edge(method, path, body) {
     return new Promise((resolve) => {
         const url = new URL(path, env.DEPLOY_EDGE_URL);
-        const req = httpRequest({
+        const secure = url.protocol === 'https:';
+        const req = (secure ? httpsRequest : httpRequest)({
             host: url.hostname,
-            port: url.port || 80,
+            port: url.port || (secure ? 443 : 80),
             path: url.pathname,
             method,
+            // Over HTTPS the certificate is checked against this name too.
+            servername: secure ? env.DEPLOY_EDGE_HOST : undefined,
             headers: { Host: env.DEPLOY_EDGE_HOST, ...(body ? { 'content-type': 'application/json' } : {}) },
             timeout: 10_000,
         }, (res) => {
@@ -210,9 +216,13 @@ function stepDeploy() {
 
 // ── wait ───────────────────────────────────────────────────────────────────
 function stepWait() {
-    kubectl(['rollout', 'status', 'statefulset/splitx-postgres', '--timeout=240s']);
+    // The overlay decides what there is to wait for: Kind's has its own
+    // Postgres and a schema Job; the AWS overlay uses a Neon branch that
+    // already has the schema, so it has neither.
+    const has = (object) => kubectl(['get', object, '--ignore-not-found', '-o', 'name'], { json: false, allowFailure: true, quiet: true }).stdout.trim() !== '';
+    if (has('statefulset/splitx-postgres')) kubectl(['rollout', 'status', 'statefulset/splitx-postgres', '--timeout=240s']);
     kubectl(['rollout', 'status', 'deployment/splitx-redis', '--timeout=120s']);
-    kubectl(['wait', '--for=condition=complete', 'job/splitx-schema-init', '--timeout=240s']);
+    if (has('job/splitx-schema-init')) kubectl(['wait', '--for=condition=complete', 'job/splitx-schema-init', '--timeout=240s']);
     // New pods must become ready within this; maxUnavailable 0 keeps the old
     // ones serving meanwhile, so a release that never gets there costs nothing.
     kubectl(['rollout', 'status', 'deployment/' + APP, '--timeout=150s']);
@@ -274,7 +284,9 @@ async function report(status, description) {
         state: status,
         description: description.slice(0, 140),
         log_url: env.BUILD_URL,
-        environment_url: 'http://' + env.DEPLOY_EDGE_HOST + '/',
+        // Where visitors reach this environment: http://localhost/ on Kind,
+        // the CloudFront address on EKS.
+        environment_url: new URL(env.DEPLOY_EDGE_URL).protocol + '//' + env.DEPLOY_EDGE_HOST + '/',
     });
     say('reported to GitHub deployment ' + deployment.id + ': ' + status);
 }

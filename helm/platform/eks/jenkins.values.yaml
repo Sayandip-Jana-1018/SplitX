@@ -1,0 +1,44 @@
+# ═══════════════════════════════════════════════════════════════
+#   Jenkins on EKS: laid over the Kind values (helm/platform/jenkins.values.yaml),
+#   which hold the plugins, the JCasC and the splitx-deploy job both clusters
+#   share. Only where this Jenkins deploys, and how GitHub reaches it, differ.
+#
+#   GitHub's second webhook posts to CloudFront, which passes
+#   /generic-webhook-trigger/* to the load balancer and on to Jenkins
+#   (jenkins/eks/ingress.yaml): no relay, and nothing else of Jenkins is
+#   reachable from outside. Every delivery must still carry GitHub's
+#   signature and the trigger token (D-055, D-056).
+# ═══════════════════════════════════════════════════════════════
+controller:
+  # Builds link here in their logs. The UI is not published on EKS: reach it
+  # with `kubectl -n jenkins port-forward svc/jenkins 8080`.
+  jenkinsUrl: http://jenkins.jenkins.svc.cluster.local:8080/
+
+  # The whole list: Helm replaces lists, it does not merge them.
+  containerEnv:
+    # GitHub deployments for the environment "eks", which the release job
+    # creates while this platform is up (D-093).
+    - name: DEPLOY_ENVIRONMENT
+      value: eks
+    - name: DEPLOY_OVERLAY
+      value: k8s/overlays/aws
+    # The smoke test goes through the edge, over HTTPS, the way visitors
+    # arrive. The address is the one committed in k8s/overlays/aws
+    # (NEXTAUTH_URL); cluster-up checks it against terraform/edge and writes it
+    # into this ConfigMap before Jenkins starts.
+    - name: DEPLOY_EDGE_URL
+      valueFrom:
+        configMapKeyRef:
+          name: splitx-edge
+          key: url
+    - name: DEPLOY_EDGE_HOST
+      valueFrom:
+        configMapKeyRef:
+          name: splitx-edge
+          key: host
+    - name: DEPLOY_PIPELINE_BRANCH
+      value: main
+
+  # Only the webhook path is published, by jenkins/eks/ingress.yaml.
+  ingress:
+    enabled: false

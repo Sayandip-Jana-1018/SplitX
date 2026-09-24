@@ -13,6 +13,8 @@
  * once, into .env, by scripts/aws-secrets.mjs.
  */
 
+import { renderAlertmanagerConfig } from './alertmanager-config.mjs';
+
 export const APP_SECRET = 'splitx/demo/app';
 export const PLATFORM_SECRET = 'splitx/demo/platform';
 
@@ -57,8 +59,9 @@ export function withPool(url) {
  * loaded). Returns the missing required keys instead of throwing, so the
  * caller can name all of them at once.
  * @param {Record<string, string | undefined>} env
+ * @param {{ alertmanagerTemplate: string }} files  the committed monitoring/alertmanager/alertmanager.yaml
  */
-export function demoSecrets(env) {
+export function demoSecrets(env, { alertmanagerTemplate }) {
     const value = (key) => (env[key] ?? '').trim();
     const missing = REQUIRED.filter((key) => !value(key));
     if (missing.length) return { missing, app: null, platform: null };
@@ -87,22 +90,21 @@ export function demoSecrets(env) {
     }
     for (const key of APP_OPTIONAL) if (value(key)) app[key] = value(key);
 
+    // Every key the cluster's ExternalSecrets name is always present, even when
+    // empty: one missing property fails the whole ExternalSecret (k8s/eks/secrets).
     /** @type {Record<string, string>} */
     const platform = {
         GF_ADMIN_PASSWORD: value('GF_ADMIN_PASSWORD'),
         JENKINS_ADMIN_PASSWORD: value('JENKINS_ADMIN_PASSWORD'),
         GITHUB_WEBHOOK_SECRET: value('GITHUB_WEBHOOK_SECRET'),
         JENKINS_TRIGGER_TOKEN: value('JENKINS_TRIGGER_TOKEN'),
+        // Empty: Jenkins deploys, but reads GitHub anonymously and reports nothing (B-026).
+        JENKINS_GITHUB_TOKEN: value('JENKINS_GITHUB_TOKEN'),
         NEXUS_ADMIN_PASSWORD: value('NEXUS_ADMIN_PASSWORD'),
+        // Alertmanager's whole configuration, filled here exactly as k8s:up fills
+        // it for Kind (D-052); without the ALERT_* values it routes but emails nobody.
+        ALERTMANAGER_YAML: renderAlertmanagerConfig(alertmanagerTemplate, env).config,
     };
-    if (value('JENKINS_GITHUB_TOKEN')) platform.JENKINS_GITHUB_TOKEN = value('JENKINS_GITHUB_TOKEN');
-    // Alertmanager's email (D-052). Google shows an app password in groups of
-    // four; the spaces are not part of it.
-    if (value('ALERT_SMTP_USERNAME') && value('ALERT_SMTP_PASSWORD') && value('ALERT_EMAIL_TO')) {
-        platform.ALERT_SMTP_USERNAME = value('ALERT_SMTP_USERNAME');
-        platform.ALERT_SMTP_PASSWORD = value('ALERT_SMTP_PASSWORD').replace(/\s+/g, '');
-        platform.ALERT_EMAIL_TO = value('ALERT_EMAIL_TO');
-    }
 
     return { missing: [], app, platform };
 }

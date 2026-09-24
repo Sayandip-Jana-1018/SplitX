@@ -1,6 +1,11 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { renderAlertmanagerConfig } from '../../../scripts/lib/alertmanager-config.mjs';
 import { amzDates, signingKey, signRequest } from '../../../scripts/lib/aws-sigv4.mjs';
-import { REQUIRED, demoSecrets, withPool } from '../../../scripts/lib/demo-secrets.mjs';
+import { REQUIRED, demoSecrets as build, withPool } from '../../../scripts/lib/demo-secrets.mjs';
+
+const alertmanagerTemplate = readFileSync('monitoring/alertmanager/alertmanager.yaml', 'utf8');
+const demoSecrets = (env: Record<string, string | undefined>) => build(env, { alertmanagerTemplate });
 
 /** Every required key, with plain made-up values. */
 const complete: Record<string, string> = Object.fromEntries(REQUIRED.map((key) => [key, `${key.toLowerCase()}-value`]));
@@ -54,7 +59,48 @@ describe('what goes into the demo secrets', () => {
             expect(app).not.toHaveProperty(key);
             expect(platform).toHaveProperty(key);
         }
-        expect(platform!.ALERT_SMTP_PASSWORD).toBe('abcdefghijklmnop');
+        expect(platform!.ALERTMANAGER_YAML).toContain('auth_password: "abcdefghijklmnop"');
+        expect(app).not.toHaveProperty('ALERTMANAGER_YAML');
+    });
+
+    it('always has every key the cluster\'s ExternalSecrets read, even the optional ones', () => {
+        const { platform } = demoSecrets(complete);
+        expect(Object.keys(platform!).sort()).toEqual([
+            'ALERTMANAGER_YAML', 'GF_ADMIN_PASSWORD', 'GITHUB_WEBHOOK_SECRET', 'JENKINS_ADMIN_PASSWORD',
+            'JENKINS_GITHUB_TOKEN', 'JENKINS_TRIGGER_TOKEN', 'NEXUS_ADMIN_PASSWORD',
+        ]);
+        expect(platform!.JENKINS_GITHUB_TOKEN).toBe('');
+    });
+});
+
+describe('Alertmanager\'s configuration, as both clusters get it', () => {
+    const alerts = { ALERT_SMTP_USERNAME: 'sender@example.com', ALERT_SMTP_PASSWORD: 'abcd efgh', ALERT_EMAIL_TO: 'team@example.com' };
+
+    it('fills every address and the password as quoted strings', () => {
+        const { config, emailed } = renderAlertmanagerConfig(alertmanagerTemplate, alerts);
+        expect(emailed).toBe(true);
+        expect(config).toContain('to: "team@example.com"');
+        expect(config).toContain('auth_username: "sender@example.com"');
+        expect(config).toContain('auth_password: "abcdefgh"');
+        expect(config).not.toMatch(/\$\{[A-Z_]+\}/);
+    });
+
+    it('keeps a value that would break YAML inside its quotes', () => {
+        const { config } = renderAlertmanagerConfig(alertmanagerTemplate, { ...alerts, ALERT_EMAIL_TO: 'a"b: #c@example.com' });
+        expect(config).toContain('to: "a\\"b: #c@example.com"');
+    });
+
+    it('routes without email when any of the three is missing, and says which', () => {
+        const { config, emailed, unset } = renderAlertmanagerConfig(alertmanagerTemplate, { ...alerts, ALERT_EMAIL_TO: ' ' });
+        expect(emailed).toBe(false);
+        expect(unset).toEqual(['ALERT_EMAIL_TO']);
+        expect(config).not.toContain('\n    email_configs:');
+        expect(config).toContain('- name: email');
+        expect(config.trimEnd().endsWith('- name: email')).toBe(true);
+    });
+
+    it('refuses a placeholder nothing fills', () => {
+        expect(() => renderAlertmanagerConfig(alertmanagerTemplate + '\n# ${ALERT_OTHER}\n', alerts)).toThrow(/ALERT_OTHER/);
     });
 });
 

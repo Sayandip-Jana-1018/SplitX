@@ -3,26 +3,37 @@ kind: Ingress
 metadata:
   name: splitx
   annotations:
-    # The AWS Load Balancer Controller turns this into an internet-facing ALB
-    # with an ACM certificate; CloudFront sits in front of it.
-    # One ALB shared by both Ingress objects in this namespace.
+    # nginx's annotations mean nothing to an ALB; removed rather than left to
+    # suggest settings that are not in force here. An ALB has no body-size
+    # limit, and its idle timeout (60 s) is below the app's keep-alive (65 s).
+    nginx.ingress.kubernetes.io/proxy-body-size: null
+    nginx.ingress.kubernetes.io/proxy-read-timeout: null
+    nginx.ingress.kubernetes.io/proxy-send-timeout: null
+    # The AWS Load Balancer Controller turns the IngressGroup "splitx" (this,
+    # splitx-internal, and Jenkins' webhook path) into one internet-facing ALB.
+    # terraform/platform finds it by this group's name for its alarms.
     alb.ingress.kubernetes.io/group.name: splitx
+    # Last: the catch-all "/" must come after the refusals (10) and Jenkins'
+    # webhook path (20). Without an order, the ALB's rule priorities followed
+    # the Ingresses' names and "/" could win over the refusals.
+    alb.ingress.kubernetes.io/group.order: "100"
     alb.ingress.kubernetes.io/scheme: internet-facing
+    # The pods themselves are the targets, so the ALB sees each pod's health
+    # and a rollout can wait for it (patches/namespace.yaml).
     alb.ingress.kubernetes.io/target-type: ip
-    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
-    alb.ingress.kubernetes.io/ssl-redirect: "443"
+    # HTTP only. CloudFront holds the certificate and the visitor's HTTPS
+    # connection and forwards over HTTP (terraform/edge), so an HTTPS listener
+    # would need a certificate for a domain SplitX doesn't have.
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
+    # Only CloudFront may connect: its origin-facing prefix list in
+    # ap-south-1. cluster-up checks this ID against AWS before every install.
+    # Anyone else's CloudFront distribution shares these addresses; the app
+    # refuses those requests itself (X-Origin-Verify, D-092).
+    alb.ingress.kubernetes.io/security-group-prefix-lists: pl-9aa247f3
     alb.ingress.kubernetes.io/healthcheck-path: /api/health/live
-    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:ap-south-1:ACCOUNT_ID:certificate/REPLACE
+    # Give a leaving pod 30 s to finish its requests, not the default 300.
+    alb.ingress.kubernetes.io/target-group-attributes: deregistration_delay.timeout_seconds=30
+    # A header that isn't valid HTTP is dropped, not passed on to the app.
+    alb.ingress.kubernetes.io/load-balancer-attributes: routing.http.drop_invalid_header_fields.enabled=true
 spec:
   ingressClassName: alb
-  rules:
-    - host: REPLACE_WITH_PUBLIC_HOSTNAME
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: splitx
-                port:
-                  name: http

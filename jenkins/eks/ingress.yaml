@@ -1,0 +1,40 @@
+# ═══════════════════════════════════════════════════════════════
+#   GitHub's way in to Jenkins on EKS (D-093): one path, on the load
+#   balancer the application uses (IngressGroup "splitx").
+#
+#   GitHub posts deployment events to
+#   https://<edge>/generic-webhook-trigger/invoke?token=..., CloudFront passes
+#   that path to the load balancer (terraform/edge), and this rule sends it to
+#   the Jenkins controller. Nothing else of Jenkins is published: its UI is
+#   reached with `kubectl port-forward`. Each delivery must still carry
+#   GitHub's signature and the trigger token, or Jenkins refuses it (D-056).
+#
+#   group.order 20: after the application's refusals of its internal paths
+#   (10) and before its catch-all "/" (100), which would otherwise take this
+#   path too.
+# ═══════════════════════════════════════════════════════════════
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: jenkins-webhook
+  namespace: jenkins
+  labels:
+    app.kubernetes.io/part-of: splitx
+  annotations:
+    alb.ingress.kubernetes.io/group.name: splitx
+    alb.ingress.kubernetes.io/group.order: "20"
+    alb.ingress.kubernetes.io/target-type: ip
+    # Jenkins answers /login without credentials; / asks for them (403).
+    alb.ingress.kubernetes.io/healthcheck-path: /login
+spec:
+  ingressClassName: alb
+  rules:
+    - http:
+        paths:
+          - path: /generic-webhook-trigger/
+            pathType: Prefix
+            backend:
+              service:
+                name: jenkins
+                port:
+                  number: 8080

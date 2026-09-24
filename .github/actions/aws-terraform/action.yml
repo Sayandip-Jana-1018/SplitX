@@ -1,9 +1,9 @@
 name: SplitX on AWS
 description: >-
   What aws-edge, aws-up and aws-down start with: one of SplitX's two CI roles,
-  assumed with GitHub's OIDC token (no stored keys); the pinned Terraform and
-  kubectl; and both Terraform roots initialised against the state bucket the
-  splitx-bootstrap stack made, with the committed lock files.
+  assumed with GitHub's OIDC token (no stored keys); the pinned Terraform,
+  kubectl and Helm; and both Terraform roots initialised against the state
+  bucket the splitx-bootstrap stack made, with the committed lock files.
 
 inputs:
   role:
@@ -64,6 +64,21 @@ runs:
         echo "$KUBECTL_SHA256  $RUNNER_TEMP/bin/kubectl" | sha256sum --check --strict -
         chmod 0755 "$RUNNER_TEMP/bin/kubectl"
         echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+    - name: Install Helm (checksum pinned)
+      # The major version the Kind rehearsals ran (4), at its newest release,
+      # for scripts/cluster-up.mjs --target eks. The checksum is the one Helm
+      # publishes beside the archive and in the release's notes.
+      shell: bash
+      env:
+        HELM_VERSION: v4.3.0
+        HELM_SHA256: 86584a54def73570558f66f5111cc53dfed56689637ae32c1201205d494f54fb
+      run: |
+        archive="$RUNNER_TEMP/helm.tar.gz"
+        curl -sSfLo "$archive" "https://get.helm.sh/helm-$HELM_VERSION-linux-amd64.tar.gz"
+        echo "$HELM_SHA256  $archive" | sha256sum --check --strict -
+        tar -xzf "$archive" -C "$RUNNER_TEMP" linux-amd64/helm
+        install -m 0755 "$RUNNER_TEMP/linux-amd64/helm" "$RUNNER_TEMP/bin/helm"
 
     - name: Initialise both roots
       shell: bash

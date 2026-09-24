@@ -3161,7 +3161,7 @@ secrets. Both are tagged `stack=platform`, and aws-down deletes them with no rec
 | Secret | Holds |
 |---|---|
 | `splitx/demo/app` | the app's `splitx-secrets`: the demo database (with Prisma's pool capped at 5 per pod), the cluster's own Redis, the session and metrics secrets, the origin header's value, and whichever of OAuth, storage, AI, email and `/ops` keys `.env` has |
-| `splitx/demo/platform` | Grafana's admin password, Alertmanager's email (the app password's spaces removed), Jenkins' admin password, webhook secret, trigger token and GitHub token, and Nexus' admin password |
+| `splitx/demo/platform` | Grafana's admin password, Alertmanager's whole configuration (filled from the `ALERT_*` values, D-093), Jenkins' admin password, webhook secret, trigger token and GitHub token (empty when unset), and Nexus' admin password |
 
 How the mapping works (`scripts/lib/demo-secrets.mjs`):
 - **The demo uses its own database.** `DEMO_DATABASE_URL` is a Neon branch with production's schema
@@ -3232,6 +3232,157 @@ paths.
 - **Reading it fails closed.** `aws-edge` reads the value with `jq -e`, so a missing key stops the
   run instead of sending the text `null`.
 
+### D-093 · The same platform on EKS: one script, the Secrets from AWS, the load balancer behind CloudFront
+**2026-09-24** · 🚧 written, rendered and unit-tested (`tests/unit/infra/eksPlatform.test.ts`, 20
+cases); none of it has run on AWS yet (B-031)
+
+**What `aws-up` does after its cluster checks:**
+1. finds the newest signed release: the image the newest `kind` deployment names;
+2. runs `node scripts/cluster-up.mjs --target eks --image <that digest>`;
+3. applies `terraform/platform` again with `alb_ready=true`, for the load balancer's alarms;
+4. points the edge at the load balancer, with the origin header's value (D-092), and checks it from
+   outside: `/api/health/live` answers 200, `/api/metrics` 403, and the load balancer does not answer
+   the runner at all;
+5. creates a GitHub deployment for `eks` and waits up to 15 minutes for Jenkins' report. The release
+   already runs, so nothing rolls: this proves the path every later release takes.
+
+**`cluster-up --target eks`** (`scripts/lib/cluster-up-eks.mjs`; the Kind path is unchanged):
+- **Checks three committed facts against AWS first:**
+  - the edge's address in `k8s/overlays/aws` against `terraform/edge`'s domain;
+  - the ClusterSecretStore's region against the platform's;
+  - the prefix list the load balancer admits against CloudFront's in that region.
+- **Namespaces:** created with their Pod Security levels.
+- **Secrets:** the External Secrets Operator first, then `k8s/eks/secrets`. These are the same Secret
+  names and keys `k8s:up` builds on Kind, so every chart and the app read them unchanged. The script
+  waits until all of them sync; a missing key or permission stops it with the operator's own message,
+  which never contains a value.
+- **The other charts, in `charts.json`'s order.** Jenkins reads the edge's address from a ConfigMap
+  the script writes.
+- **Kyverno's policy before the app,** so the very first pods are admitted only if their image is
+  signed.
+- **The overlay, with the release pinned by digest** (the way Jenkins deploys it), the dashboards,
+  and `jenkins/eks`.
+- **Waits** for Redis, the app, and the load balancer's address.
+
+**Charts.** `helm/platform/charts.json` gained `targets`, `eksValues` (laid over the shared values),
+`set` (values read from Terraform's outputs, like the VPC) and `stage`. The versions were looked up in
+each chart repository's index on 2026-09-24.
+
+| Chart | Version | Where | On EKS |
+|---|---|---|---|
+| external-secrets | 2.11.0 | EKS only | turns `splitx/demo/*` into Secrets through Pod Identity; its push and cross-namespace controllers are off |
+| aws-load-balancer-controller | 3.5.0 | EKS only | the ALB; two replicas; tags everything it makes `project=splitx, stack=platform`; the Service webhook (fail-closed for every Service) is off |
+| cluster-autoscaler | 9.59.0, image v1.35.2 by digest | EKS only | adds and removes the fourth node, 5 minutes after it stops being needed |
+| kube-prometheus-stack, loki, alloy, kyverno, jenkins | unchanged | both | EKS values only where they differ: Grafana has no Ingress, the four clock alerts Kind silences are back on, and Jenkins deploys `eks` |
+| ingress-nginx, metrics-server | unchanged | Kind only | EKS has the ALB, and its own metrics-server add-on without `--kubelet-insecure-tls` |
+
+Helm is pinned in the composite action at v4.3.0, by the checksum Helm publishes. Helm 4 is the major
+version the Kind rehearsals ran.
+
+**Secrets (amends D-091).**
+- **Alertmanager's configuration is rendered on the laptop.** `splitx/demo/platform` holds the whole
+  file (`ALERTMANAGER_YAML`), filled by the same code `k8s:up` uses
+  (`scripts/lib/alertmanager-config.mjs`), instead of the three `ALERT_*` values.
+- **Every property is always present.** `JENKINS_GITHUB_TOKEN` is written even when empty, because one
+  missing property fails a whole ExternalSecret.
+- **A test checks the two sides agree:** every property the ExternalSecrets read against what
+  `aws:secrets` writes.
+
+**The load balancer** (`k8s/overlays/aws`).
+- **What it serves:** one HTTP:80 listener with the pods as targets. There is no ACM certificate, no
+  HTTPS redirect, and no IRSA annotation (the app calls no AWS API).
+- **Who may connect:** CloudFront's origin-facing prefix list, `pl-9aa247f3` in ap-south-1.
+- **Rule order,** fixed with `group.order`. Before, the rule priorities followed the Ingress names,
+  and "/" could outrank the refusals.
+
+  | Rule | group.order |
+  |---|---|
+  | the refusals of `/api/metrics` and `/api/health/ready` | 10 |
+  | Jenkins' webhook path | 20 |
+  | the app's "/" | 100 |
+
+- **No host rules.** The domain is written once (`NEXTAUTH_URL`). A host rule would add nothing the
+  prefix list and the origin header don't already enforce.
+- **Rollouts wait for the load balancer:**
+  - pod readiness gates, through the namespace label;
+  - a preStop sleep of 20 s and a termination grace period of 45 s;
+  - a deregistration delay of 30 s.
+- **nginx's annotations are removed,** rather than left to suggest settings that are not in force.
+
+**Network policies, with EKS's addresses.**
+- **The app** admits the public subnets (the load balancer) and `monitoring`.
+  - There is no rule for the kubelet: the VPC CNI's agent always admits the node's own address
+    (aws-network-policy-agent PR #65; confirmed by its maintainers in issue #108).
+  - Kind's node-range rule would admit every pod here, because pods share the nodes' subnets.
+- **Jenkins** (`jenkins/eks`) reaches the API server at the `kubernetes` Service's address,
+  `172.20.0.1:443`. That is the address the agent judges, before translation (the maintainers, #108),
+  and it is why the service range is pinned.
+- **The agent needs a Service's port to equal its pods' port.** Every path that crosses a policy here
+  complies: Redis 6379, Jenkins 8080. The app's Service (80 to 3000) is reached only by the load
+  balancer, straight to the pods, and by Prometheus, which has no egress policy. Phase 6's traffic lab
+  must mind it.
+- **Tests keep the addresses honest.** They check the CIDRs equal `terraform/platform/network.tf`'s
+  public subnets, and that `172.20.0.1` is the first address of the pinned range.
+
+**Delivery on EKS.**
+- **One Jenkins per environment.** Jenkins on EKS takes deployments for `eks`.
+  - CI's release job creates one only while the edge answers `/api/health/live` with 200, which is on
+    AWS days.
+  - `aws-up` creates one for its first release.
+  - `aws-down` marks the newest one inactive.
+- **The webhook's way in:** GitHub, then CloudFront (`/generic-webhook-trigger/*`), then the load
+  balancer, then Jenkins (`jenkins/eks/ingress.yaml`). Nothing else of Jenkins is published.
+- **The second webhook is the user's to create.** On other days its deliveries meet the offline page
+  (503), and GitHub lists them as failed. That is honest, and nothing is lost: the next `aws-up`
+  deploys the newest release anyway.
+- **`deploy.mjs` works on both clusters.**
+  - On EKS it checks through CloudFront over HTTPS.
+  - It waits for Postgres and the schema Job only where the overlay has them.
+  - The environment URL follows the edge's scheme.
+- **Image volumes** (the agent's kubectl and cosign):
+  - EKS's AL2023 AMIs ship containerd 2.2.7 (release v20260917).
+  - The feature is on by default in 1.35; Kind v1.35.0 ran it with no feature gate.
+  - The rehearsal proves it on EKS.
+- **The delivery alerts stay on Kind.** They watch the smee relay, which EKS doesn't have, and they
+  would fire for its absence.
+
+**Docker Hub.** It allows 100 anonymous pulls per 6 hours per address (Docker's documentation, read
+2026-09-24). An AWS day pulls a few dozen at most through the one NAT address, so no token is needed.
+The rehearsal counts them.
+
+**Rejected:**
+- **A separate EKS script.** There is one entry point, `cluster-up --target`, with the chart code
+  shared (`scripts/lib/platform-charts.mjs`).
+- **Rendering Alertmanager's configuration in the cluster with the operator's templates.** That would
+  put two templating languages on one file. The laptop renders it with exactly the code Kind uses.
+- **Publishing Jenkins' UI or Grafana through the edge.**
+  - Jenkins has no permissions plugin, so any account would be an admin.
+  - Grafana reaches the audience through `/ops` in Phase 6.
+
+**Known limits, proven only on the day (B-031):**
+- whether the ALB policy that `eks-pod-identity` 2.9.0 writes covers every call controller 3.5.0 makes;
+- metrics-server's resolution, which is the add-on's own default (its schema takes no arguments).
+
+### D-094 · Jenkins could not deploy any release made after the daily scan was added
+**2026-09-24** · 🚧 fixed in code; proven when Jenkins next deploys (plan Phase 7 on Kind, or an AWS day)
+
+**Found while writing D-093.**
+- `k8s/base/release-scan.yaml` (D-061, 2026-09-20 15:30) put a CronJob, a Role and a RoleBinding into
+  every release. `jenkins-deployer`'s Role (D-055) allowed none of the three.
+- `kubectl apply` reads each object before changing it, so every deploy of a later commit would stop
+  at its Deploy step, refused.
+- The last deploy that was proven (`docs/evidence/delivery.md`, 14:16 that day) came before the scan,
+  and none has run since: the laptop has had no cluster.
+
+**The fix.**
+- **The Role now allows:**
+  - `cronjobs`: get, list, watch, create, patch, update;
+  - Roles and RoleBindings: create, plus get, patch and update on the one named `release-scan`.
+- **This can't widen what a deploy build may do.** Kubernetes lets an account create or bind only a
+  Role whose permissions it already holds.
+- **`cd:verify` proves it:** the new permission is among the ones it checks.
+- **The file moved** to `jenkins/rbac/rbac.yaml`, shared by Kind (`jenkins/`) and EKS (`jenkins/eks`).
+
 ---
 
 ## Open problems
@@ -3268,7 +3419,7 @@ paths.
 | B-028 | The AI chat builds its own balances: pairwise instead of the group plan, over every expense including deleted ones, in deleted groups too, with ±1 paisa counted as settled. | Its answers to "who owes me?" can disagree with Settle Up, and count expenses that were deleted. | ✅ Resolved 2026-09-22 — D-067. The chat's context is the ledger: balances per group over live expenses, and each group's settle-up plan. |
 | B-029 | Removing a member used to re-split their shares among the others (D-063). Groups that had a member removed may hold shares that were moved between people, and former members may still owe or be owed. | Balances in those groups reflect the old re-split, not what people agreed to. | ✅ Checked 2026-09-22 — D-069. `npm run ledger:audit -- --https` read production (1 group, 37 expenses, 62 shares, 0 settlements, 9 accounts) in a read-only transaction: no share of a former member, no former member with a balance, every expense adding up, every group netting to zero. Nothing to repair. |
 | B-030 | `npm audit` still reports one high advisory: `deepmerge-ts` below 8 (GHSA-ggr8-5vv4-36mx, stack exhaustion when merging self-referencing objects), through `prisma` → `@prisma/config`. | The Prisma CLI is a development and migration tool; the app's runtime (`@prisma/client`) doesn't use it, and the only objects it merges are our own config. | Accepted 2026-09-22 (D-070). The fix is Prisma 7, a major upgrade with its own changes. Still accepted after the migration baseline (D-072), which was done on Prisma 6: the upgrade is its own change. The CLI stays out of the runtime image. |
-| B-031 | Phase 4 (D-088 to D-090) is written and validated, but nothing in it has been applied. Only a real run proves: the `iam:PassedToService` value for the flow log's role (both candidates are allowed); that `splitx-ci-teardown`'s permissions cover a whole `terraform destroy` and the edge's offline apply; the ALB's lookup by the controller's tags (`ingress.k8s.aws/stack = splitx`); that the pinned add-on versions are still offered on the day; and the edge function in CloudFront's own runtime (it is tested in Node). | An AWS day that meets any of these unprepared loses hours of a rehearsal or the demo. | Open. `aws-edge` proves the edge's part as soon as the stacks and the `AWS_ACCOUNT_ID` secret exist. The rehearsal's first hour, a platform-only `aws-up` then `aws-down`, proves the rest (plan Phase 10). |
+| B-031 | Phase 4 (D-088 to D-090) is written and validated, but nothing in it has been applied. Only a real run proves: the `iam:PassedToService` value for the flow log's role (both candidates are allowed); that `splitx-ci-teardown`'s permissions cover a whole `terraform destroy` and the edge's offline apply; the ALB's lookup by the controller's tags (`ingress.k8s.aws/stack = splitx`); that the pinned add-on versions are still offered on the day; and the edge function in CloudFront's own runtime (it is tested in Node). | An AWS day that meets any of these unprepared loses hours of a rehearsal or the demo. | Open. `aws-edge` proves the edge's part as soon as the stacks and the `AWS_ACCOUNT_ID` secret exist. The rehearsal's first hour, a platform-only `aws-up` then `aws-down`, proves the rest (plan Phase 10). **2026-09-24, D-093 adds to the list:** the External Secrets Operator's Pod Identity credentials; the load balancer controller's IAM policy (the module's) against controller 3.5.0; the pod readiness gates; the VPC CNI agent admitting the kubelet and judging `172.20.0.1` as the API server; the prefix-list rule fitting the security group (weight 55 of 60); image volumes on the EKS node image; Docker Hub pulls through the NAT address; GitHub's webhook through CloudFront to Jenkins; and the Jenkins deploy RBAC of D-094. |
 
 ## Environment notes (this machine)
 

@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: splitx
+  labels:
+    # The AWS Load Balancer Controller adds a readiness gate to every pod here:
+    # a new pod counts as ready only once the ALB has it registered and
+    # healthy. Without it, a rollout could retire the old pods while the ALB
+    # still had no healthy new one, and visitors would get 502s.
+    elbv2.k8s.aws/pod-readiness-gate-inject: enabled

@@ -4,10 +4,28 @@
     "installed in this order by scripts/cluster-up.mjs. Nothing is installed from",
     "an unpinned `helm install` in a script or a README, so the rehearsal cluster",
     "and the graded demo get identical components.",
-    "kube-prometheus-stack comes first: its CRDs (ServiceMonitor, PrometheusRule)",
-    "must exist before any other chart or manifest declares one."
+    "targets: the clusters a chart goes on, kind (the rehearsal cluster) and eks",
+    "(the demo platform, D-093). values is read on both; eksValues is laid over it",
+    "on EKS. set names values read from terraform/platform's outputs at install",
+    "time (value path: output name), because they change with every AWS day.",
+    "stage secrets: installed before everything else on EKS, because the charts",
+    "after it read Secrets it makes (k8s/eks/secrets).",
+    "kube-prometheus-stack comes before the rest: its CRDs (ServiceMonitor,",
+    "PrometheusRule) must exist before any other chart or manifest declares one."
   ],
   "charts": [
+    {
+      "release": "external-secrets",
+      "repo": "https://charts.external-secrets.io",
+      "chart": "external-secrets/external-secrets",
+      "version": "2.11.0",
+      "appVersion": "v2.11.0",
+      "namespace": "external-secrets",
+      "targets": ["eks"],
+      "stage": "secrets",
+      "values": "helm/platform/eks/external-secrets.values.yaml",
+      "why": "Turns splitx/demo/* in AWS Secrets Manager into the same Kubernetes Secrets k8s:up builds from .env on Kind, so the other charts and the app read them unchanged. Nothing on EKS generates a secret."
+    },
     {
       "release": "kube-prometheus-stack",
       "repo": "https://prometheus-community.github.io/helm-charts",
@@ -15,8 +33,22 @@
       "version": "91.4.1",
       "appVersion": "v0.94.0",
       "namespace": "monitoring",
+      "targets": ["kind", "eks"],
       "values": "helm/platform/kube-prometheus-stack.values.yaml",
+      "eksValues": "helm/platform/eks/kube-prometheus-stack.values.yaml",
       "why": "Prometheus, Alertmanager and Grafana, run by the Prometheus Operator, with kube-state-metrics and node-exporter for what Kubernetes and the nodes are doing."
+    },
+    {
+      "release": "aws-load-balancer-controller",
+      "repo": "https://aws.github.io/eks-charts",
+      "chart": "eks/aws-load-balancer-controller",
+      "version": "3.5.0",
+      "appVersion": "v3.5.0",
+      "namespace": "kube-system",
+      "targets": ["eks"],
+      "values": "helm/platform/eks/aws-load-balancer-controller.values.yaml",
+      "set": { "clusterName": "cluster_name", "region": "region", "vpcId": "vpc_id" },
+      "why": "Turns the Ingresses into one Application Load Balancer, which admits only CloudFront, with the pods as its targets. Replaces ingress-nginx on EKS."
     },
     {
       "release": "ingress-nginx",
@@ -25,6 +57,7 @@
       "version": "4.15.1",
       "appVersion": "1.15.1",
       "namespace": "ingress-nginx",
+      "targets": ["kind"],
       "values": "helm/platform/ingress-nginx.values.yaml",
       "why": "Turns Ingress objects into a real HTTP entry point on 80/443."
     },
@@ -35,8 +68,21 @@
       "version": "3.14.0",
       "appVersion": "0.9.0",
       "namespace": "kube-system",
+      "targets": ["kind"],
       "values": "helm/platform/metrics-server.values.yaml",
-      "why": "Supplies the CPU readings the HorizontalPodAutoscaler scales on."
+      "why": "Supplies the CPU readings the HorizontalPodAutoscaler scales on. EKS runs it as a managed add-on (terraform/platform/cluster.tf)."
+    },
+    {
+      "release": "cluster-autoscaler",
+      "repo": "https://kubernetes.github.io/autoscaler",
+      "chart": "autoscaler/cluster-autoscaler",
+      "version": "9.59.0",
+      "appVersion": "1.35.2",
+      "namespace": "kube-system",
+      "targets": ["eks"],
+      "values": "helm/platform/eks/cluster-autoscaler.values.yaml",
+      "set": { "autoDiscovery.clusterName": "cluster_name", "awsRegion": "region" },
+      "why": "Adds the fourth node when pods can't be placed on three, and removes it when it is no longer needed."
     },
     {
       "release": "loki",
@@ -45,6 +91,7 @@
       "version": "7.3.0",
       "appVersion": "3.6.12",
       "namespace": "monitoring",
+      "targets": ["kind", "eks"],
       "values": "helm/platform/loki.values.yaml",
       "why": "Stores the logs of the pods, searchable in Grafana by label and by request ID."
     },
@@ -55,6 +102,7 @@
       "version": "1.12.1",
       "appVersion": "v1.19.2",
       "namespace": "monitoring",
+      "targets": ["kind", "eks"],
       "values": "helm/platform/alloy.values.yaml",
       "why": "Reads the application and ingress logs through the Kubernetes API, parses their JSON, and sends them to Loki."
     },
@@ -65,6 +113,7 @@
       "version": "3.9.1",
       "appVersion": "v1.19.1",
       "namespace": "kyverno",
+      "targets": ["kind", "eks"],
       "values": "helm/platform/kyverno.values.yaml",
       "why": "Refuses, at admission, any image from our registry that the release workflow did not sign. Installed before Jenkins so the policy is in force before anything can deploy."
     },
@@ -75,7 +124,9 @@
       "version": "5.9.63",
       "appVersion": "2.568.3",
       "namespace": "jenkins",
+      "targets": ["kind", "eks"],
       "values": "helm/platform/jenkins.values.yaml",
+      "eksValues": "helm/platform/eks/jenkins.values.yaml",
       "timeout": "10m",
       "why": "Deploys releases GitHub Actions signed, when GitHub announces them, and rolls back what does not come up healthy. Its first start downloads its pinned plugins, hence the longer wait."
     }

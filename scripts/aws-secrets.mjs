@@ -17,7 +17,8 @@
  */
 import { spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { appendFileSync } from 'node:fs';
+import { appendFileSync, readFileSync } from 'node:fs';
+import { ALERT_KEYS } from './lib/alertmanager-config.mjs';
 import { signRequest } from './lib/aws-sigv4.mjs';
 import { APP_SECRET, PLATFORM_SECRET, demoSecrets } from './lib/demo-secrets.mjs';
 
@@ -42,7 +43,13 @@ ensureEnv('ORIGIN_VERIFY_SECRET', 'CloudFront sends this to the load balancer, a
 ensureEnv('NEXUS_ADMIN_PASSWORD', 'The Nexus admin password on the demo platform (user admin)');
 if (generated.length) console.log(`${CHECK ? 'Would generate' : 'Generated'} into .env: ${generated.join(', ')}`);
 
-const { missing, app, platform } = demoSecrets(process.env);
+let secrets;
+try {
+    secrets = demoSecrets(process.env, { alertmanagerTemplate: readFileSync('monitoring/alertmanager/alertmanager.yaml', 'utf8') });
+} catch (error) {
+    fail(error.message);
+}
+const { missing, app, platform } = secrets;
 if (missing.length) {
     fail('.env is missing: ' + missing.join(', ')
         + (missing.includes('DEMO_DATABASE_URL') ? '. DEMO_DATABASE_URL is a Neon branch with the schema and no data (docs/DECISIONS.md, D-091).' : ''));
@@ -50,7 +57,9 @@ if (missing.length) {
 console.log(`${APP_SECRET}: ${Object.keys(app).sort().join(', ')}`);
 console.log(`${PLATFORM_SECRET}: ${Object.keys(platform).sort().join(', ')}`);
 if (!app.GITHUB_ID) console.log('  (no AWS_GITHUB_ID in .env: the EKS site will not offer GitHub sign-in)');
-if (!platform.ALERT_EMAIL_TO) console.log('  (no ALERT_* in .env: alerts fire on EKS but are not emailed)');
+if (!platform.JENKINS_GITHUB_TOKEN) console.log('  (no JENKINS_GITHUB_TOKEN in .env: Jenkins on EKS reads GitHub anonymously and reports nothing back)');
+const unsetAlertKeys = ALERT_KEYS.filter((key) => !process.env[key]?.trim());
+if (unsetAlertKeys.length) console.log(`  (no ${unsetAlertKeys.join(', ')} in .env: alerts fire on EKS but are not emailed)`);
 if (CHECK) {
     console.log('--check: nothing written.');
     process.exit(0);

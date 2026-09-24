@@ -64,3 +64,6 @@ __pycache__/
 
 # generated scan and test reports
 /reports/
+
+# cluster-up --target eks: its temporary kustomization for the release to run
+.cluster-up-eks-*/

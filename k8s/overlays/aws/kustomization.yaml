@@ -1,17 +1,24 @@
 # ═══════════════════════════════════════════════════════════════
-#   AWS overlay — EKS, behind an ALB and CloudFront.
+#   AWS overlay: EKS, behind CloudFront and an Application Load Balancer
+#   (D-093). `node scripts/cluster-up.mjs --target eks` applies it on an AWS
+#   day, and Jenkins on EKS deploys every later release with it.
 #
 #   Differences from local, and why each one exists:
-#     • the image is pulled from ghcr.io — the one GitHub Actions built,
+#     • the image is pulled from ghcr.io: the one GitHub Actions built,
 #       scanned and signed (D-054), the same digest Jenkins deploys here
-#     • no in-cluster Postgres: EKS talks to Neon, like the deployed site
+#     • no in-cluster Postgres: EKS talks to a Neon branch that has the
+#       schema and none of production's data (splitx/demo/app, D-091)
 #     • two proxies in front of a pod (CloudFront -> ALB), not one
+#     • one plain-HTTP listener, which admits only CloudFront's addresses:
+#       CloudFront holds the HTTPS certificate and the visitor's connection,
+#       and the app accepts only requests carrying our edge's header (D-092)
 #     • replicas spread across availability zones, not just nodes
-#     • the ServiceAccount carries an IRSA role
+#     • rollouts wait for the load balancer, in both directions
+#     • network policies with EKS's addresses (patches/networkpolicy.yaml)
 #
-#   Phase 7 fills in the account id, the hostname and the certificate, and
-#   applies it. `npm run k8s:render` renders it today so the difference
-#   between the two environments is reviewable in a pull request.
+#   The Secret splitx-secrets is made from Secrets Manager by the External
+#   Secrets Operator (k8s/eks/secrets), with the same keys as on Kind.
+#   `npm run k8s:render` shows everything this overlay produces.
 # ═══════════════════════════════════════════════════════════════
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
@@ -27,18 +34,18 @@ components:
 images:
   - name: splitx
     # The public package GitHub Actions publishes and signs. Jenkins replaces
-    # this with the digest of the release it is deploying (D-055); the tag
-    # here is the last release, so what this renders today is a real image
-    # that exists — never a moving tag, which would make a rollback
-    # meaningless (D-059).
+    # this with the digest of the release it is deploying (D-055), and so does
+    # cluster-up on EKS; the tag here is a real release that exists, never a
+    # moving tag, which would make a rollback meaningless (D-059).
     newName: ghcr.io/sayandip-jana-1018/splitx
     newTag: 52137218e1d4
 
 patches:
-  - path: patches/serviceaccount.yaml
+  - path: patches/namespace.yaml
   - path: patches/ingress.yaml
   - path: patches/ingress-internal.yaml
   - path: patches/deployment.yaml
+  - path: patches/networkpolicy.yaml
 
 configMapGenerator:
   - name: splitx-config
@@ -48,4 +55,7 @@ configMapGenerator:
       # of X-Forwarded-For. Getting this wrong would rate-limit the ALB instead
       # of the visitor, or let a visitor forge an address and dodge the limit.
       - TRUSTED_PROXY_HOPS=2
+      # The edge's address (terraform/edge), the one place it is written down:
+      # the app builds its links from it, and cluster-up checks it against the
+      # distribution Terraform manages before anything is installed.
       - NEXTAUTH_URL=https://REPLACE_WITH_PUBLIC_HOSTNAME

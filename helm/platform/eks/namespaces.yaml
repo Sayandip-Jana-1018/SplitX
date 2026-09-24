@@ -1,0 +1,14 @@
+# ═══════════════════════════════════════════════════════════════
+#   Namespaces only the EKS platform has, created with their Pod Security
+#   level before any chart installs into them (as helm/platform/namespaces.yaml
+#   does for both clusters).
+# ═══════════════════════════════════════════════════════════════
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: external-secrets
+  labels:
+    # The operator, its webhook and its certificate controller all run as a
+    # non-root user with a read-only root filesystem and no host access.
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/warn: restricted
