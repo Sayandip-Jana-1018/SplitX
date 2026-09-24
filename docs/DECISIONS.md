@@ -3581,6 +3581,23 @@ The ops image is now built the way the app's is (checked by a unit test against 
 
 Dependabot now watches `ops/` for its base images and its npm packages.
 
+**The second verdict, and the one exception.** The rebuilt image (`9faf1c6`) had one high finding
+left, in the k6 binary: CVE-2026-84445, a gRPC-Go denial of service through malformed RPC requests to
+a gRPC *server*.
+- **Why it can't be fixed yet:** k6 2.3.0 is the newest release and embeds grpc 1.84.0. The fixes are
+  in grpc 1.82.2, 1.83.2 and an unreleased 1.85 build; there is no fixed 1.84 release, and no k6
+  built with one.
+- **Why it doesn't apply here:** the lab's k6 serves no gRPC. Its one script makes plain HTTP
+  requests to SplitX's own edge, and only ops-api can reach the lab.
+- **What was accepted:** that one finding, in `ops/.trivyignore.yaml`.
+  - It covers the k6 binary alone, carries its reason, and expires on 2026-10-24.
+  - The gate reads the file for the ops image only. The app's image has no exceptions.
+  - A unit test refuses an entry without one file, a statement and an expiry by the end of October.
+  - On the expiry date the gate refuses the image again, unless Dependabot has brought a k6 release
+    with the fix.
+- **Rejected:** replacing k6 with a load generator written here. It would trade a well-known tool
+  for new code of our own, to avoid one finding in code the lab never runs.
+
 **/ops on the clusters.** The app on EKS gets `OPS_ADMINS`, `OPS_GITHUB_TOKEN` and `SONAR_PROJECT_KEY`
 from `.env` through `npm run aws:secrets`, and Kind's `k8s:up` now copies the same three. Without
 `OPS_ADMINS`, the page admits nobody.

@@ -549,18 +549,23 @@ jobs:
         # An image with a critical or high vulnerability that has a fix is left
         # published but unsigned, and Jenkins deploys only signed images. The
         # ops image passes the same gate, and the cluster admits it only signed.
+        # Its accepted exceptions (ops/.trivyignore.yaml) each name one file, a
+        # reason and an expiry; the app's image has none.
         env:
           TRIVY_USERNAME: ${{ github.actor }}
           TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
           REF: ${{ steps.image.outputs.ref }}
           OPS_REF: ${{ steps.image.outputs.ops_ref }}
         run: |
-          for ref in "$REF" "$OPS_REF"; do
-            echo "── $ref"
+          scan() {
             docker run --rm -e TRIVY_USERNAME -e TRIVY_PASSWORD \
-              -v "$RUNNER_TEMP/trivy:/root/.cache/trivy" "$TRIVY" image --skip-db-update \
-              --severity CRITICAL,HIGH --ignore-unfixed --exit-code 1 --no-progress "$ref"
-          done
+              -v "$RUNNER_TEMP/trivy:/root/.cache/trivy" -v "$PWD/ops:/ops:ro" "$TRIVY" image --skip-db-update \
+              --severity CRITICAL,HIGH --ignore-unfixed --exit-code 1 --no-progress "$@"
+          }
+          echo "── the app: $REF"
+          scan "$REF"
+          echo "── ops-api and the traffic lab: $OPS_REF"
+          scan --ignorefile /ops/.trivyignore.yaml "$OPS_REF"
 
       - name: Install cosign
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2

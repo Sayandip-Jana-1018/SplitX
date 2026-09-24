@@ -1,0 +1,21 @@
+# ═══════════════════════════════════════════════════════════════
+#   Vulnerabilities accepted in the ops image (D-097), and only there: the
+#   release job's scan gate reads this file for ops-api and the traffic lab,
+#   never for the application's image. Each entry names the one file it
+#   covers, says why it cannot be exploited here, and expires; on that date
+#   the gate refuses the image again unless a fixed release has replaced it.
+#   tests/unit/infra/opsApi.test.ts refuses an entry without all four.
+# ═══════════════════════════════════════════════════════════════
+vulnerabilities:
+  - id: CVE-2026-84445
+    paths:
+      - usr/local/bin/k6
+    statement: >-
+      gRPC-Go denial of service through malformed RPC requests sent to a gRPC
+      server. k6 2.3.0, the newest release (2026-09-21), embeds grpc 1.84.0,
+      and no fixed 1.84 release exists yet. The traffic lab's k6 serves no
+      gRPC and its one script (ops/lab/preview.js) makes plain HTTP requests
+      to SplitX's own edge, so the vulnerable code never runs; the lab also
+      accepts connections from ops-api only. Dependabot watches ops/ for a
+      k6 release with the fix.
+    expired_at: 2026-10-24

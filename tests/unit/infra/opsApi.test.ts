@@ -285,7 +285,10 @@ describe('the files that deploy ops-api and the lab', () => {
         const ci = read('.github/workflows/ci.yml');
         expect(ci).toContain('targets: release,ops-release');
         expect(ci).toContain('ops-release.tags=${{ env.IMAGE }}:ops-${{ steps.provenance.outputs.git_sha }}');
-        expect(ci).toMatch(/for ref in "\$REF" "\$OPS_REF"; do/);
+        // The same gate for both images; only the ops image may use its reviewed exceptions.
+        expect(ci).toMatch(/\n\s+scan "\$REF"\n/);
+        expect(ci).toMatch(/\n\s+scan --ignorefile \/ops\/\.trivyignore\.yaml "\$OPS_REF"\n/);
+        expect(ci.match(/--ignorefile/g)).toHaveLength(1);
         expect(ci).toContain('cosign sign --yes "$REF" "$OPS_REF"');
         expect(ci.match(/payload: \{image: \$image, ops_image: \$ops\}/g)).toHaveLength(2);
         expect(ci).toMatch(/for kustomization in [^\n]* k8s\/ops; do/);
@@ -293,6 +296,23 @@ describe('the files that deploy ops-api and the lab', () => {
         expect(up).toContain('.payload.ops_image // "none"');
         expect(up).toContain('--ops-image "$OPS_IMAGE"');
         expect(read('docker-bake.hcl')).toMatch(/target "ops-release" \{\n {2}inherits = \["ops"\]/);
+    });
+
+    it('accept a vulnerability in the ops image only with one file, a reason and an expiry', () => {
+        const entries = read('ops/.trivyignore.yaml').split(/\n {2}- id: /).slice(1);
+        expect(entries.length).toBeGreaterThan(0);
+        for (const entry of entries) {
+            const id = entry.split('\n')[0];
+            expect(id, 'an id').toMatch(/^(CVE|GHSA)-[\w-]+$/);
+            // Exactly one path: never a whole image, never every file.
+            expect(entry.match(/^ {6}- \S+$/gm), id + ': one path').toHaveLength(1);
+            expect(entry, id + ': the path').toMatch(/\n {4}paths:\n {6}- usr\/local\/bin\/k6\n/);
+            expect(entry, id + ': a statement').toMatch(/\n {4}statement: >-\n {6}\S/);
+            const expires = entry.match(/\n {4}expired_at: (\d{4}-\d{2}-\d{2})/)?.[1];
+            expect(expires, id + ': an expiry').toBeDefined();
+            // No acceptance outlives the AWS account's Free plan, the demo's deadline (D-095).
+            expect(expires! <= '2026-10-31', id + ': expires by the end of October').toBe(true);
+        }
     });
 
     it('give ops-api the role Terraform associates with it', () => {
