@@ -295,10 +295,24 @@ describe('the files that deploy ops-api and the lab', () => {
         expect(read('docker-bake.hcl')).toMatch(/target "ops-release" \{\n {2}inherits = \["ops"\]/);
     });
 
-    it('give ops-api the role Terraform associates with it, and lock the lab\'s image to the pinned k6', () => {
+    it('give ops-api the role Terraform associates with it', () => {
         expect(read('terraform/platform/workloads.tf')).toMatch(/namespace\s+= "ops"\n\s+service_account = "ops-api"/);
         expect(opsApi).toMatch(/kind: ServiceAccount\nmetadata:\n[\s\S]*?name: ops-api/);
-        expect(read('ops/Dockerfile')).toMatch(/K6_IMAGE=grafana\/k6:[\d.]+@sha256:[0-9a-f]{64}/);
-        expect(read('ops/Dockerfile')).toMatch(/NODE_IMAGE=node:[\w.-]+@sha256:[0-9a-f]{64}/);
+    });
+
+    it('build the ops image the way the app\'s is built: the same patched Alpine, the node binary, no npm', () => {
+        const ops = read('ops/Dockerfile');
+        const app = read('Dockerfile');
+        const pin = (file: string, name: string) => file.match(new RegExp(`^ARG ${name}=(\\S+)$`, 'm'))?.[1];
+        expect(pin(ops, 'NODE_IMAGE')).toMatch(/^node:[\w.-]+@sha256:[0-9a-f]{64}$/);
+        expect(pin(ops, 'NODE_IMAGE')).toBe(pin(app, 'NODE_IMAGE'));
+        expect(pin(ops, 'RUNTIME_IMAGE')).toMatch(/^alpine:[\d.]+@sha256:[0-9a-f]{64}$/);
+        expect(pin(ops, 'RUNTIME_IMAGE')).toBe(pin(app, 'RUNTIME_IMAGE'));
+        expect(ops).toMatch(/^FROM \$\{RUNTIME_IMAGE\} AS runner$/m);
+        expect(ops).toContain('apk upgrade --no-cache');
+        expect(ops).toContain('COPY --from=node /usr/local/bin/node /usr/local/bin/node');
+        // The lab runs the k6 the load tests run (scripts/load-run.mjs), by digest.
+        expect(pin(ops, 'K6_IMAGE')).toMatch(/^grafana\/k6:[\d.]+@sha256:[0-9a-f]{64}$/);
+        expect(pin(ops, 'K6_IMAGE')).toBe(read('scripts/load-run.mjs').match(/const K6_IMAGE = '([^']+)'/)?.[1]);
     });
 });

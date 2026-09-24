@@ -6,7 +6,10 @@ version: 2
 
 updates:
   - package-ecosystem: npm
-    directory: /
+    # The app, and ops-api's AWS SDK clients (ops/, D-097).
+    directories:
+      - /
+      - /ops
     schedule:
       interval: weekly
       day: monday
@@ -41,7 +44,10 @@ updates:
           - '*'
 
   - package-ecosystem: docker
-    directory: /
+    # The app's image, and the ops image's Node, Alpine and k6 (ops/Dockerfile).
+    directories:
+      - /
+      - /ops
     schedule:
       interval: weekly
       day: monday

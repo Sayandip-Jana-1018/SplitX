@@ -42,7 +42,7 @@ import { writeReport } from './load-report.mjs';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const CONTEXT = 'kind-splitx';
 const NS = 'splitx';
-const K6_IMAGE = 'grafana/k6:2.2.0@sha256:9bd01d6941fca969cb61bb57d2da5ee9b385fe2aa8881df3798c196564d6ace6';
+const K6_IMAGE = 'grafana/k6:2.3.0@sha256:9c2dee7f8ed74d317e4027c06a10f169b625638189de8d4555d0b3486a5aeb34';
 const BUCKET_SECONDS = 10;
 const POLL_MS = 5_000;
 // Docker wants forward slashes in -v paths on Windows.
