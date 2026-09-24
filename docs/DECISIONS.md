@@ -3846,6 +3846,103 @@ application/json". The webhook hadn't been changed yet.
   makes a Jenkins build fail on purpose, so Jenkins' last result is then "failure". The check now
   passes on any real result Jenkins' metrics carry, and shows which.
 
+**Run 4 (36031428036, on `a776b41`) was the first to go all the way through.** The user had set
+the webhook to JSON.
+- **The delivery:** GitHub's own delivery reached the runner's Jenkins through smee.io and the
+  relay. Jenkins verified both signatures, deployed and reported success in 73 s.
+- **`k8s:verify`:** 34 of 35 passed and 1 was skipped (email). The failure is the Jenkins dashboard
+  panels again, this time with a build behind them.
+- **`cd:verify --rollback`:** 15 of 15. The release that can't come up was rolled back after 187 s,
+  and 650 of 650 requests were answered 200.
+- **`ops-verify`:** all 24 failed. Its operator was refused (401), and everything after followed.
+- **Jenkins' status:** "evidence NOT archived", with no reason given.
+
+D-100 has the five causes and their fixes.
+
+### D-100 · What kind-e2e run 4 found: five causes, each read in the source of what was involved
+**2026-09-24** · 🚧 fixed and unit-tested (1,302 → 1,311 tests); the next kind-e2e run proves them
+
+Each cause below was found in the source code of the component involved, at its pinned version, not
+guessed from the symptom.
+
+**1. ops-verify's operator was never signed in.**
+- **The cause:**
+  - A production build names its session cookie `__Secure-authjs.session-token` (`src/lib/auth.ts`),
+    and next-auth salts the token with the cookie's name. The cluster runs a production build.
+  - `ops-verify` made its sessions under the development name `authjs.session-token`, so the app saw
+    no session. The operator and the visitor both got 401, and every later check failed with them.
+- **The fix:**
+  - The name now lives in `src/lib/sessionCookie.ts`, which `auth.ts` uses.
+  - `scripts/lib/e2e.mjs` (`e2eSessionCookie`) makes the check's sessions under the production name.
+  - A unit test decodes such a session with the app's name. It also proves that a token made under
+    the development name is no session there.
+
+**2. Nexus refused every upload.**
+- **The cause:**
+  - Nexus checks each request to a repository by its HTTP method: POST is "add" and PUT is "edit"
+    (`SecurityFacetSupport.action` in Nexus 3.96.3's source).
+  - Jenkins stores each file with PUT, and its role (D-096) had only read, browse and add. So every
+    upload got 403.
+- **The role:**
+  - It gains "edit".
+  - Evidence still can't be overwritten: the repository's allow-once write policy prevents that, not
+    the role. A second PUT to the same path gets 400.
+- **The setup Job now proves the result instead of assuming it:**
+  - It stores a probe as Jenkins (201), and a second store at the same path is refused.
+  - ops-api's account can't store (403).
+  - It removes the probes as the admin (204). The raw handler answers PUT with 201 and DELETE with
+    204, per Nexus' source.
+  - So a Nexus where Jenkins can't store now fails `k8s:up`, and says why.
+- **The tests:** the stand-in Nexus now checks each repository request by its method, as 3.96.3
+  does. With "edit" withheld, the Job stops.
+- **The deployment's GitHub status** now gives the reason, for example "evidence NOT archived: Nexus
+  answered 403 to storing sbom.cdx.json".
+- **Checked on the way, from cosign 3.1.3's source:**
+  - `verify-attestation` prints each verified attestation as one line of compact JSON, the DSSE
+    envelope. It does so for sigstore bundles too: it marshals the bundle's envelope, and
+    `PrintVerification` prints the payload.
+  - `deploy.mjs` parses exactly that. Only a run that archives proves it end to end.
+
+**3. Jenkins' build metrics arrived late.**
+- **The cause:**
+  - The Prometheus plugin gathers the metrics on its own timer, every 2 minutes by default
+    (`DEFAULT_COLLECTING_METRICS_PERIOD_IN_SECONDS`, at the pinned commit). The chart's ServiceMonitor
+    scraped every 60 s.
+  - So a finished deploy took up to 3 minutes to reach the Delivery dashboard and `/ops`. `k8s:verify`
+    looked 96 s after the build and found nothing.
+  - D-099 blamed run 2's identical failure on Jenkins not having built yet. That was true, but not
+    the whole cause.
+- **The fix:**
+  - `COLLECTING_METRICS_PERIOD_IN_SECONDS=30` on both Jenkins. EKS replaces the whole environment
+    list, and a test holds both lists.
+  - The scrape now runs every 30 s.
+  - `k8s:verify` looks again for up to 90 s for any dashboard metric still missing.
+
+**4. The traffic lab would have been refused, not served.** Run 4 never reached it.
+- **The cause:**
+  - The app allows each identity 60 plans a minute, and a request without a device cookie is
+    identified by its address.
+  - The lab only POSTed plans, so all of them came from its one address. At 30 a second, 29 in 30
+    would have been refused before any pod did any work, and the autoscaler would never have moved.
+  - D-097's own reasoning ("under the network ceiling of 2,400 a minute") assumed devices.
+- **The fix:**
+  - Each plan is now a visitor: it opens `/scale` first, as a phone in the classroom does (D-048),
+    gets its own device cookie there, then plans once.
+  - k6 empties the cookie jar after each iteration, so every plan is a new device.
+  - 30 plans a second stay under the network ceiling of 2,400 a minute.
+- **The counts:** the lab counts and times only the plans (`preview_ms`), because the page visits
+  are not plans.
+
+**5. Nothing kept Jenkins' own record.**
+- **The cause:** Jenkins' console ended with the runner, so run 4's archive failure left its message
+  nowhere.
+- **The fix:**
+  - kind-e2e now keeps every build's console in the evidence, through `scripts/e2e.mjs jenkins-logs`.
+  - The step can't fail the run.
+
+**Left unchanged:** Kyverno's admission metric really has the label `request_allowed`
+(`pkg/metrics/admission.go` in Kyverno 1.19.1), so ops-api's query stands.
+
 ---
 
 ## Open problems
@@ -3882,7 +3979,7 @@ application/json". The webhook hadn't been changed yet.
 | B-028 | The AI chat builds its own balances: pairwise instead of the group plan, over every expense including deleted ones, in deleted groups too, with ±1 paisa counted as settled. | Its answers to "who owes me?" can disagree with Settle Up, and count expenses that were deleted. | ✅ Resolved 2026-09-22 — D-067. The chat's context is the ledger: balances per group over live expenses, and each group's settle-up plan. |
 | B-029 | Removing a member used to re-split their shares among the others (D-063). Groups that had a member removed may hold shares that were moved between people, and former members may still owe or be owed. | Balances in those groups reflect the old re-split, not what people agreed to. | ✅ Checked 2026-09-22 — D-069. `npm run ledger:audit -- --https` read production (1 group, 37 expenses, 62 shares, 0 settlements, 9 accounts) in a read-only transaction: no share of a former member, no former member with a balance, every expense adding up, every group netting to zero. Nothing to repair. |
 | B-030 | `npm audit` still reports one high advisory: `deepmerge-ts` below 8 (GHSA-ggr8-5vv4-36mx, stack exhaustion when merging self-referencing objects), through `prisma` → `@prisma/config`. | The Prisma CLI is a development and migration tool; the app's runtime (`@prisma/client`) doesn't use it, and the only objects it merges are our own config. | Accepted 2026-09-22 (D-070). The fix is Prisma 7, a major upgrade with its own changes. Still accepted after the migration baseline (D-072), which was done on Prisma 6: the upgrade is its own change. The CLI stays out of the runtime image. |
-| B-031 | Phase 4 (D-088 to D-090) is written and validated, but nothing in it has been applied. Only a real run proves: the `iam:PassedToService` value for the flow log's role (both candidates are allowed); that `splitx-ci-teardown`'s permissions cover a whole `terraform destroy` and the edge's offline apply; the ALB's lookup by the controller's tags (`ingress.k8s.aws/stack = splitx`); that the pinned add-on versions are still offered on the day; and the edge function in CloudFront's own runtime (it is tested in Node). | An AWS day that meets any of these unprepared loses hours of a rehearsal or the demo. | Open. `aws-edge` proves the edge's part as soon as the stacks and the `AWS_ACCOUNT_ID` secret exist. The rehearsal's first hour, a platform-only `aws-up` then `aws-down`, proves the rest (plan Phase 10). **2026-09-24, D-093 adds to the list:** the External Secrets Operator's Pod Identity credentials; the load balancer controller's IAM policy (the module's) against controller 3.5.0; the pod readiness gates; the VPC CNI agent admitting the kubelet and judging `172.20.0.1` as the API server; the prefix-list rule fitting the security group (weight 55 of 60); image volumes on the EKS node image; Docker Hub pulls through the NAT address; GitHub's webhook through CloudFront to Jenkins; and the Jenkins deploy RBAC of D-094. **D-095 and D-096 add:** whether EKS itself is allowed on the account's Free plan; the `m7i-flex.large` nodes; Nexus with a read-only root filesystem; and cosign's attestation output in the archive step. **D-097 adds:** Kyverno's admission metrics reaching Prometheus; the ops image passing the release's Trivy gate; ops-api's AWS reads through Pod Identity; and the traffic lab's load reaching CloudFront from the NAT address. |
+| B-031 | Phase 4 (D-088 to D-090) is written and validated, but nothing in it has been applied. Only a real run proves: the `iam:PassedToService` value for the flow log's role (both candidates are allowed); that `splitx-ci-teardown`'s permissions cover a whole `terraform destroy` and the edge's offline apply; the ALB's lookup by the controller's tags (`ingress.k8s.aws/stack = splitx`); that the pinned add-on versions are still offered on the day; and the edge function in CloudFront's own runtime (it is tested in Node). | An AWS day that meets any of these unprepared loses hours of a rehearsal or the demo. | Open. `aws-edge` proves the edge's part as soon as the stacks and the `AWS_ACCOUNT_ID` secret exist. The rehearsal's first hour, a platform-only `aws-up` then `aws-down`, proves the rest (plan Phase 10). **2026-09-24, D-093 adds to the list:** the External Secrets Operator's Pod Identity credentials; the load balancer controller's IAM policy (the module's) against controller 3.5.0; the pod readiness gates; the VPC CNI agent admitting the kubelet and judging `172.20.0.1` as the API server; the prefix-list rule fitting the security group (weight 55 of 60); image volumes on the EKS node image; Docker Hub pulls through the NAT address; GitHub's webhook through CloudFront to Jenkins; and the Jenkins deploy RBAC of D-094. **D-095 and D-096 add:** whether EKS itself is allowed on the account's Free plan; the `m7i-flex.large` nodes; Nexus with a read-only root filesystem; and cosign's attestation output in the archive step. **D-097 adds:** Kyverno's admission metrics reaching Prometheus; the ops image passing the release's Trivy gate; ops-api's AWS reads through Pod Identity; and the traffic lab's load reaching CloudFront from the NAT address. **2026-09-24, from kind-e2e (D-099, D-100):** on Kind, Nexus with a read-only root filesystem ran in runs 2 to 4, the ops image passed the gate, and D-094's deploy RBAC was proven (run 4: 4 allowed, 5 refused). Run 4 found that Jenkins' Nexus role could not upload (fixed in D-100), and cosign's attestation output was then checked against cosign's source; the first run that archives proves it. |
 
 ## Environment notes (this machine)
 

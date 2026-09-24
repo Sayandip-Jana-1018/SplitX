@@ -27,7 +27,7 @@ import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { JENKINS_RESULTS } from '../ops/api/summaries.mjs';
-import { E2E_OPERATOR, E2E_VISITOR, READINGS_ON_AWS_ONLY, READINGS_ON_KIND } from './lib/e2e.mjs';
+import { E2E_OPERATOR, E2E_VISITOR, e2eSessionCookie, READINGS_ON_AWS_ONLY, READINGS_ON_KIND } from './lib/e2e.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 if (existsSync(join(root, '.env'))) process.loadEnvFile(join(root, '.env'));
@@ -66,18 +66,9 @@ if (seeded.status !== 0) {
 
 const projectRequire = createRequire(join(root, 'package.json'));
 const { encode } = await import(pathToFileURL(projectRequire.resolve('next-auth/jwt')).href);
-async function session(person) {
-    const token = await encode({
-        token: { id: person.userId, sub: person.userId, email: person.email, name: person.name, tokenVersion: 0 },
-        secret: process.env.NEXTAUTH_SECRET,
-        // The cookie's name is the salt; over http it has no __Secure- prefix.
-        salt: 'authjs.session-token',
-        maxAge: 3600,
-    });
-    return 'authjs.session-token=' + token;
-}
-const operator = await session(E2E_OPERATOR);
-const visitor = await session(E2E_VISITOR);
+// The cluster runs a production build, whose cookie is __Secure- even over http.
+const operator = await e2eSessionCookie(encode, E2E_OPERATOR, process.env.NEXTAUTH_SECRET);
+const visitor = await e2eSessionCookie(encode, E2E_VISITOR, process.env.NEXTAUTH_SECRET);
 
 async function api(path, { cookie, method = 'GET', body } = {}) {
     try {

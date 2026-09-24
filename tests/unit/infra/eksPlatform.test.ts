@@ -59,6 +59,14 @@ describe('the charts each cluster installs', () => {
         expect(() => helmInstallArgs(controller, 'eks', { ...outputs, vpc_id: '' })).toThrow(/vpc_id/);
     });
 
+    it('has both Jenkins gather their build metrics every 30 s, since EKS replaces the whole environment list (D-100)', () => {
+        const every30s = /- name: COLLECTING_METRICS_PERIOD_IN_SECONDS\n\s+value: "30"/;
+        for (const file of ['helm/platform/jenkins.values.yaml', 'helm/platform/eks/jenkins.values.yaml']) {
+            expect(read(file).replace(/\r\n/g, '\n')).toMatch(every30s);
+        }
+        expect(read('helm/platform/jenkins.values.yaml')).toMatch(/prometheus:\s+enabled: true\s+scrapeInterval: 30s/);
+    });
+
     it('adds each helm repository once', () => {
         const names = reposOf(chartsFor(chartsFile, 'eks')).map(([name]: [string, string]) => name);
         expect(names).toEqual([...new Set(names)]);

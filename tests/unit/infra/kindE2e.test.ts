@@ -1,8 +1,11 @@
 import { existsSync, readFileSync } from 'node:fs';
+import { decode, encode } from 'next-auth/jwt';
 import { describe, expect, it } from 'vitest';
 import { CLUSTER_KEYS } from '@/lib/ops/cluster';
+import { sessionCookieName } from '@/lib/sessionCookie';
 import {
-    deliveryState, E2E_OPERATOR, e2eEnvironment, envLine, FROM_REPOSITORY, OPTIONAL, pickRelease, READINGS_ON_AWS_ONLY, READINGS_ON_KIND, relayVerdict,
+    deliveryState, E2E_OPERATOR, E2E_SESSION_COOKIE, e2eEnvironment, e2eSessionCookie, envLine, FROM_REPOSITORY, OPTIONAL, pickRelease,
+    READINGS_ON_AWS_ONLY, READINGS_ON_KIND, relayVerdict,
 } from '../../../scripts/lib/e2e.mjs';
 import { columns, parseMeminfo, parseMemoryStat, summarise } from '../../../scripts/lib/memory.mjs';
 import { powerSource } from '../../../scripts/lib/power.mjs';
@@ -115,6 +118,24 @@ describe('what ops-verify expects of each reading', () => {
         const named = [...READINGS_ON_KIND, ...READINGS_ON_AWS_ONLY];
         expect(new Set(named).size).toBe(named.length);
         expect([...named].sort()).toEqual([...CLUSTER_KEYS].sort());
+    });
+});
+
+describe('the sessions ops-verify signs in with (D-100)', () => {
+    const secret = 'splitx';
+
+    it('carry the cookie a production build reads, which is what the cluster runs', async () => {
+        expect(E2E_SESSION_COOKIE).toBe(sessionCookieName(true));
+        const header = await e2eSessionCookie(encode, E2E_OPERATOR, secret);
+        const cut = header.indexOf('=');
+        expect(header.slice(0, cut)).toBe(sessionCookieName(true));
+        expect(await decode({ token: header.slice(cut + 1), secret, salt: sessionCookieName(true) }))
+            .toMatchObject({ id: E2E_OPERATOR.userId, email: E2E_OPERATOR.email, tokenVersion: 0 });
+    });
+
+    it('would be no session under the development name: next-auth salts the token with the name (run 4\'s 401)', async () => {
+        const header = await e2eSessionCookie(encode, E2E_OPERATOR, secret);
+        await expect(decode({ token: header.slice(header.indexOf('=') + 1), secret, salt: sessionCookieName(false) })).rejects.toThrow();
     });
 });
 

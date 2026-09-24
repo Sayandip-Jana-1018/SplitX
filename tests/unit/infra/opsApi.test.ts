@@ -195,15 +195,24 @@ describe('the traffic lab\'s limits', () => {
     it('tells requests refused on purpose (429, 503) apart from failures in k6\'s summary', () => {
         expect(summariseK6({
             metrics: {
-                http_reqs: { values: { count: 100 } },
+                // Each visitor also opens /scale first: 200 requests for 100 plans (D-100).
+                http_reqs: { values: { count: 200 } },
                 preview_ok: { values: { count: 90 } },
                 preview_rate_limited: { values: { count: 4 } },
                 preview_shed: { values: { count: 5 } },
                 preview_other: { values: { count: 1 } },
-                http_req_duration: { values: { 'p(95)': 812.4 } },
+                http_req_duration: { values: { 'p(95)': 20.1 } },
+                preview_ms: { values: { 'p(95)': 812.4 } },
             },
         })).toEqual({ requests: 100, served: 90, refused: 9, failed: 1, p95Ms: 812 });
         expect(summariseK6(null)).toEqual({ requests: 0, served: 0, refused: 0, failed: 0, p95Ms: null });
+    });
+
+    it('arrives as a phone does before each plan, so each plan counts against its own device (D-100)', () => {
+        const script = readFileSync('ops/lab/preview.js', 'utf8');
+        expect(script).toMatch(/http\.get\(__ENV\.TARGET \+ '\/scale'/);
+        // k6 empties the cookie jar after each iteration unless told not to: a new visitor each time.
+        expect(script).not.toMatch(/noCookiesReset/);
     });
 });
 

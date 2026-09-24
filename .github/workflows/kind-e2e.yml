@@ -222,6 +222,14 @@ jobs:
           echo "ops-verify" > "$EVIDENCE/memory.csv.phase"
           node scripts/ops-verify.mjs --delivered "$SHA" --deployment "$DEPLOYMENT"
 
+      - name: Jenkins' build logs
+        # Each build's console, as Jenkins kept it: every delivery and rollback
+        # of this run, step by step. Jenkins ends with the runner, and a
+        # deployment's status holds a line at most (D-100).
+        if: ${{ always() && steps.deliver.outcome != 'skipped' }}
+        continue-on-error: true
+        run: node scripts/e2e.mjs jenkins-logs "$EVIDENCE"
+
       - name: What the memory was made of
         if: ${{ always() }}
         run: |

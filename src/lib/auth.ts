@@ -11,6 +11,7 @@ import { consumeAllowance } from '@/lib/rateLimit';
 import { sendVerificationLink, verificationRequired } from '@/lib/emailVerification';
 import { logger } from '@/lib/logger';
 import { currentTokenVersion } from '@/lib/sessionVersion';
+import { sessionCookieName } from '@/lib/sessionCookie';
 
 const LOGIN_ATTEMPTS = 10;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
@@ -277,9 +278,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     trustHost: true, // Required for Vercel / reverse-proxy deployments
     cookies: {
         sessionToken: {
-            name: process.env.NODE_ENV === 'production'
-                ? '__Secure-authjs.session-token'
-                : 'authjs.session-token',
+            name: sessionCookieName(),
             options: {
                 httpOnly: true,
                 sameSite: 'lax',

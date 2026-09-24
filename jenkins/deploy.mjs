@@ -302,7 +302,8 @@ async function nexusPut(path, body) {
         const existing = await fetch(url, { method: 'HEAD', headers: { authorization }, signal: AbortSignal.timeout(30_000) });
         if (existing.ok) return 'already stored';
     }
-    if (!res.ok) throw new Error('Nexus answered ' + res.status + ' to storing ' + path);
+    // The file's name is enough: the reason goes into the GitHub status, which is short.
+    if (!res.ok) throw new Error('Nexus answered ' + res.status + ' to storing ' + path.split('/').pop());
     return 'stored';
 }
 
@@ -375,7 +376,9 @@ async function stepReport() {
     const result = env.BUILD_RESULT;
     if (state.superseded) return report('inactive', 'Superseded by deployment ' + state.superseded);
     if (result === 'SUCCESS') {
-        const evidence = state.archived ? '; evidence in Nexus' : state.archiveError ? '; evidence NOT archived' : '';
+        // Why the evidence is missing, where anyone looking at the deployment
+        // sees it; run 4 said only "NOT archived", and its log died with its runner (D-100).
+        const evidence = state.archived ? '; evidence in Nexus' : state.archiveError ? '; evidence NOT archived: ' + state.archiveError : '';
         return report('success', 'Deployed ' + deployment.sha.slice(0, 12) + ' and checked through the edge' + evidence);
     }
     const outcome = state.rolledBack ? '; rolled back to ' + String(state.imageBefore).split('@').pop().slice(0, 19)

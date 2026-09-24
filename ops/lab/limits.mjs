@@ -40,9 +40,11 @@ export function parseRun(body) {
  */
 export function summariseK6(data) {
     const count = (name) => data?.metrics?.[name]?.values?.count ?? 0;
-    const p95 = data?.metrics?.http_req_duration?.values?.['p(95)'];
+    // Plans only: each visitor also opens /scale first (lab/preview.js, D-100),
+    // which is neither a plan nor what the lab's limits count.
+    const p95 = data?.metrics?.preview_ms?.values?.['p(95)'];
     return {
-        requests: count('http_reqs'),
+        requests: count('preview_ok') + count('preview_rate_limited') + count('preview_shed') + count('preview_other'),
         served: count('preview_ok'),
         // 429 and 503 are the app protecting itself (D-045, D-046), not errors.
         refused: count('preview_rate_limited') + count('preview_shed'),

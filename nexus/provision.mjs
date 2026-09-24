@@ -11,12 +11,17 @@
  *   3. turns anonymous access off: nothing is readable without an account
  *   4. creates the raw repository splitx-evidence, where nothing is ever
  *      overwritten (write policy "allow once")
- *   5. creates the role splitx-evidence-writer (read and add, in that
- *      repository only) and the user jenkins with it, whose password Jenkins
- *      holds; a changed password is updated
+ *   5. creates the role splitx-evidence-writer (read, browse, add and edit, in
+ *      that repository only) and the user jenkins with it, whose password
+ *      Jenkins holds; a changed password is updated. Jenkins stores with an
+ *      HTTP PUT, which Nexus checks as "edit" (D-100); the allow-once policy,
+ *      not the role, is what keeps anything from being overwritten
  *   6. when NEXUS_OPS_PASSWORD is set, the same for splitx-evidence-reader
  *      (read only) and the user ops, which ops-api shows the evidence with
  *      on /ops (D-097)
+ *   7. proves it: anonymous is refused, Jenkins can browse and store the way
+ *      its archive step does but never the same path twice, and ops can't
+ *      store; the probes are removed as the admin
  *
  * Needs NEXUS_URL, NEXUS_ADMIN_PASSWORD and NEXUS_JENKINS_PASSWORD. The
  * passwords are never printed; the log names each step and its outcome.
@@ -144,7 +149,10 @@ async function account({ role: roleId, actions, what, userId, firstName, passwor
 }
 
 console.log('[5] Jenkins\' account');
-await account({ role: ROLE, actions: ['read', 'browse', 'add'], what: 'Read and add release evidence', userId: USER, firstName: 'Jenkins', password: jenkinsPassword });
+// Nexus checks each request by its HTTP method: POST is "add", PUT is "edit"
+// (SecurityFacetSupport.action, Nexus 3.96.3), and Jenkins' archive step stores
+// with PUT. With add alone every upload was refused (kind-e2e run 4, D-100).
+await account({ role: ROLE, actions: ['read', 'browse', 'add', 'edit'], what: 'Read and store release evidence', userId: USER, firstName: 'Jenkins', password: jenkinsPassword });
 
 const opsPassword = process.env.NEXUS_OPS_PASSWORD;
 if (opsPassword) {
@@ -164,4 +172,45 @@ if (anonymous.ok || !jenkins.ok) {
     console.error('x anonymous read answered ' + anonymous.status + ' (want 401 or 403); jenkins read answered ' + jenkins.status + ' (want 200)');
     process.exit(1);
 }
-console.log('\nNexus is ready: anonymous ' + anonymous.status + ', jenkins ' + jenkins.status + ' on ' + REPOSITORY + '.');
+
+// Storing, as the archive step does it (jenkins/deploy.mjs): a PUT per file.
+// A probe per account, under a path /ops never lists (evidence is always
+// <commit>/<deployment>/<file>), removed as the admin at once.
+const stamp = Date.now();
+const probe = (who) => NEXUS + '/repository/' + REPOSITORY + '/provision-check/' + stamp + '-' + who + '.txt';
+const put = async (url, auth) => (await fetch(url, {
+    method: 'PUT',
+    headers: { authorization: auth, 'content-type': 'text/plain' },
+    body: 'Stored by nexus/provision.mjs to prove the account can store, and removed by it at once.',
+    signal: AbortSignal.timeout(30_000),
+})).status;
+const succeeded = (status) => status >= 200 && status < 300;
+const problems = [];
+const stored = [];
+
+const byJenkins = await put(probe('jenkins'), asJenkins);
+if (byJenkins === 201) {
+    stored.push(probe('jenkins'));
+    const again = await put(probe('jenkins'), asJenkins);
+    if (succeeded(again)) problems.push('the same path was stored twice (HTTP ' + again + '): the repository must allow each path once');
+} else {
+    problems.push('Jenkins\' account can\'t store evidence: Nexus answered ' + byJenkins + ' to a PUT, which it checks as edit');
+}
+let byOps = null;
+if (opsPassword) {
+    byOps = await put(probe('ops'), 'Basic ' + Buffer.from('ops:' + opsPassword).toString('base64'));
+    if (succeeded(byOps)) {
+        stored.push(probe('ops'));
+        problems.push('ops-api\'s account could store (HTTP ' + byOps + '): it must only read');
+    }
+}
+for (const url of stored) {
+    const removed = await fetch(url, { method: 'DELETE', headers: { authorization: admin }, signal: AbortSignal.timeout(30_000) });
+    if (removed.status !== 204) say('the probe ' + url.slice(url.indexOf('/repository/')) + ' is still there (HTTP ' + removed.status + '); /ops never lists it');
+}
+if (problems.length) {
+    for (const problem of problems) console.error('x ' + problem);
+    process.exit(1);
+}
+console.log('\nNexus is ready: anonymous ' + anonymous.status + ', jenkins ' + jenkins.status + ' on ' + REPOSITORY
+    + '; Jenkins stored a file (201) and could not store it again' + (byOps === null ? '' : '; ops could not store (' + byOps + ')') + '.');

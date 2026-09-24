@@ -51,6 +51,30 @@ export const E2E_OPERATOR = {
 export const E2E_VISITOR = { userId: 'e2e-visitor', email: 'visitor@e2e.splitx.invalid', name: 'End-to-end visitor' };
 
 /**
+ * The session cookie a production build reads (src/lib/sessionCookie.ts), and
+ * the cluster runs a production build. next-auth salts the token with the
+ * cookie's name, so a session made for the development name is no session
+ * there: run 4 got 401 for its operator (D-100).
+ */
+export const E2E_SESSION_COOKIE = '__Secure-authjs.session-token';
+
+/**
+ * A Cookie header holding a session for `person`, as the app issues one at
+ * sign-in: signed with the run's own secret, for an hour.
+ *
+ * @param {typeof import('next-auth/jwt').encode} encode next-auth/jwt's encode
+ */
+export async function e2eSessionCookie(encode, person, secret) {
+    const token = await encode({
+        token: { id: person.userId, sub: person.userId, email: person.email, name: person.name, tokenVersion: 0 },
+        secret,
+        salt: E2E_SESSION_COOKIE,
+        maxAge: 3600,
+    });
+    return E2E_SESSION_COOKIE + '=' + token;
+}
+
+/**
  * ops-api's readings (src/lib/ops/cluster.ts, CLUSTER_KEYS), by what a Kind
  * cluster can give them: its own sources, or nothing, because only the EKS
  * platform gives ops-api an AWS role. A unit test keeps the two lists

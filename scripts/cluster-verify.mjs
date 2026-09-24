@@ -628,6 +628,15 @@ for (const [, name, type] of declared.matchAll(/^# TYPE (\S+) (\S+)$/gm)) {
     if (type === 'summary') for (const suffix of ['_sum', '_count']) storedNames.add(name + suffix);
 }
 const queries = dashboardQueries(root);
+// Jenkins' plugin gathers its build metrics every 30 s and Prometheus scrapes
+// it every 30 s (helm/platform/jenkins.values.yaml), so a build that ended just
+// before this check can take a minute to appear. A name still missing is looked
+// for again for up to 90 s before it counts as absent (D-100).
+const wanted = [...new Set(queries.flatMap((query) => metricNamesIn(query.expr)))];
+await waitFor(() => {
+    for (const name of raw(PROMETHEUS + '/api/v1/label/__name__/values')?.data ?? []) storedNames.add(name);
+    return wanted.every((name) => storedNames.has(name));
+}, { timeoutMs: 90_000, everyMs: 10_000 });
 const queryProblems = [];
 for (const query of queries) {
     const answer = promQuery(withoutGrafanaVariables(query.expr));

@@ -41,6 +41,9 @@ controller:
       value: http://nexus.nexus.svc.cluster.local:8081
     - name: DEPLOY_PIPELINE_BRANCH
       value: main
+    # Build metrics every 30 s, as on Kind (D-100).
+    - name: COLLECTING_METRICS_PERIOD_IN_SECONDS
+      value: "30"
 
   # Only the webhook path is published, by jenkins/eks/ingress.yaml.
   ingress:

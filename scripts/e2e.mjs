@@ -12,12 +12,13 @@
  *   node scripts/e2e.mjs deliver             announce that release as a GitHub deployment for "kind",
  *                                            exactly as a merge does, and wait for Jenkins' verdict
  *   node scripts/e2e.mjs retire <id>         mark that deployment inactive: the runner's cluster is gone
+ *   node scripts/e2e.mjs jenkins-logs <dir>  keep every Jenkins build's console in <dir>, with the evidence
  *
  * `release` and `deliver` write their results to $GITHUB_OUTPUT. GitHub is
  * read and written with GITHUB_TOKEN, the job's own token.
  */
 import { spawnSync } from 'node:child_process';
-import { appendFileSync, existsSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { request as httpRequest } from 'node:http';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -25,7 +26,7 @@ import { deliveryState, e2eEnvironment, envLine, OPTIONAL, pickRelease, relayVer
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 // The run's Jenkins password, for asking Jenkins how the delivery is going. Read, never printed.
-if (process.argv[2] === 'deliver' && existsSync(join(root, '.env'))) process.loadEnvFile(join(root, '.env'));
+if (['deliver', 'jenkins-logs'].includes(process.argv[2]) && existsSync(join(root, '.env'))) process.loadEnvFile(join(root, '.env'));
 const REPOSITORY = process.env.GITHUB_REPOSITORY || 'Sayandip-Jana-1018/SplitX';
 // Flags (--wait) are read where they apply; the rest are positional.
 const [command, argument] = process.argv.slice(2).filter((value) => !value.startsWith('--'));
@@ -66,36 +67,40 @@ async function github(method, path, body) {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/**
- * What the cluster's Jenkins is doing, through ingress-nginx as a person with
- * the admin password would ask: Jenkins reports to GitHub only when a build
- * ends, so while waiting this tells "no delivery yet" from "deploying".
- */
-function jenkinsBuilds() {
+/** One GET to the cluster's Jenkins, through ingress-nginx, as a person with the admin password would ask. */
+function jenkinsGet(path, timeoutMs = 10_000) {
     return new Promise((resolve) => {
         const auth = 'Basic ' + Buffer.from('admin:' + (process.env.JENKINS_ADMIN_PASSWORD ?? '')).toString('base64');
-        const req = httpRequest({
-            host: '127.0.0.1',
-            port: 80,
-            path: '/job/splitx-deploy/api/json?tree=builds%5Bnumber,result,building%5D%7B0,3%7D',
-            headers: { Host: 'jenkins.localhost', Authorization: auth },
-            timeout: 10_000,
-        }, (res) => {
+        const req = httpRequest({ host: '127.0.0.1', port: 80, path, headers: { Host: 'jenkins.localhost', Authorization: auth }, timeout: timeoutMs }, (res) => {
             let text = '';
             res.on('data', (chunk) => { text += chunk; });
-            res.on('end', () => {
-                try {
-                    const builds = JSON.parse(text).builds ?? [];
-                    resolve(builds.length ? builds.map((b) => '#' + b.number + ' ' + (b.building ? 'running' : String(b.result).toLowerCase())).join(', ') : 'no build yet');
-                } catch {
-                    resolve('Jenkins answered HTTP ' + res.statusCode);
-                }
-            });
+            res.on('end', () => resolve({ status: res.statusCode, text }));
         });
-        req.on('timeout', () => req.destroy(new Error('no answer in 10 s')));
-        req.on('error', (error) => resolve('Jenkins could not be asked (' + error.message + ')'));
+        req.on('timeout', () => req.destroy(new Error('no answer in ' + timeoutMs / 1000 + ' s')));
+        req.on('error', (error) => resolve({ status: 0, text: '', error: error.message }));
         req.end();
     });
+}
+
+/** The job's builds, newest first, or why Jenkins could not say. */
+async function jenkinsBuildList(tree) {
+    const answer = await jenkinsGet('/job/splitx-deploy/api/json?tree=' + encodeURIComponent(tree));
+    if (answer.status === 0) return { builds: null, why: 'Jenkins could not be asked (' + answer.error + ')' };
+    try {
+        return { builds: JSON.parse(answer.text).builds ?? [], why: '' };
+    } catch {
+        return { builds: null, why: 'Jenkins answered HTTP ' + answer.status };
+    }
+}
+
+/**
+ * What the cluster's Jenkins is doing: Jenkins reports to GitHub only when a
+ * build ends, so while waiting this tells "no delivery yet" from "deploying".
+ */
+async function jenkinsBuilds() {
+    const { builds, why } = await jenkinsBuildList('builds[number,result,building]{0,3}');
+    if (!builds) return why;
+    return builds.length ? builds.map((b) => '#' + b.number + ' ' + (b.building ? 'running' : String(b.result).toLowerCase())).join(', ') : 'no build yet';
 }
 
 if (command === 'env') {
@@ -178,6 +183,24 @@ if (command === 'env') {
         description: 'The kind-e2e run ended, and its cluster with it',
     });
     console.log('deployment ' + argument + ' marked inactive');
+} else if (command === 'jenkins-logs') {
+    // Every build's console, as Jenkins kept it: each delivery and rollback of
+    // the run, step by step. Jenkins ends with the runner, and a deployment's
+    // status holds a line at most (D-100). Evidence, so it never fails the run.
+    if (!argument) fail('usage: node scripts/e2e.mjs jenkins-logs <directory>');
+    const { builds, why } = await jenkinsBuildList('builds[number,result]');
+    if (!builds) {
+        console.log('No build logs kept: ' + why);
+        process.exit(0);
+    }
+    if (!builds.length) console.log('Jenkins has no build to keep: no delivery reached it');
+    mkdirSync(argument, { recursive: true });
+    for (const build of [...builds].reverse()) {
+        const log = await jenkinsGet('/job/splitx-deploy/' + build.number + '/consoleText', 30_000);
+        const file = join(argument, 'jenkins-build-' + build.number + '.txt');
+        writeFileSync(file, log.status === 200 ? log.text : 'Jenkins answered HTTP ' + log.status + (log.error ? ' (' + log.error + ')' : '') + '\n');
+        console.log('    #' + build.number + ' ' + String(build.result ?? 'running').toLowerCase() + ': ' + log.text.split('\n').length + ' lines, in ' + file);
+    }
 } else {
-    fail('usage: node scripts/e2e.mjs env | release [sha] [--wait] | deliver | retire <id>');
+    fail('usage: node scripts/e2e.mjs env | release [sha] [--wait] | deliver | retire <id> | jenkins-logs <dir>');
 }
