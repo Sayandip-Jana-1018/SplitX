@@ -313,3 +313,26 @@ export function buildForDeployment(builds, deploymentId) {
     return builds.find((build) => (build.actions ?? []).some((action) =>
         (action.causes ?? []).some((cause) => pattern.test(cause.shortDescription ?? '')))) ?? null;
 }
+
+const COSIGN_CHECKED = '; cosign checked:';
+
+/**
+ * What Jenkins' verify step wrote about the image's signature
+ * (jenkins/deploy.mjs): the line naming the signer, and each check cosign
+ * printed on the indented lines under it. Null when the log has no such line.
+ * @param {string} buildLog a build's consoleText
+ * @param {string} repository owner/name, as the signer's address names it
+ */
+export function cosignVerification(buildLog, repository) {
+    const lines = buildLog.split('\n');
+    const at = lines.findIndex((line) => line.includes('signed by https://github.com/' + repository));
+    if (at === -1) return null;
+    const first = lines[at].trim();
+    const checks = [];
+    for (const line of lines.slice(at + 1)) {
+        const text = line.trim();
+        if (!line.startsWith(' ') || !text.startsWith('- ')) break;
+        checks.push(text.slice(2));
+    }
+    return { signed: first.endsWith(COSIGN_CHECKED) ? first.slice(0, -COSIGN_CHECKED.length) : first, checks };
+}

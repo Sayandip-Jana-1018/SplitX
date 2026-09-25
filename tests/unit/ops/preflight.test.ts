@@ -276,6 +276,16 @@ describe('what only EKS has', () => {
         expect(one('stacks', withCluster({ stacks: unread('AccessDenied') })).readiness).toBe('fix');
     });
 
+    it('says which stacks were never checked for drift, instead of that no drift was found', () => {
+        expect(one('stacks', {})).toMatchObject({
+            readiness: 'go',
+            detail: 'splitx-bootstrap and splitx-guardrails: complete, but splitx-guardrails not yet checked for drift.',
+        });
+        const checked = { name: 'splitx-bootstrap', status: 'CREATE_COMPLETE', updatedAt: at, drift: 'IN_SYNC', driftCheckedAt: at };
+        expect(one('stacks', withCluster({ stacks: ok([checked, { ...checked, name: 'splitx-guardrails' }]) })).detail)
+            .toBe('splitx-bootstrap and splitx-guardrails: complete, and in sync when drift was last checked.');
+    });
+
     it('warns before the budget is spent, not after', () => {
         expect(one('budget', {}).detail).toBe('3.20 USD of 15.00 USD this month.');
         expect(one('budget', withCluster({ budget: ok({ name: 'splitx-monthly', unit: 'USD', limit: 15, actual: 9, forecast: 18.5 }) })))

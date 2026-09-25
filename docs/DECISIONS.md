@@ -4340,6 +4340,66 @@ Terraform phase with ECR and IRSA, and listed features that later decisions chan
 - **The verifier cuts one detail short.** `cd:verify`'s "Jenkins verified that signature" row ends
   at "cosign checked:". `deploy.mjs` prints the checks on the lines after it, and the verifier keeps
   only the first line. Fixing it touches `scripts/`, so its push starts a Kind end-to-end run.
+  Fixed the same day (below).
+
+**2026-09-25, later: two loose ends closed.**
+- **The signature row is whole.** `cosignVerification` (`scripts/lib/platform-checks.mjs`) reads the
+  signer's line and every check cosign printed under it, and `cd:verify` reports them all:
+  - the claims were validated;
+  - their entry in the transparency log was verified;
+  - the certificate was verified against the trusted authorities.
+
+  What makes the row pass is unchanged. A unit test reads run 8's own Jenkins console from
+  `docs/evidence/kind-e2e/`.
+- **The pre-flight's CloudFormation line no longer says "no drift found" of a stack nobody
+  checked.** It names each stack CloudFormation hasn't checked for drift. The item stays green, as
+  the stacks panel's "drift not checked yet" does: a stack that was never checked is complete, only
+  unexamined. Both stacks have been checked since (D-105).
+
+---
+
+## Phase 17 — The rehearsal on AWS, then the demo
+
+### D-105 · The rehearsal: what was checked before it, and what the day proved
+**2026-09-25** · 🚧 prepared. It waits on AWS verifying the account for CloudFront (a support case
+is open), then the edge, the secrets and the dates. The day itself follows
+[`DEMO_DAY.md`](DEMO_DAY.md) §7.
+
+**Checked from the laptop before the day, read-only, as `splitx-devops` (2026-09-25).** These are
+B-031 items a describe call can answer now, so they cannot cost the rehearsal an hour:
+- **EKS 1.35** is in standard support until 2027-03-27.
+- **All six pinned add-on versions are still offered for 1.35:** vpc-cni `v1.23.1-eksbuild.1`, the
+  Pod Identity agent `v1.4.0-eksbuild.2`, kube-proxy `v1.35.3-eksbuild.29`, CoreDNS
+  `v1.14.6-eksbuild.4`, the EBS CSI driver `v1.66.0-eksbuild.1` and metrics-server
+  `v0.9.0-eksbuild.11`.
+- **`m7i-flex.large`** is offered in all three zones of ap-south-1, and EC2 lists it among the types
+  the Free plan may launch (D-095).
+- **The vCPU quota** for on-demand standard instances is 8: four nodes.
+- **Nothing that costs money is running.** There is no cluster, NAT gateway, load balancer, Elastic
+  IP, SplitX volume or VPC, and no demo secret. CloudFront has no distribution yet; the edge
+  function exists, as the two failed `AWS edge` runs left it.
+- **The budget** reads $1.66 spent this month, and a forecast of $2.19, against $15.
+
+**Both stacks were checked for drift, and are in sync (05:39 UTC).** This is the plan's "both
+stacks show no drift".
+- `aws cloudformation detect-stack-drift` reads each resource and compares it with the template. It
+  changes nothing.
+- Every resource of a type CloudFormation can check is `IN_SYNC`:
+  - `splitx-bootstrap`: the deploy and teardown roles, their two policies, the boundary, the OIDC
+    provider and the state bucket;
+  - `splitx-guardrails`: the alert topic.
+- It can't check the bucket policy, the topic policy or the budget.
+- `splitx-devops` may start a detection, but not read its progress
+  (`DescribeStackDriftDetectionStatus` is denied). The stacks' own record carries the verdict, and
+  that is what ops-api reads for `/ops`.
+
+**Not checkable before the day** (B-031):
+- whether the Free plan lets this account create EKS;
+- the flow log role's `iam:PassedToService`;
+- the teardown role's cover of a whole destroy;
+- everything D-103 checks through CloudFront.
+
+The first hour of the rehearsal proves the first three. `aws-up`'s last step proves the rest.
 
 ---
 
@@ -4377,7 +4437,7 @@ Terraform phase with ECR and IRSA, and listed features that later decisions chan
 | B-028 | The AI chat builds its own balances: pairwise instead of the group plan, over every expense including deleted ones, in deleted groups too, with ±1 paisa counted as settled. | Its answers to "who owes me?" can disagree with Settle Up, and count expenses that were deleted. | ✅ Resolved 2026-09-22 — D-067. The chat's context is the ledger: balances per group over live expenses, and each group's settle-up plan. |
 | B-029 | Removing a member used to re-split their shares among the others (D-063). Groups that had a member removed may hold shares that were moved between people, and former members may still owe or be owed. | Balances in those groups reflect the old re-split, not what people agreed to. | ✅ Checked 2026-09-22 — D-069. `npm run ledger:audit -- --https` read production (1 group, 37 expenses, 62 shares, 0 settlements, 9 accounts) in a read-only transaction: no share of a former member, no former member with a balance, every expense adding up, every group netting to zero. Nothing to repair. |
 | B-030 | `npm audit` still reports one high advisory: `deepmerge-ts` below 8 (GHSA-ggr8-5vv4-36mx, stack exhaustion when merging self-referencing objects), through `prisma` → `@prisma/config`. | The Prisma CLI is a development and migration tool; the app's runtime (`@prisma/client`) doesn't use it, and the only objects it merges are our own config. | Accepted 2026-09-22 (D-070). The fix is Prisma 7, a major upgrade with its own changes. Still accepted after the migration baseline (D-072), which was done on Prisma 6: the upgrade is its own change. The CLI stays out of the runtime image. |
-| B-031 | Phase 4 (D-088 to D-090) is written and validated, but nothing in it has been applied. Only a real run proves: the `iam:PassedToService` value for the flow log's role (both candidates are allowed); that `splitx-ci-teardown`'s permissions cover a whole `terraform destroy` and the edge's offline apply; the ALB's lookup by the controller's tags (`ingress.k8s.aws/stack = splitx`); that the pinned add-on versions are still offered on the day; and the edge function in CloudFront's own runtime (it is tested in Node). | An AWS day that meets any of these unprepared loses hours of a rehearsal or the demo. | Open. `aws-edge` proves the edge's part as soon as the stacks and the `AWS_ACCOUNT_ID` secret exist. The rehearsal's first hour, a platform-only `aws-up` then `aws-down`, proves the rest (plan Phase 10). **2026-09-24, D-093 adds to the list:** the External Secrets Operator's Pod Identity credentials; the load balancer controller's IAM policy (the module's) against controller 3.5.0; the pod readiness gates; the VPC CNI agent admitting the kubelet and judging `172.20.0.1` as the API server; the prefix-list rule fitting the security group (weight 55 of 60); image volumes on the EKS node image; Docker Hub pulls through the NAT address; GitHub's webhook through CloudFront to Jenkins; and the Jenkins deploy RBAC of D-094. **D-095 and D-096 add:** whether EKS itself is allowed on the account's Free plan; the `m7i-flex.large` nodes; Nexus with a read-only root filesystem; and cosign's attestation output in the archive step. **D-097 adds:** Kyverno's admission metrics reaching Prometheus; the ops image passing the release's Trivy gate; ops-api's AWS reads through Pod Identity; and the traffic lab's load reaching CloudFront from the NAT address. **2026-09-24, from kind-e2e (D-099, D-100):** on Kind, Nexus with a read-only root filesystem ran in runs 2 to 4, the ops image passed the gate, and D-094's deploy RBAC was proven (run 4: 4 allowed, 5 refused). Run 4 found that Jenkins' Nexus role could not upload (fixed in D-100), and cosign's attestation output was then checked against cosign's source; the first run that archives proves it. **Runs 5 and 6 did (D-099).** **2026-09-25, D-103:** `aws-up` now ends by verifying the platform through CloudFront (`k8s:verify` and `cd:verify --target eks`), and `aws-verify` repeats that alone. Together they check most of this list live on the day: ESO's Pod Identity credentials; the ALB controller's policy (it made the ALB and its bindings); the readiness gates; the VPC CNI agent enforcing, admitting the kubelet (every pod ready) and reaching 172.20.0.1 (ops-api's reads, Jenkins' agents); Docker Hub pulls through the NAT address (every pod running); GitHub's webhook through CloudFront to Jenkins; D-094's RBAC; ops-api's AWS reads; and the edge function in CloudFront's own runtime. What they can't check: the flow log role's `iam:PassedToService` and the add-on versions (aws-up's apply proves those), `splitx-ci-teardown`'s cover of a whole destroy (aws-down proves it), and EKS and `m7i-flex.large` on the Free plan (the apply again). |
+| B-031 | Phase 4 (D-088 to D-090) is written and validated, but nothing in it has been applied. Only a real run proves: the `iam:PassedToService` value for the flow log's role (both candidates are allowed); that `splitx-ci-teardown`'s permissions cover a whole `terraform destroy` and the edge's offline apply; the ALB's lookup by the controller's tags (`ingress.k8s.aws/stack = splitx`); that the pinned add-on versions are still offered on the day; and the edge function in CloudFront's own runtime (it is tested in Node). | An AWS day that meets any of these unprepared loses hours of a rehearsal or the demo. | Open. `aws-edge` proves the edge's part as soon as the stacks and the `AWS_ACCOUNT_ID` secret exist. The rehearsal's first hour, a platform-only `aws-up` then `aws-down`, proves the rest (plan Phase 10). **2026-09-24, D-093 adds to the list:** the External Secrets Operator's Pod Identity credentials; the load balancer controller's IAM policy (the module's) against controller 3.5.0; the pod readiness gates; the VPC CNI agent admitting the kubelet and judging `172.20.0.1` as the API server; the prefix-list rule fitting the security group (weight 55 of 60); image volumes on the EKS node image; Docker Hub pulls through the NAT address; GitHub's webhook through CloudFront to Jenkins; and the Jenkins deploy RBAC of D-094. **D-095 and D-096 add:** whether EKS itself is allowed on the account's Free plan; the `m7i-flex.large` nodes; Nexus with a read-only root filesystem; and cosign's attestation output in the archive step. **D-097 adds:** Kyverno's admission metrics reaching Prometheus; the ops image passing the release's Trivy gate; ops-api's AWS reads through Pod Identity; and the traffic lab's load reaching CloudFront from the NAT address. **2026-09-24, from kind-e2e (D-099, D-100):** on Kind, Nexus with a read-only root filesystem ran in runs 2 to 4, the ops image passed the gate, and D-094's deploy RBAC was proven (run 4: 4 allowed, 5 refused). Run 4 found that Jenkins' Nexus role could not upload (fixed in D-100), and cosign's attestation output was then checked against cosign's source; the first run that archives proves it. **Runs 5 and 6 did (D-099).** **2026-09-25, D-103:** `aws-up` now ends by verifying the platform through CloudFront (`k8s:verify` and `cd:verify --target eks`), and `aws-verify` repeats that alone. Together they check most of this list live on the day: ESO's Pod Identity credentials; the ALB controller's policy (it made the ALB and its bindings); the readiness gates; the VPC CNI agent enforcing, admitting the kubelet (every pod ready) and reaching 172.20.0.1 (ops-api's reads, Jenkins' agents); Docker Hub pulls through the NAT address (every pod running); GitHub's webhook through CloudFront to Jenkins; D-094's RBAC; ops-api's AWS reads; and the edge function in CloudFront's own runtime. What they can't check: the flow log role's `iam:PassedToService` and the add-on versions (aws-up's apply proves those), `splitx-ci-teardown`'s cover of a whole destroy (aws-down proves it), and EKS and `m7i-flex.large` on the Free plan (the apply again). **2026-09-25, D-105:** checked read-only ahead of the day: EKS 1.35 is in standard support, all six pinned add-on versions are still offered, `m7i-flex.large` is offered in all three zones and is Free-plan eligible, and the vCPU quota is 8. Both stacks are in sync. |
 
 ## Environment notes (this machine)
 

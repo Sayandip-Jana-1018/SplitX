@@ -224,7 +224,12 @@ function stacks(cluster: ClusterReadings): PreflightItem {
     if (!cluster.stacks.ok) return unread('stacks', title, cluster.stacks);
     const problems = cluster.stacks.data.map(stackProblem).filter(Boolean);
     if (problems.length) return item('stacks', title, 'fix', `${problems.join('; ')}.`);
-    return item('stacks', title, 'go', `${cluster.stacks.data.map((stack) => stack.name).join(' and ')}: complete, no drift found.`);
+    // A stack CloudFormation never checked has no drift found only because
+    // nobody looked, so the line says which, as the stacks panel does.
+    const names = cluster.stacks.data.map((stack) => stack.name).join(' and ');
+    const unchecked = cluster.stacks.data.filter((stack) => stack.drift !== 'IN_SYNC').map((stack) => stack.name);
+    const drift = unchecked.length ? 'but ' + unchecked.join(' and ') + ' not yet checked for drift' : 'and in sync when drift was last checked';
+    return item('stacks', title, 'go', `${names}: complete, ${drift}.`);
 }
 
 function budget(cluster: ClusterReadings): PreflightItem {

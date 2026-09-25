@@ -25,7 +25,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { request } from 'node:http';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { buildForDeployment } from './lib/platform-checks.mjs';
+import { buildForDeployment, cosignVerification } from './lib/platform-checks.mjs';
 import { powerSource } from './lib/power.mjs';
 import { clusterSecret, portForward, stopForwards, verifyTarget } from './lib/verify-target.mjs';
 
@@ -538,11 +538,13 @@ record(
 const lastBuilds = (await jenkinsJson('/job/' + JOB + '/api/json?tree=builds[number,result]'))?.builds ?? [];
 const lastSuccess = lastBuilds.find((build) => build.result === 'SUCCESS');
 const buildLog = lastSuccess ? (await http('/job/' + JOB + '/' + lastSuccess.number + '/consoleText')).text : '';
-const verifiedLine = buildLog.split('\n').find((line) => line.includes('signed by https://github.com/' + REPOSITORY));
+const verification = cosignVerification(buildLog, REPOSITORY);
 record(
     'Jenkins verified that signature before it deployed',
-    Boolean(verifiedLine) && buildLog.includes(digest) && buildLog.includes('all running'),
-    verifiedLine ? 'build #' + lastSuccess.number + ': ' + verifiedLine.trim().slice(0, 150) : 'no successful build has a cosign result in its log'
+    Boolean(verification) && buildLog.includes(digest) && buildLog.includes('all running'),
+    verification
+        ? 'build #' + lastSuccess.number + ': ' + verification.signed + '; cosign checked: ' + (verification.checks.join('; ') || 'nothing it printed')
+        : 'no successful build has a cosign result in its log'
 );
 
 sections.push({

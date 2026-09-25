@@ -4,7 +4,7 @@ import {
     checkNewConnections, DATABASE_FROM_URL, PROBE_CONTROL, policyEnforced, policyProbeScript, policyTargets, readPolicyProbe,
 } from '../../../scripts/lib/cluster-network.mjs';
 import {
-    ALB_EXPECTED, albDecision, albFindings, autoscalerHealth, awsReadings, buildForDeployment, DATABASE_PROBE, ebsFindings, eksClusterOf,
+    ALB_EXPECTED, albDecision, albFindings, autoscalerHealth, awsReadings, buildForDeployment, cosignVerification, DATABASE_PROBE, ebsFindings, eksClusterOf,
     identityProblem, INTERNAL_SPELLINGS, madeByEdgeFunction, matchesPathPattern, POD_IDENTITY_ACCOUNTS, podIdentityFindings, spreadOf,
     ungatedPods, unhealthyPods,
 } from '../../../scripts/lib/platform-checks.mjs';
@@ -417,6 +417,34 @@ describe('GitHub\'s own delivery, in Jenkins\' record', () => {
 
     it('matches the cause Jenkins\' job is configured to write', () => {
         expect(read('helm/platform/jenkins.values.yaml')).toContain("causeString('GitHub deployment $deployment_id, delivery $x_github_delivery')");
+    });
+});
+
+describe('what cosign checked, in Jenkins\' record', () => {
+    const REPOSITORY = 'Sayandip-Jana-1018/SplitX';
+
+    it('keeps each check cosign printed under the signer, as in run 8\'s build', () => {
+        const verification = cosignVerification(read('docs/evidence/kind-e2e/jenkins-build-1.txt'), REPOSITORY);
+        expect(verification?.signed).toBe('signed by https://github.com/' + REPOSITORY + '/.github/workflows/ci.yml@refs/heads/main at commit e66a699d0229');
+        expect(verification?.checks).toEqual([
+            'The cosign claims were validated',
+            'Existence of the claims in the transparency log was verified offline',
+            'The code-signing certificate was verified using trusted certificate authority certificates',
+        ]);
+    });
+
+    it('stops at the first line that is not one of them', () => {
+        const log = '    signed by https://github.com/' + REPOSITORY + '/.github/workflows/ci.yml@refs/heads/main at commit abc; cosign checked:\n'
+            + '      - The cosign claims were validated\n[Pipeline] }\n      - not cosign\'s\n';
+        expect(cosignVerification(log, REPOSITORY)?.checks).toEqual(['The cosign claims were validated']);
+    });
+
+    it('is null for a log without a verified signature', () => {
+        expect(cosignVerification('Started by user admin\nFinished: FAILURE\n', REPOSITORY)).toBeNull();
+    });
+
+    it('reads the line the verify step writes', () => {
+        expect(read('jenkins/deploy.mjs')).toContain("' at commit ' + deployment.sha.slice(0, 12) + '; cosign checked:\\n    ' + checks.join('\\n    ')");
     });
 });
 
