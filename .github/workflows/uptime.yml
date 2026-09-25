@@ -11,6 +11,9 @@
 #   20 s later; one that fails twice fails the run, and GitHub emails
 #   the failure. The run also opens an issue for the incident, and
 #   closes it with the outage's length when every check passes again.
+#
+#   GitHub starts scheduled runs late when it is busy, sometimes by
+#   hours, so /ops calls a quiet spell late before it calls it stopped.
 # ═══════════════════════════════════════════════════════════════
 name: Production checks
 

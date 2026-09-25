@@ -139,9 +139,16 @@ describe('the pre-flight list', () => {
         expect(one('site', checks('failure'))).toMatchObject({ readiness: 'fix', detail: 'The newest production check failed: open the run, and its incident issue.' });
         expect(one('site', checks('timed_out')).detail).toBe('The newest production check timed out: open the run, and its incident issue.');
         expect(one('site', checks('cancelled')).readiness).toBe('wait');
-        // Every 15 minutes, so nothing for 50 means the schedule stopped, whatever the last verdict was.
-        expect(one('site', checks('success', '2026-10-10T03:10:00Z'))).toMatchObject({ readiness: 'fix' });
-        expect(one('site', checks('success', '2026-10-10T03:10:00Z')).detail).toContain('No production check for 50 minutes');
+        // Due every 15 minutes, but GitHub starts schedules late when it is busy: nothing for 50 minutes
+        // after a pass is late, not a stop. A failure stays a failure however old it is.
+        expect(one('site', checks('success', '2026-10-10T03:10:00Z'))).toMatchObject({
+            readiness: 'wait',
+            detail: 'Passed every production check, 50 min before this reading; GitHub is late with the next. Actions → Production checks runs one now.',
+        });
+        expect(one('site', checks('failure', '2026-10-10T02:00:00Z')).readiness).toBe('fix');
+        // Six hours without a run: the schedule has stopped, whatever the last verdict was.
+        expect(one('site', checks('success', '2026-10-09T21:00:00Z'))).toMatchObject({ readiness: 'fix' });
+        expect(one('site', checks('success', '2026-10-09T21:00:00Z')).detail).toContain('No production check for 7 hours: the schedule has stopped.');
         expect(one('site', { siteChecks: ok(null) })).toMatchObject({ readiness: 'wait', detail: 'The production checks haven\'t run yet.' });
         expect(one('site', { siteChecks: unread('GitHub answered 404: Not Found', 'GitHub Actions: Production checks') }))
             .toMatchObject({ readiness: 'fix', detail: 'GitHub Actions: Production checks can\'t be read: GitHub answered 404: Not Found' });

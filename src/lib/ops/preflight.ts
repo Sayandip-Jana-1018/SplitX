@@ -107,11 +107,14 @@ function sonar(reading: PreflightInput['qualityGate']): PreflightItem {
 }
 
 /**
- * The checks run every 15 minutes (uptime.yml, D-106), so a newest run older
- * than this means the schedule stopped: GitHub pauses a public repository's
- * schedules after 60 days without activity.
+ * The checks are due every 15 minutes (uptime.yml, D-106), but GitHub starts
+ * scheduled runs late when it is busy: on 2026-09-25 it started the nightly
+ * Kind run 2 h 19 min late. So a quiet spell is late before it is a stop. Six
+ * hours without a run means the schedule has stopped: GitHub pauses a public
+ * repository's schedules after 60 days without activity.
  */
-const SITE_CHECKS_STALE_MS = 45 * 60_000;
+const SITE_CHECKS_LATE_MS = 45 * 60_000;
+const SITE_CHECKS_STOPPED_MS = 6 * 60 * 60_000;
 
 /** How the page words a production check that didn't pass. */
 const SITE_CHECK_ENDINGS = new Map([
@@ -126,8 +129,11 @@ function site(reading: PreflightInput['siteChecks']): PreflightItem {
     if (!run) return item('site', title, 'wait', 'The production checks haven\'t run yet.');
     // Judged against when GitHub was read, so the list says the same thing on every render.
     const minutes = Math.max(0, Math.round((Date.parse(reading.fetchedAt) - Date.parse(run.at)) / 60_000));
-    if (minutes * 60_000 > SITE_CHECKS_STALE_MS) {
-        return item('site', title, 'fix', `No production check for ${minutes} minutes: the schedule stopped. Run Actions → Production checks, and enable it if GitHub paused it.`);
+    if (minutes * 60_000 > SITE_CHECKS_STOPPED_MS) {
+        return item('site', title, 'fix', `No production check for ${Math.floor(minutes / 60)} hours: the schedule has stopped. Run Actions → Production checks, and enable it if GitHub paused it.`);
+    }
+    if (run.conclusion === 'success' && minutes * 60_000 > SITE_CHECKS_LATE_MS) {
+        return item('site', title, 'wait', `Passed every production check, ${minutes} min before this reading; GitHub is late with the next. Actions → Production checks runs one now.`);
     }
     if (run.conclusion === 'success') return item('site', title, 'go', `Passed every production check, ${minutes} min before this reading.`);
     if (run.conclusion === 'cancelled') return item('site', title, 'wait', 'The newest production check was cancelled; the next runs within 15 minutes.');

@@ -3941,6 +3941,16 @@ Memory peaked at 8.0 GB in use, 6.6 GB of it anonymous.
 - **`ops-verify`:** 24/24.
   - The lab served all 5,392 plans: 0 refused, 0 failed, p95 192 ms.
   - The autoscaler went from 2 pods to 10, and the page's chart peaked at 60.2 requests a second.
+
+**Run 10 (36102807256, on `ded12b7`, D-106's push) was green on every check.**
+- **Delivery:** 52 s. Jenkins reported "Deployed ded12b718b21 and checked through the edge".
+- **`k8s:verify`:** 36/36, with 1 skipped (email).
+- **`cd:verify --rollback`:** 16/16. The broken release was rolled back after 191 s, with 650 of 650
+  requests answered 200.
+- **`ops-verify`:** 24/24.
+
+No Kind run followed D-107 to D-109: they change the app and its tests, which don't start one. The
+nightly run tests their release.
 - **Memory** peaked at 8.2 GB in use, 6.8 GB of it anonymous.
 
 ### D-100 · What kind-e2e run 4 found: five causes, each read in the source of what was involved
@@ -4491,6 +4501,18 @@ worth seeing.
 the file is valid and the repository's nightly schedule runs. GitHub can take hours to take up a new
 schedule. The incident issue has not been opened yet; the first real failure will.
 
+**2026-09-25, later: on `/ops`, late is not stopped.** GitHub started the nightly Kind run (cron 21:40
+UTC) at 23:59 UTC, 2 h 19 min late. So "no run for 45 minutes" can't mean the schedule stopped, and
+`/ops` showed the live site red while the site was fine. The pre-flight item now reads:
+- **green** when the newest run passed, less than 45 minutes before the reading;
+- **amber, late**, when it passed but nothing has run for 45 minutes to 6 hours. It says so, and that
+  Actions → Production checks runs one at once;
+- **red** when the newest run failed or timed out, however old it is;
+- **red, stopped**, after 6 hours without a run.
+
+The workflow file's header says the same, and re-saving it asks GitHub to register the schedule
+again.
+
 ### D-107 · The flows a classroom uses, tested in a phone's browser before every release
 **2026-09-25** · ✅ 11 tests green locally against a production build. CI's `e2e` job runs them on
 every push (plan Phase 1b).
@@ -4614,8 +4636,10 @@ code: the `e2e` job's production build of the same commit passed, and the next p
 released normally.
 
 ### D-109 · Sonar's 64 reliability findings, fixed without changing what anything shows or reads
-**2026-09-25** · 🚧 pushed. The 13 regular expressions were proven equivalent on 4.8 million
-generated inputs; Sonar's reading after its analysis is recorded below.
+**2026-09-25** · ✅ **0 open reliability findings.** After `6982011`'s analysis, SonarQube Cloud
+rated reliability, security and maintainability all A, with 0 bugs, 0 vulnerabilities, 0 security
+hotspots and 72.8 % coverage. The gate passed, with 95.8 % coverage on new code. The 13 regular
+expressions were proven equivalent on 4.8 million generated inputs.
 
 **Where it started.** SonarQube Cloud rated reliability C, with 64 open findings. The plan counted
 39; newer rules found more.
