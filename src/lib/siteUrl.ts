@@ -11,5 +11,6 @@ export function siteUrl(request?: Request): string | null {
         || process.env.AUTH_URL
         || (vercelDomain ? `https://${vercelDomain}` : '')
         || (request ? new URL(request.url).origin : '');
-    return url ? url.replace(/\/+$/, '') : null;
+    // (?<!\/): the match starts at a run's first slash only, so no run is scanned twice.
+    return url ? url.replace(/(?<!\/)\/+$/, '') : null;
 }

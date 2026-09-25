@@ -114,7 +114,8 @@ function layout(params: { icon: string; title: string; body: string; button: str
     </div>
 </body>
 </html>`;
-    const strip = (value: string) => value.replace(/<[^>]+>/g, '');
+    // A tag can't hold "<", so each "<" is looked at once: the templates' tags come out the same.
+    const strip = (value: string) => value.replace(/<[^<>]+>/g, '');
     const text = `${strip(params.title)}\n\n${strip(params.body)}\n\n${params.button}: ${params.url}\n\n${strip(params.footnote).replace(/\s+/g, ' ')}\n`;
     return { html, text };
 }

@@ -23,7 +23,8 @@ let activeGroupsRefreshedAt = 0;
 const digest = (value: string) => createHash('sha256').update(value).digest();
 
 function isAuthorized(header: string | null, expected: string) {
-    const given = header?.match(/^Bearer\s+(.+)$/i)?.[1]?.trim();
+    // The token starts at its first non-space, so the spaces before it are read one way only.
+    const given = header?.match(/^Bearer\s+(\S.*)$/i)?.[1]?.trim();
     // Comparing fixed-length digests keeps the check constant-time, including for length.
     return Boolean(given) && timingSafeEqual(digest(given as string), digest(expected));
 }

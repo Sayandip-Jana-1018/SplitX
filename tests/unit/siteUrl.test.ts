@@ -15,6 +15,8 @@ describe('siteUrl', () => {
         vi.stubEnv('NEXTAUTH_URL', 'https://splitx.example/');
         vi.stubEnv('VERCEL_PROJECT_PRODUCTION_URL', 'splitx-app.vercel.app');
         expect(siteUrl(request)).toBe('https://splitx.example');
+        vi.stubEnv('NEXTAUTH_URL', 'https://splitx.example///');
+        expect(siteUrl(request)).toBe('https://splitx.example');
     });
 
     it('on Vercel without one, uses the production domain Vercel sets', () => {

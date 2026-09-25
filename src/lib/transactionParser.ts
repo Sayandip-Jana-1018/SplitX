@@ -25,10 +25,13 @@ export interface ParsedTransaction {
 }
 
 // ── Amount Patterns ──
+// Written so that no two repeats can share the same run of characters (D-109):
+// the spaces after a currency belong to it, and an amount is only read from the
+// first digit of its run. Each matches what it did before.
 const AMOUNT_PATTERNS = [
     /(?:₹|Rs\.?|INR)\s*([\d,]+(?:\.\d{1,2})?)/gi,
-    /(?:amount|amt|paid|debited|credited)[:\s]*(?:₹|Rs\.?|INR)?\s*([\d,]+(?:\.\d{1,2})?)/gi,
-    /(?:₹|Rs\.?|INR)?\s*([\d,]+(?:\.\d{1,2})?)\s*(?:paid|debited|sent|received)/gi,
+    /(?:amount|amt|paid|debited|credited)[:\s]*(?:(?:₹|Rs\.?|INR)\s*)?([\d,]+(?:\.\d{1,2})?)/gi,
+    /(?:(?:₹|Rs\.?|INR)\s*)?(?<![\d,])([\d,]+(?:\.\d{1,2})?)\s*(?:paid|debited|sent|received)/gi,
 ];
 
 // ── Currency ──
@@ -74,17 +77,19 @@ const MERCHANT_PATTERNS = [
 
 // ── Line Item Patterns (for receipt scanning) ──
 // Pattern: "2 x Coffee ₹240" or "2x Coffee 240.00" or "Coffee x2 ₹240"
+// A name starts and ends with a non-space, as the shortest name always did, so
+// the spaces around it are read one way only (D-109).
 const LINE_ITEM_PATTERNS = [
     // "2 x ItemName ₹120.00" or "2x ItemName 120"
-    /^[\s]*(\d+)\s*[xX×]\s+(.+?)\s+(?:₹|Rs\.?|INR)?\s*([\d,]+(?:\.\d{1,2})?)\s*$/,
+    /^[\s]*(\d+)\s*[xX×]\s+(\S(?:.*?\S)??)\s+(?:(?:₹|Rs\.?|INR)\s*)?([\d,]+(?:\.\d{1,2})?)\s*$/,
     // "ItemName x2 ₹120.00"
-    /^[\s]*(.+?)\s+[xX×]\s*(\d+)\s+(?:₹|Rs\.?|INR)?\s*([\d,]+(?:\.\d{1,2})?)\s*$/,
+    /^[\s]*(\S(?:.*?\S)??)\s+[xX×]\s*(\d+)\s+(?:(?:₹|Rs\.?|INR)\s*)?([\d,]+(?:\.\d{1,2})?)\s*$/,
     // "ItemName          ₹120.00" (large gap or tabs between name and price)
-    /^[\s]*([A-Za-z][\w\s&'.,-]{2,30}?)\s{2,}(?:₹|Rs\.?|INR)?\s*([\d,]+(?:\.\d{1,2})?)\s*$/,
+    /^[\s]*([A-Za-z][\w\s&'.,-]{2,30}?)\s{2,}(?:(?:₹|Rs\.?|INR)\s*)?([\d,]+(?:\.\d{1,2})?)\s*$/,
     // "ItemName ... ₹120" (dots between)
-    /^[\s]*([A-Za-z][\w\s&'.,-]{2,30}?)\s*\.{2,}\s*(?:₹|Rs\.?|INR)?\s*([\d,]+(?:\.\d{1,2})?)\s*$/,
+    /^[\s]*([A-Za-z][\w\s&'.,-]{2,30}?)\s*\.{2,}\s*(?:(?:₹|Rs\.?|INR)\s*)?([\d,]+(?:\.\d{1,2})?)\s*$/,
     // "1. Coffee ₹120" (numbered list)
-    /^[\s]*\d+[.)]\s+(.+?)\s+(?:₹|Rs\.?|INR)?\s*([\d,]+(?:\.\d{1,2})?)\s*$/,
+    /^[\s]*\d+[.)]\s+(\S(?:.*?\S)??)\s+(?:(?:₹|Rs\.?|INR)\s*)?([\d,]+(?:\.\d{1,2})?)\s*$/,
 ];
 
 // Words indicating summary/total lines (skip these)
@@ -219,7 +224,7 @@ export function extractLineItems(rawText: string): ReceiptLineItem[] {
             }
 
             // Clean and validate
-            name = name.replace(/\s+/g, ' ').replace(/[.…]+$/, '').trim();
+            name = name.replace(/\s+/g, ' ').replace(/(?<![.…])[.…]+$/, '').trim();
             if (name.length < 2 || name.length > 40) continue;
 
             const priceNum = Number.parseFloat(priceStr.replace(/,/g, ''));

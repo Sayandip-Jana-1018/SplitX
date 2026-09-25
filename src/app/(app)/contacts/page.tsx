@@ -65,7 +65,9 @@ interface GroupOption {
 
 type Filter = 'all' | 'onApp' | 'invite';
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+// The domain splits at its first dot after the first character, so it is read one way only.
+// It accepts exactly what /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/ did.
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@][^\s@.]*\.[^\s@]{2,}$/;
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 const EMPTY_FORM = { name: '', email: '', phone: '' };
 

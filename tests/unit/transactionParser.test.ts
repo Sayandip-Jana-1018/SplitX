@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { detectCurrency, parseTransactionText } from '@/lib/transactionParser';
+import { detectCurrency, extractLineItems, parseTransactionText } from '@/lib/transactionParser';
 
 describe('parseTransactionText', () => {
     it('reads rupee amounts from UPI messages and bank texts', () => {
@@ -52,6 +52,38 @@ describe('a printed bill', () => {
 
     it('still never reads another currency as rupees', () => {
         expect(parseTransactionText('Total USD 12.50').amount).toBeNull();
+    });
+});
+
+describe('a bill\'s item lines', () => {
+    it('reads an item and its quantity, on either side of the name', () => {
+        expect(extractLineItems('2 x Filter Coffee ₹240')).toEqual([{ name: 'Filter Coffee', quantity: 2, price: 24_000, confidence: 90 }]);
+        expect(extractLineItems('Masala Dosa x3 Rs. 540.00')).toEqual([{ name: 'Masala Dosa', quantity: 3, price: 54_000, confidence: 85 }]);
+    });
+
+    it('keeps the currency out of the name, even with spaces between them', () => {
+        expect(extractLineItems('1. Paneer Tikka Rs   260')).toEqual([{ name: 'Paneer Tikka', quantity: 1, price: 26_000, confidence: 70 }]);
+        expect(extractLineItems('Veg Biryani .... ₹ 220')).toEqual([{ name: 'Veg Biryani', quantity: 1, price: 22_000, confidence: 70 }]);
+    });
+
+    it('takes the shortest name: a one-character name is too short, so the line is no item (D-109)', () => {
+        // A rewrite that tried longer names first read this as "- Rs" for ₹100.
+        expect(extractLineItems('1. - Rs 100')).toEqual([]);
+    });
+});
+
+describe('text built to make a parser backtrack (D-109)', () => {
+    // The old item pattern took 8 s on the first of these at 3,000 characters.
+    it.each([
+        ['spaces after an item\'s name', '2 x a' + ' '.repeat(100_000) + 'b'],
+        ['a gap after a name', 'Tea' + ' '.repeat(100_000) + 'x'],
+        ['digits before no "paid"', '1'.repeat(100_000) + 'x'],
+        ['spaces after "paid"', 'paid' + ' '.repeat(100_000) + 'x'],
+        ['a dot leader to nowhere', 'Tea' + '.'.repeat(100_000) + 'x'],
+    ])('reads %s in linear time', (_shape, text) => {
+        const start = performance.now();
+        parseTransactionText(text);
+        expect(performance.now() - start).toBeLessThan(1_000);
     });
 });
 

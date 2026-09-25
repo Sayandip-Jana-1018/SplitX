@@ -4485,8 +4485,11 @@ worth seeing.
   later.
 - **Checking the database every 15 minutes,** for the compute hours above.
 
-**2026-09-25, later:** the first scheduled and pushed runs on GitHub passed all 6 checks (run
-36102807424, on `ded12b7`). The incident issue has not been opened yet; the first real failure will.
+**2026-09-25, later:** the first run on GitHub, started by the push, passed all 6 checks (run
+36102807424, on `ded12b7`). An earlier note here said scheduled runs had passed too. None had: by
+09:16 UTC, three hours after the workflow was added, GitHub had started no scheduled run, though
+the file is valid and the repository's nightly schedule runs. GitHub can take hours to take up a new
+schedule. The incident issue has not been opened yet; the first real failure will.
 
 ### D-107 · The flows a classroom uses, tested in a phone's browser before every release
 **2026-09-25** · ✅ 11 tests green locally against a production build. CI's `e2e` job runs them on
@@ -4603,6 +4606,92 @@ yet the page said "Amount: Not found".
 - **Tests:** six new unit tests, including the scanned text line for line, and ₹-priced items.
 
 **After this deploys,** the production checks (D-106) report "CSP enforced".
+
+**2026-09-25, later:** Vercel deployed it, and production sends the enforced header. CI's release
+job failed once on this commit: the image build couldn't download a Google font (Turbopack's
+"Can't resolve '@vercel/turbopack-next/internal/font/google/font'"). That was the network, not the
+code: the `e2e` job's production build of the same commit passed, and the next push (`fdac248`)
+released normally.
+
+### D-109 · Sonar's 64 reliability findings, fixed without changing what anything shows or reads
+**2026-09-25** · 🚧 pushed. The 13 regular expressions were proven equivalent on 4.8 million
+generated inputs; Sonar's reading after its analysis is recorded below.
+
+**Where it started.** SonarQube Cloud rated reliability C, with 64 open findings. The plan counted
+39; newer rules found more.
+- 20 × S6772: JSX text on the line after an element.
+- 18 × S7773: `parseInt`, `parseFloat` and `isNaN` instead of their `Number.` forms.
+- 13 × S8786: regular expressions that backtrack super-linearly.
+- 13 others: `Array(n)` (2), `charCodeAt` (2), click handlers on elements that aren't controls (6),
+  a Promise rejected with something that isn't an Error, `autoFocus`, and a conditional that
+  returned the same value both ways.
+
+**The first 51 (`fdac248`).** The previous session made these; this one reviewed each change, ran
+every check and pushed them. CI's 12 browser flows passed on it.
+- **The JSX text** is joined to the element before it. JSX already drops a newline there, so every
+  page renders as before.
+- **The `Number.` forms**, with a radix of 10 where none was given.
+- **`Array.from`, `codePointAt`**, and a real Error for an image that couldn't be read.
+  `codePointAt` changes one thing: a name with an emoji in it gets another avatar colour.
+- **Controls:**
+  - the item sheet's handle is a Close button;
+  - the receipt viewer still closes on the backdrop or the empty stage around the photo, now
+    without click handlers on the bar, the photo and the sheet;
+  - the custom category field is focused by an effect instead of `autoFocus`.
+
+**The 13 regular expressions.** S8786 is the scslre library's analysis (SonarJS,
+`packages/analysis/src/jsts/rules/S8786`). It finds two shapes:
+- two repeats side by side that can take the same characters, such as `\s+` then `\s*`, or a name's
+  `.+?` then `\s+`;
+- a pattern that can start at every character of a long run and scan the run from each, such as
+  `[\d,]+` inside a long number.
+
+Each rewrite removes the shape and keeps what the pattern accepts:
+
+| Where | Was | Now | Why it is the same |
+|---|---|---|---|
+| Amounts, and the item lines | `(?:₹\|Rs\.?\|INR)?\s*` after `[:\s]*`, `\s+` or `\s{2,}` | `(?:(?:₹\|Rs\.?\|INR)\s*)?` | Without a currency, the two runs of spaces were one. |
+| An amount before "paid" | `…\s*([\d,]+…)` | `…(?<![\d,])([\d,]+…)` | A match starting inside a number also starts at its first digit, and that one is found first. |
+| An item's name (3 patterns) | `(.+?)` | `(\S(?:.*?\S)??)` | The shortest name never began or ended with a space. `??` still tries the shortest first. |
+| Trailing dots and slashes, "12 to Ravi" | `[.…]+$`, `\/+$`, `\d+\s+to` | each after `(?<![.…])`, `(?<!\/)`, `(?<!\d)` | Only a run's first character can start a match. |
+| `/api/metrics`' token | `^Bearer\s+(.+)$` | `^Bearer\s+(\S.*)$` | After trimming, the token read is the same. |
+| The contacts form's email | `[^\s@]+\.[^\s@]{2,}` | `[^\s@][^\s@.]*\.[^\s@]{2,}` | The domain splits at its first dot after the first character: the split that works if any does. |
+| An email's plain text | `<[^>]+>` | `<[^<>]+>` | The same on every template, which never puts "<" inside a tag. |
+
+The lookbehinds are safe in browsers: the app already ships one (`transactions/new`), and
+Next.js 16 supports only browsers that have them.
+
+**How it was proven.** A temporary test loaded the parser as it was, from git, next to the new one.
+It was never committed:
+- **1,000,000 generated texts** (receipts, UPI messages and noise) through `parseTransactionText`: no
+  field differed.
+- **500,000 item-shaped lines**, with one-character names, currencies and gaps, and 300,000 looser
+  lines: no item differed.
+- **Each other rewrite:** 500,000 random strings, with no answer different. For the email's text,
+  that is every string with no "<" inside a tag, and every template.
+- **It caught a mistake before any commit.** The first rewrite of the name, `(\S(?:.*?\S)?)`, tried
+  longer names first. "1. - Rs 100" became an item called "- Rs" for ₹100, where the parser has
+  always dropped that line. The lazy `??` fixed it, and a unit test now holds that line.
+
+**What the old patterns cost.** One call each, on this laptop:
+
+| Input | Before, 3,000 characters | After, 3,000 | After, 300,000 |
+|---|---|---|---|
+| An item line: "2 x a", then spaces | 8.2 s | 0.12 ms | 1.7 ms |
+| An item line with a gap | 291 ms | 0.32 ms | 27 ms |
+| Digits with no "paid" after them | 13 ms | 0.12 ms | 1.8 ms |
+| The other seven | 3–5 ms | ≤ 0.08 ms | ≤ 1.2 ms |
+
+The parser reads text from the phone's own scan or a pasted message, so a bad line only ever froze
+its own phone. An 8-second freeze on one bad scan is still a bug.
+
+**Tests kept:**
+- the shapes of item lines, a currency kept out of a name, and the one-character name;
+- five 100,000-character inputs, each parsed in under a second;
+- `/api/metrics`' token, which had no test:
+  - served: the token, however the scheme is written and spaced;
+  - refused: no token, another token, another scheme, or a scheme with nothing after it;
+- several trailing slashes on the site's address.
 
 ---
 

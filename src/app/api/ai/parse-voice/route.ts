@@ -266,7 +266,7 @@ function parseTranscriptLocally(transcript: string, memberNames: string[]): Pars
 
     // Determine split type
     const isCustom = lower.includes('custom') || lower.includes('unequal') ||
-        lower.includes('different') || /\d+\s+to\s+\w/.test(lower);
+        lower.includes('different') || /(?<!\d)\d+\s+to\s+\w/.test(lower);
 
     // Extract title — heuristic: words that aren't numbers or member names
     const titleWords = words.filter(w =>
