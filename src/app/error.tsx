@@ -66,6 +66,8 @@ export default function AppError({ error, reset }: { error: Error & { digest?: s
                 {!healing && (
                     <div style={row}>
                         <button type="button" style={primary} onClick={reset}>Try again</button>
+                        {/* A full reload on purpose: a crashed or outdated client recovers only by loading afresh. */}
+                        {/* eslint-disable-next-line @next/next/no-location-assign-relative-destination */}
                         <button type="button" style={ghost} onClick={() => { window.location.href = '/dashboard'; }}>Go home</button>
                     </div>
                 )}

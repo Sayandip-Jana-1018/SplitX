@@ -228,6 +228,8 @@ export default function SettingsPage() {
         try {
             await signOutAndForget('/login');
         } catch {
+            // A full reload on purpose: it drops everything the failed sign-out left in memory.
+            // eslint-disable-next-line @next/next/no-location-assign-relative-destination
             window.location.href = '/login';
         }
     };
