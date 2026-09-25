@@ -4425,6 +4425,16 @@ stacks show no drift".
 
 The first hour of the rehearsal proves the first three. `aws-up`'s last step proves the rest.
 
+**2026-09-25, later: the secrets.** The user filled in `.env` and ran `npm run aws:secrets`.
+- It generated `ORIGIN_VERIFY_SECRET` and the three Nexus passwords into `.env`.
+- Secrets Manager refused the first write: "You must provide a ClientRequestToken value".
+  - The SDKs and the CLI make that token themselves; a request signed by hand, as this script's
+    are, must carry its own.
+  - Nothing had been written: no `splitx` secret existed afterwards (read-only check).
+- `09f2237` gives each call a fresh UUID. `secretWrites` in `scripts/lib/demo-secrets.mjs` builds
+  both request bodies, and a test holds them.
+- The user runs it again.
+
 ---
 
 ## Phase 18 — Production, between demo days
@@ -4716,6 +4726,51 @@ its own phone. An 8-second freeze on one bad scan is still a bug.
   - served: the token, however the scheme is written and spaced;
   - refused: no token, another token, another scheme, or a scheme with nothing after it;
 - several trailing slashes on the site's address.
+
+### D-110 · Dependabot's 13 pull requests: what was taken, what waits, and one Postgres major
+**2026-09-25** · 🚧 the first batch is pushed, with CI's full run and a Kind run to prove it. The
+majors come one at a time after it.
+
+**Applied on `main`, not merged.** Pushes go straight to `main` (memory `push-to-main-policy`), and
+each pull request was opened against an older `main`. So each update was applied to today's code
+and checked as a whole. Dependabot closes a pull request once `main` has what it proposed.
+
+| PR | Proposed | Done |
+|---|---|---|
+| #21 | 12 minor and patch updates: React 19.3, Prisma 6.19.3, zod 4.6, recharts 3.10, swr 2.5, supabase-js, Upstash, react-icons, eslint-config-next 16.3.5 and React's types | **Taken.** The Prisma CLI moved with its client, which the PR left behind. |
+| #26 | `actions/checkout` 7.0.1, `actions/setup-node` 7.0.0 | **Taken in all 11 workflows.** The PR covered 3; its base predates the rest. Both SHAs were checked against their tags. v6 and v7 keep the git credential in its own file (no job pushes with git), block fork pull requests on `pull_request_target` (unused here) and move to ESM. |
+| #27 | Compose: Postgres 18, Redis 8, SonarQube, Nexus | **Postgres 17.11 instead**, production's version (below). Redis stays at the cluster's 7.4.9. SonarQube's Community Build was taken. Nexus is pinned to the cluster's own 3.96.3. |
+| #30 | `@types/node` 26 | **`^24` instead.** The types describe Node 24, which runs the app; they were `^20`. |
+| #29 | `@types/bcryptjs` 3 | **Removed instead.** bcryptjs 3 ships its own types, and `tsc` passes on them. |
+| #20 | Node 26 in the images | **Not yet.** Node 26 becomes LTS in October 2026. |
+| #22, #23 | Vitest 5, and its coverage | Next, one at a time. |
+| #31 | ESLint 10 | Next. It must suit every plugin eslint-config-next brings. |
+| #24 | framer-motion 13 | Next. |
+| #28 | lucide-react 1.x | Next. |
+| #25, #32 | commitlint 21 | Next. |
+
+**One Postgres major, production's.** Neon runs 17.11, and CI tests on 17.11 pinned by digest
+(D-072). Compose and the Kind cluster still ran 16, so the cluster proved the app on a Postgres it
+never meets anywhere else. Both now run CI's image, and Dependabot's 18 would have widened the gap.
+- **Its majors, and Redis', move together by hand.** `dependabot.yml` now ignores them for Compose.
+- **A volume made by 16 doesn't start under 17.** That means Compose's local volume
+  (`docker compose down -v`; it only holds local data) and a laptop cluster made before this
+  (`npm run k8s:down`). The Kind runs start fresh each time.
+
+**Dependabot's other ignores:** majors of `@types/node`, which follows the runtime, and of the `node`
+image until LTS.
+
+**The new ESLint config found two full reloads that are on purpose.** 16.3.5 adds
+`no-location-assign-relative-destination`, which asks for the router instead of `window.location`:
+- **the fallback when sign-out fails:** the reload drops what the failed sign-out left in memory;
+- **the error page's "Go home":** a crashed or outdated client recovers only by loading afresh.
+
+Each keeps its reload, with the reason and a one-line disable.
+
+**Checked before pushing:** `tsc`, lint (0 warnings), 1,429 unit tests and the schema. Every edited
+YAML file parsed, and the Kind overlays render Postgres 17.11. CI runs the database, integration and
+browser tests on the new packages. The push also starts a Kind run, since it touches `scripts/lib`
+and `k8s/`, which proves the platform on Postgres 17 with the new release.
 
 ---
 

@@ -27,6 +27,10 @@ updates:
         update-types: ['version-update:semver-major']
       - dependency-name: '@prisma/client'
         update-types: ['version-update:semver-major']
+      # The types describe the Node the app runs (24, in the Dockerfile and CI), not the newest
+      # one; they move with the runtime, by hand.
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
 
   - package-ecosystem: github-actions
     # The workflows, and the composite action the aws-* workflows share.
@@ -57,6 +61,11 @@ updates:
       base-images:
         patterns:
           - '*'
+    ignore:
+      # The images run an LTS line of Node. A new major is taken by hand once it is LTS
+      # (Node 26: October 2026), with @types/node and CI's node-version.
+      - dependency-name: node
+        update-types: ['version-update:semver-major']
 
   - package-ecosystem: docker-compose
     directory: /
@@ -69,6 +78,13 @@ updates:
       compose-images:
         patterns:
           - '*'
+    ignore:
+      # Local development runs what production and the cluster run: Postgres 17, as Neon and
+      # CI do, and the cluster's Redis 7.4. Their majors move together, by hand.
+      - dependency-name: postgres
+        update-types: ['version-update:semver-major']
+      - dependency-name: redis
+        update-types: ['version-update:semver-major']
 
   # terraform/edge and terraform/platform: the AWS provider and the
   # terraform-aws-modules versions, lock files included. Each PR runs the

@@ -27,7 +27,7 @@ spec:
       containers:
         - name: psql
           # The database image, for psql — no Node, no Prisma CLI, no npm.
-          image: postgres:16-alpine@sha256:4e6e670bb069649261c9c18031f0aded7bb249a5b6664ddec29c013a89310d50
+          image: postgres:17.11-alpine3.24@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
           command: ["/bin/sh", "-c"]
           args:
             - |

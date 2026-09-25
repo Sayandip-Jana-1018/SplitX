@@ -71,7 +71,7 @@ services:
 
   # ── PostgreSQL (Local Development DB) ──
   postgres:
-    image: postgres:16-alpine@sha256:4e6e670bb069649261c9c18031f0aded7bb249a5b6664ddec29c013a89310d50
+    image: postgres:17.11-alpine3.24@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
     container_name: splitx-postgres
     deploy:
       resources:
@@ -131,7 +131,7 @@ services:
 
   # ── SonarQube (Code Quality Analysis) ──
   sonarqube:
-    image: sonarqube:10.7.0-community
+    image: sonarqube:26.9.0.129388-community
     container_name: splitx-sonarqube
     deploy:
       resources:
@@ -152,7 +152,7 @@ services:
 
   # ── Nexus (Artifact Repository) ──
   nexus:
-    image: sonatype/nexus3:3.92.0
+    image: sonatype/nexus3:3.96.3@sha256:a406f4e9dc149e050723a93bf57964311f6d1c88e1dcbed2e42ea373319a1772
     container_name: splitx-nexus
     deploy:
       resources:
