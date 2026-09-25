@@ -3963,6 +3963,18 @@ nightly run tests their release.
   - **`ops-verify`:** 24/24.
 - **Memory** peaked at 8.2 GB in use, 6.8 GB of it anonymous.
 
+**Runs 13 and 14 were green on every check.**
+- **Run 13** (36163672111, on `1103d84`) carried D-111's clean-out. It touched `scripts/lib` and
+  `ops/`, and those scripts ran unchanged.
+- **Run 14** (36166973783, on `f1890b1`) carried D-112's migration, which the cluster's schema Job
+  applied:
+  - **`k8s:verify`:** 36/36, with 1 skipped (email). No request was lost while every pod was
+    replaced: 2,106 of 2,106.
+  - **`cd:verify --rollback`:** 16/16. The broken release was rolled back after 180 s, with 616 of 616
+    requests answered 200.
+  - **`ops-verify`:** 24/24. The lab's 5,387 requests: 5,363 served, 24 refused on purpose and 0
+    failed, at p95 152 ms.
+
 ### D-100 · What kind-e2e run 4 found: five causes, each read in the source of what was involved
 **2026-09-24** · ✅ fixed, unit-tested (1,302 → 1,311 tests) and proven by run 5, then again by run 6
 (D-099)
@@ -4885,8 +4897,15 @@ warnings); knip (nothing); 1,429 unit tests; the schema. The push touches `scrip
 `ops/`, so a Kind run proves the platform scripts unchanged.
 
 ### D-112 · Invite links work for 7 days
-**2026-09-25** · 🚧 on the branch. Production's database takes the column first (the user runs
-"Production database"), then `main` takes the code.
+**2026-09-25** · ✅ live on `main` (`f1890b1`) since ~22:58 IST:
+- **Production's database took the column first.** The user ran "Production database" on the
+  branch: #5 as a report, which listed this one migration, then #6 with Apply. Read only, the column
+  is NOT NULL, the one group has its time, and the migration is recorded.
+- **Then `main`:**
+  - CI is green on all ten jobs. The 13 browser tests include the new one, "the owner makes a new
+    link", which took 13.1 s;
+  - kind-e2e run 14 is green on every check, with the migration applied by the cluster (D-099).
+- **Production serves the new route:** a GET answers 405, so it exists, and takes POST only.
 
 **Why.** A group's invite link never expired. Anyone holding an old one, from a forwarded message or
 a photo of the QR code, could join the group months later. Phase 1 left "optional invite-code
@@ -4967,6 +4986,7 @@ goes first.
 | B-029 | Removing a member used to re-split their shares among the others (D-063). Groups that had a member removed may hold shares that were moved between people, and former members may still owe or be owed. | Balances in those groups reflect the old re-split, not what people agreed to. | ✅ Checked 2026-09-22 — D-069. `npm run ledger:audit -- --https` read production (1 group, 37 expenses, 62 shares, 0 settlements, 9 accounts) in a read-only transaction: no share of a former member, no former member with a balance, every expense adding up, every group netting to zero. Nothing to repair. |
 | B-030 | `npm audit` still reports one high advisory: `deepmerge-ts` below 8 (GHSA-ggr8-5vv4-36mx, stack exhaustion when merging self-referencing objects), through `prisma` → `@prisma/config`. | The Prisma CLI is a development and migration tool; the app's runtime (`@prisma/client`) doesn't use it, and the only objects it merges are our own config. | Accepted 2026-09-22 (D-070). The fix is Prisma 7, a major upgrade with its own changes. Still accepted after the migration baseline (D-072), which was done on Prisma 6: the upgrade is its own change. The CLI stays out of the runtime image. |
 | B-031 | Phase 4 (D-088 to D-090) is written and validated, but nothing in it has been applied. Only a real run proves: the `iam:PassedToService` value for the flow log's role (both candidates are allowed); that `splitx-ci-teardown`'s permissions cover a whole `terraform destroy` and the edge's offline apply; the ALB's lookup by the controller's tags (`ingress.k8s.aws/stack = splitx`); that the pinned add-on versions are still offered on the day; and the edge function in CloudFront's own runtime (it is tested in Node). | An AWS day that meets any of these unprepared loses hours of a rehearsal or the demo. | Open. `aws-edge` proves the edge's part as soon as the stacks and the `AWS_ACCOUNT_ID` secret exist. The rehearsal's first hour, a platform-only `aws-up` then `aws-down`, proves the rest (plan Phase 10). **2026-09-24, D-093 adds to the list:** the External Secrets Operator's Pod Identity credentials; the load balancer controller's IAM policy (the module's) against controller 3.5.0; the pod readiness gates; the VPC CNI agent admitting the kubelet and judging `172.20.0.1` as the API server; the prefix-list rule fitting the security group (weight 55 of 60); image volumes on the EKS node image; Docker Hub pulls through the NAT address; GitHub's webhook through CloudFront to Jenkins; and the Jenkins deploy RBAC of D-094. **D-095 and D-096 add:** whether EKS itself is allowed on the account's Free plan; the `m7i-flex.large` nodes; Nexus with a read-only root filesystem; and cosign's attestation output in the archive step. **D-097 adds:** Kyverno's admission metrics reaching Prometheus; the ops image passing the release's Trivy gate; ops-api's AWS reads through Pod Identity; and the traffic lab's load reaching CloudFront from the NAT address. **2026-09-24, from kind-e2e (D-099, D-100):** on Kind, Nexus with a read-only root filesystem ran in runs 2 to 4, the ops image passed the gate, and D-094's deploy RBAC was proven (run 4: 4 allowed, 5 refused). Run 4 found that Jenkins' Nexus role could not upload (fixed in D-100), and cosign's attestation output was then checked against cosign's source; the first run that archives proves it. **Runs 5 and 6 did (D-099).** **2026-09-25, D-103:** `aws-up` now ends by verifying the platform through CloudFront (`k8s:verify` and `cd:verify --target eks`), and `aws-verify` repeats that alone. Together they check most of this list live on the day: ESO's Pod Identity credentials; the ALB controller's policy (it made the ALB and its bindings); the readiness gates; the VPC CNI agent enforcing, admitting the kubelet (every pod ready) and reaching 172.20.0.1 (ops-api's reads, Jenkins' agents); Docker Hub pulls through the NAT address (every pod running); GitHub's webhook through CloudFront to Jenkins; D-094's RBAC; ops-api's AWS reads; and the edge function in CloudFront's own runtime. What they can't check: the flow log role's `iam:PassedToService` and the add-on versions (aws-up's apply proves those), `splitx-ci-teardown`'s cover of a whole destroy (aws-down proves it), and EKS and `m7i-flex.large` on the Free plan (the apply again). **2026-09-25, D-105:** checked read-only ahead of the day: EKS 1.35 is in standard support, all six pinned add-on versions are still offered, `m7i-flex.large` is offered in all three zones and is Free-plan eligible, and the vCPU quota is 8. Both stacks are in sync. |
+| B-032 | Errors reach no one, and the live site's scheduled checks run only when GitHub's scheduler gets to them. Most API routes catch their errors and log them, and logs on Vercel's free plan are short-lived. The 15-minute production check (D-106) ran at 12:06 and 12:41 UTC on 2026-09-25, then not until 17:15. | An outage or a broken page between demo days is found by a user, not by us. | Open, 2026-09-25. The user asked for real-time errors. Planned for D-113: Sentry's free plan (5,000 errors a month, email alerts, one uptime monitor checking every minute). It reports browser and server errors, including those `logger.error` records, through a tunnel on the site itself, so the CSP is unchanged. `/ops` shows its count, and the GitHub check stays as the second opinion. Waits on the user's Sentry account and DSN. |
 
 ## Environment notes (this machine)
 
