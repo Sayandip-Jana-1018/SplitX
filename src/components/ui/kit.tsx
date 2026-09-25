@@ -483,36 +483,6 @@ export function Notice({
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   Switch
-   ═══════════════════════════════════════════════════════════════ */
-
-export function Switch({
-    checked,
-    onChange,
-    label,
-    disabled,
-}: {
-    checked: boolean;
-    onChange: (next: boolean) => void;
-    label: string;
-    disabled?: boolean;
-}) {
-    return (
-        <button
-            type="button"
-            role="switch"
-            aria-checked={checked}
-            aria-label={label}
-            disabled={disabled}
-            className={cn(styles.switch, checked && styles.switchOn)}
-            onClick={() => onChange(!checked)}
-        >
-            <motion.span layout className={styles.switchKnob} transition={{ type: 'spring', stiffness: 700, damping: 36 }} />
-        </button>
-    );
-}
-
-/* ═══════════════════════════════════════════════════════════════
    Progress
    ═══════════════════════════════════════════════════════════════ */
 
@@ -532,10 +502,6 @@ export function Progress({ value, tone = 'accent', className }: { value: number;
 
 export function Spinner({ size = 18, className }: { size?: number; className?: string }) {
     return <span className={cn(styles.spinner, className)} style={{ width: size, height: size }} aria-hidden="true" />;
-}
-
-export function Divider({ className }: { className?: string }) {
-    return <div className={cn(styles.divider, className)} role="separator" />;
 }
 
 /* ═══════════════════════════════════════════════════════════════

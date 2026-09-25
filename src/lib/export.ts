@@ -21,7 +21,7 @@ interface ExportSettlement {
     amount: number; // paise
 }
 
-export interface BalanceHistoryExportEntry {
+interface BalanceHistoryExportEntry {
     date: string | Date;
     eventType: string;
     sourceLabel: string;
@@ -55,7 +55,7 @@ export interface ExportData {
 /**
  * Generate a text-based settlement summary for sharing
  */
-export function generateTextSummary(data: ExportData): string {
+function generateTextSummary(data: ExportData): string {
     const lines: string[] = [];
 
     lines.push(`═══════════════════════════════`);
@@ -93,38 +93,13 @@ export function generateTextSummary(data: ExportData): string {
 }
 
 /**
- * Generate a CSV export of transactions
- */
-export function generateCSV(data: ExportData): string {
-    const headers = ['#', 'Title', 'Amount', 'Paid By', 'Category', 'Method', 'Date'];
-    const rows = data.transactions.map((t, i) => [
-        i + 1,
-        `"${t.title}"`,
-        (t.amount / 100).toFixed(2),
-        `"${t.payer}"`,
-        t.category,
-        t.method,
-        t.date.toISOString().split('T')[0],
-    ]);
-
-    return [
-        headers.join(','),
-        ...rows.map((r) => r.join(',')),
-        '',
-        '# Settlements',
-        'From,To,Amount',
-        ...data.settlements.map((s) => `"${s.from}","${s.to}",${(s.amount / 100).toFixed(2)}`),
-    ].join('\n');
-}
-
-/**
  * One CSV cell of text someone typed (a title, a name): quoted, its quotes
  * doubled, and, when it starts the way a formula does (= + - @, a tab or a
  * carriage return), led by an apostrophe so a spreadsheet shows it rather than
  * running it. A group member could otherwise title an expense =HYPERLINK(...)
  * and have it run for whoever exports the group's history.
  */
-export function csvText(value: string): string {
+function csvText(value: string): string {
     const shown = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
     return `"${shown.replace(/"/g, '""')}"`;
 }
@@ -174,7 +149,7 @@ export function generateBalanceHistoryCSV(data: BalanceHistoryExportData): strin
 /**
  * Download a file from text content
  */
-export function downloadFile(content: string, filename: string, mimeType: string) {
+function downloadFile(content: string, filename: string, mimeType: string) {
     const blob = new Blob([content], { type: mimeType });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -192,14 +167,6 @@ export function downloadFile(content: string, filename: string, mimeType: string
 export function exportAsText(data: ExportData) {
     const text = generateTextSummary(data);
     downloadFile(text, `${data.tripName}_settlement.txt`, 'text/plain');
-}
-
-/**
- * Export as CSV
- */
-export function exportAsCSV(data: ExportData) {
-    const csv = generateCSV(data);
-    downloadFile(csv, `${data.tripName}_transactions.csv`, 'text/csv');
 }
 
 export function exportBalanceHistoryAsCSV(data: BalanceHistoryExportData) {

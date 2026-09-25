@@ -16,7 +16,7 @@ export const MAX_EXPENSE_PAISE = 100_000_000;
 export const SPLIT_TYPES = ['equal', 'percentage', 'custom'] as const;
 export type SplitType = (typeof SPLIT_TYPES)[number];
 
-export interface ShareInput {
+interface ShareInput {
     userId: string;
     amount: number;
 }

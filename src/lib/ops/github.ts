@@ -72,7 +72,7 @@ interface WorkflowJob {
     steps?: { name: string; conclusion: string | null }[];
 }
 
-export interface PipelineJob {
+interface PipelineJob {
     name: string;
     status: string;
     conclusion: string | null;

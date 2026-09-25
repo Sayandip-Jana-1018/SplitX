@@ -24,7 +24,7 @@
  * and saw none. Browsers still report what it blocks to /api/csp-report.
  */
 
-export const CSP_REPORT_PATH = '/api/csp-report';
+const CSP_REPORT_PATH = '/api/csp-report';
 
 export const CONTENT_SECURITY_POLICY = [
     "default-src 'self'",

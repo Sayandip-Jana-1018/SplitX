@@ -3,7 +3,7 @@
 // Toggle features on/off without code changes.
 // ═══════════════════════════════════════════════════════════════
 
-export const featureFlags = {
+const featureFlags = {
     /** In-app notification system (bell icon + dropdown) */
     notifications: true,
 

@@ -3,7 +3,7 @@
 import { createContext, useContext } from 'react';
 import { MotionConfig } from 'framer-motion';
 import { useTheme, COLOR_PALETTES } from '@/hooks/useTheme';
-import type { PaletteId, ColorPalette, ThemePreference } from '@/hooks/useTheme';
+import type { PaletteId, ThemePreference } from '@/hooks/useTheme';
 
 type ThemeContextType = ReturnType<typeof useTheme>;
 
@@ -32,4 +32,4 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 }
 
 export { COLOR_PALETTES };
-export type { PaletteId, ColorPalette, ThemePreference };
+export type { PaletteId, ThemePreference };

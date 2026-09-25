@@ -291,7 +291,7 @@ const prisma = new PrismaClient();
 `;
 
 /** The AWS readings ops-api makes with its Pod Identity role (ops/api/aws.mjs). */
-export const AWS_READINGS = ['stacks', 'eks', 'edge', 'budget'];
+const AWS_READINGS = ['stacks', 'eks', 'edge', 'budget'];
 
 /**
  * @param {Record<string, { ok: boolean, error?: string }> | null} readings  ops-api's /v1/readings

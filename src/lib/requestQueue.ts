@@ -48,7 +48,7 @@ export function previewMaxQueueMs() {
     return Number.isInteger(value) && value > 0 ? value : 1_000;
 }
 
-export function trustsUpstreamRequestStart() {
+function trustsUpstreamRequestStart() {
     return process.env.TRUST_UPSTREAM_REQUEST_START === 'true';
 }
 

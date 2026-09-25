@@ -119,14 +119,6 @@
     color: var(--fg-tertiary);
 }
 
-.textarea {
-    height: auto;
-    min-height: 104px;
-    padding: 14px 16px;
-    line-height: 1.5;
-    resize: vertical;
-}
-
 /* ── Floating label ── */
 .floatingContainer {
     position: relative;

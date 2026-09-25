@@ -4818,9 +4818,9 @@ YAML file parsed, and the Kind overlays render Postgres 17.11. CI runs the datab
 browser tests on the new packages. The push also starts a Kind run, since it touches `scripts/lib`
 and `k8s/`, which proves the platform on Postgres 17 with the new release.
 
-### D-111 · Nothing unused: knip in CI, and the dead code it found, for the user to approve
-**2026-09-25** · ✅ the gate runs in CI's `verify` job. 🚧 Deleting the dead code waits for the
-user's yes.
+### D-111 · Nothing unused: knip in CI, and the dead code it found
+**2026-09-25** · ✅ the gate runs in CI's `verify` job, and since the user's yes (22:10 IST) it
+covers exports and types too: the dead code is deleted.
 
 **Why.** The clean-out on 09-25 (D-104) found 13 files by hand, left over from the redesign, and
 nothing stopped more from piling up. Plan Phase 1c asks for knip, clean in CI.
@@ -4840,10 +4840,11 @@ binaries, all of them things it couldn't see. Each is now listed with its reason
 or an unresolved import. Today it reports none. It passed without `ops/`' packages installed, as in
 CI.
 
-**Not gated yet: 32 unused exports and 14 unused exported types.** They were sorted by dropping the
-`export` and asking `tsc` what then went unused (then restored):
-- **24 are used inside their own file.** Only the keyword goes.
-- **22 are used nowhere: dead code.**
+**Not gated at first: unused exports and exported types.** They were sorted by dropping the
+`export` and asking `tsc` what then went unused (then restored). The first count, "32 exports and
+14 types", was wrong: knip's compact report counts files, not names. The files held 65 exports and
+34 types, 99 names:
+- **22 were used nowhere: dead code.** This list was shown to the user before any deletion:
   - `upi.ts`: `getAppSpecificLinks`, `openUpiPayment`, `generateReminder`, `sendWhatsAppReminder`.
     Only `generateUpiLink` is used, by the payment route.
   - `utils.ts`: `formatCurrencyShort`, `toRupees`, `debounce`, `getCategoryData`.
@@ -4857,8 +4858,31 @@ CI.
   - `useTheme.ts`: `ACCENT_COLORS`.
   - `ThemeProvider.tsx`: the type `ColorPalette`.
 
-The user was promised the list before any code is deleted. With their yes, the 22 go, the 24 lose
-their `export`, and exports and types join the gate.
+- **77 were used inside their own file**, not "24".
+
+**Done, on the user's yes.** knip removed the keywords (`knip --fix --fix-type exports,types`), then
+the dead code was deleted by hand and `tsc --noUnusedLocals` asked again until nothing was left:
+- **The 22 above.** The old `generateCSV` wrote titles into cells without the guard against CSV
+  formulas (D-073). It could no longer be wired back in by mistake.
+- **4 more that only dead code used:**
+  - `loginSchema`, `createGroupSchema` and `createTripSchema`, read only by the deleted types;
+  - `Textarea`, named only by its own `displayName` line, which `tsc` counts as a use.
+- **What they used:**
+  - the search palette's event: only `openSearch` sent it, and the search button opens the
+    palette directly;
+  - five CSS rules: the switch's three, the divider's and the textarea's.
+- **The rest of the 99:**
+  - `Input`'s default export repeated its named one;
+  - two arrays existed only to spell a type (`AVATAR_TYPES`, `CHART_KEYS`), and ESLint said
+    so: they are types now. Profile photos are still checked by their bytes (`sniffImageType`);
+  - 70 lost only the keyword.
+
+**The gate is now knip's whole default check** (`npm run lint:unused` is plain `knip`): files,
+dependencies and binaries as before, plus exports, types, duplicate exports and enum members.
+
+**Checked before pushing:** `tsc`, also with `--noUnusedLocals --noUnusedParameters`; lint (0
+warnings); knip (nothing); 1,429 unit tests; the schema. The push touches `scripts/lib` and
+`ops/`, so a Kind run proves the platform scripts unchanged.
 
 ---
 

@@ -213,12 +213,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     }, [mode, showChrome]);
 
     useEffect(() => {
-        const onSearch = () => setSearchOpen(true);
         const onAssistant = () => setAssistantOpen(true);
-        window.addEventListener(UI_EVENTS.openSearch, onSearch);
         window.addEventListener(UI_EVENTS.openAssistant, onAssistant);
         return () => {
-            window.removeEventListener(UI_EVENTS.openSearch, onSearch);
             window.removeEventListener(UI_EVENTS.openAssistant, onAssistant);
         };
     }, []);

@@ -21,7 +21,7 @@
  * network, each planning a trip every few seconds, with room to spare.
  */
 
-export type PolicyName = 'auth' | 'preview' | 'api';
+type PolicyName = 'auth' | 'preview' | 'api';
 
 export interface RateLimitPolicy {
     name: PolicyName;

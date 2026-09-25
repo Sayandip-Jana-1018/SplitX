@@ -18,7 +18,7 @@ const SOURCE = 'ops-api in the cluster';
 
 export const NOT_CONNECTED = 'Not connected here: the cluster runs on AWS on demo days, and on Kind in CI.';
 
-export interface NodeRow {
+interface NodeRow {
     name: string;
     zone: string | null;
     instanceType: string | null;
@@ -28,7 +28,7 @@ export interface NodeRow {
     since: string | null;
 }
 
-export interface PodRow {
+interface PodRow {
     name: string;
     node: string | null;
     zone: string | null;
@@ -39,7 +39,7 @@ export interface PodRow {
     since: string | null;
 }
 
-export interface Autoscaler {
+interface Autoscaler {
     min: number | null;
     max: number | null;
     current: number | null;
@@ -58,8 +58,7 @@ export interface Chart {
     points: [number, number | null][];
 }
 
-export const CHART_KEYS = ['requests', 'p95', 'errors', 'readyPods', 'wantedPods'] as const;
-export type ChartKey = (typeof CHART_KEYS)[number];
+type ChartKey = 'requests' | 'p95' | 'errors' | 'readyPods' | 'wantedPods';
 
 export interface Traffic {
     from: number;
@@ -68,7 +67,7 @@ export interface Traffic {
     charts: Record<ChartKey, Chart>;
 }
 
-export interface LabSummary {
+interface LabSummary {
     requests: number;
     served: number;
     refused: number;
@@ -88,7 +87,7 @@ export interface LabRun {
     error?: string | null;
 }
 
-export interface AlertRow {
+interface AlertRow {
     name: string;
     severity: string;
     namespace: string | null;
@@ -96,7 +95,7 @@ export interface AlertRow {
     summary: string;
 }
 
-export interface LogLine {
+interface LogLine {
     time: string;
     level: string | null;
     message: string;
@@ -104,7 +103,7 @@ export interface LogLine {
     pod: string | null;
 }
 
-export interface EvidenceRow {
+interface EvidenceRow {
     commit: string;
     deployment: string;
     files: string[];
@@ -112,7 +111,7 @@ export interface EvidenceRow {
     complete: boolean;
 }
 
-export interface StackRow {
+interface StackRow {
     name: string;
     status: string;
     updatedAt: string | null;
@@ -120,7 +119,7 @@ export interface StackRow {
     driftCheckedAt: string | null;
 }
 
-export interface EksSummary {
+interface EksSummary {
     name: string;
     version: string;
     platformVersion: string | null;
@@ -130,7 +129,7 @@ export interface EksSummary {
     addons: { name: string; version: string; status: string }[];
 }
 
-export interface EdgeSummary {
+interface EdgeSummary {
     id: string;
     domain: string;
     status: string;
@@ -142,7 +141,7 @@ export interface EdgeSummary {
     lastModified: string | null;
 }
 
-export interface BudgetSummary {
+interface BudgetSummary {
     name: string;
     unit: string;
     limit: number | null;
@@ -150,7 +149,7 @@ export interface BudgetSummary {
     forecast: number | null;
 }
 
-export interface PlatformFacts {
+interface PlatformFacts {
     target: string;
     region: string | null;
     kubernetesVersion: string | null;

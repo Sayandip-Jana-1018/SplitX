@@ -1,6 +1,6 @@
 'use client';
 
-import { forwardRef, InputHTMLAttributes, TextareaHTMLAttributes, useState, useId } from 'react';
+import { forwardRef, InputHTMLAttributes, useState, useId } from 'react';
 import styles from './input.module.css';
 import { cn } from '@/lib/utils';
 
@@ -79,33 +79,4 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
 
 Input.displayName = 'Input';
 
-interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
-    label?: string;
-    error?: string;
-}
-
-const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
-    ({ label, error, className, ...props }, ref) => {
-        const generatedId = useId();
-        const inputId = props.id || generatedId;
-        return (
-            <div className={cn(styles.wrapper, error && styles.error)}>
-                {label && <label htmlFor={inputId} className={styles.label}>{label}</label>}
-                <textarea
-                    ref={ref}
-                    className={cn(styles.input, styles.textarea, className)}
-                    {...props}
-                    id={inputId}
-                    aria-invalid={error ? true : props['aria-invalid']}
-                    aria-describedby={error ? `${inputId}-error` : props['aria-describedby']}
-                />
-                {error && <span id={`${inputId}-error`} role="alert" className={styles.errorText}>{error}</span>}
-            </div>
-        );
-    }
-);
-
-Textarea.displayName = 'Textarea';
-
-export { Input, Textarea };
-export default Input;
+export { Input };

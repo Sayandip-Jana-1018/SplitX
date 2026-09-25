@@ -1,12 +1,12 @@
 /** Web Speech API type definitions and browser detection utility. */
 
-export interface SpeechRecognitionResult {
+interface SpeechRecognitionResult {
     readonly isFinal: boolean;
     readonly length: number;
     [index: number]: { transcript: string; confidence: number };
 }
 
-export interface SpeechRecognitionResultList {
+interface SpeechRecognitionResultList {
     readonly length: number;
     [index: number]: SpeechRecognitionResult;
 }

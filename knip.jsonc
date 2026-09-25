@@ -1,5 +1,6 @@
 // knip finds files, dependencies and exports that nothing uses (plan Phase 1c).
-// CI's verify job fails on unused files and dependencies; see D-111.
+// CI's verify job fails on anything it reports: a file, dependency, export or
+// type that nothing uses (D-111).
 // It reads Next.js, Vitest, Playwright, ESLint and the workflows by itself. What
 // it can't see is listed here, each with the reason.
 {

@@ -8,7 +8,7 @@
  */
 
 export const PASSWORD_MIN_CHARS = 8;
-export const PASSWORD_MAX_BYTES = 72;
+const PASSWORD_MAX_BYTES = 72;
 
 /** Why the password can't be used, or null when it can. */
 export function passwordProblem(password: string): string | null {

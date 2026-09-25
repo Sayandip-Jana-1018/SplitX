@@ -1,6 +1,6 @@
 /** Shared voice input types used across the voice feature modules. */
 
-export interface VoiceMember {
+interface VoiceMember {
     name: string;
     amount?: number;
     confidence: number;

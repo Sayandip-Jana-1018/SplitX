@@ -12,13 +12,13 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
  */
 
 export const RECEIPT_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
-export const AVATAR_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'] as const;
 // Browsers shrink receipt photos to 2,048 pixels before upload (lib/receiptUpload.ts),
 // usually well under 1 MB; 5 MB leaves room for an original that couldn't be redrawn.
 export const MAX_RECEIPT_BYTES = 5 * 1024 * 1024;
 export const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 
-type ImageType = (typeof AVATAR_TYPES)[number];
+/** The types a profile photo may be (sniffImageType); receipts take the first three (RECEIPT_TYPES). */
+type ImageType = 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif';
 
 const EXTENSIONS: Record<ImageType, string> = {
     'image/jpeg': 'jpg',

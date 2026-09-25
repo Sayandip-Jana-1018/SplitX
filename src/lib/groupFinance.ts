@@ -10,7 +10,7 @@ export interface FinanceMember {
     role?: string;
 }
 
-export interface FinanceSplitSnapshot {
+interface FinanceSplitSnapshot {
     userId: string;
     userName: string;
     amount: number;
@@ -75,7 +75,7 @@ export interface BalanceHistoryEntry {
     afterRouteSummary: string;
 }
 
-export interface BalanceHistoryCursor {
+interface BalanceHistoryCursor {
     beforeCreatedAt: string;
     beforeId: string;
 }
@@ -110,15 +110,15 @@ type TransactionAuditDetails = {
     after?: FinanceTransactionSnapshot | null;
 };
 
-export function cloneBalances(balances: Record<string, number>) {
+function cloneBalances(balances: Record<string, number>) {
     return Object.fromEntries(Object.entries(balances).map(([userId, amount]) => [userId, amount]));
 }
 
-export function createZeroBalances(memberIds: string[]) {
+function createZeroBalances(memberIds: string[]) {
     return Object.fromEntries(memberIds.map((memberId) => [memberId, 0])) as Record<string, number>;
 }
 
-export function applyDeltaMap(
+function applyDeltaMap(
     balances: Record<string, number>,
     deltaByUser: BalanceDeltaMap
 ) {
@@ -127,7 +127,7 @@ export function applyDeltaMap(
     }
 }
 
-export function buildTransactionDeltaMap(snapshot: BalanceTransaction | null | undefined) {
+function buildTransactionDeltaMap(snapshot: BalanceTransaction | null | undefined) {
     if (!snapshot) return {};
 
     const deltaByUser: BalanceDeltaMap = {};
@@ -140,7 +140,7 @@ export function buildTransactionDeltaMap(snapshot: BalanceTransaction | null | u
     return deltaByUser;
 }
 
-export function buildSettlementDeltaMap(snapshot: BalanceSettlement | null | undefined) {
+function buildSettlementDeltaMap(snapshot: BalanceSettlement | null | undefined) {
     if (!snapshot || !isCompletedSettlementStatus(snapshot.status) || snapshot.deletedAt) {
         return {};
     }
@@ -151,7 +151,7 @@ export function buildSettlementDeltaMap(snapshot: BalanceSettlement | null | und
     };
 }
 
-export function diffDeltaMaps(before: BalanceDeltaMap, after: BalanceDeltaMap) {
+function diffDeltaMaps(before: BalanceDeltaMap, after: BalanceDeltaMap) {
     const userIds = new Set([...Object.keys(before), ...Object.keys(after)]);
     const diff: BalanceDeltaMap = {};
 

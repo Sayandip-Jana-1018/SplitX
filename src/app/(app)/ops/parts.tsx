@@ -6,7 +6,7 @@ import styles from './ops.module.css';
 /** Where every panel's code lives; each panel links to what produces it. */
 export const REPOSITORY_URL = 'https://github.com/Sayandip-Jana-1018/SplitX';
 
-export const clock = (iso: string) => new Date(iso).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+const clock = (iso: string) => new Date(iso).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
 /** The separator in small print: it stays at the end of a line, never starts one. */
 export const SEP = ' · ';

@@ -15,7 +15,7 @@
  * replacement.
  */
 
-export const DEFAULT_GEMINI_MODEL = 'gemini-3.6-flash';
+const DEFAULT_GEMINI_MODEL = 'gemini-3.6-flash';
 
 export type GeminiResult =
     | { ok: true; text: string }

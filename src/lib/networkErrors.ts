@@ -14,7 +14,7 @@ export class NetworkTaggedError extends Error {
 
 const RESTRICTED_NETWORK_EVENT = 'splitx:network-blocked';
 
-export function emitRestrictedNetworkSignal() {
+function emitRestrictedNetworkSignal() {
     if (typeof window === 'undefined') return;
     window.dispatchEvent(new CustomEvent(RESTRICTED_NETWORK_EVENT));
 }
@@ -25,7 +25,7 @@ export function onRestrictedNetworkSignal(handler: () => void) {
     return () => window.removeEventListener(RESTRICTED_NETWORK_EVENT, handler);
 }
 
-export function classifyNetworkError(params: {
+function classifyNetworkError(params: {
     error?: unknown;
     response?: Response | null;
 }): NetworkErrorVariant {

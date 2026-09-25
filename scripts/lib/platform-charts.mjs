@@ -4,7 +4,7 @@
  * scripts/cluster-up.mjs: kind (the rehearsal cluster) and eks (D-093).
  */
 
-export const TARGETS = ['kind', 'eks'];
+const TARGETS = ['kind', 'eks'];
 
 /**
  * The charts one target installs, in the order it installs them.

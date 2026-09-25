@@ -25,7 +25,7 @@ import { isCompletedSettlementStatus, isPendingSettlementStatus } from '@/lib/se
 
 type Db = Prisma.TransactionClient;
 
-export interface LedgerPerson extends FinanceMember {
+interface LedgerPerson extends FinanceMember {
     /** False for someone who appears in the group's history but has left it. */
     isMember: boolean;
 }

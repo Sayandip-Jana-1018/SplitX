@@ -16,7 +16,7 @@ import { Redis as UpstashRedis } from '@upstash/redis';
  * ARGV[1] limit, ARGV[2] window ms, ARGV[3] now ms
  * Returns { allowed (1/0), count, ms until the current window ends }.
  */
-export const SLIDING_WINDOW_SCRIPT = `
+const SLIDING_WINDOW_SCRIPT = `
 local limit = tonumber(ARGV[1])
 local window = tonumber(ARGV[2])
 local now = tonumber(ARGV[3])
@@ -68,7 +68,7 @@ type ScriptedRedis = IORedis & {
 };
 
 /** How long after start-up requests wait for the first Redis connection. */
-export const STARTUP_GRACE_MS = 5_000;
+const STARTUP_GRACE_MS = 5_000;
 
 export function createRedisStore(
     url: string,

@@ -5,7 +5,7 @@ import useSWR from 'swr';
 import { fetcher } from '@/lib/swr';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 
-export interface BalanceTransfer {
+interface BalanceTransfer {
     from: string;
     to: string;
     amount: number;
@@ -21,7 +21,7 @@ export interface BalanceTransfer {
     groupBreakdown?: { groupName: string; groupEmoji: string; amount: number }[];
 }
 
-export interface RecordedSettlementData {
+interface RecordedSettlementData {
     id: string;
     tripId?: string;
     fromId: string;
@@ -50,13 +50,13 @@ export interface BalancesResponse {
     global: { computed: BalanceTransfer[]; recorded: RecordedSettlementData[] };
 }
 
-export interface GroupNet {
+interface GroupNet {
     net: number;
     youOwe: number;
     owedToYou: number;
 }
 
-export const BALANCES_KEY = '/api/settlements/by-group';
+const BALANCES_KEY = '/api/settlements/by-group';
 
 /**
  * Single source of truth for "who owes whom" across the app.

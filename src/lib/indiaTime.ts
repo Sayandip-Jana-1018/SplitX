@@ -7,7 +7,7 @@
  * in the month before, and "this month" was empty for the first 5½ hours.
  */
 
-export const IST_OFFSET_MS = (5 * 60 + 30) * 60 * 1000;
+const IST_OFFSET_MS = (5 * 60 + 30) * 60 * 1000;
 
 /** The same instant, moved so that its UTC fields read as India's wall clock. */
 const wallClock = (date: Date) => new Date(date.getTime() + IST_OFFSET_MS);

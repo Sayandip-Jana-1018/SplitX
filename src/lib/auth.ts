@@ -259,7 +259,7 @@ if (process.env.GITHUB_ID && process.env.GITHUB_SECRET) {
     );
 }
 
-export const { handlers, signIn, signOut, auth } = NextAuth({
+export const { handlers, auth } = NextAuth({
     providers: [
         ...oauthProviders,
         CredentialsProvider({

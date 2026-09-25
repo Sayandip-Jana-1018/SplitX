@@ -33,7 +33,7 @@ function iconConfig(Icon: IconType, label: string, color: string, size = 20): Ic
 }
 
 // ── Payment methods (brand colours) ──
-export const PAYMENT_ICONS: Record<string, IconConfig> = {
+const PAYMENT_ICONS: Record<string, IconConfig> = {
     cash: iconConfig(BsCashCoin, 'Cash', '#16a34a', 18),
     gpay: iconConfig(SiGooglepay, 'Google Pay', '#4285F4'),
     phonepe: iconConfig(SiPhonepe, 'PhonePe', '#5F259F', 18),
@@ -44,7 +44,7 @@ export const PAYMENT_ICONS: Record<string, IconConfig> = {
 };
 
 // ── Categories ──
-export const CATEGORY_ICONS: Record<string, IconConfig> = {
+const CATEGORY_ICONS: Record<string, IconConfig> = {
     general: iconConfig(MdCategory, 'General', '#6366f1'),
     food: iconConfig(MdFastfood, 'Food & Drinks', '#ef4444'),
     groceries: iconConfig(MdLocalGroceryStore, 'Groceries', '#16a34a'),
@@ -91,28 +91,6 @@ export function PaymentIcon({ method, size = 18 }: { method: string; size?: numb
                 color: config.color,
                 width: size + 4,
                 height: size + 4,
-            }}
-        >
-            <Icon size={size} />
-        </span>
-    );
-}
-
-/** Small inline category glyph with a tinted backdrop. */
-export function CategoryIcon({ category, size = 20 }: { category: string; size?: number }) {
-    const config = getCategoryConfig(category);
-    const Icon = config.Icon;
-    return (
-        <span
-            style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: config.color,
-                width: size + 6,
-                height: size + 6,
-                background: `color-mix(in srgb, ${config.color} 14%, transparent)`,
-                borderRadius: 'var(--radius-sm)',
             }}
         >
             <Icon size={size} />

@@ -8,7 +8,7 @@ import { request } from 'node:https';
 
 const TIMEOUT_MS = 5_000;
 
-export const URLS = {
+const URLS = {
     prometheus: process.env.PROMETHEUS_URL ?? 'http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090',
     alertmanager: process.env.ALERTMANAGER_URL ?? 'http://kube-prometheus-stack-alertmanager.monitoring.svc.cluster.local:9093',
     loki: process.env.LOKI_URL ?? 'http://loki.monitoring.svc.cluster.local:3100',

@@ -4,7 +4,7 @@ import { balanceOf, loadGroupLedgers, pendingSettlementsOf } from '@/lib/ledger'
 import { formatCurrency } from '@/lib/utils';
 
 /** What the people and history an account leaves behind call it from now on. */
-export const DELETED_USER_NAME = 'Deleted user';
+const DELETED_USER_NAME = 'Deleted user';
 
 export class DeletionRefused extends Error {
     constructor(message: string, readonly status = 409) {

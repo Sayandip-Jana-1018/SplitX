@@ -10,7 +10,7 @@
     "start": "next start",
     "postinstall": "prisma generate",
     "lint": "eslint",
-    "lint:unused": "knip --no-progress --include files,dependencies,devDependencies,optionalPeerDependencies,unlisted,binaries,unresolved",
+    "lint:unused": "knip --no-progress",
     "test": "vitest run --project unit && node tests/production-hardening.test.mjs",
     "prepare": "husky",
     "verify:metrics": "node --env-file=.env scripts/verify-metrics.mjs",

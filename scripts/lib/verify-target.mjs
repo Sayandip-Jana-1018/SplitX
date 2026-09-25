@@ -152,6 +152,6 @@ export function clusterSecret(context, namespace, name, key) {
 }
 
 /** Asks GitHub Actions to hide a value in the job's log (single-line values). */
-export function mask(value) {
+function mask(value) {
     if (value && process.env.GITHUB_ACTIONS === 'true') console.log('::add-mask::' + value);
 }

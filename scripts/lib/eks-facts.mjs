@@ -5,7 +5,7 @@
  */
 
 /** The placeholder k8s/overlays/aws carries until terraform/edge exists. */
-export const EDGE_PLACEHOLDER = 'REPLACE_WITH_PUBLIC_HOSTNAME';
+const EDGE_PLACEHOLDER = 'REPLACE_WITH_PUBLIC_HOSTNAME';
 
 /**
  * The edge's address as the AWS overlay commits it (NEXTAUTH_URL), or null

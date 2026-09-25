@@ -30,7 +30,7 @@ export interface PlannedTransfer {
     amount: number;
 }
 
-export type PlanAlgorithm = 'greedy' | 'exact' | 'heuristic';
+type PlanAlgorithm = 'greedy' | 'exact' | 'heuristic';
 
 export interface SettlementPlan {
     transfers: PlannedTransfer[];
@@ -51,10 +51,10 @@ export interface PlanOptions {
     tripleBudget?: number;
 }
 
-export const DEFAULT_EXACT_LIMIT = 16;
+const DEFAULT_EXACT_LIMIT = 16;
 /** Hard ceiling: the exact solver allocates 9 bytes per subset (2ⁿ subsets). */
-export const MAX_EXACT_LIMIT = 20;
-export const DEFAULT_TRIPLE_BUDGET = 4_000_000;
+const MAX_EXACT_LIMIT = 20;
+const DEFAULT_TRIPLE_BUDGET = 4_000_000;
 
 interface Party {
     id: string;

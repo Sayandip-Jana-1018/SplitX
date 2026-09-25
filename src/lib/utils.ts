@@ -13,26 +13,9 @@ export function formatCurrency(paise: number, currency = 'INR'): string {
     }).format(amount);
 }
 
-/** Format paise to short form: 150000 → "₹1,500" */
-export function formatCurrencyShort(paise: number): string {
-    const amount = paise / 100;
-    if (amount >= 100000) {
-        return `₹${(amount / 100000).toFixed(1)}L`;
-    }
-    if (amount >= 1000) {
-        return `₹${(amount / 1000).toFixed(1)}K`;
-    }
-    return `₹${amount.toLocaleString('en-IN')}`;
-}
-
 /** Convert rupee amount (user input) to paise for storage */
 export function toPaise(rupees: number): number {
     return Math.round(rupees * 100);
-}
-
-/** Convert paise to rupees for display */
-export function toRupees(paise: number): number {
-    return paise / 100;
 }
 
 /** Relative time: "2 hours ago", "just now", etc. */
@@ -99,18 +82,6 @@ export function cn(...classes: (string | undefined | null | false)[]): string {
     return classes.filter(Boolean).join(' ');
 }
 
-/** Debounce a function */
-export function debounce<T extends (...args: unknown[]) => unknown>(
-    fn: T,
-    delay: number
-): (...args: Parameters<T>) => void {
-    let timer: NodeJS.Timeout;
-    return (...args: Parameters<T>) => {
-        clearTimeout(timer);
-        timer = setTimeout(() => fn(...args), delay);
-    };
-}
-
 /** Category labels and emojis */
 export const CATEGORIES: Record<string, { label: string; emoji: string }> = {
     general: { label: 'General', emoji: '🏷️' },
@@ -126,14 +97,6 @@ export const CATEGORIES: Record<string, { label: string; emoji: string }> = {
     medical: { label: 'Medical', emoji: '🏥' },
     other: { label: 'Other', emoji: '✏️' },
 };
-
-/** Get Category Data (supports custom categories) */
-export function getCategoryData(category: string): { label: string; emoji: string } {
-    if (!category) return CATEGORIES.general;
-    if (CATEGORIES[category]) return CATEGORIES[category];
-    // Custom category
-    return { label: category, emoji: '🔖' };
-}
 
 /** Payment method labels and icons */
 export const PAYMENT_METHODS: Record<string, { label: string; emoji: string }> = {

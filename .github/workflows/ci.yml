@@ -52,7 +52,7 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      # No file, dependency or binary that nothing uses (knip.jsonc, D-111).
+      # No file, dependency, export or type that nothing uses (knip.jsonc, D-111).
       - name: Nothing unused
         run: npm run lint:unused
 

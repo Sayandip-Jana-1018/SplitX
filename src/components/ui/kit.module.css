@@ -624,34 +624,6 @@
 .notice_danger { background: var(--color-error-bg); border-color: var(--color-error-border); }
 .notice_danger .noticeIcon { color: var(--color-error); }
 
-/* ── Switch ── */
-.switch {
-    display: flex;
-    justify-content: flex-start;
-    flex-shrink: 0;
-    width: 50px;
-    height: 30px;
-    padding: 2px;
-    border-radius: 15px;
-    background: var(--bg-tertiary);
-    border: 1px solid var(--border-default);
-    transition: background-color var(--duration-normal) var(--ease-out), border-color var(--duration-normal) var(--ease-out);
-}
-
-.switchOn {
-    justify-content: flex-end;
-    background: var(--accent-500);
-    border-color: transparent;
-}
-
-.switchKnob {
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    background: #fff;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.22);
-}
-
 /* ── Progress ── */
 .progress {
     position: relative;
@@ -680,11 +652,4 @@
     border: 2px solid currentColor;
     border-right-color: transparent;
     animation: spin 0.8s linear infinite;
-}
-
-/* ── Divider ── */
-.divider {
-    height: 1px;
-    width: 100%;
-    background: var(--border-subtle);
 }

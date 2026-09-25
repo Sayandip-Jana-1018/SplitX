@@ -1,9 +1,8 @@
-export const SETTLEMENT_PENDING_STATUSES = ['pending', 'initiated', 'paid_pending'] as const;
-export const SETTLEMENT_COMPLETED_STATUSES = ['completed', 'confirmed'] as const;
-export const SETTLEMENT_TERMINAL_STATUSES = [...SETTLEMENT_COMPLETED_STATUSES, 'cancelled'] as const;
+const SETTLEMENT_PENDING_STATUSES = ['pending', 'initiated', 'paid_pending'] as const;
+const SETTLEMENT_COMPLETED_STATUSES = ['completed', 'confirmed'] as const;
 
-export type SettlementPendingStatus = (typeof SETTLEMENT_PENDING_STATUSES)[number];
-export type SettlementCompletedStatus = (typeof SETTLEMENT_COMPLETED_STATUSES)[number];
+type SettlementPendingStatus = (typeof SETTLEMENT_PENDING_STATUSES)[number];
+type SettlementCompletedStatus = (typeof SETTLEMENT_COMPLETED_STATUSES)[number];
 
 export function isPendingSettlementStatus(status: string) {
     return SETTLEMENT_PENDING_STATUSES.includes(

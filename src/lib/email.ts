@@ -81,7 +81,7 @@ export async function sendEmail(mail: OutgoingEmail) {
 }
 
 /** The site's own address, for links in emails (lib/siteUrl.ts); there is no request to fall back on. */
-export function appUrl() {
+function appUrl() {
     const url = siteUrl();
     if (!url) throw new Error('NEXTAUTH_URL is not set, so emails cannot link back to the site');
     return url;

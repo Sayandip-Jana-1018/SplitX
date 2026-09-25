@@ -21,9 +21,9 @@ export interface ColorPalette {
     swatches: string[];
 }
 
-export const THEME_STORAGE_KEY = 'SplitX-theme';
-export const PALETTE_STORAGE_KEY = 'SplitX-palette';
-export const DEFAULT_PALETTE: PaletteId = 'amethyst-haze';
+const THEME_STORAGE_KEY = 'SplitX-theme';
+const PALETTE_STORAGE_KEY = 'SplitX-palette';
+const DEFAULT_PALETTE: PaletteId = 'amethyst-haze';
 
 /** Curated palette set. Full colour scales live in styles/themes/accents.css. */
 export const COLOR_PALETTES: ColorPalette[] = [
@@ -192,9 +192,3 @@ export function useTheme() {
         setPalette,
     };
 }
-
-export const ACCENT_COLORS = COLOR_PALETTES.map((palette) => ({
-    value: palette.id,
-    label: palette.name,
-    color: palette.accent500,
-}));
