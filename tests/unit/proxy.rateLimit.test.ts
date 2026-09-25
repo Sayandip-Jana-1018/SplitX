@@ -2,6 +2,8 @@ import { NextRequest } from 'next/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { metrics } from '@/lib/metrics';
 import { setRateLimitStore } from '@/lib/rateLimit';
+import { DEVICE_COOKIE, mintDevice } from '@/lib/rateLimit/device';
+import { clearLocalLimits } from '@/lib/rateLimit/local';
 import type { RateLimitStore } from '@/lib/rateLimit/store';
 import { proxy } from '@/proxy';
 
@@ -45,6 +47,48 @@ describe('proxy rate limiting', () => {
         expect(res.headers.get('x-middleware-next')).toBe('1');
         expect(res.headers.get('x-ratelimit-remaining')).toBe('100');
         expect(await decisions('pass')).toBe(1);
+    });
+
+    describe('sign-in and sign-up without the shared limiter', () => {
+        // Found by the browser tests (D-107): this fallback counted every credential
+        // request against its network address, so a room signing up from one campus
+        // address was one person again, ten a minute, whenever Redis was missing or down.
+        const signUp = (device?: string) => new NextRequest('http://localhost/api/register', {
+            method: 'POST',
+            headers: { 'x-forwarded-for': '198.51.100.7', ...(device ? { cookie: `${DEVICE_COOKIE}=${device}` } : {}) },
+        });
+
+        beforeEach(async () => {
+            vi.stubEnv('AUTH_SECRET', 'a-test-secret-that-signs-device-cookies');
+            clearLocalLimits();
+            await setRateLimitStore(null);
+        });
+        afterEach(() => vi.unstubAllEnvs());
+
+        it('counts each phone on its own, as the shared limiter does', async () => {
+            for (let i = 0; i < 25; i++) {
+                expect((await proxy(signUp(mintDevice() ?? undefined))).status, `phone ${i + 1}`).not.toBe(429);
+            }
+        });
+
+        it('still stops one phone at its limit of ten a minute', async () => {
+            const phone = mintDevice() ?? undefined;
+            for (let i = 0; i < 10; i++) expect((await proxy(signUp(phone))).status).not.toBe(429);
+            const refused = await proxy(signUp(phone));
+            expect(refused.status).toBe(429);
+            expect(await refused.json()).toMatchObject({ code: 'RATE_LIMITED', error: 'Too many requests. Please wait a moment.' });
+        });
+
+        it('keeps the network\'s ceiling, since new device cookies cost nothing to make', async () => {
+            vi.stubEnv('RATE_LIMIT_AUTH_NETWORK_PER_MINUTE', '3');
+            for (let i = 0; i < 3; i++) expect((await proxy(signUp(mintDevice() ?? undefined))).status).not.toBe(429);
+            expect((await proxy(signUp(mintDevice() ?? undefined))).status).toBe(429);
+        });
+
+        it('limits a request without a device by its address, as before', async () => {
+            for (let i = 0; i < 10; i++) expect((await proxy(signUp())).status).not.toBe(429);
+            expect((await proxy(signUp())).status).toBe(429);
+        });
     });
 
     it('lets requests through when the limiter backend is down, and counts it', async () => {

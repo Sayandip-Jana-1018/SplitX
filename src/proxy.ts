@@ -7,9 +7,9 @@ import { metrics, recordProxyDecision, type ProxyDecision } from '@/lib/metrics'
 import { newTraceContext, REQUEST_ID_HEADER, type TraceContext } from '@/lib/observability/trace';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { clientIp } from '@/lib/rateLimit/clientIp';
-import { hitLocally } from '@/lib/rateLimit/local';
+import { hitIdentityLocally } from '@/lib/rateLimit/local';
 import { DEVICE_COOKIE, deviceCookieOptions, mintDevice, verifyDevice } from '@/lib/rateLimit/device';
-import { verifiedSessionUserId } from '@/lib/rateLimit/identity';
+import { resolveIdentity, verifiedSessionUserId } from '@/lib/rateLimit/identity';
 import { PREVIEW_ADMISSION_HEADER, tryAdmitPreview } from '@/lib/previewAdmission';
 import { arrivalTime, previewMaxQueueMs, REQUEST_START_HEADER, requestStartValue } from '@/lib/requestQueue';
 
@@ -248,9 +248,10 @@ export async function proxy(request: NextRequest) {
 
     if (limit.outcome === 'disabled' || limit.outcome === 'error') {
         // Sign-in, registration and password reset fail closed: without the
-        // shared limiter, this process counts them itself (lib/rateLimit/local.ts).
+        // shared limiter, this process counts them itself, per phone with the
+        // network's ceiling, as the shared one does (lib/rateLimit/local.ts).
         if (limit.policy.name === 'auth') {
-            const local = hitLocally(`auth:${clientIp(request.headers) ?? 'unknown'}`, limit.policy.limit, limit.policy.windowMs);
+            const local = hitIdentityLocally(await resolveIdentity(request, clientIp(request.headers)), limit.policy);
             if (!local.allowed) {
                 const response = NextResponse.json(
                     { success: false, error: 'Too many requests. Please wait a moment.', code: 'RATE_LIMITED', requestId: trace.traceId },

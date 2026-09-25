@@ -7,6 +7,8 @@
  *
  * Bounded: past MAX_KEYS it forgets the oldest windows first.
  */
+import type { RequestIdentity } from './identity';
+import type { RateLimitPolicy } from './policies';
 
 const MAX_KEYS = 10_000;
 
@@ -36,6 +38,23 @@ export function hitLocally(key: string, limit: number, windowMs: number, now = D
     const allowed = entry.count < limit;
     if (allowed) entry.count += 1;
     return { allowed, resetMs: windowStart + windowMs - now };
+}
+
+/**
+ * A request counted in this process the way the shared limiter counts it
+ * (lib/rateLimit/index.ts): against its identity at the policy's limit, and,
+ * for an anonymous device, against its network's ceiling as well (B-015,
+ * B-025). Counting by address alone made a room signing up from one campus
+ * network one person again whenever Redis was missing or down (D-107).
+ */
+export function hitIdentityLocally(
+    identity: RequestIdentity,
+    policy: Pick<RateLimitPolicy, 'name' | 'limit' | 'windowMs' | 'networkLimit'>,
+    now = Date.now(),
+) {
+    const own = hitLocally(`${policy.name}:${identity.key}`, policy.limit, policy.windowMs, now);
+    if (!own.allowed || !identity.network || !policy.networkLimit) return own;
+    return hitLocally(`${policy.name}:net:${identity.network.key}`, policy.networkLimit, policy.windowMs, now);
 }
 
 /** Test hook. */
