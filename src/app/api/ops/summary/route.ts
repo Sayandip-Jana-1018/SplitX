@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { opsViewer } from '@/lib/ops/access';
-import { readCodeScanning, readDeliveries, readDependabot, readPipeline } from '@/lib/ops/github';
+import { readCodeScanning, readDeliveries, readDependabot, readPipeline, readSiteChecks } from '@/lib/ops/github';
 import { readQualityGate } from '@/lib/ops/quality';
 import { siteUrl } from '@/lib/siteUrl';
 
@@ -16,16 +16,17 @@ export async function GET(request: Request) {
     if (!viewer) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     if (!viewer.allowed) return NextResponse.json({ error: 'Only SplitX operators can read this.' }, { status: 403 });
 
-    const [pipeline, codeScanning, dependabot, deliveries, qualityGate] = await Promise.all([
+    const [pipeline, codeScanning, dependabot, deliveries, qualityGate, siteChecks] = await Promise.all([
         readPipeline(),
         readCodeScanning(),
         readDependabot(),
         readDeliveries(),
         readQualityGate(),
+        readSiteChecks(),
     ]);
 
     return NextResponse.json(
-        { pipeline, codeScanning, dependabot, deliveries, qualityGate, site: siteUrl(request) },
+        { pipeline, codeScanning, dependabot, deliveries, qualityGate, siteChecks, site: siteUrl(request) },
         { headers: { 'Cache-Control': 'no-store' } }
     );
 }

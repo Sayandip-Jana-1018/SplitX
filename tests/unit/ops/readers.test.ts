@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { deployerOf, JENKINS_ENVIRONMENTS, readCodeScanning, readDeliveries, readDependabot, readPipeline, RELEASE_STEPS } from '@/lib/ops/github';
+import { deployerOf, JENKINS_ENVIRONMENTS, readCodeScanning, readDeliveries, readDependabot, readPipeline, readSiteChecks, RELEASE_STEPS } from '@/lib/ops/github';
 import { readQualityGate } from '@/lib/ops/quality';
 import { forgetReadings, readSource } from '@/lib/ops/reading';
 
@@ -9,6 +9,7 @@ const SHA = '93fea82aa6a3c0ffee00000000000000000000aa';
 const ANALYSES = '/code-scanning/analyses?ref=refs/heads/main&per_page=50';
 const SONAR_GATE = 'https://sonarcloud.io/api/qualitygates/project_status?projectKey=splitx';
 const SONAR_ANALYSES = 'https://sonarcloud.io/api/project_analyses/search?project=splitx&ps=1';
+const SITE_CHECKS = '/actions/workflows/uptime.yml/runs?branch=main&status=completed&per_page=1';
 
 /** GitHub's and SonarQube Cloud's answers, by path: what the readers are given. */
 const answers: Record<string, unknown> = {
@@ -46,6 +47,13 @@ const answers: Record<string, unknown> = {
         { tool: { name: 'CodeQL' }, commit_sha: 'older', created_at: '2026-09-22T07:06:00Z', error: 'a query failed' },
     ],
     '/dependabot/alerts?state=open&per_page=100': [{ security_advisory: { severity: 'moderate' } }],
+    // The production checks' newest finished run (uptime.yml, D-106).
+    [SITE_CHECKS]: {
+        workflow_runs: [{
+            id: 9, head_sha: SHA, display_title: 'Production checks', status: 'completed', conclusion: 'failure',
+            run_started_at: '2026-09-25T06:22:03Z', updated_at: '2026-09-25T06:22:40Z', html_url: 'https://github.com/Sayandip-Jana-1018/SplitX/actions/runs/9',
+        }],
+    },
     // As GitHub records them: the release job (github-actions[bot]) creates Jenkins' deployments, Vercel's
     // bot creates its own, and a workflow job in an environment gets one GitHub Actions creates.
     '/deployments?per_page=100': [
@@ -214,6 +222,26 @@ describe('the deliveries reading', () => {
         const workflow = readFileSync('.github/workflows/ci.yml', 'utf8');
         const created = [...workflow.matchAll(/ref: \$sha, environment: "([a-z-]+)"/g)].map((match) => match[1]);
         expect(created.toSorted()).toEqual([...JENKINS_ENVIRONMENTS].toSorted());
+    });
+});
+
+describe('the production checks reading', () => {
+    it('gives the verdict of the newest finished run on main, when it ended, and where to read it', async () => {
+        expect(await readSiteChecks()).toMatchObject({
+            ok: true,
+            source: 'GitHub Actions: Production checks',
+            data: { conclusion: 'failure', at: '2026-09-25T06:22:40Z', url: 'https://github.com/Sayandip-Jana-1018/SplitX/actions/runs/9' },
+        });
+    });
+
+    it('says the checks have not run yet, rather than a verdict', async () => {
+        const restore = answering(SITE_CHECKS, { workflow_runs: [] });
+        expect(await readSiteChecks()).toMatchObject({ ok: true, data: null });
+        restore();
+    });
+
+    it('reads the workflow the unit tests hold (tests/unit/infra/uptime.test.ts)', () => {
+        expect(readFileSync('.github/workflows/uptime.yml', 'utf8')).toContain('name: Production checks');
     });
 });
 

@@ -1,0 +1,61 @@
+# ═══════════════════════════════════════════════════════════════
+#   SplitX — the live site, checked every 15 minutes (D-106)
+#
+#   Production is splitsj.vercel.app. Prometheus, Alertmanager and the
+#   rest run only on the Kind runs and the AWS days, so without this
+#   nothing would notice the site real people use going down.
+#
+#   scripts/uptime.mjs asks what a visitor's browser asks: the app, the
+#   home page and its own JavaScript, the security headers, the sign-in
+#   page, and once an hour the database. A failed check is asked again
+#   20 s later; one that fails twice fails the run, and GitHub emails
+#   the failure. The run also opens an issue for the incident, and
+#   closes it with the outage's length when every check passes again.
+# ═══════════════════════════════════════════════════════════════
+name: Production checks
+
+on:
+  schedule:
+    # Off the busy top of the hour. The database is asked at :07 only:
+    # its check wakes Neon's compute, and every 15 minutes would keep it
+    # awake a third of the time, on the free plan's compute hours.
+    - cron: '7 * * * *'
+    - cron: '22,37,52 * * * *'
+  workflow_dispatch:
+  # A change to the checks is run at once.
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/uptime.yml
+      - scripts/uptime.mjs
+      - scripts/lib/uptime.mjs
+
+permissions:
+  contents: read
+  issues: write # the incident issue, opened and closed by the run
+
+concurrency:
+  group: uptime
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - name: Setup Node
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 24
+
+      - name: Check the live site
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          # Hourly, and on every run started by hand or by a change to the checks.
+          WITH_DATABASE: ${{ github.event_name != 'schedule' || github.event.schedule == '7 * * * *' }}
+        run: node scripts/uptime.mjs --incidents

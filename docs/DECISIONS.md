@@ -4417,6 +4417,76 @@ The first hour of the rehearsal proves the first three. `aws-up`'s last step pro
 
 ---
 
+## Phase 18 — Production, between demo days
+
+### D-106 · The live site is checked every 15 minutes, and an outage opens an incident
+**2026-09-25** · 🚧 written, unit-tested and run against production from the laptop; the first runs
+on GitHub follow the push
+
+**The gap.** Prometheus, Alertmanager, Grafana and Loki run only where the platform does: on the
+nightly Kind run and on AWS days. `splitsj.vercel.app`, the site real people use, had nothing
+watching it. If it went down at night, nobody would know until someone complained.
+
+**What runs now.** `.github/workflows/uptime.yml` runs `scripts/uptime.mjs` every 15 minutes, at :07,
+:22, :37 and :52, off the busy top of the hour. It asks production what a visitor's browser asks.
+The rules are in `scripts/lib/uptime.mjs`, unit-tested against the answers production gave:
+- **The app:** `/api/health/live` answers "alive", without touching the database.
+- **The home page:** 200, titled SplitX, not just any page.
+- **Its own JavaScript:** the first `/_next/static/…js` it names is served as JavaScript. A deploy
+  whose HTML loads but whose scripts are missing fails here.
+- **The headers:** HSTS of a year or more, `nosniff`, and a Content Security Policy. The report
+  says whether the CSP is enforced or report-only (report-only today).
+- **The sign-in page:** 200, titled SplitX.
+- **The database,** once an hour, at :07, and on every run started by hand or by a change to the
+  checks: `/api/health/ready`.
+  - Each check wakes Neon's compute if it sleeps. Every 15 minutes would keep it awake about a third
+    of the time, on the free plan's compute hours.
+
+A redirect is judged, not followed: every page checked answers 200 today, so a redirect is a change
+worth seeing.
+
+**When a check fails.**
+- It is asked again 20 s later, so a blip, or Neon waking its compute, is not an outage.
+- A check that fails twice fails the run. GitHub emails a failed scheduled run to whoever last
+  changed its schedule, here the repository's owner.
+- The run opens an issue, "Production check failing: …", with the table of results. The same run
+  on a later check leaves it open.
+- The first run that passes everything comments with how long the checks had been failing, and
+  closes it. The issue is the incident's record. The run needs only `issues: write` besides reading
+  the code.
+
+**On `/ops`.**
+- The Tools list gains **Production checks**: the newest finished run's verdict, and when it ran.
+- The pre-flight list gains **The live site**:
+  - green when the newest run passed;
+  - red when it failed or timed out;
+  - red when no run has finished for 45 minutes. The schedule has then stopped: GitHub pauses a
+    public repository's schedules after 60 days without activity.
+
+  It is judged against the time GitHub was read, so the list says the same thing on every render.
+
+**Checked before pushing.**
+- From the laptop against production: all 6 checks passed.
+- Against a site that isn't SplitX (`example.com`): 5 of 5 failed, each once more after 20 s, each
+  with its reason, and the run exited 1.
+- 16 unit tests for the rules and the workflow, and 4 for `/ops`: the reader, and each of the
+  item's states.
+
+**Limits, said plainly.**
+- GitHub runs scheduled workflows late when it is busy, by minutes.
+- The checks run from one place, GitHub's runners, not from around the world.
+- The email goes to one person. An outage that lasts hours sends one email per failed run.
+
+**Rejected:**
+- **Prometheus scraping Vercel.** Each serverless instance keeps its own metrics, so a scrape
+  reads whichever instance answers.
+- **An external uptime service.** UptimeRobot and Better Stack would work, but each needs an account
+  in the owner's name. This needs none, and keeps its record in the repository. Either can be added
+  later.
+- **Checking the database every 15 minutes,** for the compute hours above.
+
+---
+
 ## Open problems
 
 | ID | Problem | Why it matters | Status / planned fix |

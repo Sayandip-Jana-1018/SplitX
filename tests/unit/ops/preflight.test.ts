@@ -11,6 +11,7 @@ import type { Reading } from '@/lib/ops/reading';
  */
 
 const at = '2026-10-10T04:00:00.000Z';
+const TEN_MINUTES_BEFORE = '2026-10-10T03:50:00Z';
 const ok = <T,>(data: T, source = 'a source'): Reading<T> => ({ ok: true, source, fetchedAt: at, data });
 const unread = (error: string, source = 'a source'): Reading<never> => ({ ok: false, source, fetchedAt: at, error });
 
@@ -88,6 +89,7 @@ function input(overrides: Partial<PreflightInput> = {}): PreflightInput {
         dependabot: ok({ total: 2, bySeverity: { moderate: 2 }, capped: false }),
         deliveries: ok([delivery(), delivery({ environment: 'kind' }), delivery({ environment: 'Production', deployer: 'Vercel', image: null })]),
         qualityGate: ok({ status: 'OK', conditions: [], analysis: { at, revision: SHA }, url: 'https://sonarcloud.io/project' }),
+        siteChecks: ok({ conclusion: 'success', at: TEN_MINUTES_BEFORE, url: 'https://github.com/Sayandip-Jana-1018/SplitX/actions/runs/2' }),
         cluster: ok(readings()),
         ...overrides,
     };
@@ -101,11 +103,11 @@ describe('the pre-flight list', () => {
     it('is all green on a ready EKS platform, in the order the demo meets it', () => {
         const items = preflight(input());
         expect(items.map((entry) => entry.key)).toEqual([
-            'ci', 'release', 'scanning', 'dependabot', 'sonar', 'platform', 'nodes', 'pods', 'running', 'evidence',
+            'ci', 'release', 'scanning', 'dependabot', 'sonar', 'site', 'platform', 'nodes', 'pods', 'running', 'evidence',
             'autoscaler', 'admissions', 'alerts', 'logs', 'lab', 'edge', 'stacks', 'budget',
         ]);
         expect(items.filter((entry) => entry.readiness !== 'go')).toEqual([]);
-        expect(preflightHeadline(items)).toBe('All 18 ready.');
+        expect(preflightHeadline(items)).toBe('All 19 ready.');
         expect(byKey(items).nodes.detail).toBe('3 ready, in ap-south-1a and ap-south-1b.');
         expect(byKey(items).platform.detail).toBe('Connected: Kubernetes on Amazon EKS.');
     });
@@ -120,15 +122,29 @@ describe('the pre-flight list', () => {
 
     it('on Vercel, judges the pipeline, and says the platform is elsewhere', () => {
         const items = preflight(input({ cluster: unread(NOT_CONNECTED, 'ops-api in the cluster') }));
-        expect(items).toHaveLength(6);
-        expect(items[5]).toEqual({ key: 'platform', title: 'The platform', readiness: 'elsewhere', detail: NOT_CONNECTED });
-        expect(preflightHeadline(items)).toBe('All 5 ready.');
+        expect(items).toHaveLength(7);
+        expect(items[6]).toEqual({ key: 'platform', title: 'The platform', readiness: 'elsewhere', detail: NOT_CONNECTED });
+        expect(preflightHeadline(items)).toBe('All 6 ready.');
     });
 
     it('waits for ops-api\'s first answer, and names why it can\'t be read', () => {
         expect(preflight(input({ cluster: undefined })).at(-1)).toMatchObject({ key: 'platform', readiness: 'wait' });
         expect(one('platform', { cluster: unread('ops-api could not be reached (ECONNREFUSED)', 'ops-api in the cluster') }))
             .toMatchObject({ readiness: 'fix', detail: 'ops-api in the cluster can\'t be read: ops-api could not be reached (ECONNREFUSED)' });
+    });
+
+    it('judges the live site by the newest production check, against when GitHub was read', () => {
+        const checks = (conclusion: string | null, when = TEN_MINUTES_BEFORE) => ({ siteChecks: ok({ conclusion, at: when, url: 'u' }) });
+        expect(one('site', {})).toMatchObject({ readiness: 'go', detail: 'Passed every production check, 10 min before this reading.' });
+        expect(one('site', checks('failure'))).toMatchObject({ readiness: 'fix', detail: 'The newest production check failed: open the run, and its incident issue.' });
+        expect(one('site', checks('timed_out')).detail).toBe('The newest production check timed out: open the run, and its incident issue.');
+        expect(one('site', checks('cancelled')).readiness).toBe('wait');
+        // Every 15 minutes, so nothing for 50 means the schedule stopped, whatever the last verdict was.
+        expect(one('site', checks('success', '2026-10-10T03:10:00Z'))).toMatchObject({ readiness: 'fix' });
+        expect(one('site', checks('success', '2026-10-10T03:10:00Z')).detail).toContain('No production check for 50 minutes');
+        expect(one('site', { siteChecks: ok(null) })).toMatchObject({ readiness: 'wait', detail: 'The production checks haven\'t run yet.' });
+        expect(one('site', { siteChecks: unread('GitHub answered 404: Not Found', 'GitHub Actions: Production checks') }))
+            .toMatchObject({ readiness: 'fix', detail: 'GitHub Actions: Production checks can\'t be read: GitHub answered 404: Not Found' });
     });
 
     it('treats a platform it can\'t name as Kind', () => {

@@ -121,6 +121,25 @@ export function readPipeline(): Promise<Reading<Pipeline | null>> {
     }));
 }
 
+export interface SiteChecks {
+    /** GitHub's verdict on the newest finished run: success when the live site passed every check. */
+    conclusion: string | null;
+    /** When that run finished. */
+    at: string;
+    url: string;
+}
+
+/**
+ * The newest finished run of the production checks (.github/workflows/uptime.yml,
+ * D-106): whether the live site answered every check. Null before the first run.
+ */
+export function readSiteChecks(): Promise<Reading<SiteChecks | null>> {
+    return recentReading('github:site-checks', TTL_MS, () => readSource('GitHub Actions: Production checks', async () => {
+        const { workflow_runs: [run] } = await github<{ workflow_runs: WorkflowRun[] }>('/actions/workflows/uptime.yml/runs?branch=main&status=completed&per_page=1');
+        return run ? { conclusion: run.conclusion, at: run.updated_at, url: run.html_url } : null;
+    }));
+}
+
 export interface AlertCounts {
     total: number;
     bySeverity: Record<string, number>;

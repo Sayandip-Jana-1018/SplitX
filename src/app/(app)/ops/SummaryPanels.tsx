@@ -2,10 +2,10 @@
 
 import { useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
-import { Boxes, Check, Copy, GitBranch, PackageCheck, Rocket, ShieldCheck, Workflow } from 'lucide-react';
+import { Activity, Boxes, Check, Copy, GitBranch, PackageCheck, Rocket, ShieldCheck, Workflow } from 'lucide-react';
 import { IconTile, ListGroup, ListRow, Section, Tag } from '@/components/ui/kit';
 import type { ClusterReadings } from '@/lib/ops/cluster';
-import type { AlertCounts, CodeScanning, Delivery, Pipeline, ToolScan } from '@/lib/ops/github';
+import type { AlertCounts, CodeScanning, Delivery, Pipeline, SiteChecks, ToolScan } from '@/lib/ops/github';
 import { JENKINS_ENVIRONMENTS } from '@/lib/ops/github';
 import { duration, failedConditions, gateLabel, imageParts, platformLabel, severityTone, stateLabel, tally, toneOf, worstFirst } from '@/lib/ops/present';
 import type { QualityGate } from '@/lib/ops/quality';
@@ -27,6 +27,7 @@ export interface OpsSummary {
     dependabot: Reading<AlertCounts & { capped: boolean }>;
     deliveries: Reading<Delivery[]>;
     qualityGate: Reading<QualityGate>;
+    siteChecks: Reading<SiteChecks | null>;
     site: string | null;
 }
 
@@ -199,6 +200,24 @@ function DeliveryTool({ tool, delivery, fallback }: Readonly<{ tool: string; del
     );
 }
 
+/** The production checks (uptime.yml, D-106): the newest finished run's verdict on the live site. */
+function SiteChecksRow({ reading }: Readonly<{ reading: Reading<SiteChecks | null> }>) {
+    const leading = <IconTile tone="accent"><Activity size={18} /></IconTile>;
+    const what = 'The live site, every 15 minutes';
+    if (!reading.ok) return <ListRow wrap leading={leading} title="Production checks" subtitle={what} trailing={<Tag>unavailable</Tag>} />;
+    const run = reading.data;
+    if (!run) return <ListRow wrap leading={leading} title="Production checks" subtitle={`${what}: no run yet`} trailing={<Tag>no report yet</Tag>} />;
+    return (
+        <ListRow
+            wrap
+            leading={leading}
+            title="Production checks"
+            subtitle={`${what}: last run ${timeAgo(run.at)}`}
+            trailing={<Tag tone={toneOf(run.conclusion)}>{stateLabel(run.conclusion)}</Tag>}
+        />
+    );
+}
+
 function platformName(cluster: Reading<ClusterReadings> | undefined): string {
     const platform = cluster?.ok && cluster.data.platform.ok ? cluster.data.platform.data : null;
     if (!platform) return 'Kubernetes, Prometheus, Grafana, Loki, Kyverno';
@@ -210,7 +229,7 @@ export function ToolsSection({ summary, cluster }: Readonly<{ summary: OpsSummar
     const verdict = run ? run.conclusion ?? run.status : null;
     const dependabot = summary.dependabot;
     // Why a row says "unavailable". The pipeline's and the deliveries' reasons show in their own sections.
-    const reasons = [summary.codeScanning, dependabot, summary.qualityGate].flatMap((reading) =>
+    const reasons = [summary.codeScanning, dependabot, summary.qualityGate, summary.siteChecks].flatMap((reading) =>
         reading.ok ? [] : [{ source: reading.source, error: reading.error }]
     );
 
@@ -240,6 +259,7 @@ export function ToolsSection({ summary, cluster }: Readonly<{ summary: OpsSummar
                     fallback="Deploys signed releases to the cluster"
                 />
                 <DeliveryTool tool="Vercel" delivery={newestOf(summary.deliveries, (environment) => environment === 'Production')} fallback="Deploys every push to main" />
+                <SiteChecksRow reading={summary.siteChecks} />
                 <ListRow
                     wrap
                     leading={<IconTile tone="neutral"><Boxes size={18} /></IconTile>}

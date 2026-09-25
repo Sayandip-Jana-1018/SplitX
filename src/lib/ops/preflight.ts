@@ -1,5 +1,5 @@
 import { NOT_CONNECTED, type ClusterReadings } from './cluster';
-import type { AlertCounts, CodeScanning, Delivery, Pipeline } from './github';
+import type { AlertCounts, CodeScanning, Delivery, Pipeline, SiteChecks } from './github';
 import { failedConditions, platformLabel, tally } from './present';
 import type { QualityGate } from './quality';
 import type { Reading } from './reading';
@@ -30,6 +30,7 @@ export interface PreflightInput {
     dependabot: Reading<AlertCounts & { capped: boolean }>;
     deliveries: Reading<Delivery[]>;
     qualityGate: Reading<QualityGate>;
+    siteChecks: Reading<SiteChecks | null>;
     /** Undefined until ops-api's first answer. */
     cluster: Reading<ClusterReadings> | undefined;
 }
@@ -103,6 +104,35 @@ function sonar(reading: PreflightInput['qualityGate']): PreflightItem {
     if (reading.data.status === 'OK') return item('sonar', title, 'go', 'Passed on new code.');
     if (reading.data.status === 'ERROR') return item('sonar', title, 'fix', `Failed: ${failedConditions(reading.data.conditions).join('; ') || 'see its conditions'}.`);
     return item('sonar', title, 'wait', 'No verdict yet: the next analysis gives one.');
+}
+
+/**
+ * The checks run every 15 minutes (uptime.yml, D-106), so a newest run older
+ * than this means the schedule stopped: GitHub pauses a public repository's
+ * schedules after 60 days without activity.
+ */
+const SITE_CHECKS_STALE_MS = 45 * 60_000;
+
+/** How the page words a production check that didn't pass. */
+const SITE_CHECK_ENDINGS = new Map([
+    ['failure', 'failed'],
+    ['timed_out', 'timed out'],
+]);
+
+function site(reading: PreflightInput['siteChecks']): PreflightItem {
+    const title = 'The live site';
+    if (!reading.ok) return unread('site', title, reading);
+    const run = reading.data;
+    if (!run) return item('site', title, 'wait', 'The production checks haven\'t run yet.');
+    // Judged against when GitHub was read, so the list says the same thing on every render.
+    const minutes = Math.max(0, Math.round((Date.parse(reading.fetchedAt) - Date.parse(run.at)) / 60_000));
+    if (minutes * 60_000 > SITE_CHECKS_STALE_MS) {
+        return item('site', title, 'fix', `No production check for ${minutes} minutes: the schedule stopped. Run Actions → Production checks, and enable it if GitHub paused it.`);
+    }
+    if (run.conclusion === 'success') return item('site', title, 'go', `Passed every production check, ${minutes} min before this reading.`);
+    if (run.conclusion === 'cancelled') return item('site', title, 'wait', 'The newest production check was cancelled; the next runs within 15 minutes.');
+    const ended = SITE_CHECK_ENDINGS.get(run.conclusion ?? '') ?? `ended "${run.conclusion ?? 'without a verdict'}"`;
+    return item('site', title, 'fix', `The newest production check ${ended}: open the run, and its incident issue.`);
 }
 
 /** The newest delivery Jenkins was asked for on this platform, if any. */
@@ -244,7 +274,10 @@ function budget(cluster: ClusterReadings): PreflightItem {
 
 /** Every pre-flight item, in the order the demo meets them. */
 export function preflight(input: PreflightInput): PreflightItem[] {
-    const items = [ci(input.pipeline), release(input.pipeline), codeScanning(input.codeScanning), dependabot(input.dependabot), sonar(input.qualityGate)];
+    const items = [
+        ci(input.pipeline), release(input.pipeline), codeScanning(input.codeScanning), dependabot(input.dependabot), sonar(input.qualityGate),
+        site(input.siteChecks),
+    ];
     const title = 'The platform';
     if (!input.cluster) return [...items, item('platform', title, 'wait', 'Asking ops-api.')];
     if (!input.cluster.ok) {

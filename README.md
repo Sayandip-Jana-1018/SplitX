@@ -9,6 +9,7 @@
 [![Kind end-to-end](https://github.com/Sayandip-Jana-1018/SplitX/actions/workflows/kind-e2e.yml/badge.svg?branch=main)](https://github.com/Sayandip-Jana-1018/SplitX/actions/workflows/kind-e2e.yml)
 [![Quality gate](https://sonarcloud.io/api/project_badges/measure?project=Sayandip-Jana-1018_SplitX&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=Sayandip-Jana-1018_SplitX)
 [![Vercel](https://img.shields.io/github/deployments/Sayandip-Jana-1018/SplitX/Production?label=vercel&logo=vercel)](https://splitsj.vercel.app)
+[![Production checks](https://github.com/Sayandip-Jana-1018/SplitX/actions/workflows/uptime.yml/badge.svg?branch=main)](https://github.com/Sayandip-Jana-1018/SplitX/actions/workflows/uptime.yml)
 [![Releases signed with cosign](https://img.shields.io/badge/releases-signed%20with%20cosign-6d4ee8)](#the-supply-chain)
 
 [**The live app**](https://splitsj.vercel.app) · [**Every decision**](docs/DECISIONS.md) · [**The demo-day runbook**](docs/DEMO_DAY.md) · [**The evidence**](#the-evidence)
@@ -64,7 +65,7 @@ Prisma on Neon Postgres, and NextAuth v5, and it is live on Vercel for real user
 - **On AWS EKS, on demo days,** behind CloudFront. It is built that morning, and removed that evening.
 
 Every decision, what was rejected, and the measurement behind each claim is in
-**[docs/DECISIONS.md](docs/DECISIONS.md)**: 105 decisions, with the open problems at the end.
+**[docs/DECISIONS.md](docs/DECISIONS.md)**: 106 decisions, with the open problems at the end.
 
 ---
 
@@ -289,6 +290,11 @@ flowchart LR
   shedding, restarts and quiet nights.
 - **The first real outage:** Redis was stopped on purpose, the alert email arrived 199 s later, and
   the resolution five minutes after the fix ([D-052](docs/DECISIONS.md)).
+- **The live site, between demo days:** the stack above runs only where the platform does. So a
+  scheduled workflow checks `splitsj.vercel.app` every 15 minutes, as a browser would, and the
+  database once an hour. A check that fails twice fails the run, which GitHub emails, and opens an
+  incident issue that closes itself on recovery ([D-106](docs/DECISIONS.md)). `/ops` shows its
+  newest verdict.
 
 ---
 
@@ -297,7 +303,7 @@ flowchart LR
 | Tool | What it does here | Where | What proves it |
 |---|---|---|---|
 | **Git, husky, commitlint, gitleaks** | Conventional commits. No secret reaches a commit, or the history. | `.husky/`, `commitlint.config.js` | Every commit in this repository |
-| **GitHub Actions** | CI, the release, the Kind end-to-end run, and AWS up, verify and down | `.github/workflows/` | The badges above |
+| **GitHub Actions** | CI, the release, the Kind end-to-end run, and AWS up, verify and down. Every 15 minutes, checks of the live site, which open an incident issue when one fails and close it on recovery. | `.github/workflows/`, `scripts/uptime.mjs` | The badges above |
 | **GitHub Deployments and webhooks** | Each release is announced as a deployment. The deployer reports back on it. | `ci.yml`, `jenkins/deploy.mjs` | `cd:verify`: GitHub's own delivery started the build |
 | **CodeQL, Dependabot** | Code scanning, and vulnerable dependencies | `codeql.yml`, `.github/dependabot.yml` | The Security tab; counted on `/ops` |
 | **SonarQube Cloud** | The quality gate on new code: coverage, ratings, duplication | `sonar-project.properties`, CI's `sonar` job | The gate badge above |
