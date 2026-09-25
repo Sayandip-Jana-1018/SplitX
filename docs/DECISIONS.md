@@ -3951,6 +3951,16 @@ Memory peaked at 8.0 GB in use, 6.6 GB of it anonymous.
 
 No Kind run followed D-107 to D-109: they change the app and its tests, which don't start one. The
 nightly run tests their release.
+
+**Runs 11 and 12 carried D-110's updates, and were green on every check.**
+- **Run 11** (36119947989, on `740dd85`): the cluster on Postgres 17.11, with the minor and patch
+  updates and Actions v7.
+- **Run 12** (36156809407, on `109be46`): Redis 7.4.11, and the release built with Vitest 5,
+  framer-motion 13, lucide-react 1 and the rest.
+  - **Delivery:** 52 s, "Deployed 109be467a16f and checked through the edge".
+  - **`k8s:verify`:** 36/36, with 1 skipped (email).
+  - **`cd:verify --rollback`:** 16/16, rolled back after 181 s with 616 of 616 requests answered 200.
+  - **`ops-verify`:** 24/24.
 - **Memory** peaked at 8.2 GB in use, 6.8 GB of it anonymous.
 
 ### D-100 · What kind-e2e run 4 found: five causes, each read in the source of what was involved
@@ -4735,9 +4745,12 @@ its own phone. An 8-second freeze on one bad scan is still a bug.
 - several trailing slashes on the site's address.
 
 ### D-110 · Dependabot's 13 pull requests: what was taken, what waits, and one Postgres major
-**2026-09-25** · ✅ first batch proven: CI green on all ten jobs at `740dd85`, and kind-e2e run 11
-(36119947989) green on Postgres 17 with the new release. 🚧 The second batch (the majors) is pushed
-after it; its proof is recorded below.
+**2026-09-25** · ✅ both batches proven:
+- **The first:** CI green on all ten jobs at `740dd85`, and kind-e2e run 11 green on Postgres 17.
+- **The second, the majors:** CI green on all ten jobs at `109be46`, browser flows and release
+  included, and kind-e2e run 12 green with Redis 7.4.11 (D-099).
+- **After it:** SonarQube Cloud still rates every quality A, and production's footer and scroll
+  animations were checked in a browser.
 
 **Applied on `main`, not merged.** Pushes go straight to `main` (memory `push-to-main-policy`), and
 each pull request was opened against an older `main`. So each update was applied to today's code
