@@ -1,5 +1,5 @@
-import { expect, test } from '@playwright/test';
-import { createGroup, newPerson, newPhone, signUp } from './support';
+import { expect } from '@playwright/test';
+import { createGroup, newPerson, newPhone, signUp, test } from './support';
 
 /*
  * Flow 7: a shared phone. After signing out, nothing of the account is left in

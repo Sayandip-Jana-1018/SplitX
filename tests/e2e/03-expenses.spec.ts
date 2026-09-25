@@ -1,5 +1,5 @@
-import { expect, test } from '@playwright/test';
-import { addExpense, memberRow, twoInAGroup } from './support';
+import { expect } from '@playwright/test';
+import { addExpense, memberRow, test, twoInAGroup } from './support';
 
 /*
  * Flow 3: expenses, split equally and by chosen amounts, and what each leaves

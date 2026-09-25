@@ -1,5 +1,5 @@
-import { expect, type Page, test } from '@playwright/test';
-import { addExpense, memberRow, twoInAGroup } from './support';
+import { expect, type Page } from '@playwright/test';
+import { addExpense, memberRow, test, twoInAGroup } from './support';
 
 /*
  * Flow 5: settling up, through each state a payment passes (D-066's table in

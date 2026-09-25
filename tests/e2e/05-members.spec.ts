@@ -1,5 +1,5 @@
-import { expect, type Page, test } from '@playwright/test';
-import { addExpense, memberRow, twoInAGroup } from './support';
+import { expect, type Page } from '@playwright/test';
+import { addExpense, memberRow, test, twoInAGroup } from './support';
 
 /*
  * Flow 6: removing a member. Refused while they owe anything (D-063: splits are

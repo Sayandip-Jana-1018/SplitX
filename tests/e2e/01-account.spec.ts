@@ -1,5 +1,5 @@
-import { expect, test } from '@playwright/test';
-import { newPerson, newPhone, signIn, signUp } from './support';
+import { expect } from '@playwright/test';
+import { newPerson, newPhone, signIn, signUp, test } from './support';
 
 /*
  * Flow 1: an account. With no email sender configured, as on production today,

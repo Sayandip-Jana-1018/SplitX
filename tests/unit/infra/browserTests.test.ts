@@ -41,6 +41,24 @@ describe('the e2e job', () => {
     });
 });
 
+describe('the Content Security Policy (D-108)', () => {
+    const config = readFileSync('next.config.ts', 'utf8');
+
+    it('is enforced in production, not only reported', () => {
+        expect(config).toContain("{ key: 'Content-Security-Policy', value: CONTENT_SECURITY_POLICY }");
+        expect(config).not.toContain('Content-Security-Policy-Report-Only');
+    });
+
+    it('fails a browser test on any violation, on any of its phones', () => {
+        const support = readFileSync('tests/e2e/support.ts', 'utf8');
+        expect(support).toContain("document.addEventListener('securitypolicyviolation'");
+        expect(support).toContain("expect(cspViolations, 'what the Content Security Policy refused').toEqual([]);");
+        for (const spec of readdirSync('tests/e2e').filter((file) => file.endsWith('.spec.ts'))) {
+            expect(readFileSync(`tests/e2e/${spec}`, 'utf8'), spec).toMatch(/import \{[^}]*\btest\b[^}]*\} from '\.\/support';/);
+        }
+    });
+});
+
 describe('the suite', () => {
     const config = readFileSync('playwright.config.ts', 'utf8');
 
@@ -58,6 +76,7 @@ describe('the suite', () => {
             '04-settle.spec.ts',
             '05-members.spec.ts',
             '06-shared-device.spec.ts',
+            '07-receipt.spec.ts',
         ]);
     });
 });

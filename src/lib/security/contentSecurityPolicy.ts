@@ -18,9 +18,10 @@
  *   to, its storage.
  * - Google and GitHub: profile photos of people who signed in with them.
  *
- * It is sent as Content-Security-Policy-Report-Only first (next.config.ts):
- * browsers report what it would block to /api/csp-report, and it is enforced
- * once production shows none from the app itself.
+ * It was sent as Content-Security-Policy-Report-Only first. Since D-108 it is
+ * enforced (next.config.ts): the browser tests (tests/e2e) fail on any
+ * violation in any flow, receipt reading's worker and WebAssembly included,
+ * and saw none. Browsers still report what it blocks to /api/csp-report.
  */
 
 export const CSP_REPORT_PATH = '/api/csp-report';

@@ -1,10 +1,27 @@
-import { expect, type Browser, type Page } from '@playwright/test';
+import { test as base, expect, type Browser, type Page } from '@playwright/test';
 
 /*
  * What every flow does the way a person does it (D-107): opening the app on a
  * phone, signing up, signing in, making a group and adding an expense. Only
  * the page is used, never the API behind it, so a broken screen fails here.
  */
+
+/** What the Content Security Policy refused, or would have, on any of the test's phones (D-108). */
+const cspViolations: string[] = [];
+
+/**
+ * The flows' `test`: each also fails if the browser reported a Content Security
+ * Policy violation on any page it opened. That is what proves the enforced
+ * policy blocks nothing the app itself needs (D-108).
+ */
+export const test = base.extend<{ contentSecurityPolicy: void }>({
+    contentSecurityPolicy: [async ({ browserName }, use) => {
+        expect(browserName).toBe('chromium');
+        cspViolations.length = 0;
+        await use();
+        expect(cspViolations, 'what the Content Security Policy refused').toEqual([]);
+    }, { auto: true }],
+});
 
 export interface Person {
     name: string;
@@ -41,6 +58,13 @@ export async function newPhone(browser: Browser): Promise<Page> {
         } catch {
             // Storage blocked: the tour shows, and the flows dismiss nothing.
         }
+        // The browser's own record of each refusal, said where the test can hear it.
+        document.addEventListener('securitypolicyviolation', (event) => {
+            console.error(`CSP violation (${event.disposition}): ${event.effectiveDirective} refused ${event.blockedURI || 'inline'} on ${location.pathname}`);
+        });
+    });
+    context.on('console', (message) => {
+        if (message.text().startsWith('CSP violation (')) cspViolations.push(message.text());
     });
     return context.newPage();
 }

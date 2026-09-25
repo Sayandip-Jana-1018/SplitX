@@ -65,7 +65,7 @@ Prisma on Neon Postgres, and NextAuth v5, and it is live on Vercel for real user
 - **On AWS EKS, on demo days,** behind CloudFront. It is built that morning, and removed that evening.
 
 Every decision, what was rejected, and the measurement behind each claim is in
-**[docs/DECISIONS.md](docs/DECISIONS.md)**: 107 decisions, with the open problems at the end.
+**[docs/DECISIONS.md](docs/DECISIONS.md)**: 108 decisions, with the open problems at the end.
 
 ---
 
@@ -308,7 +308,7 @@ flowchart LR
 | **CodeQL, Dependabot** | Code scanning, and vulnerable dependencies | `codeql.yml`, `.github/dependabot.yml` | The Security tab; counted on `/ops` |
 | **SonarQube Cloud** | The quality gate on new code: coverage, ratings, duplication | `sonar-project.properties`, CI's `sonar` job | The gate badge above |
 | **Vitest** | Unit, property, integration (Redis) and database (Postgres) tests | `tests/` | CI's `verify`, `integration` and `database` jobs |
-| **Playwright** | The flows a classroom uses, on a phone's browser against a production build: sign-up, a group and its invite, expenses, settling up, removing a member, a shared phone after sign-out | `tests/e2e/`, `playwright.config.ts` | CI's `e2e` job, which a release waits for |
+| **Playwright** | The flows a classroom uses, on a phone's browser against a production build: sign-up, a group and its invite, expenses, settling up, removing a member, a shared phone after sign-out, and a receipt read on the phone. Any Content Security Policy violation fails a test, which is what lets the policy be enforced. | `tests/e2e/`, `playwright.config.ts` | CI's `e2e` job, which a release waits for |
 | **Docker, Buildx Bake, Compose** | One image per release, built once, with no npm in it at run time. Compose runs local development. | `Dockerfile`, `docker-bake.hcl`, `docker-compose.yml` | 81 MB against a naive 1,091 MB; 0 vulnerabilities against 4,139 ([evidence](docs/evidence/image-comparison.md)) |
 | **Trivy** | Gates each release on fixable critical and high vulnerabilities, and scans the IaC | CI's `release` and `iac` jobs | A release with such a finding is never signed |
 | **cosign and Sigstore** | Keyless signatures and attestations | CI's `release` job | [`cosign verify`](#the-supply-chain), as above |

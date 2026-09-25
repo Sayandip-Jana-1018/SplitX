@@ -9,7 +9,7 @@ const LOG_EVERY_MS = 10_000;
 const globalForCsp = globalThis as typeof globalThis & { __splitxCspLoggedAt?: number };
 
 // POST /api/csp-report — where browsers report what the Content-Security-Policy
-// blocked (or, while it is report-only, would have). Counted in
+// blocked (it is enforced since D-108; before, what it would have). Counted in
 // splitx_csp_violations_total; logged at most once every ten seconds per
 // process, so a noisy page or a flood of fake reports can't fill the logs.
 export async function POST(req: Request) {

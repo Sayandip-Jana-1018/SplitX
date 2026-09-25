@@ -4549,6 +4549,61 @@ Postgres (memory `local-postgres-testing`).
 - **One long test** of all seven flows. A failure would hide everything after it.
 - **Raising the limits for the tests.** The limiter they tripped is the one a classroom would trip.
 
+### D-108 · The Content Security Policy is enforced, and a receipt's total is read
+**2026-09-25** · ✅ 12 browser tests green under the enforced policy, locally against a production
+build; CI's `e2e` job runs them on every push
+
+**The policy was report-only** (plan Phase 1, item 7). The plan was to enforce it "once production
+shows no violations from the app itself". Reports reach `/api/csp-report`. But on Vercel each
+instance keeps its own counters, and its logs don't last, so production could never show that.
+The browser tests show it instead:
+- **Every flow fails on any violation.** Each test phone listens for the browser's own
+  `securitypolicyviolation` events. The suite's `test` (`tests/e2e/support.ts`) fails a test when
+  any of its phones reported one, whether the policy blocked it or only reported it.
+- **Under the report-only policy:** the flows saw none. That covered all eleven classroom tests,
+  and the receipt flow up to where it stopped on the bug below, worker and WebAssembly included.
+- **Under the enforced policy:** all 12 pass, with none.
+- **Production's public pages:** `/`, `/login`, `/register`, `/forgot-password`, `/scale` and a
+  join link were opened in Chromium on 2026-09-25, as they are served today. None reported a
+  violation. So nothing Vercel adds in production breaks the policy.
+
+**So `next.config.ts` sends `Content-Security-Policy`.** It keeps `report-uri`, so a real violation
+is blocked and still counted (`splitx_csp_violations_total`) and logged. A unit test holds the
+header, and every browser test's use of the listening `test`.
+
+**Not covered by a browser test, and why it is still safe:**
+- **Google and GitHub sign-in.** Their pages are theirs; ours go there by script, which the policy
+  doesn't govern.
+- **The AI scan and chat.** The server calls the AI providers, not the page.
+- **Photo uploads.** They go straight to Supabase, which `connect-src` names.
+- **Voice input.** The browser's own speech service, outside the page.
+
+If one of them ever needs something the policy doesn't list, it is blocked, reported and logged. The
+way back is one line: the header's name.
+
+**A new flow: a receipt read on the phone** (`07-receipt.spec.ts`).
+- The page draws a bill, and the on-device scanner reads it. That scanner is Tesseract: its worker,
+  engine and English model are all served by the app, and it compiles WebAssembly. So this is also
+  the flow that proves the policy leaves workers and WebAssembly working.
+- What it read opens the composer, amount and merchant filled in, and becomes an expense.
+- The tests have no storage, so the photo isn't kept, and the page says so.
+
+**What it found: a printed bill's total was never read.** Tesseract read the test bill perfectly,
+yet the page said "Amount: Not found".
+- **The parser (`src/lib/transactionParser.ts`)** only knew amounts marked ₹, Rs or INR, or next to
+  "paid", "debited" and the like, as in UPI messages and bank texts. A bill's "TOTAL 300.00" matched
+  none of them.
+- **Worse, with ₹ on each item it took the first item's price** as the bill's amount.
+- **The fix:** a bill's total is read first.
+  - The grand or payable total wins when the bill names one ("Grand Total", "Net Payable", "Amount
+    payable"); otherwise the last total line counts.
+  - Sub-totals, counts ("Total Items: 3") and taxes ("Total Tax 15.00") are not totals: only
+    separators and a currency may sit between the words and the number.
+  - UPI messages and bank texts, which have no total line, are read as before.
+- **Tests:** six new unit tests, including the scanned text line for line, and ₹-priced items.
+
+**After this deploys,** the production checks (D-106) report "CSP enforced".
+
 ---
 
 ## Open problems

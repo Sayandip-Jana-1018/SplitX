@@ -1,5 +1,5 @@
-import { expect, test } from '@playwright/test';
-import { createGroup, joinGroup, newPerson, newPhone, signUp } from './support';
+import { expect } from '@playwright/test';
+import { createGroup, joinGroup, newPerson, newPhone, signUp, test } from './support';
 
 /*
  * Flow 2: a group. One person makes it and shares its link; a friend opens the
