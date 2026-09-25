@@ -5,6 +5,7 @@ import { auth } from '@/lib/auth';
 import { createAuditLog } from '@/lib/auditLog';
 import { computeGroupBalances } from '@/lib/groupFinance';
 import { isLedgerSettled, loadGroupLedger } from '@/lib/ledger';
+import { inviteExpiresAt, inviteIsLive } from '@/lib/groupInvite';
 import { formatCurrency } from '@/lib/utils';
 import { logger } from '@/lib/logger';
 
@@ -93,6 +94,9 @@ export async function GET(
 
         return NextResponse.json({
             ...group,
+            // A link that no longer works is never handed out to be shared (D-112).
+            inviteCode: inviteIsLive(group.inviteCodeIssuedAt) ? group.inviteCode : null,
+            inviteExpiresAt: inviteExpiresAt(group.inviteCodeIssuedAt),
             totalSpent,
             activeTrip,
             balances,

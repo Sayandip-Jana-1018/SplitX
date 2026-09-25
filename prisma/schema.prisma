@@ -106,11 +106,13 @@ model User {
 }
 
 model Group {
-  id          String   @id @default(cuid())
-  name        String
-  emoji       String   @default("✈️")
-  inviteCode  String   @unique @default(cuid())
-  ownerId     String
+  id                 String   @id @default(cuid())
+  name               String
+  emoji              String   @default("✈️")
+  inviteCode         String   @unique @default(cuid())
+  // When inviteCode was made: its link works for 7 days (lib/groupInvite.ts).
+  inviteCodeIssuedAt DateTime @default(now())
+  ownerId            String
 
   owner       User              @relation("GroupOwner", fields: [ownerId], references: [id])
   members     GroupMember[]

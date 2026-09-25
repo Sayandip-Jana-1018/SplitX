@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
@@ -6,6 +5,7 @@ import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { createAuditLog } from '@/lib/auditLog';
 import { balanceOf, loadGroupLedger, pendingSettlementsOf } from '@/lib/ledger';
+import { newInviteCode } from '@/lib/groupInvite';
 import { logger } from '@/lib/logger';
 
 const RemoveMemberSchema = z.object({ userId: z.string().min(1).max(64) });
@@ -103,7 +103,7 @@ export async function DELETE(
 
                 await tx.groupMember.deleteMany({ where: { groupId, userId } });
                 // A removed member must not be able to walk back in with the old link.
-                await tx.group.update({ where: { id: groupId }, data: { inviteCode: randomUUID().replace(/-/g, '') } });
+                await tx.group.update({ where: { id: groupId }, data: { inviteCode: newInviteCode(), inviteCodeIssuedAt: new Date() } });
             }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
         } catch (error) {
             if (error instanceof RemovalRefused) {

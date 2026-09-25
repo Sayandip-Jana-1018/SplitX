@@ -521,3 +521,26 @@ INSERT INTO "_prisma_migrations" ("id", "checksum", "finished_at", "migration_na
 VALUES (gen_random_uuid()::text, '15683311575ffbffdf57efb41e27e915e1f7333bc80f99d57dddfb2d32a3da27', now(), '20260922180436_transaction_idempotency_key', now(), 1);
 COMMIT;
 \endif
+
+-- ─── 20260925165652_group_invite_issued_at ─────────────────────────────
+SELECT NOT EXISTS (
+    SELECT 1 FROM "_prisma_migrations"
+    WHERE "migration_name" = '20260925165652_group_invite_issued_at' AND "finished_at" IS NOT NULL AND "rolled_back_at" IS NULL
+) AS pending \gset
+\if :pending
+\echo 'applying 20260925165652_group_invite_issued_at'
+BEGIN;
+
+-- A group's invite link works for 7 days after its code is made (D-112).
+-- Groups that exist now count their code as made now, so every link already
+-- shared keeps working for 7 more days. CURRENT_TIMESTAMP is read once, for
+-- the whole statement, and a default that isn't volatile is stored once, not
+-- written into every row: instant.
+
+-- AlterTable
+ALTER TABLE "Group" ADD COLUMN     "inviteCodeIssuedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+INSERT INTO "_prisma_migrations" ("id", "checksum", "finished_at", "migration_name", "started_at", "applied_steps_count")
+VALUES (gen_random_uuid()::text, '976328d8cda1378d3660be4869e94b1fac266a7c72817b88bd1f1c9061de4918', now(), '20260925165652_group_invite_issued_at', now(), 1);
+COMMIT;
+\endif

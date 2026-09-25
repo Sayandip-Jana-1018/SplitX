@@ -4884,6 +4884,52 @@ dependencies and binaries as before, plus exports, types, duplicate exports and 
 warnings); knip (nothing); 1,429 unit tests; the schema. The push touches `scripts/lib` and
 `ops/`, so a Kind run proves the platform scripts unchanged.
 
+### D-112 · Invite links work for 7 days
+**2026-09-25** · 🚧 on the branch. Production's database takes the column first (the user runs
+"Production database"), then `main` takes the code.
+
+**Why.** A group's invite link never expired. Anyone holding an old one, from a forwarded message or
+a photo of the QR code, could join the group months later. Phase 1 left "optional invite-code
+expiry" for later; on 09-25 the user chose 7 days.
+
+**How it works:**
+- **One new column,** `Group.inviteCodeIssuedAt`: when the code was made. Its link works for 7
+  days after that (`src/lib/groupInvite.ts`).
+- **An expired link, opened** (`/api/groups/join`): answered with 410 and nothing of the group, not
+  even its name. The join page already said "This invite has expired". Someone already in the group
+  is still taken to it.
+- **The group's page** gives no code once it has expired (`inviteCode: null`), so nobody shares a
+  link that doesn't work. The invite sheet says "Works until …".
+- **A new link** (`POST /api/groups/:id/invite`):
+  - the owner or an admin, at any time ("New link"); the old link stops working;
+  - anyone else in the group, once it has expired ("Make a new link"). While it still works, they
+    get it back: one member can't end a link the others have sent out.
+- **Two people at once get one link.** The code is replaced only if it is still the one they read
+  (`updateMany … where inviteCode = old`), and both are answered with the code the group then has.
+  A real-Postgres test runs that race five times.
+- **What was there already stays:**
+  - removing a member still replaces the link (D-063, D-078), and now restarts its 7 days;
+  - inviting a contact never sends an expired link: it renews it first.
+
+**The migration only adds a column.** Its default, `CURRENT_TIMESTAMP`, is read once for the whole
+statement. It was checked on a local Postgres 17 holding groups made 30 and 90 days before:
+- both groups got the migration's time, so every link already shared works for 7 more days;
+- `atthasmissing` is true: the default is stored once and no row is rewritten, so the change is
+  instant.
+
+The code running before it never reads the column, so it keeps working: that is why the database
+goes first.
+
+**Tests:**
+- 18 unit tests:
+  - the route's rules;
+  - the 7 days, to the millisecond;
+  - the join page's answers;
+  - the group page's code;
+  - the contact invite's renewal.
+- 3 database tests: expiry, the old link after a new one, and two renewals at once.
+- A browser test: the owner's new link lets a friend in, and the old one says it has expired.
+
 ---
 
 ## Open problems

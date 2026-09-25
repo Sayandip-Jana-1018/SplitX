@@ -4,10 +4,17 @@ import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
+import { inviteIsLive } from '@/lib/groupInvite';
 
 const JoinGroupSchema = z.object({
     inviteCode: z.string().trim().min(1).max(64),
 });
+
+// A link works for 7 days (lib/groupInvite.ts). 410: this code was real, and is no more.
+const expired = () => NextResponse.json(
+    { error: 'This invite link has expired. Ask someone in the group for a new one.' },
+    { status: 410 }
+);
 
 // POST /api/groups/join — join a group by invite code
 export async function POST(req: Request) {
@@ -38,7 +45,9 @@ export async function POST(req: Request) {
         }
 
         const alreadyMember = () => NextResponse.json({ message: 'Already a member', groupId: group.id });
+        // Someone already in the group is let through an old link: it opens nothing new.
         if (group.members.some(m => m.userId === user.id)) return alreadyMember();
+        if (!inviteIsLive(group.inviteCodeIssuedAt)) return expired();
 
         // A second tap can pass the check above before the first one's insert
         // lands; the database's one-membership-per-person rule then refuses it,
@@ -100,6 +109,7 @@ export async function GET(req: Request) {
                 id: true,
                 name: true,
                 emoji: true,
+                inviteCodeIssuedAt: true,
                 _count: { select: { members: true } },
             },
         });
@@ -107,8 +117,11 @@ export async function GET(req: Request) {
         if (!group) {
             return NextResponse.json({ error: 'Invalid invite code' }, { status: 404 });
         }
+        // An expired link shows nothing of the group, not even its name.
+        const { inviteCodeIssuedAt, ...preview } = group;
+        if (!inviteIsLive(inviteCodeIssuedAt)) return expired();
 
-        return NextResponse.json(group);
+        return NextResponse.json(preview);
     } catch (error) {
         logger.error('Failed to look up group', { err: error });
         return NextResponse.json({ error: 'Failed to look up group' }, { status: 500 });

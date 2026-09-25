@@ -14,7 +14,7 @@ const { auth, prisma } = vi.hoisted(() => ({
     prisma: {
         user: { findUnique: vi.fn(), findMany: vi.fn() },
         contact: { findFirst: vi.fn() },
-        group: { findFirst: vi.fn(), findMany: vi.fn() },
+        group: { findFirst: vi.fn(), findMany: vi.fn(), updateMany: vi.fn(), findUniqueOrThrow: vi.fn() },
         transaction: { findMany: vi.fn() },
         settlement: { findMany: vi.fn() },
         notification: { findFirst: vi.fn(), create: vi.fn() },
@@ -79,18 +79,31 @@ describe('POST /api/contacts/invite', () => {
     });
 
     it('gives a member their own group’s link', async () => {
-        prisma.group.findFirst.mockResolvedValue({ inviteCode: 'abc123' });
+        prisma.group.findFirst.mockResolvedValue({ id: ids.group, inviteCode: 'abc123', inviteCodeIssuedAt: new Date() });
 
         const res = await invite.POST(jsonRequest('http://localhost/api/contacts/invite', { contactId: 'ccontact0000001', groupId: ids.group }));
 
         expect((await res.json()).inviteUrl).toBe('https://splitx.example/join/abc123');
     });
 
+    it('never hands out a link that has expired: it makes the group a new one first', async () => {
+        const eightDaysAgo = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000);
+        prisma.group.findFirst.mockResolvedValue({ id: ids.group, inviteCode: 'old123', inviteCodeIssuedAt: eightDaysAgo });
+        prisma.group.updateMany.mockResolvedValue({ count: 1 });
+        prisma.group.findUniqueOrThrow.mockResolvedValue({ inviteCode: 'new456', inviteCodeIssuedAt: new Date() });
+
+        const res = await invite.POST(jsonRequest('http://localhost/api/contacts/invite', { contactId: 'ccontact0000001', groupId: ids.group }));
+
+        expect((await res.json()).inviteUrl).toBe('https://splitx.example/join/new456');
+        // Only the code it read is replaced: someone else's new link is kept, not ended.
+        expect(prisma.group.updateMany.mock.calls[0][0].where).toEqual({ id: ids.group, inviteCode: 'old123' });
+    });
+
     it('without a configured address, links to where the request came in, never to localhost', async () => {
         vi.stubEnv('NEXTAUTH_URL', '');
         vi.stubEnv('AUTH_URL', '');
         vi.stubEnv('VERCEL_PROJECT_PRODUCTION_URL', '');
-        prisma.group.findFirst.mockResolvedValue({ inviteCode: 'abc123' });
+        prisma.group.findFirst.mockResolvedValue({ id: ids.group, inviteCode: 'abc123', inviteCodeIssuedAt: new Date() });
 
         const res = await invite.POST(jsonRequest('https://splitx-app.vercel.app/api/contacts/invite', { contactId: 'ccontact0000001', groupId: ids.group }));
 

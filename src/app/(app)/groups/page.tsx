@@ -351,7 +351,7 @@ function GroupsContent() {
                                     <Check size={30} strokeWidth={3} />
                                 </motion.span>
                                 <p className={styles.successTitle}>{selectedEmoji} {groupName.trim()} is ready</p>
-                                <p className={styles.successText}>Share this link or let friends scan the code to join instantly.</p>
+                                <p className={styles.successText}>Share this link or let friends scan the code to join. It works for 7 days.</p>
                             </div>
 
                             <div className={styles.qr}>

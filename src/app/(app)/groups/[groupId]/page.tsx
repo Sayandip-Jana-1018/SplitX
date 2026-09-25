@@ -18,6 +18,7 @@ import {
     MessageSquare,
     Plus,
     ReceiptText,
+    RefreshCw,
     Send,
     Share2,
     Trash2,
@@ -39,6 +40,7 @@ import {
     IconTile,
     ListGroup,
     ListRow,
+    Notice,
     Section,
     Segmented,
     Spinner,
@@ -95,7 +97,9 @@ interface GroupDetailData {
     id: string;
     name: string;
     emoji: string;
-    inviteCode: string;
+    /** Null once the link has expired: the server never hands out one that doesn't work. */
+    inviteCode: string | null;
+    inviteExpiresAt: string;
     createdAt: string;
     ownerId: string;
     members: MemberData[];
@@ -160,6 +164,7 @@ export default function GroupDetailPage() {
     const [memberToRemove, setMemberToRemove] = useState<MemberData | null>(null);
     const [busy, setBusy] = useState(false);
     const [copied, setCopied] = useState(false);
+    const [renewingLink, setRenewingLink] = useState(false);
     const [tripTitle, setTripTitle] = useState('');
     const [tripStart, setTripStart] = useState('');
     const [tripEnd, setTripEnd] = useState('');
@@ -249,7 +254,14 @@ export default function GroupDetailPage() {
     const isAdmin = isOwner || group.members.some((member) => member.userId === me && member.role === 'admin');
     const myBalance = balances[me] ?? 0;
     const perPerson = group.members.length ? Math.round(group.totalSpent / group.members.length) : 0;
-    const inviteLink = isClient ? `${window.location.origin}/join/${group.inviteCode}` : '';
+    const inviteLink = isClient && group.inviteCode ? `${window.location.origin}/join/${group.inviteCode}` : '';
+    const inviteExpiry = new Date(group.inviteExpiresAt).toLocaleString('en-IN', {
+        weekday: 'short',
+        day: 'numeric',
+        month: 'short',
+        hour: 'numeric',
+        minute: '2-digit',
+    });
     const journey = journeyQuery.data;
     const activeTrip = group.activeTrip;
 
@@ -271,6 +283,35 @@ export default function GroupDetailPage() {
             } catch { /* dismissed */ }
         } else {
             copyInvite();
+        }
+    };
+
+    // Links work for 7 days (D-112). Anyone renews an expired one; only the owner
+    // or an admin can end one that still works, and the server says so.
+    const makeNewLink = async () => {
+        const wasLive = Boolean(group.inviteCode);
+        setRenewingLink(true);
+        try {
+            const res = await fetch(`/api/groups/${group.id}/invite`, { method: 'POST' });
+            if (res.status === 401) {
+                sessionEnded();
+                return;
+            }
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                toast(data.error || 'Could not make a new link', 'error');
+                return;
+            }
+            await groupQuery.mutate(
+                (current) => current && { ...current, inviteCode: data.inviteCode, inviteExpiresAt: data.inviteExpiresAt },
+                { revalidate: false }
+            );
+            haptics.success();
+            toast(wasLive ? 'New link ready. The old one no longer works.' : 'New link ready', 'success');
+        } catch {
+            toast('Network error', 'error');
+        } finally {
+            setRenewingLink(false);
         }
     };
 
@@ -672,42 +713,63 @@ export default function GroupDetailPage() {
             {/* ── Invite ── */}
             <Modal isOpen={sheet === 'invite'} onClose={() => setSheet(null)} title={`Invite to ${group.name}`} size="small">
                 <div className={styles.sheet}>
-                    {inviteLink && (
-                        <div className={styles.qr}>
-                            <QRCodeSVG value={inviteLink} size={156} level="M" bgColor="#ffffff" fgColor="#0d0f14" />
-                        </div>
+                    {!group.inviteCode ? (
+                        <>
+                            <Notice tone="warning" title="This link has expired">
+                                Invite links work for 7 days. Make a new one to invite people.
+                            </Notice>
+                            <Button fullWidth leftIcon={<RefreshCw size={16} />} loading={renewingLink} onClick={makeNewLink}>
+                                Make a new link
+                            </Button>
+                        </>
+                    ) : (
+                        <>
+                            {inviteLink && (
+                                <div className={styles.qr}>
+                                    <QRCodeSVG value={inviteLink} size={156} level="M" bgColor="#ffffff" fgColor="#0d0f14" />
+                                </div>
+                            )}
+                            <div className={styles.linkBox}>
+                                <Link2 size={16} style={{ color: 'var(--fg-muted)', flexShrink: 0 }} />
+                                <span className={styles.linkText}>{inviteLink}</span>
+                                <Button size="sm" variant={copied ? 'soft' : 'secondary'} onClick={copyInvite} leftIcon={copied ? <Check size={14} /> : <Copy size={14} />}>
+                                    {copied ? 'Copied' : 'Copy'}
+                                </Button>
+                            </div>
+                            <div className={styles.shareGrid}>
+                                <button
+                                    type="button"
+                                    className={styles.shareOption}
+                                    onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(`Join "${group.name}" on SplitX to split expenses: ${inviteLink}`)}`, '_blank')}
+                                >
+                                    <span className={styles.shareIcon}><MessageCircle size={18} /></span>WhatsApp
+                                </button>
+                                <button
+                                    type="button"
+                                    className={styles.shareOption}
+                                    onClick={() => window.open(`sms:?body=${encodeURIComponent(`Join "${group.name}" on SplitX: ${inviteLink}`)}`, '_blank')}
+                                >
+                                    <span className={styles.shareIcon}><MessageSquare size={18} /></span>SMS
+                                </button>
+                                <button
+                                    type="button"
+                                    className={styles.shareOption}
+                                    onClick={() => window.open(`mailto:?subject=${encodeURIComponent(`Join ${group.name} on SplitX`)}&body=${encodeURIComponent(`Split expenses with us in "${group.name}".\n\n${inviteLink}`)}`, '_blank')}
+                                >
+                                    <span className={styles.shareIcon}><Mail size={18} /></span>Email
+                                </button>
+                            </div>
+                            <Button fullWidth leftIcon={<Share2 size={16} />} onClick={shareInvite}>More ways to share</Button>
+                            <div className={styles.linkMeta}>
+                                <span>Works until {inviteExpiry}</span>
+                                {isAdmin && (
+                                    <Button size="sm" variant="ghost" leftIcon={<RefreshCw size={14} />} loading={renewingLink} onClick={makeNewLink}>
+                                        New link
+                                    </Button>
+                                )}
+                            </div>
+                        </>
                     )}
-                    <div className={styles.linkBox}>
-                        <Link2 size={16} style={{ color: 'var(--fg-muted)', flexShrink: 0 }} />
-                        <span className={styles.linkText}>{inviteLink}</span>
-                        <Button size="sm" variant={copied ? 'soft' : 'secondary'} onClick={copyInvite} leftIcon={copied ? <Check size={14} /> : <Copy size={14} />}>
-                            {copied ? 'Copied' : 'Copy'}
-                        </Button>
-                    </div>
-                    <div className={styles.shareGrid}>
-                        <button
-                            type="button"
-                            className={styles.shareOption}
-                            onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(`Join "${group.name}" on SplitX to split expenses: ${inviteLink}`)}`, '_blank')}
-                        >
-                            <span className={styles.shareIcon}><MessageCircle size={18} /></span>WhatsApp
-                        </button>
-                        <button
-                            type="button"
-                            className={styles.shareOption}
-                            onClick={() => window.open(`sms:?body=${encodeURIComponent(`Join "${group.name}" on SplitX: ${inviteLink}`)}`, '_blank')}
-                        >
-                            <span className={styles.shareIcon}><MessageSquare size={18} /></span>SMS
-                        </button>
-                        <button
-                            type="button"
-                            className={styles.shareOption}
-                            onClick={() => window.open(`mailto:?subject=${encodeURIComponent(`Join ${group.name} on SplitX`)}&body=${encodeURIComponent(`Split expenses with us in "${group.name}".\n\n${inviteLink}`)}`, '_blank')}
-                        >
-                            <span className={styles.shareIcon}><Mail size={18} /></span>Email
-                        </button>
-                    </div>
-                    <Button fullWidth leftIcon={<Share2 size={16} />} onClick={shareInvite}>More ways to share</Button>
                 </div>
             </Modal>
 

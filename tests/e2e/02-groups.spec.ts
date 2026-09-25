@@ -35,3 +35,26 @@ test('a link to a group that doesn\'t exist says so', async ({ browser }) => {
     await expect(page.getByText('This invite has expired')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Join group' })).toHaveCount(0);
 });
+
+test('the owner makes a new link: it lets a friend in, and the one shared before doesn\'t', async ({ browser }) => {
+    const asha = newPerson('Asha');
+    const bala = newPerson('Bala');
+    const ashaPhone = await newPhone(browser);
+    const balaPhone = await newPhone(browser);
+    await signUp(ashaPhone, asha);
+    await signUp(balaPhone, bala);
+
+    const group = await createGroup(ashaPhone, 'Hampi trip');
+    await ashaPhone.getByRole('button', { name: 'Invite people' }).first().click();
+    // A link works for 7 days (D-112), and the sheet says until when.
+    await expect(ashaPhone.getByText(/^Works until /)).toBeVisible();
+    await ashaPhone.getByRole('button', { name: 'New link' }).click();
+    await expect(ashaPhone.getByText('New link ready. The old one no longer works.')).toBeVisible();
+    const inviteLink = (await ashaPhone.getByText(/\/join\/[\w-]+$/).first().textContent())?.trim() ?? '';
+    expect(inviteLink).toMatch(/\/join\/[0-9a-f]{32}$/);
+    expect(inviteLink).not.toBe(group.inviteLink);
+
+    await balaPhone.goto(new URL(group.inviteLink).pathname);
+    await expect(balaPhone.getByText('This invite has expired')).toBeVisible();
+    await joinGroup(balaPhone, { ...group, inviteLink });
+});

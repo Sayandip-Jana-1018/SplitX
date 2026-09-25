@@ -4,6 +4,7 @@ import { auth } from '@/lib/auth';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { siteUrl } from '@/lib/siteUrl';
+import { inviteIsLive, replaceInviteCode } from '@/lib/groupInvite';
 
 const InviteSchema = z.object({
     contactId: z.string().min(1).max(64),
@@ -47,12 +48,16 @@ export async function POST(req: Request) {
                     deletedAt: null,
                     OR: [{ ownerId: user.id }, { members: { some: { userId: user.id } } }],
                 },
-                select: { inviteCode: true },
+                select: { id: true, inviteCode: true, inviteCodeIssuedAt: true },
             });
             if (!group) {
                 return NextResponse.json({ error: 'Group not found' }, { status: 404 });
             }
-            inviteUrl = `${site}/join/${group.inviteCode}`;
+            // Never an expired link: a member may renew one (lib/groupInvite.ts).
+            const { inviteCode } = inviteIsLive(group.inviteCodeIssuedAt)
+                ? group
+                : await replaceInviteCode(group.id, group.inviteCode);
+            inviteUrl = `${site}/join/${inviteCode}`;
         }
 
         // For now, return the invite URL — in production you'd use SendGrid/Resend/etc.

@@ -119,6 +119,8 @@ describe('DELETE /api/groups/:groupId/members', () => {
         const newCode = txClient.group.update.mock.calls[0][0].data.inviteCode;
         expect(newCode).toMatch(/^[0-9a-f]{32}$/);
         expect(newCode).not.toBe('old-invite-code');
+        // The new link gets its own 7 days (D-112).
+        expect(txClient.group.update.mock.calls[0][0].data.inviteCodeIssuedAt).toBeInstanceOf(Date);
         // The check and the removal share one serializable transaction.
         expect(prisma.$transaction.mock.calls[0][1]).toEqual({ isolationLevel: 'Serializable' });
         // No split or expense is rewritten: the transaction client has no such methods to call.
