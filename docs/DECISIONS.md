@@ -4303,8 +4303,10 @@ Terraform phase with ECR and IRSA, and listed features that later decisions chan
 
   Each was rendered with Mermaid 11 before committing.
 - **A table of every tool**, what it does here, where it lives, and what proves it. Then the
-  evidence, the synopsis against what was built, the app, how to run it, and a map of the
-  repository.
+  evidence, the app, how to run it, and a map of the repository.
+- **No table of the synopsis against what was built.** The plan asked for one; the user had it
+  removed on 2026-09-25. The reasons behind each change stay in their decisions (D-002, D-054,
+  D-055, D-089, D-096).
 - **Every number in it is from a run or a decision.** For example, run 8's 2,391 requests without
   one lost, and D-023's 1,818 payments.
 - **EKS is described as ready, not as proven.** Its evidence is the rehearsal's `eks-verify`

@@ -40,7 +40,6 @@
 - [Observability](#observability)
 - [Every tool, and what proves it](#every-tool-and-what-proves-it)
 - [The evidence](#the-evidence)
-- [The synopsis, and what was built](#the-synopsis-and-what-was-built)
 - [The app](#the-app)
 - [Run it](#run-it)
 - [Where things are](#where-things-are)
@@ -336,18 +335,6 @@ flowchart LR
 | **The image** against a naive build | [docs/evidence/image-comparison.md](docs/evidence/image-comparison.md) |
 | **The ledger:** production's balances audited read-only | [docs/evidence/ledger-audit.json](docs/evidence/ledger-audit.json), [D-069](docs/DECISIONS.md) |
 | **EKS** | The `eks-verify` artifact of each AWS day's `aws-up` run. The first is the rehearsal. |
-
----
-
-## The synopsis, and what was built
-
-| The synopsis said | What was built | Why |
-|---|---|---|
-| ECR | **GHCR** | Images are built and signed next to the code, and pulling needs no AWS credentials. The signatures sit beside the images ([D-054](docs/DECISIONS.md)). |
-| Argo CD | **Jenkins** | The deployer checks the webhook's signature and the image's, applies the release's own manifests, and rolls back what fails ([D-055](docs/DECISIONS.md)). |
-| Ansible | **Dropped** | EKS managed nodes have no SSH, and immutable images leave nothing to configure ([D-002](docs/DECISIONS.md)). |
-| Nexus as the registry | **Nexus as the evidence store** | GHCR holds the images. Nexus keeps each deployment's verified SBOM, vulnerability report and record ([D-096](docs/DECISIONS.md)). |
-| An S3 static origin | **CloudFront caching the app's own static files** | Next.js already serves them with content hashes; there's no second copy to keep in step ([D-089](docs/DECISIONS.md)). |
 
 ---
 
