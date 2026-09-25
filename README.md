@@ -328,9 +328,11 @@ flowchart LR
 
 | What | Where |
 |---|---|
-| **The whole platform, end to end, nightly.** Kind on a GitHub runner, a delivery through GitHub's own webhook, then every verifier: `k8s:verify`, `cd:verify --rollback` and `ops-verify`. | The newest [Kind end-to-end run](https://github.com/Sayandip-Jana-1018/SplitX/actions/workflows/kind-e2e.yml): its summary has every result table, and its artifact keeps the reports. Runs 1 to 8 are in [D-099](docs/DECISIONS.md). |
+| **The whole platform, end to end, nightly.** Kind on a GitHub runner, a delivery through GitHub's own webhook, then every verifier: `k8s:verify`, `cd:verify --rollback` and `ops-verify`. | The newest [Kind end-to-end run](https://github.com/Sayandip-Jana-1018/SplitX/actions/workflows/kind-e2e.yml): its summary has every result table, and its artifact keeps the reports. Runs 1 to 8 are in [D-099](docs/DECISIONS.md). The four reports below are run 8's, from 25 September 2026. |
 | **The cluster:** probes against a real database outage, a release under traffic, network policy, monitoring end to end | [docs/evidence/kubernetes.md](docs/evidence/kubernetes.md) |
 | **Delivery:** the webhook gate, the deploy account, admission, and a rollback | [docs/evidence/delivery.md](docs/evidence/delivery.md) |
+| **The control room:** `/ops` as an operator reads it, from ops-api and the traffic lab | [docs/evidence/ops.md](docs/evidence/ops.md) |
+| **The run itself:** the runner's memory throughout, each pod's use, and Jenkins' two consoles (the release, then the rollback) | [docs/evidence/kind-e2e/](docs/evidence/kind-e2e/) |
 | **Load:** a classroom under production limits, overload on two pods, the autoscaler | [docs/evidence/load-tests.md](docs/evidence/load-tests.md) |
 | **The image** against a naive build | [docs/evidence/image-comparison.md](docs/evidence/image-comparison.md) |
 | **The ledger:** production's balances audited read-only | [docs/evidence/ledger-audit.json](docs/evidence/ledger-audit.json), [D-069](docs/DECISIONS.md) |

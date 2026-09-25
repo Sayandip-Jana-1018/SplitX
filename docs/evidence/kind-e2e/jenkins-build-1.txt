@@ -1,0 +1,333 @@
+GitHub deployment 6653852657, delivery 4f4e01b0-b89b-11f1-849c-bde6cac40c3d
+Obtained jenkins/Jenkinsfile from git https://github.com/Sayandip-Jana-1018/SplitX.git
+[Pipeline] Start of Pipeline
+[Pipeline] podTemplate
+[Pipeline] {
+[Pipeline] node
+Created Pod: kubernetes jenkins/splitx-deploy-1-d1xqp-tjn05-sqhnt
+[PodInfo] jenkins/splitx-deploy-1-d1xqp-tjn05-sqhnt
+	Container [jnlp] waiting [ContainerCreating] No message
+	Container [tools] waiting [ContainerCreating] No message
+	Pod [Pending][ContainersNotReady] containers with unready status: [tools jnlp]
+Agent splitx-deploy-1-d1xqp-tjn05-sqhnt is provisioned from template splitx-deploy_1-d1xqp-tjn05
+---
+apiVersion: "v1"
+kind: "Pod"
+metadata:
+  annotations:
+    kubernetes.jenkins.io/last-refresh: "1790311275494"
+    buildUrl: "http://jenkins.jenkins.svc.cluster.local:8080/job/splitx-deploy/1/"
+    runUrl: "job/splitx-deploy/1/"
+  labels:
+    app.kubernetes.io/name: "splitx-deployer"
+    jenkins/jenkins-jenkins-agent: "true"
+    jenkins/label-digest: "2f1bf3093df98e9e4bc3017322a9d5c729fbf081"
+    jenkins/label: "splitx-deploy_1-d1xqp"
+    kubernetes.jenkins.io/controller: "http___jenkins_jenkins_svc_cluster_local_8080x"
+  name: "splitx-deploy-1-d1xqp-tjn05-sqhnt"
+  namespace: "jenkins"
+spec:
+  containers:
+  - args:
+    - "infinity"
+    command:
+    - "sleep"
+    env:
+    - name: "PATH"
+      value: "/tools/kubectl/bin:/tools/cosign/ko-app:/usr/local/bin:/usr/bin:/bin"
+    - name: "HOME"
+      value: "/home/jenkins/agent"
+    image: "node:24.21.0-alpine3.24@sha256:be80f76cf40ec8e42b9bec49f60a55e0660f30af58d3e5a25530785b30ea67e2"
+    name: "tools"
+    resources:
+      limits:
+        memory: "512Mi"
+      requests:
+        cpu: "100m"
+        memory: "256Mi"
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - "ALL"
+      readOnlyRootFilesystem: true
+      runAsNonRoot: true
+      seccompProfile:
+        type: "RuntimeDefault"
+    volumeMounts:
+    - mountPath: "/tools/kubectl"
+      name: "kubectl"
+      readOnly: true
+    - mountPath: "/tools/cosign"
+      name: "cosign"
+      readOnly: true
+    - mountPath: "/tmp"
+      name: "tmp"
+    - mountPath: "/home/jenkins/agent"
+      name: "workspace-volume"
+      readOnly: false
+    workingDir: "/home/jenkins/agent"
+  - args:
+    - "********"
+    - "splitx-deploy-1-d1xqp-tjn05-sqhnt"
+    env:
+    - name: "JENKINS_SECRET"
+      value: "********"
+    - name: "JENKINS_AGENT_NAME"
+      value: "splitx-deploy-1-d1xqp-tjn05-sqhnt"
+    - name: "JENKINS_WEB_SOCKET"
+      value: "true"
+    - name: "REMOTING_OPTS"
+      value: "-noReconnectAfter 1d"
+    - name: "JENKINS_NAME"
+      value: "splitx-deploy-1-d1xqp-tjn05-sqhnt"
+    - name: "JENKINS_AGENT_WORKDIR"
+      value: "/home/jenkins/agent"
+    - name: "JENKINS_URL"
+      value: "http://jenkins.jenkins.svc.cluster.local:8080/"
+    image: "jenkins/inbound-agent:3385.vf1123fb_515da_-1"
+    imagePullPolicy: "IfNotPresent"
+    name: "jnlp"
+    resources:
+      limits:
+        memory: "512Mi"
+      requests:
+        memory: "256Mi"
+        cpu: "100m"
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - "ALL"
+      runAsNonRoot: true
+      seccompProfile:
+        type: "RuntimeDefault"
+    tty: false
+    volumeMounts:
+    - mountPath: "/home/jenkins/agent"
+      name: "workspace-volume"
+      readOnly: false
+    workingDir: "/home/jenkins/agent"
+  nodeSelector:
+    kubernetes.io/os: "linux"
+  restartPolicy: "Never"
+  securityContext:
+    runAsGroup: 1000
+    runAsNonRoot: true
+    runAsUser: 1000
+    seccompProfile:
+      type: "RuntimeDefault"
+  serviceAccountName: "jenkins-deployer"
+  volumes:
+  - emptyDir: {}
+    name: "tmp"
+  - image:
+      pullPolicy: "IfNotPresent"
+      reference: "registry.k8s.io/kubectl:v1.35.0@sha256:0bb95b2a450875fc8ceaea2f9987a99fe27c228846e2e00b93b65ebb0d59034e"
+    name: "kubectl"
+  - image:
+      pullPolicy: "IfNotPresent"
+      reference: "ghcr.io/sigstore/cosign/cosign:v3.1.3@sha256:9e5c2f2edc34351160407ca3416c61855bdf9403c3c5936e0f0be7fc261611b8"
+    name: "cosign"
+  - emptyDir:
+      medium: ""
+    name: "workspace-volume"
+
+Running on splitx-deploy-1-d1xqp-tjn05-sqhnt in /home/jenkins/agent/workspace/splitx-deploy
+[Pipeline] {
+[Pipeline] container
+[Pipeline] {
+[Pipeline] timeout
+Timeout set to expire in 25 min
+[Pipeline] {
+[Pipeline] stage
+[Pipeline] { (Request)
+[Pipeline] container
+[Pipeline] {
+[Pipeline] dir
+Running in /home/jenkins/agent/workspace/splitx-deploy/pipeline
+[Pipeline] {
+[Pipeline] checkout
+The recommended git tool is: git
+No credentials specified
+Warning: JENKINS-30600: special launcher org.csanchez.jenkins.plugins.kubernetes.pipeline.ContainerExecDecorator$1@2f6f51c2; decorates org.csanchez.jenkins.plugins.kubernetes.pipeline.ContainerExecDecorator$1@47c7e984; decorates RemoteLauncher[hudson.remoting.Channel@211db04:splitx-deploy-1-d1xqp-tjn05-sqhnt] will be ignored (a typical symptom is the Git executable not being run inside a designated container)
+Cloning the remote Git repository
+Cloning repository https://github.com/Sayandip-Jana-1018/SplitX.git
+ > git init /home/jenkins/agent/workspace/splitx-deploy/pipeline # timeout=10
+Fetching upstream changes from https://github.com/Sayandip-Jana-1018/SplitX.git
+ > git --version # timeout=10
+ > git --version # 'git version 2.47.3'
+ > git fetch --tags --force --progress -- https://github.com/Sayandip-Jana-1018/SplitX.git +refs/heads/*:refs/remotes/origin/* # timeout=10
+Avoid second fetch
+Checking out Revision e66a699d02295d32924802867288d1ec36ac9028 (refs/remotes/origin/main)
+ > git config remote.origin.url https://github.com/Sayandip-Jana-1018/SplitX.git # timeout=10
+ > git config --add remote.origin.fetch +refs/heads/*:refs/remotes/origin/* # timeout=10
+ > git rev-parse refs/remotes/origin/main^{commit} # timeout=10
+ > git config core.sparsecheckout # timeout=10
+ > git checkout -f e66a699d02295d32924802867288d1ec36ac9028 # timeout=10
+Commit message: "feat(verify): k8s:verify and cd:verify check EKS through CloudFront (D-103)"
+First time build. Skipping changelog.
+[Pipeline] }
+[Pipeline] // dir
+[Pipeline] }
+[Pipeline] // container
+[Pipeline] withCredentials
+Masking supported pattern matches of $GITHUB_TOKEN
+[Pipeline] {
+[Pipeline] script
+[Pipeline] {
+[Pipeline] sh
++ node pipeline/jenkins/deploy.mjs request
+    deployment 6653852657 of e66a699d0229 to "kind" is the newest, and matches GitHub's record
+    reported to GitHub deployment 6653852657: in_progress
+[Pipeline] }
+[Pipeline] // script
+[Pipeline] }
+[Pipeline] // withCredentials
+[Pipeline] }
+[Pipeline] // stage
+[Pipeline] stage
+[Pipeline] { (Verify)
+[Pipeline] sh
++ node pipeline/jenkins/deploy.mjs verify
+    signed by https://github.com/Sayandip-Jana-1018/SplitX/.github/workflows/ci.yml@refs/heads/main at commit e66a699d0229; cosign checked:
+      - The cosign claims were validated
+      - Existence of the claims in the transparency log was verified offline
+      - The code-signing certificate was verified using trusted certificate authority certificates
+[Pipeline] }
+[Pipeline] // stage
+[Pipeline] stage
+[Pipeline] { (Deploy)
+[Pipeline] container
+[Pipeline] {
+[Pipeline] dir
+Running in /home/jenkins/agent/workspace/splitx-deploy/release
+[Pipeline] {
+[Pipeline] checkout
+The recommended git tool is: git
+No credentials specified
+Warning: JENKINS-30600: special launcher org.csanchez.jenkins.plugins.kubernetes.pipeline.ContainerExecDecorator$1@5fb695a; decorates org.csanchez.jenkins.plugins.kubernetes.pipeline.ContainerExecDecorator$1@7b44731a; decorates RemoteLauncher[hudson.remoting.Channel@211db04:splitx-deploy-1-d1xqp-tjn05-sqhnt] will be ignored (a typical symptom is the Git executable not being run inside a designated container)
+Cloning the remote Git repository
+Cloning repository https://github.com/Sayandip-Jana-1018/SplitX.git
+ > git init /home/jenkins/agent/workspace/splitx-deploy/release # timeout=10
+Fetching upstream changes from https://github.com/Sayandip-Jana-1018/SplitX.git
+ > git --version # timeout=10
+ > git --version # 'git version 2.47.3'
+ > git fetch --tags --force --progress -- https://github.com/Sayandip-Jana-1018/SplitX.git +refs/heads/*:refs/remotes/origin/* # timeout=10
+Avoid second fetch
+Checking out Revision e66a699d02295d32924802867288d1ec36ac9028 (detached)
+Commit message: "feat(verify): k8s:verify and cd:verify check EKS through CloudFront (D-103)"
+[Pipeline] }
+[Pipeline] // dir
+[Pipeline] }
+[Pipeline] // container
+[Pipeline] sh
+ > git config remote.origin.url https://github.com/Sayandip-Jana-1018/SplitX.git # timeout=10
+ > git config --add remote.origin.fetch +refs/heads/*:refs/remotes/origin/* # timeout=10
+ > git rev-parse e66a699d02295d32924802867288d1ec36ac9028^{commit} # timeout=10
+ > git config core.sparsecheckout # timeout=10
+ > git checkout -f e66a699d02295d32924802867288d1ec36ac9028 # timeout=10
++ node pipeline/jenkins/deploy.mjs deploy
+    running now: revision 1, splitx:local
+    job.batch "splitx-schema-init" deleted from splitx namespace
+    namespace/splitx unchanged
+    serviceaccount/release-scan unchanged
+    serviceaccount/splitx unchanged
+    role.rbac.authorization.k8s.io/release-scan unchanged
+    rolebinding.rbac.authorization.k8s.io/release-scan unchanged
+    configmap/splitx-config-46fhtgdd9b unchanged
+    configmap/splitx-schema-7k625k75t8 unchanged
+    service/splitx unchanged
+    service/splitx-postgres unchanged
+    service/splitx-redis unchanged
+    deployment.apps/splitx configured
+    deployment.apps/splitx-redis unchanged
+    statefulset.apps/splitx-postgres configured
+    cronjob.batch/release-scan unchanged
+    poddisruptionbudget.policy/splitx configured
+    horizontalpodautoscaler.autoscaling/splitx unchanged
+    job.batch/splitx-schema-init created
+    prometheusrule.monitoring.coreos.com/splitx unchanged
+    servicemonitor.monitoring.coreos.com/splitx unchanged
+    ingress.networking.k8s.io/splitx unchanged
+    ingress.networking.k8s.io/splitx-internal unchanged
+    networkpolicy.networking.k8s.io/default-deny-ingress unchanged
+    networkpolicy.networking.k8s.io/splitx unchanged
+    networkpolicy.networking.k8s.io/splitx-postgres unchanged
+    networkpolicy.networking.k8s.io/splitx-redis unchanged
+    the application now runs ghcr.io/sayandip-jana-1018/splitx@sha256:9f0924f253ba99026a5928fba8d4135f49b1cff3affac9e0c56883eed536559a
+[Pipeline] }
+[Pipeline] // stage
+[Pipeline] stage
+[Pipeline] { (Roll out)
+[Pipeline] sh
++ node pipeline/jenkins/deploy.mjs wait
+    partitioned roll out complete: 1 new pods have been updated...
+    deployment "splitx-redis" successfully rolled out
+    job.batch/splitx-schema-init condition met
+    Waiting for deployment "splitx" rollout to finish: 1 out of 2 new replicas have been updated...
+    Waiting for deployment "splitx" rollout to finish: 1 out of 2 new replicas have been updated...
+    Waiting for deployment "splitx" rollout to finish: 1 old replicas are pending termination...
+    Waiting for deployment "splitx" rollout to finish: 1 old replicas are pending termination...
+    deployment "splitx" successfully rolled out
+[Pipeline] }
+[Pipeline] // stage
+[Pipeline] stage
+[Pipeline] { (Check)
+[Pipeline] sh
++ node pipeline/jenkins/deploy.mjs check
+    2 ready pod(s), all running sha256:9f0924f253ba…: splitx-6b5684d5c6-dw59z, splitx-6b5684d5c6-tgpt8
+    the edge serves only the new pods; a 50-person plan came back from splitx-6b5684d5c6-tgpt8 with 49 transfers
+[Pipeline] }
+[Pipeline] // stage
+[Pipeline] stage
+[Pipeline] { (Archive)
+[Pipeline] withCredentials
+Masking supported pattern matches of $NEXUS_PASSWORD
+[Pipeline] {
+[Pipeline] catchError
+[Pipeline] {
+[Pipeline] sh
++ node pipeline/jenkins/deploy.mjs archive
+    cosign verified the SBOM and the vulnerability report, both attested by https://github.com/Sayandip-Jana-1018/SplitX/.github/workflows/ci.yml@refs/heads/main at e66a699d0229
+    sbom.cdx.json: stored
+    vuln.json: stored
+    deployment.json: stored
+    the evidence is in Nexus: splitx-evidence/e66a699d02295d32924802867288d1ec36ac9028/6653852657/
+[Pipeline] }
+[Pipeline] // catchError
+[Pipeline] }
+[Pipeline] // withCredentials
+[Pipeline] }
+[Pipeline] // stage
+[Pipeline] stage
+[Pipeline] { (Declarative: Post Actions)
+[Pipeline] script
+[Pipeline] {
+[Pipeline] fileExists
+[Pipeline] withCredentials
+Masking supported pattern matches of $GITHUB_TOKEN
+[Pipeline] {
+[Pipeline] withEnv
+[Pipeline] {
+[Pipeline] sh
++ node pipeline/jenkins/deploy.mjs report
+    reported to GitHub deployment 6653852657: success
+[Pipeline] }
+[Pipeline] // withEnv
+[Pipeline] }
+[Pipeline] // withCredentials
+[Pipeline] }
+[Pipeline] // script
+[Pipeline] }
+[Pipeline] // stage
+[Pipeline] }
+[Pipeline] // timeout
+[Pipeline] }
+[Pipeline] // container
+[Pipeline] }
+[Pipeline] // node
+[Pipeline] }
+[Pipeline] // podTemplate
+[Pipeline] End of Pipeline
+Finished: SUCCESS
