@@ -544,24 +544,21 @@ export default function ContactsPage() {
                                 className={styles.shareOption}
                                 onClick={() => window.open(`https://wa.me/${digits}?text=${encodeURIComponent(shareData.message)}`, '_blank')}
                             >
-                                <span className={styles.shareIcon}><MessageCircle size={18} /></span>
-                                WhatsApp
+                                <span className={styles.shareIcon}><MessageCircle size={18} /></span>WhatsApp
                             </button>
                             <button
                                 type="button"
                                 className={styles.shareOption}
                                 onClick={() => window.open(`sms:${digits}?body=${encodeURIComponent(shareData.message)}`, '_blank')}
                             >
-                                <span className={styles.shareIcon}><MessageSquare size={18} /></span>
-                                SMS
+                                <span className={styles.shareIcon}><MessageSquare size={18} /></span>SMS
                             </button>
                             <button
                                 type="button"
                                 className={styles.shareOption}
                                 onClick={() => window.open(`mailto:${shareFor?.email ?? ''}?subject=${encodeURIComponent('Join me on SplitX')}&body=${encodeURIComponent(shareData.message)}`, '_blank')}
                             >
-                                <span className={styles.shareIcon}><Mail size={18} /></span>
-                                Email
+                                <span className={styles.shareIcon}><Mail size={18} /></span>Email
                             </button>
                         </div>
                         <div className={styles.linkBox}>

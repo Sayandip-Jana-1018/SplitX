@@ -366,8 +366,7 @@ function BalanceCard({
 
             <div className={styles.heroTop}>
                 <span className={styles.heroLabel}>
-                    <span className={styles.heroDot} />
-                    Net balance
+                    <span className={styles.heroDot} />Net balance
                 </span>
                 <button
                     type="button"
@@ -392,15 +391,13 @@ function BalanceCard({
             <div className={styles.heroTiles}>
                 <Link href="/settlements" className={styles.heroTile}>
                     <span className={styles.heroTileLabel}>
-                        <span className={cn(styles.heroTileIcon, styles.heroTileOut)}><ArrowUpRight size={13} /></span>
-                        You owe
+                        <span className={cn(styles.heroTileIcon, styles.heroTileOut)}><ArrowUpRight size={13} /></span>You owe
                     </span>
                     <span className={styles.heroTileValue}>{formatCurrency(youOwe)}</span>
                 </Link>
                 <Link href="/settlements" className={styles.heroTile}>
                     <span className={styles.heroTileLabel}>
-                        <span className={cn(styles.heroTileIcon, styles.heroTileIn)}><ArrowDownLeft size={13} /></span>
-                        Owed to you
+                        <span className={cn(styles.heroTileIcon, styles.heroTileIn)}><ArrowDownLeft size={13} /></span>Owed to you
                     </span>
                     <span className={styles.heroTileValue}>{formatCurrency(owedToYou)}</span>
                 </Link>

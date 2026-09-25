@@ -24,7 +24,7 @@ export async function GET(
         const { groupId } = await params;
         const { searchParams } = new URL(req.url);
         const cursor = searchParams.get('cursor');
-        const limit = Math.min(parseInt(searchParams.get('limit') || '30'), 50);
+        const limit = Math.min(Number.parseInt(searchParams.get('limit') || '30', 10), 50);
 
         const user = await prisma.user.findUnique({ where: { email: session.user.email } });
         if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });

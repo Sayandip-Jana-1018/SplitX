@@ -405,7 +405,7 @@ function ExpenseSheetBody({
     const isCustom = (txn.splitType ?? 'equal') !== 'equal';
     const canEdit = Boolean(currentUserId && (currentUserId === txn.payer.id || currentUserId === txn.trip?.group.ownerId));
     const category = getCategoryConfig(txn.category);
-    const amountPaise = Math.round((parseFloat(amount) || 0) * 100);
+    const amountPaise = Math.round((Number.parseFloat(amount) || 0) * 100);
 
     const people = useMemo(() => {
         if (members.length > 0) {

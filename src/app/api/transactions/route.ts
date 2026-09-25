@@ -64,7 +64,7 @@ export async function GET(req: Request) {
 
         const { searchParams } = new URL(req.url);
         const tripId = searchParams.get('tripId');
-        const limit = parseInt(searchParams.get('limit') || '50', 10);
+        const limit = Number.parseInt(searchParams.get('limit') || '50', 10);
 
         // If tripId is provided, use it directly
         if (tripId) {

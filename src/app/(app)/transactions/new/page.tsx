@@ -108,6 +108,11 @@ function QuickAddContent() {
     const [selectedMembers, setSelectedMembers] = useState<Set<string>>(new Set());
     const [isCustomCategory, setIsCustomCategory] = useState(false);
     const [customCatValue, setCustomCatValue] = useState('');
+    // The typed category's field takes the focus when the person asks for it.
+    const customCategoryRef = useRef<HTMLInputElement>(null);
+    useEffect(() => {
+        if (isCustomCategory) customCategoryRef.current?.focus();
+    }, [isCustomCategory]);
     const [splitType, setSplitType] = useState<SplitMode>('equal');
     const [customSplits, setCustomSplits] = useState<{ userId: string; amount: number }[]>([]);
     const [expression, setExpression] = useState('');
@@ -133,8 +138,8 @@ function QuickAddContent() {
         for (const token of tokens) {
             const trimmed = token.trim();
             if (trimmed === '+' || trimmed === '-') { op = trimmed; continue; }
-            const num = parseFloat(trimmed);
-            if (isNaN(num)) continue;
+            const num = Number.parseFloat(trimmed);
+            if (Number.isNaN(num)) continue;
             total = op === '+' ? total + num : total - num;
         }
         return Math.max(0, Math.round(total * 100) / 100);
@@ -380,7 +385,7 @@ function QuickAddContent() {
     }, [activeTripId]);
 
     // ── Derived values ──
-    const numericAmount = parseFloat(amount) || 0;
+    const numericAmount = Number.parseFloat(amount) || 0;
     const totalPaise = toPaise(numericAmount);
     const selectedMemberIds = useMemo(
         () => members.filter((member) => selectedMembers.has(member.id)).map((member) => member.id),
@@ -991,8 +996,7 @@ function QuickAddContent() {
                                                 {isRemainder && <span className={styles.customHint}>Gets the remainder</span>}
                                             </span>
                                             <label className={cn(styles.customInputWrap, isRemainder && styles.customInputLocked)}>
-                                                ₹
-                                                <input
+                                                ₹<input
                                                     className={styles.customInput}
                                                     type="number"
                                                     inputMode="decimal"
@@ -1000,7 +1004,7 @@ function QuickAddContent() {
                                                     readOnly={isRemainder}
                                                     placeholder="0"
                                                     onChange={(event) => {
-                                                        const paise = Math.max(0, Math.round(parseFloat(event.target.value || '0') * 100));
+                                                        const paise = Math.max(0, Math.round(Number.parseFloat(event.target.value || '0') * 100));
                                                         setCustomSplits((prev) => {
                                                             const exists = prev.some((split) => split.userId === memberId);
                                                             return exists
@@ -1161,7 +1165,7 @@ function QuickAddContent() {
                             </span>
                             <input
                                 className={styles.titleInput}
-                                autoFocus
+                                ref={customCategoryRef}
                                 placeholder="e.g. Scuba diving"
                                 value={customCatValue}
                                 onChange={(event) => setCustomCatValue(event.target.value)}

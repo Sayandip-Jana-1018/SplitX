@@ -179,17 +179,17 @@ export default function SplitByItems({
                         position: 'relative',
                     }}
                 >
-                    {/* ── Handle Bar ── */}
-                    <div style={{
-                        display: 'flex', justifyContent: 'center', padding: '16px 0 8px',
-                        background: 'var(--bg-primary)', flexShrink: 0,
+                    {/* ── Handle Bar: a tap closes the sheet ── */}
+                    <button type="button" aria-label="Close" onClick={onClose} style={{
+                        display: 'flex', justifyContent: 'center', padding: '16px 0 8px', width: '100%',
+                        background: 'var(--bg-primary)', flexShrink: 0, border: 'none',
                         cursor: 'grab'
-                    }} onClick={onClose}>
-                        <div style={{
-                            width: 36, height: 4, borderRadius: 2,
+                    }}>
+                        <span style={{
+                            display: 'block', width: 36, height: 4, borderRadius: 2,
                             background: 'var(--border-tertiary)',
                         }} />
-                    </div>
+                    </button>
 
                     {/* ── Header ── */}
                     <div style={{
@@ -204,8 +204,7 @@ export default function SplitByItems({
                                     color: 'var(--fg-primary)', letterSpacing: '-0.02em',
                                     display: 'flex', alignItems: 'center', gap: 10,
                                 }}>
-                                    Split Items
-                                    <span style={{
+                                    Split Items<span style={{
                                         fontSize: '12px', fontWeight: 600, color: 'var(--accent-500)',
                                         background: 'rgba(var(--accent-500-rgb), 0.1)',
                                         padding: '2px 8px', borderRadius: '12px'
@@ -226,8 +225,7 @@ export default function SplitByItems({
                                         display: 'flex', alignItems: 'center', gap: 8, marginTop: 8,
                                         fontSize: '13px', color: 'var(--fg-tertiary)', fontWeight: 500,
                                     }}>
-                                        Group
-                                        <select
+                                        Group<select
                                             value={chosenGroupId ?? ''}
                                             onChange={(event) => chooseGroup(event.target.value)}
                                             style={{
@@ -397,7 +395,7 @@ export default function SplitByItems({
                                                             ) : (
                                                                 <>
                                                                     <span style={{ fontWeight: 500 }}>{formatCurrency(Math.round(item.price / assigned.size))}</span>
-                                                                    <span style={{ color: 'var(--fg-tertiary)' }}>per {assigned.size > 1 ? 'person' : 'person'}</span>
+                                                                    <span style={{ color: 'var(--fg-tertiary)' }}>per person</span>
                                                                 </>
                                                             )}
                                                         </div>

@@ -53,7 +53,7 @@ function expandIpv6(address: string): string[] {
         else headParts.splice(-1, 1, ...groups);
     }
     const missing = address.includes('::') ? 8 - headParts.length - tailParts.length : 0;
-    return [...headParts, ...Array(missing).fill('0'), ...tailParts].map((group) => group.padStart(4, '0').toLowerCase());
+    return [...headParts, ...Array.from({ length: missing }, () => '0'), ...tailParts].map((group) => group.padStart(4, '0').toLowerCase());
 }
 
 /**
@@ -66,7 +66,7 @@ export function ipBucket(address: string): string {
     const groups = expandIpv6(address);
     const mappedIpv4 = groups.slice(0, 5).every((g) => g === '0000') && groups[5] === 'ffff';
     if (mappedIpv4) {
-        const value = (parseInt(groups[6], 16) << 16) | parseInt(groups[7], 16);
+        const value = (Number.parseInt(groups[6], 16) << 16) | Number.parseInt(groups[7], 16);
         return [value >>> 24, (value >>> 16) & 255, (value >>> 8) & 255, value & 255].join('.');
     }
     return `${groups.slice(0, 4).join(':')}::/64`;

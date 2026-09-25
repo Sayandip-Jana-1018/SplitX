@@ -15,7 +15,7 @@ export function MemberAvatar({
 }) {
     const [imgErr, setImgErr] = useState(false);
     const initial = name.charAt(0).toUpperCase();
-    const hue = name.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0) % 360;
+    const hue = name.split('').reduce((acc, c) => acc + (c.codePointAt(0) ?? 0), 0) % 360;
 
     if (image && !imgErr) {
         return (

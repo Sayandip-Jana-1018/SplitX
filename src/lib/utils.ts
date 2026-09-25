@@ -75,7 +75,7 @@ export function getInitials(name: string): string {
 export function getAvatarHue(name: string): number {
     let hash = 0;
     for (let i = 0; i < name.length; i++) {
-        hash = name.charCodeAt(i) + ((hash << 5) - hash);
+        hash = (name.codePointAt(i) ?? 0) + ((hash << 5) - hash);
     }
     return Math.abs(hash) % 360;
 }

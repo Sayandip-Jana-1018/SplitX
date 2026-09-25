@@ -80,7 +80,7 @@ export default function Testimonials() {
                             <Quote size={18} />
                         </div>
                         <div className={styles.stars}>
-                            {Array(5).fill(0).map((_, j) => <Star key={j} size={14} fill="#fbbf24" stroke="#fbbf24" />)}
+                            {Array.from({ length: 5 }, (_, j) => <Star key={j} size={14} fill="#fbbf24" stroke="#fbbf24" />)}
                         </div>
                         <p className={styles.testimonialText}>&ldquo;{t.text}&rdquo;</p>
                         <div className={styles.testimonialAuthor}>

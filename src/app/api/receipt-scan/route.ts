@@ -209,8 +209,8 @@ export async function POST(req: Request) {
 
         // Normalize amounts to paise (multiply by 100)
         const toPaise = (val: unknown): number => {
-            const n = typeof val === 'number' ? val : parseFloat(String(val || '0'));
-            return isNaN(n) ? 0 : Math.round(n * 100);
+            const n = typeof val === 'number' ? val : Number.parseFloat(String(val || '0'));
+            return Number.isNaN(n) ? 0 : Math.round(n * 100);
         };
 
         // A discount the model listed as an item is dropped: the printed total already has it.

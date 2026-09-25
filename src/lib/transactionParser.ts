@@ -137,7 +137,7 @@ function extractAmount(text: string): number | null {
         const match = pattern.exec(text);
         if (match) {
             const cleaned = match[1].replace(/,/g, '');
-            const num = parseFloat(cleaned);
+            const num = Number.parseFloat(cleaned);
             if (num > 0 && num < 10_000_000) {
                 return Math.round(num * 100); // to paise
             }
@@ -201,13 +201,13 @@ export function extractLineItems(rawText: string): ReceiptLineItem[] {
                 // Patterns with qty: either (qty, name, price) or (name, qty, price)
                 const firstIsNum = /^\d+$/.test(match[1]);
                 if (firstIsNum) {
-                    quantity = parseInt(match[1]) || 1;
+                    quantity = Number.parseInt(match[1], 10) || 1;
                     name = match[2].trim();
                     priceStr = match[3];
                     confidence = 90;
                 } else {
                     name = match[1].trim();
-                    quantity = parseInt(match[2]) || 1;
+                    quantity = Number.parseInt(match[2], 10) || 1;
                     priceStr = match[3];
                     confidence = 85;
                 }
@@ -222,8 +222,8 @@ export function extractLineItems(rawText: string): ReceiptLineItem[] {
             name = name.replace(/\s+/g, ' ').replace(/[.…]+$/, '').trim();
             if (name.length < 2 || name.length > 40) continue;
 
-            const priceNum = parseFloat(priceStr.replace(/,/g, ''));
-            if (isNaN(priceNum) || priceNum <= 0 || priceNum > 1_000_000) continue;
+            const priceNum = Number.parseFloat(priceStr.replace(/,/g, ''));
+            if (Number.isNaN(priceNum) || priceNum <= 0 || priceNum > 1_000_000) continue;
 
             // Deduplicate
             const key = name.toLowerCase();

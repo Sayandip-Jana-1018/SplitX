@@ -158,8 +158,7 @@ export default function HeroSection() {
                         >
                             <span className={styles.heroFloatIcon}><TrendingUp size={15} /></span>
                             <span className={styles.heroFloatText}>
-                                <strong>+₹2,650</strong>
-                                owed to you
+                                <strong>+₹2,650</strong>owed to you
                             </span>
                         </motion.div>
 
@@ -172,8 +171,7 @@ export default function HeroSection() {
                         >
                             <span className={`${styles.heroFloatIcon} ${styles.heroFloatIconDone}`}><Check size={15} strokeWidth={3} /></span>
                             <span className={styles.heroFloatText}>
-                                <strong>Goa trip</strong>
-                                settled in 2 taps
+                                <strong>Goa trip</strong>settled in 2 taps
                             </span>
                         </motion.div>
 

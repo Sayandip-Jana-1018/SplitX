@@ -126,9 +126,14 @@ export function ReceiptViewer({ receipt, onClose }: { receipt: ReceiptView | nul
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    onClick={onClose}
+                    // Only a tap on the dim backdrop, or the empty stage around the photo, closes it;
+                    // the bar, the photo and the sheet keep their taps.
+                    onClick={(event) => {
+                        if ((event.target as HTMLElement).dataset.closesViewer !== undefined) onClose();
+                    }}
+                    data-closes-viewer
                 >
-                    <div className={styles.viewerBar} onClick={(event) => event.stopPropagation()}>
+                    <div className={styles.viewerBar}>
                         <a href={receipt.imageUrl} target="_blank" rel="noreferrer" className={styles.viewerButton} aria-label="Open original image">
                             <ExternalLink size={17} />
                         </a>
@@ -139,6 +144,7 @@ export function ReceiptViewer({ receipt, onClose }: { receipt: ReceiptView | nul
 
                     <motion.div
                         className={styles.viewerStage}
+                        data-closes-viewer
                         initial={{ scale: 0.94, opacity: 0 }}
                         animate={{ scale: 1, opacity: 1 }}
                         exit={{ scale: 0.96, opacity: 0 }}
@@ -149,13 +155,11 @@ export function ReceiptViewer({ receipt, onClose }: { receipt: ReceiptView | nul
                             src={receipt.imageUrl}
                             alt={receipt.title}
                             className={styles.viewerImage}
-                            onClick={(event) => event.stopPropagation()}
                         />
                     </motion.div>
 
                     <motion.div
                         className={styles.viewerSheet}
-                        onClick={(event) => event.stopPropagation()}
                         initial={{ y: 40, opacity: 0 }}
                         animate={{ y: 0, opacity: 1 }}
                         exit={{ y: 40, opacity: 0 }}

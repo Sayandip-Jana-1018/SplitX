@@ -251,7 +251,7 @@ function parseTranscriptLocally(transcript: string, memberNames: string[]): Pars
     let amount = 0;
     const amountMatch = transcript.match(/(\d+(?:\.\d{1,2})?)/);
     if (amountMatch) {
-        amount = parseFloat(amountMatch[1]);
+        amount = Number.parseFloat(amountMatch[1]);
     }
 
     // Extract mentioned member names

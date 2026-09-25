@@ -379,15 +379,13 @@ export default function SettlementsPage() {
                     <div className={styles.summary}>
                         <div className={cn(styles.summaryTile, youOwe > 0 && styles.summaryTileOwe)}>
                             <span className={styles.summaryHead}>
-                                <span className={cn(styles.summaryIcon, styles.iconOwe)}><ArrowUpRight size={15} /></span>
-                                You owe
+                                <span className={cn(styles.summaryIcon, styles.iconOwe)}><ArrowUpRight size={15} /></span>You owe
                             </span>
                             <span className={styles.summaryValue}>{formatCurrency(youOwe)}</span>
                         </div>
                         <div className={cn(styles.summaryTile, owedToYou > 0 && styles.summaryTileOwed)}>
                             <span className={styles.summaryHead}>
-                                <span className={cn(styles.summaryIcon, styles.iconOwed)}><ArrowDownLeft size={15} /></span>
-                                Owed to you
+                                <span className={cn(styles.summaryIcon, styles.iconOwed)}><ArrowDownLeft size={15} /></span>Owed to you
                             </span>
                             <span className={styles.summaryValue}>{formatCurrency(owedToYou)}</span>
                         </div>
@@ -532,22 +530,18 @@ export default function SettlementsPage() {
                     <StaggerItem>
                         <div className={styles.footerActions}>
                             <button type="button" className={styles.footerAction} onClick={() => exportAsText(exportPayload())}>
-                                <span className={styles.footerIcon}><Download size={17} /></span>
-                                Export
+                                <span className={styles.footerIcon}><Download size={17} /></span>Export
                             </button>
                             <button type="button" className={styles.footerAction} onClick={() => shareSettlement(exportPayload())}>
-                                <span className={styles.footerIcon}><Share2 size={17} /></span>
-                                Share
+                                <span className={styles.footerIcon}><Share2 size={17} /></span>Share
                             </button>
                             {isFeatureEnabled('balanceJourney') ? (
                                 <button type="button" className={styles.footerAction} onClick={() => router.push(`/groups/${activeGroup.groupId}/journey`)}>
-                                    <span className={styles.footerIcon}><GitBranch size={17} /></span>
-                                    Why?
+                                    <span className={styles.footerIcon}><GitBranch size={17} /></span>Why?
                                 </button>
                             ) : (
                                 <button type="button" className={styles.footerAction} onClick={() => router.push(`/groups/${activeGroup.groupId}`)}>
-                                    <span className={styles.footerIcon}><Users size={17} /></span>
-                                    Group
+                                    <span className={styles.footerIcon}><Users size={17} /></span>Group
                                 </button>
                             )}
                         </div>

@@ -31,7 +31,7 @@ export async function GET(
         const { groupId } = await params;
         const { searchParams } = new URL(req.url);
         const requestedUserId = searchParams.get('userId');
-        const limit = Math.min(Math.max(parseInt(searchParams.get('limit') || '120', 10) || 120, 1), 250);
+        const limit = Math.min(Math.max(Number.parseInt(searchParams.get('limit') || '120', 10) || 120, 1), 250);
         const beforeCreatedAt = searchParams.get('beforeCreatedAt');
         const beforeId = searchParams.get('beforeId');
         const filterKey = parseFilterKey(searchParams.get('filterKey'));
