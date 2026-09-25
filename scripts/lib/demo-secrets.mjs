@@ -13,10 +13,36 @@
  * into .env, by scripts/aws-secrets.mjs.
  */
 
+import { randomUUID } from 'node:crypto';
 import { renderAlertmanagerConfig } from './alertmanager-config.mjs';
 
 export const APP_SECRET = 'splitx/demo/app';
 export const PLATFORM_SECRET = 'splitx/demo/platform';
+
+/**
+ * The bodies of the two Secrets Manager calls that write a secret: a new value
+ * for one that exists, or the secret itself. A raw request, without an SDK,
+ * must carry its own ClientRequestToken, which becomes the new version's ID.
+ * The SDKs and the CLI make one. Without it the first real run was refused
+ * (2026-09-25: "You must provide a ClientRequestToken value").
+ * @param {string} name
+ * @param {Record<string, string>} contents
+ * @param {string} description
+ * @param {() => string} [token] a fresh UUID for each call
+ */
+export function secretWrites(name, contents, description, token = randomUUID) {
+    const SecretString = JSON.stringify(contents);
+    return {
+        put: { SecretId: name, SecretString, ClientRequestToken: token() },
+        create: {
+            Name: name,
+            Description: description,
+            SecretString,
+            ClientRequestToken: token(),
+            Tags: [{ Key: 'project', Value: 'splitx' }, { Key: 'stack', Value: 'platform' }],
+        },
+    };
+}
 
 /** Values the platform can't run without; aws:secrets stops when one is missing. */
 export const REQUIRED = [

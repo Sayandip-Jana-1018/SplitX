@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { renderAlertmanagerConfig } from '../../../scripts/lib/alertmanager-config.mjs';
 import { amzDates, signingKey, signRequest } from '../../../scripts/lib/aws-sigv4.mjs';
-import { REQUIRED, demoSecrets as build, withPool } from '../../../scripts/lib/demo-secrets.mjs';
+import { REQUIRED, demoSecrets as build, secretWrites, withPool } from '../../../scripts/lib/demo-secrets.mjs';
 
 const alertmanagerTemplate = readFileSync('monitoring/alertmanager/alertmanager.yaml', 'utf8');
 const demoSecrets = (env: Record<string, string | undefined>) => build(env, { alertmanagerTemplate });
@@ -76,6 +76,28 @@ describe('what goes into the demo secrets', () => {
             'JENKINS_GITHUB_TOKEN', 'JENKINS_TRIGGER_TOKEN', 'NEXUS_ADMIN_PASSWORD', 'NEXUS_JENKINS_PASSWORD', 'NEXUS_OPS_PASSWORD',
         ]);
         expect(platform!.JENKINS_GITHUB_TOKEN).toBe('');
+    });
+});
+
+describe('writing them to Secrets Manager', () => {
+    const UUID = /^[\da-f]{8}-[\da-f]{4}-4[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/;
+
+    it('gives each call its own ClientRequestToken, which a request made without an SDK must carry', () => {
+        // The first real run was refused without one (2026-09-25).
+        const { put, create } = secretWrites('splitx/demo/app', { A: '1' }, 'the app');
+        expect(put).toMatchObject({ SecretId: 'splitx/demo/app', SecretString: '{"A":"1"}' });
+        expect(create).toMatchObject({ Name: 'splitx/demo/app', Description: 'the app', SecretString: '{"A":"1"}' });
+        expect(put.ClientRequestToken).toMatch(UUID);
+        expect(create.ClientRequestToken).toMatch(UUID);
+        expect(create.ClientRequestToken).not.toBe(put.ClientRequestToken);
+        expect(create.Tags).toEqual([{ Key: 'project', Value: 'splitx' }, { Key: 'stack', Value: 'platform' }]);
+    });
+
+    it('is what npm run aws:secrets sends', () => {
+        const script = readFileSync('scripts/aws-secrets.mjs', 'utf8');
+        expect(script).toContain('secretWrites(name, contents, description)');
+        expect(script).toContain("secretsManager('PutSecretValue', requests.put)");
+        expect(script).toContain("secretsManager('CreateSecret', requests.create)");
     });
 });
 

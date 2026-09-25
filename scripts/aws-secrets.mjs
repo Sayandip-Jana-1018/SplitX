@@ -21,7 +21,7 @@ import { randomBytes } from 'node:crypto';
 import { appendFileSync, readFileSync } from 'node:fs';
 import { ALERT_KEYS } from './lib/alertmanager-config.mjs';
 import { signRequest } from './lib/aws-sigv4.mjs';
-import { APP_SECRET, PLATFORM_SECRET, demoSecrets } from './lib/demo-secrets.mjs';
+import { APP_SECRET, PLATFORM_SECRET, demoSecrets, secretWrites } from './lib/demo-secrets.mjs';
 
 const REGION = process.env.AWS_REGION || 'ap-south-1';
 const CHECK = process.argv.includes('--check');
@@ -94,16 +94,11 @@ async function secretsManager(action, payload) {
 const reason = ({ status, answer }) => `${answer.__type ?? 'HTTP ' + status}: ${answer.Message ?? answer.message ?? ''}`.trim();
 
 async function write(name, contents, description) {
-    const secretString = JSON.stringify(contents);
-    const put = await secretsManager('PutSecretValue', { SecretId: name, SecretString: secretString });
+    const requests = secretWrites(name, contents, description);
+    const put = await secretsManager('PutSecretValue', requests.put);
     if (put.ok) return 'updated';
     if (!String(put.answer.__type).endsWith('ResourceNotFoundException')) fail(`${name}: ${reason(put)}`);
-    const created = await secretsManager('CreateSecret', {
-        Name: name,
-        Description: description,
-        SecretString: secretString,
-        Tags: [{ Key: 'project', Value: 'splitx' }, { Key: 'stack', Value: 'platform' }],
-    });
+    const created = await secretsManager('CreateSecret', requests.create);
     if (!created.ok) fail(`${name}: ${reason(created)}`);
     return 'created';
 }
