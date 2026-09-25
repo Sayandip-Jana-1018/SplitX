@@ -1,0 +1,52 @@
+// knip finds files, dependencies and exports that nothing uses (plan Phase 1c).
+// CI's verify job fails on unused files and dependencies; see D-111.
+// It reads Next.js, Vitest, Playwright, ESLint and the workflows by itself. What
+// it can't see is listed here, each with the reason.
+{
+    "$schema": "https://unpkg.com/knip@6/schema.json",
+    "workspaces": {
+        ".": {
+            "entry": [
+                // Run by hand or by a workflow, as `node scripts/<name>.mjs`.
+                "scripts/*.mjs",
+                // Run by Jenkins' pipeline (Jenkinsfile) and by the relay's container.
+                "jenkins/**/*.mjs",
+                // Run by the Nexus provisioning Job (nexus/provision.yaml).
+                "nexus/*.mjs",
+                // Loaded by the browser, never imported.
+                "public/sw.js"
+            ],
+            "ignore": [
+                // k6 scripts: they run in k6, not in Node.
+                "load/**"
+            ],
+            "ignoreDependencies": [
+                // Read from its folder by scripts/tesseract-assets.mjs, not imported.
+                "@tesseract.js-data/eng",
+                // Named only in a JSDoc type of commitlint.config.js and postcss.config.mjs;
+                // each comes with the tool that reads the file.
+                "@commitlint/types",
+                "postcss-load-config"
+            ],
+            "ignoreBinaries": [
+                // Installed on the machine or the runner, not from npm. cosign is in
+                // Jenkins' agent image (jenkins/deploy.mjs verifies releases with it).
+                "gitleaks",
+                "kubectl",
+                "kind",
+                "cosign",
+                // macOS only: scripts/lib/power.mjs keeps a Mac awake during a cluster run.
+                "pmset"
+            ]
+        },
+        // ops-api and the traffic lab: their own package, image and dependencies (D-097).
+        "ops": {
+            "ignore": [
+                // The lab's k6 script, run by k6.
+                "lab/preview.js"
+            ],
+            // Copied into the ops image from Grafana's k6 image (ops/Dockerfile).
+            "ignoreBinaries": ["k6"]
+        }
+    }
+}

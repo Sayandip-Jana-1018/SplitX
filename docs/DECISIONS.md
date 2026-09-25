@@ -4566,9 +4566,15 @@ branch rule can hold them. The report, with each failure's screenshots and trace
   The network ceiling holds, since device cookies cost nothing to make.
 
 **Not covered, and why.**
-- **The emailed confirmation link.** Production has no email sender, so no confirmation is asked
-  for (`lib/emailVerification.ts`). When one is chosen, a Mailpit container in the job can catch
-  the email and the test can follow its link.
+- **The emailed confirmation link.** CI's job has no email sender, so it asks for no confirmation
+  (`lib/emailVerification.ts`), and the tests sign up without one. A Mailpit container in the job
+  could catch the email and let the test follow its link.
+  - **Corrected 2026-09-25:** this first said production had no sender either. It has had one
+    since D-070 (Gmail over SMTP, in `.env` and Vercel), so production does ask password accounts
+    to confirm.
+  - Checked that evening: production's forgot-password gives its normal answer for an address with
+    no account. Without a sender it answers 503. Nothing was written or sent.
+  - So the one flow production runs that these tests skip is the confirmation link.
 - **Split by items.** It follows the AI receipt scan, which needs a paid key. A real receipt on
   production checks it instead.
 - **UPI payments.** They open a payment app, which no browser test can follow; the cash path covers
@@ -4798,6 +4804,48 @@ Each keeps its reload, with the reason and a one-line disable.
 YAML file parsed, and the Kind overlays render Postgres 17.11. CI runs the database, integration and
 browser tests on the new packages. The push also starts a Kind run, since it touches `scripts/lib`
 and `k8s/`, which proves the platform on Postgres 17 with the new release.
+
+### D-111 · Nothing unused: knip in CI, and the dead code it found, for the user to approve
+**2026-09-25** · ✅ the gate runs in CI's `verify` job. 🚧 Deleting the dead code waits for the
+user's yes.
+
+**Why.** The clean-out on 09-25 (D-104) found 13 files by hand, left over from the redesign, and
+nothing stopped more from piling up. Plan Phase 1c asks for knip, clean in CI.
+
+**knip 6.38, configured in `knip.jsonc`.** It reads Next.js, Vitest, Playwright, ESLint, commitlint
+and the workflows by itself. Its first run flagged 16 files, a dependency, two packages and eight
+binaries, all of them things it couldn't see. Each is now listed with its reason:
+- **Entry points:** scripts run by hand or by a workflow, Jenkins' deploy script and its relay, the
+  Nexus provisioning Job, and the service worker.
+- **k6 scripts**, which run in k6: `load/` and the lab's `preview.js`.
+- **`ops/`**, a workspace of its own: its own package, image and dependencies.
+- **Not imports:** the tesseract language data, read by path; two packages named only in JSDoc
+  types.
+- **Binaries** from the machine or an image: gitleaks, kubectl, kind, cosign, pmset and k6.
+
+**The gate.** `npm run lint:unused` fails on any unused file, dependency, unlisted package or binary,
+or an unresolved import. Today it reports none. It passed without `ops/`' packages installed, as in
+CI.
+
+**Not gated yet: 32 unused exports and 14 unused exported types.** They were sorted by dropping the
+`export` and asking `tsc` what then went unused (then restored):
+- **24 are used inside their own file.** Only the keyword goes.
+- **22 are used nowhere: dead code.**
+  - `upi.ts`: `getAppSpecificLinks`, `openUpiPayment`, `generateReminder`, `sendWhatsAppReminder`.
+    Only `generateUpiLink` is used, by the payment route.
+  - `utils.ts`: `formatCurrencyShort`, `toRupees`, `debounce`, `getCategoryData`.
+  - `export.ts`: `exportAsCSV`, and `generateCSV`, which only it calls.
+  - `validators.ts`: `markSettlementSchema`, and the types `RegisterInput`, `LoginInput`,
+    `CreateGroupInput` and `CreateTripInput`.
+  - `settlementStatus.ts`: `SETTLEMENT_TERMINAL_STATUSES`.
+  - `uiEvents.ts`: `openSearch`.
+  - The UI kit: `Switch` and `Divider`.
+  - `Icons.tsx`: `CategoryIcon`.
+  - `useTheme.ts`: `ACCENT_COLORS`.
+  - `ThemeProvider.tsx`: the type `ColorPalette`.
+
+The user was promised the list before any code is deleted. With their yes, the 22 go, the 24 lose
+their `export`, and exports and types join the gate.
 
 ---
 
