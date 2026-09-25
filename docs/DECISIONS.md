@@ -4285,7 +4285,30 @@ Before the demo, every tool shows green, or a red item says what to fix.
   - It is self-contained, and follows the system's light or dark theme. At phone width its timeline
     stacks.
 
-**Still to come in this phase:** the showcase README, rewritten last.
+**The README, rewritten last** (plan Phase 9). The old one still counted 768 tests. It described a
+Terraform phase with ECR and IRSA, and listed features that later decisions changed (D-063, D-076).
+- **Centred**, with the app's screenshots, and a commented place for `/ops` screenshots from the
+  rehearsal. Screenshots of the local stand-in's readings would not be real, so none are used.
+- **Live badges:** CI, CodeQL, the Kind end-to-end run, SonarQube Cloud's gate, and Vercel's newest
+  Production deployment. The release's signature is a static badge that links to the `cosign verify`
+  command anyone can run, with the identity the admission policy checks.
+- **Seven colour-coded Mermaid diagrams:**
+  1. the platform;
+  2. a merge to a running pod;
+  3. the supply chain;
+  4. the AWS layout;
+  5. CloudFormation against Terraform;
+  6. observability;
+  7. the settlement engine.
+
+  Each was rendered with Mermaid 11 before committing.
+- **A table of every tool**, what it does here, where it lives, and what proves it. Then the
+  evidence, the synopsis against what was built, the app, how to run it, and a map of the
+  repository.
+- **Every number in it is from a run or a decision.** For example, run 8's 2,391 requests without
+  one lost, and D-023's 1,818 payments.
+- **EKS is described as ready, not as proven.** Its evidence is the rehearsal's `eks-verify`
+  artifact, when the rehearsal has run.
 
 ---
 
