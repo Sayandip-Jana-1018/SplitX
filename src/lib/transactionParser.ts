@@ -96,7 +96,42 @@ const SKIP_KEYWORDS = [
     'amount due', 'amount paid', 'payment', 'bill amount',
 ];
 
+// ── Receipt totals ──
+// A printed bill's bottom line, often with no rupee sign: "TOTAL 300.00",
+// "Grand Total: ₹315", "Net Payable Rs. 1,250.50". Only separators and a
+// currency may sit between the words and the number, so "Total Items: 3" and
+// "Total Tax 15.00" are not totals. Sub-totals don't count.
+const TOTAL_LINE = /\b(grand\s+total|net\s+(?:total|payable|amount)|amount\s+payable|total\s+(?:payable|due|amount)|bill\s+total|total)[\s:=-]*(?:(?:₹|Rs\.?|INR)\s*)?(\d[\d,]*(?:\.\d{1,2})?)/i;
+const SUBTOTAL = /\bsub[\s-]*total\b/i;
+/** Words that make a total the one to pay, over any other total line. */
+const FINAL_TOTAL = /grand|payable|net|due/i;
+
+function toPaise(amount: string): number | null {
+    const value = Number.parseFloat(amount.replaceAll(',', ''));
+    return value > 0 && value < 10_000_000 ? Math.round(value * 100) : null;
+}
+
+/**
+ * A receipt's total: the grand or payable total when it names one, otherwise
+ * its last total line. Taken before any other amount, since a bill's first
+ * rupee amount is usually its first item's price (D-108).
+ */
+function extractTotal(text: string): number | null {
+    let last: number | null = null;
+    for (const line of text.split(/\r?\n/)) {
+        if (SUBTOTAL.test(line)) continue;
+        const match = TOTAL_LINE.exec(line);
+        const paise = match ? toPaise(match[2]) : null;
+        if (paise === null) continue;
+        if (FINAL_TOTAL.test(match?.[1] ?? '')) return paise;
+        last = paise;
+    }
+    return last;
+}
+
 function extractAmount(text: string): number | null {
+    const total = extractTotal(text);
+    if (total !== null) return total;
     for (const pattern of AMOUNT_PATTERNS) {
         pattern.lastIndex = 0;
         const match = pattern.exec(text);

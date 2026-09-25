@@ -17,6 +17,44 @@ describe('parseTransactionText', () => {
     });
 });
 
+describe('a printed bill', () => {
+    // What Tesseract read from the browser tests' receipt, line for line (D-108).
+    const scanned = 'Masala Dosa 180.00\nFilter Coffee 120.00\nTOTAL 300.00\nUPI Ref 412345678901\nPaid to Sunrise Cafe\n';
+
+    it('reads its total, which has no rupee sign (it read none, and a lucky "Paid" on the next line hid that)', () => {
+        const bill = parseTransactionText(scanned);
+        expect(bill.amount).toBe(30_000);
+        expect(bill.merchant).toBe('Sunrise Cafe');
+        expect(parseTransactionText('TOTAL 300.00').amount).toBe(30_000);
+    });
+
+    it('takes the total, not the first price, when the items carry a rupee sign', () => {
+        expect(parseTransactionText('Idli ₹60.00\nVada ₹40.00\nTotal ₹100.00').amount).toBe(10_000);
+    });
+
+    it('takes the grand total over a sub-total and the taxes', () => {
+        expect(parseTransactionText('Sub Total 300.00\nCGST 2.5% 7.50\nSGST 2.5% 7.50\nGrand Total 315.00').amount).toBe(31_500);
+        expect(parseTransactionText('Subtotal: 300\nSub-Total 300\nTotal: 315').amount).toBe(31_500);
+        expect(parseTransactionText('Grand Total 315.00\nTotal Savings 20').amount).toBe(31_500);
+    });
+
+    it('reads a payable amount, with or without a currency or a colon', () => {
+        expect(parseTransactionText('Net Payable Rs. 1,250.50').amount).toBe(125_050);
+        expect(parseTransactionText('Amount payable: 499').amount).toBe(49_900);
+        expect(parseTransactionText('TOTAL INR 2,000').amount).toBe(200_000);
+        expect(parseTransactionText('Total Amount - 640').amount).toBe(64_000);
+    });
+
+    it('doesn\'t take a count or a tax for the total', () => {
+        expect(parseTransactionText('Total Items: 3\nTotal Tax 15.00\nTotal ₹315').amount).toBe(31_500);
+        expect(parseTransactionText('Total Qty 2').amount).toBeNull();
+    });
+
+    it('still never reads another currency as rupees', () => {
+        expect(parseTransactionText('Total USD 12.50').amount).toBeNull();
+    });
+});
+
 describe('detectCurrency', () => {
     it.each([
         ['€8.50 bezahlt', 'EUR'],
