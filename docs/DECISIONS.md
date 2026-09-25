@@ -4312,6 +4312,35 @@ Terraform phase with ECR and IRSA, and listed features that later decisions chan
 - **EKS is described as ready, not as proven.** Its evidence is the rehearsal's `eks-verify`
   artifact, when the rehearsal has run.
 
+**2026-09-25, after the README: the evidence, and a clean-out.**
+- **Run 8's reports replace the laptop's.** With the user's yes, `kind-e2e-36094752475` was
+  downloaded. Before committing, it was scanned for emails, tokens, keys, database URLs, smee
+  channels, account IDs and public IPs; there were none. Its reports are committed byte for byte:
+  - `docs/evidence/kubernetes.md` (36 passed, and the alert emails skipped because the run had no
+    mail account);
+  - `delivery.md` (16 passed);
+  - `ops.md` (24 passed);
+  - `docs/evidence/kind-e2e/`: memory, each pod's use, and Jenkins' two consoles.
+
+  The sampler's log, pid and phase files were left out.
+- **What nothing used was removed:**
+  - **Source.** An import graph built from Next.js's entry files and the tests, then checked with
+    grep, found 13 files, all left over from the 09-11 redesign: `AuthStory`, `GroupInvite`,
+    `GroupSelector`, `SplitSelector`, `AmountPad`, `AnimatedGradient`, `Badge`, `Card` (and
+    `card.module.css`), `Confetti`, `ScrollProgress`, `useViewportTier` and `recomputeBalances`.
+  - **Screenshots.** Seven of the April gallery were no longer shown after the README rewrite. All
+    of them show the UI from before the redesign, and one shows notes and a whiteboard, which the
+    app no longer has.
+  - **The rest was checked and is in use:**
+    - every script, `scripts/lib` module, overlay, component, composite action and test helper;
+    - every dependency. `babel-plugin-react-compiler` is only a dependency of `next`, since
+      `reactCompiler` is off.
+- **Retake on the rehearsal day, with the `/ops` screenshots:** the README's four remaining app
+  screenshots are also from April.
+- **The verifier cuts one detail short.** `cd:verify`'s "Jenkins verified that signature" row ends
+  at "cosign checked:". `deploy.mjs` prints the checks on the lines after it, and the verifier keeps
+  only the first line. Fixing it touches `scripts/`, so its push starts a Kind end-to-end run.
+
 ---
 
 ## Open problems
