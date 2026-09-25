@@ -3929,6 +3929,20 @@ Memory peaked at 8.0 GB in use, 6.6 GB of it anonymous.
   - The autoscaler went from 2 pods to 10.
 - **Memory** peaked at 8.0 GB in use, 6.6 GB of it anonymous.
 
+**Run 9 (36099864599, on `20c9a28`, D-104's last fix) was green on every check.**
+- **Delivery:** 52 s. Jenkins reported "Deployed 20c9a28410a7 and checked through the edge;
+  evidence in Nexus".
+- **`k8s:verify`:** 36/36, with 1 skipped (email). While every pod was replaced, 2,124 requests in
+  8.8 s were all answered 200.
+- **`cd:verify --rollback`:** 16/16.
+  - The signature row now names cosign's three checks: the claims validated, their transparency-log
+    entry verified, and the certificate verified against the trusted authorities.
+  - The broken release was rolled back after 186 s, with 651 of 651 requests answered 200.
+- **`ops-verify`:** 24/24.
+  - The lab served all 5,392 plans: 0 refused, 0 failed, p95 192 ms.
+  - The autoscaler went from 2 pods to 10, and the page's chart peaked at 60.2 requests a second.
+- **Memory** peaked at 8.2 GB in use, 6.8 GB of it anonymous.
+
 ### D-100 · What kind-e2e run 4 found: five causes, each read in the source of what was involved
 **2026-09-24** · ✅ fixed, unit-tested (1,302 → 1,311 tests) and proven by run 5, then again by run 6
 (D-099)
@@ -4350,7 +4364,7 @@ Terraform phase with ECR and IRSA, and listed features that later decisions chan
   - the certificate was verified against the trusted authorities.
 
   What makes the row pass is unchanged. A unit test reads run 8's own Jenkins console from
-  `docs/evidence/kind-e2e/`.
+  `docs/evidence/kind-e2e/`. Kind-e2e run 9 printed the whole row (D-099).
 - **The pre-flight's CloudFormation line no longer says "no drift found" of a stack nobody
   checked.** It names each stack CloudFormation hasn't checked for drift. The item stays green, as
   the stacks panel's "drift not checked yet" does: a stack that was never checked is complete, only
