@@ -1,20 +1,23 @@
 #!/usr/bin/env node
 /**
  * Proves the delivery path does what phase 6 claims, and writes what it
- * measured to docs/evidence/delivery.md.
+ * measured to docs/evidence/delivery.md (Kind) or docs/evidence/delivery-eks.md (EKS).
  *
  *   npm run cd:verify                 checks that change nothing
  *   npm run cd:verify -- --rollback   also deploys a release that cannot come
  *                                     up, and measures what users saw
+ *   npm run cd:verify -- --target eks [--rollback]
+ *                                     the same on the EKS platform (D-103)
  *
  * The chain: GitHub Actions builds, scans and signs every release on main and
  * announces it as a GitHub deployment (D-054). GitHub's webhook reaches
- * Jenkins through the relay (D-056). Jenkins checks the webhook's signature,
- * then the image's, then deploys the release's own manifests and rolls back
+ * Jenkins through the relay on Kind (D-056), and through CloudFront and the
+ * load balancer on EKS (D-093). Jenkins checks the webhook's signature, then
+ * the image's, then deploys the release's own manifests and rolls back
  * anything that does not come up healthy (D-055).
  *
  * Nothing here asserts anything about a file: every check asks the running
- * Jenkins, the running relay, the API server, or GitHub.
+ * Jenkins, the relay, the API server, the edge, or GitHub.
  */
 import { spawnSync } from 'node:child_process';
 import { createHmac } from 'node:crypto';
@@ -22,19 +25,41 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { request } from 'node:http';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { buildForDeployment } from './lib/platform-checks.mjs';
 import { powerSource } from './lib/power.mjs';
+import { clusterSecret, portForward, stopForwards, verifyTarget } from './lib/verify-target.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 // The Jenkins admin password, the webhook secret and the channel. Read, never printed.
 if (existsSync(join(root, '.env'))) process.loadEnvFile(join(root, '.env'));
-const CONTEXT = 'kind-splitx';
+let target;
+try {
+    target = verifyTarget(process.argv.slice(2), (path) => readFileSync(join(root, path), 'utf8'));
+} catch (error) {
+    console.error('x ' + error.message);
+    process.exit(1);
+}
+const EKS = target.name === 'eks';
+const CONTEXT = target.context;
 const NS = 'splitx';
 const JENKINS_HOST = 'jenkins.localhost';
 const JOB = 'splitx-deploy';
 const REPOSITORY = 'Sayandip-Jana-1018/SplitX';
 const IMAGE_REPOSITORY = 'ghcr.io/sayandip-jana-1018/splitx';
-const ENVIRONMENT = 'kind';
-const PROMETHEUS = '/api/v1/namespaces/monitoring/services/kube-prometheus-stack-prometheus:http-web/proxy';
+// The GitHub environment this cluster's Jenkins deploys, and the other one.
+const ENVIRONMENT = target.environment;
+const OTHER_ENVIRONMENT = target.otherEnvironment;
+const PROMETHEUS = { namespace: 'monitoring', service: 'kube-prometheus-stack-prometheus', portName: 'http-web', port: 9090 };
+
+// On Kind the owner's .env holds the platform's secrets; on EKS the External
+// Secrets Operator made them from Secrets Manager, and they are read from the
+// cluster, masked in a runner's log before anything could print them.
+const secret = (name, key, fromEnv) => (EKS ? clusterSecret(CONTEXT, 'jenkins', name, key) : process.env[fromEnv] ?? '');
+const ADMIN_PASSWORD = secret('jenkins-admin', 'jenkins-admin-password', 'JENKINS_ADMIN_PASSWORD');
+const WEBHOOK_SECRET = secret('jenkins-secrets', 'webhook-secret', 'GITHUB_WEBHOOK_SECRET');
+const TRIGGER_TOKEN = secret('jenkins-secrets', 'trigger-token', 'JENKINS_TRIGGER_TOKEN');
+// Deployments are read with any token that may: .env's, the workflow's, or Jenkins' own.
+const GITHUB_TOKEN = process.env.JENKINS_GITHUB_TOKEN || process.env.GITHUB_TOKEN || (EKS ? secret('jenkins-secrets', 'github-token', '') : '');
 
 const withRollback = process.argv.includes('--rollback');
 const checks = [];
@@ -55,26 +80,47 @@ function sh(file, argv) {
 }
 const kubectl = (argv) => sh('kubectl', ['--context', CONTEXT, ...argv]);
 const json = (argv) => JSON.parse(kubectl([...argv, '-o', 'json']).stdout || '{}');
-const promQuery = (expr) => {
+
+// Neither Jenkins' UI nor Prometheus is published on EKS: both are reached
+// through `kubectl port-forward`. On Kind, Jenkins answers on ingress-nginx and
+// Prometheus through the API server's service proxy.
+let prometheus = null;
+async function promQuery(expr) {
+    const path = '/api/v1/query?query=' + encodeURIComponent(expr);
     try {
-        return JSON.parse(kubectl(['get', '--raw', PROMETHEUS + '/api/v1/query?query=' + encodeURIComponent(expr)]).stdout);
+        if (!EKS) {
+            return JSON.parse(kubectl(['get', '--raw', '/api/v1/namespaces/' + PROMETHEUS.namespace + '/services/' + PROMETHEUS.service + ':' + PROMETHEUS.portName + '/proxy' + path]).stdout);
+        }
+        prometheus ??= await portForward({ context: CONTEXT, namespace: PROMETHEUS.namespace, service: PROMETHEUS.service, port: PROMETHEUS.port });
+        return await (await fetch(prometheus.url + path, { signal: AbortSignal.timeout(30_000) })).json();
     } catch {
         return null;
     }
-};
+}
+let jenkins = { port: 80, host: JENKINS_HOST };
+if (EKS) {
+    try {
+        const forwarded = await portForward({ context: CONTEXT, namespace: 'jenkins', service: 'jenkins', port: 8080 });
+        jenkins = { port: forwarded.port, host: '127.0.0.1:' + forwarded.port };
+    } catch (error) {
+        console.error('x Jenkins could not be reached: ' + error.message);
+        stopForwards();
+        process.exit(1);
+    }
+}
 
 // ── talking to Jenkins, as a person with the admin password would ──────────
-const auth = 'Basic ' + Buffer.from('admin:' + (process.env.JENKINS_ADMIN_PASSWORD ?? '')).toString('base64');
+const auth = 'Basic ' + Buffer.from('admin:' + ADMIN_PASSWORD).toString('base64');
 let cookie = '';
 function http(path, { method = 'GET', headers = {}, body, authenticate = true } = {}) {
     return new Promise((resolve) => {
         const req = request({
             host: '127.0.0.1',
-            port: 80,
+            port: jenkins.port,
             path: path.replace(/\[/g, '%5B').replace(/\]/g, '%5D'),
             method,
             headers: {
-                Host: JENKINS_HOST,
+                Host: jenkins.host,
                 ...(authenticate ? { Authorization: auth } : {}),
                 // Jenkins ties a crumb to the session that asked for it.
                 ...(cookie ? { cookie } : {}),
@@ -105,16 +151,34 @@ async function post(path, { headers = {}, body } = {}) {
 }
 
 // A delivery as GitHub would send it: compact JSON, signed over those bytes.
-const sign = (text, secret = process.env.GITHUB_WEBHOOK_SECRET ?? '') => 'sha256=' + createHmac('sha256', secret).update(Buffer.from(text, 'utf8')).digest('hex');
+const sign = (text, key = WEBHOOK_SECRET) => 'sha256=' + createHmac('sha256', key).update(Buffer.from(text, 'utf8')).digest('hex');
 const deliveryBody = (environment) => JSON.stringify({
     action: 'created',
     deployment: { id: 1, sha: 'a'.repeat(40), environment, payload: { image: IMAGE_REPOSITORY + '@sha256:' + 'b'.repeat(64) } },
 });
 const pingBody = JSON.stringify({ zen: 'Non-blocking is better than blocking.', hook_id: 1 });
-const invoke = (body, headers) => post('/generic-webhook-trigger/invoke', {
-    body,
-    headers: { 'content-type': 'application/json', ...headers },
-});
+/**
+ * Posts a delivery to Jenkins' webhook endpoint. On Kind, the way the relay
+ * does: to Jenkins itself, the token as a header. On EKS, the way GitHub's
+ * second webhook does (D-093): through CloudFront and the load balancer, the
+ * token in the address, and no Jenkins credentials at all.
+ */
+async function invoke(body, { token, ...headers }) {
+    if (!EKS) {
+        return post('/generic-webhook-trigger/invoke', { body, headers: { 'content-type': 'application/json', token, ...headers } });
+    }
+    try {
+        const response = await fetch(target.base + '/generic-webhook-trigger/invoke?token=' + encodeURIComponent(token), {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', 'user-agent': 'GitHub-Hookshot/delivery-verify', ...headers },
+            body,
+            signal: AbortSignal.timeout(30_000),
+        });
+        return { status: response.status, text: await response.text() };
+    } catch (error) {
+        return { status: 0, text: String(error) };
+    }
+}
 const triggered = (res) => {
     try {
         return Object.values(JSON.parse(res.text).jobs ?? {}).some((job) => job.triggered);
@@ -125,7 +189,7 @@ const triggered = (res) => {
 
 async function github(path) {
     const headers = { Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'splitx-delivery-verify' };
-    if (process.env.JENKINS_GITHUB_TOKEN) headers.Authorization = 'Bearer ' + process.env.JENKINS_GITHUB_TOKEN;
+    if (GITHUB_TOKEN) headers.Authorization = 'Bearer ' + GITHUB_TOKEN;
     const res = await fetch('https://api.github.com' + path, { headers, signal: AbortSignal.timeout(20_000) });
     if (!res.ok) {
         // Without a token GitHub allows 60 calls an hour per address, and a
@@ -142,14 +206,23 @@ async function github(path) {
     return res.json();
 }
 
-console.log('SplitX — delivery verification\n');
+console.log('SplitX — delivery verification (' + (EKS ? 'EKS, through ' + target.base : 'Kind') + ')\n');
+
+// The release this cluster's Jenkins was last asked to deploy.
+let deployment = null;
+let deploymentError = '';
+try {
+    [deployment] = await github('/repos/' + REPOSITORY + '/deployments?environment=' + ENVIRONMENT + '&per_page=1');
+} catch (error) {
+    deploymentError = error.message;
+}
 
 // ── 1. Jenkins, configured as code ────────────────────────────────────────
 heading('[1] Jenkins');
 const whoAmI = await jenkinsJson('/whoAmI/api/json');
 const anonymous = await http('/api/json', { authenticate: false });
 record(
-    'Jenkins answers the admin from .env, and nobody else',
+    'Jenkins answers the admin' + (EKS ? ' (its password from Secrets Manager)' : ' from .env') + ', and nobody else',
     whoAmI?.authenticated === true && whoAmI.name === 'admin' && anonymous.status === 403,
     'admin authenticated: ' + (whoAmI?.authenticated ?? false) + '; without credentials: HTTP ' + anonymous.status
 );
@@ -194,7 +267,9 @@ const expectedCredentials = ['github-webhook-secret', 'webhook-trigger-token', '
 record(
     'The credentials come from Kubernetes Secrets, by name only',
     expectedCredentials.every((id) => credentialIds.includes(id)),
-    credentialIds.join(', ') + ' — the values live in the Secrets k8s:up builds from .env'
+    credentialIds.join(', ') + (EKS
+        ? ' — the values live in the Secrets the External Secrets Operator makes from Secrets Manager'
+        : ' — the values live in the Secrets k8s:up builds from .env')
 );
 
 sections.push({
@@ -206,22 +281,24 @@ sections.push({
         '',
         '| | |',
         '|---|---|',
-        '| Configuration | `helm/platform/jenkins.values.yaml`: security realm, credentials, the webhook gate and the job itself (Job DSL) |',
+        '| Configuration | `helm/platform/jenkins.values.yaml`' + (EKS ? ' with `helm/platform/eks/jenkins.values.yaml` over it' : '')
+            + ': security realm, credentials, the webhook gate and the job itself (Job DSL) |',
         '| Plugins | ' + plugins.length + ', each pinned with its dependencies |',
         '| Job | `' + JOB + '`, its steps in `jenkins/Jenkinsfile` on main |',
         '| Builds run | in an agent pod as `jenkins-deployer`, with the official kubectl and cosign images mounted read-only |',
+        ...(EKS ? ['| Reached | its UI through `kubectl port-forward` only; the edge publishes `/generic-webhook-trigger/` and nothing else of it |'] : []),
     ].join('\n'),
 });
 
 // ── 2. The webhook gate ───────────────────────────────────────────────────
-heading('[2] What Jenkins accepts');
+heading('[2] What Jenkins accepts' + (EKS ? ', through the edge' : ''));
 const buildsBefore = (await jenkinsJson('/job/' + JOB + '/api/json?tree=builds[number]'))?.builds?.length ?? 0;
-const token = process.env.JENKINS_TRIGGER_TOKEN ?? '';
-const kindDelivery = deliveryBody(ENVIRONMENT);
+const token = TRIGGER_TOKEN;
+const ownDelivery = deliveryBody(ENVIRONMENT);
 const refused = [
-    ['no signature at all', await invoke(kindDelivery, { token, 'x-github-event': 'deployment' })],
-    ['signed with another secret', await invoke(kindDelivery, { token, 'x-github-event': 'deployment', 'x-hub-signature-256': sign(kindDelivery, 'not-the-secret') })],
-    ['changed after GitHub signed it', await invoke(kindDelivery, { token, 'x-github-event': 'deployment', 'x-hub-signature-256': sign(deliveryBody('aws')) })],
+    ['no signature at all', await invoke(ownDelivery, { token, 'x-github-event': 'deployment' })],
+    ['signed with another secret', await invoke(ownDelivery, { token, 'x-github-event': 'deployment', 'x-hub-signature-256': sign(ownDelivery, 'not-the-secret') })],
+    ['changed after GitHub signed it', await invoke(ownDelivery, { token, 'x-github-event': 'deployment', 'x-hub-signature-256': sign(deliveryBody(OTHER_ENVIRONMENT)) })],
 ];
 record(
     'A delivery GitHub did not sign is refused',
@@ -237,21 +314,25 @@ record(
 );
 
 const ping = await invoke(pingBody, { token, 'x-github-event': 'ping', 'x-hub-signature-256': sign(pingBody) });
-const otherEnvironment = deliveryBody('aws');
-const foreign = await invoke(otherEnvironment, { token, 'x-github-event': 'deployment', 'x-hub-signature-256': sign(otherEnvironment) });
+const otherDelivery = deliveryBody(OTHER_ENVIRONMENT);
+const foreign = await invoke(otherDelivery, { token, 'x-github-event': 'deployment', 'x-hub-signature-256': sign(otherDelivery) });
 const buildsAfter = (await jenkinsJson('/job/' + JOB + '/api/json?tree=builds[number]'))?.builds?.length ?? 0;
 record(
     'Signed events that are not a deployment for this cluster start nothing',
     ping.status === 200 && foreign.status === 200 && !triggered(ping) && !triggered(foreign) && buildsAfter === buildsBefore,
-    'a ping and a deployment for "aws" were accepted (HTTP 200) and started no build; the job still has ' + buildsAfter + ' build(s)'
+    'a ping and a deployment for "' + OTHER_ENVIRONMENT + '" were accepted (HTTP ' + ping.status + ', ' + foreign.status
+        + ') and started no build; the job still has ' + buildsAfter + ' build(s)'
 );
 
 sections.push({
     title: 'What Jenkins accepts',
     body: [
         'The job is started by GitHub\'s `deployment` webhook and nothing else. The Generic Webhook Trigger',
-        'verifies GitHub\'s `X-Hub-Signature-256` against the secret in `.env` before any job sees the delivery,',
-        'so the relay that carries it (D-056) is only a courier: it cannot forge or change one.',
+        'verifies GitHub\'s `X-Hub-Signature-256` against the webhook\'s secret before any job sees the delivery,',
+        EKS
+            ? 'so CloudFront and the load balancer that carry it are only couriers: they cannot forge or change one.'
+            : 'so the relay that carries it (D-056) is only a courier: it cannot forge or change one.',
+        ...(EKS ? ['Each delivery below went the way GitHub\'s do: to ' + target.base + '/generic-webhook-trigger/invoke, the token in the address.'] : []),
         '',
         '| Delivery | Answer |',
         '|---|---|',
@@ -260,92 +341,147 @@ sections.push({
         '| Changed after signing | HTTP 403, no build |',
         '| Signed, wrong endpoint token | HTTP 404, no build |',
         '| Signed `ping` | HTTP 200, no build (it is not a deployment) |',
-        '| Signed deployment for `aws` | HTTP 200, no build (this Jenkins deploys `' + ENVIRONMENT + '`) |',
+        '| Signed deployment for `' + OTHER_ENVIRONMENT + '` | HTTP 200, no build (this Jenkins deploys `' + ENVIRONMENT + '`) |',
     ].join('\n'),
 });
 
-// ── 3. The relay ──────────────────────────────────────────────────────────
-heading('[3] The relay');
-// Read from the relay itself: Prometheus scrapes every 30 s, so a sample
-// taken while the stream was being re-opened would say "lost" about a relay
-// that is already back. The alert has the 5 minutes it needs for that; this
-// check does not.
-const relayMetric = (name) => {
-    const metrics = kubectl(['exec', '-n', 'jenkins', 'deploy/webhook-relay', '--', 'wget', '-qO-', 'http://127.0.0.1:9090/metrics']).stdout;
-    const line = metrics.split('\n').find((l) => l.startsWith(name + ' ') || l.startsWith(name + '{'));
-    return Number(line?.split(' ').pop() ?? NaN);
-};
-const relayCounter = (result) => relayMetric('webhook_relay_deliveries_total{result="' + result + '"}');
-
-let relayConnected = relayMetric('webhook_relay_connected');
-// It reconnects on its own within seconds; only a stream that stays lost matters.
-for (let i = 0; i < 10 && relayConnected !== 1; i += 1) {
-    await sleep(3000);
-    relayConnected = relayMetric('webhook_relay_connected');
-}
-const relayPod = json(['get', 'pods', '-n', 'jenkins', '-l', 'app.kubernetes.io/name=webhook-relay']).items?.[0];
-const relayReady = relayPod?.status?.conditions?.some((c) => c.type === 'Ready' && c.status === 'True');
-// Prometheus must also have the series, or the alert that watches it never fires.
-const relayScraped = (promQuery('webhook_relay_connected{namespace="jenkins"}')?.data?.result ?? []).length > 0;
-record(
-    'The relay is holding the smee.io channel open',
-    relayConnected === 1 && Boolean(relayReady) && relayScraped,
-    'the relay reports connected, its pod is ' + (relayReady ? 'ready' : 'not ready')
-        + ', and Prometheus ' + (relayScraped ? 'scrapes it' : 'has no sample of it')
-        + '; it has re-opened the stream ' + relayMetric('webhook_relay_reconnects_total') + ' time(s) since it started'
-);
-const acceptedBefore = relayCounter('accepted');
-let delivered = false;
-if (process.env.SMEE_URL) {
-    // A signed ping, the way GitHub posts one. It must arrive at Jenkins and be
-    // accepted there; a ping starts no build.
-    await fetch(process.env.SMEE_URL, {
-        method: 'POST',
-        headers: {
-            'content-type': 'application/json',
-            'x-github-event': 'ping',
-            'x-github-delivery': 'delivery-verify-' + Date.now(),
-            'x-hub-signature-256': sign(pingBody),
-            'user-agent': 'GitHub-Hookshot/delivery-verify',
-        },
-        body: pingBody,
-    }).catch(() => null);
-    for (let i = 0; i < 20 && !delivered; i += 1) {
-        await sleep(1500);
-        delivered = relayCounter('accepted') > acceptedBefore;
+// ── 3. The way GitHub's deliveries arrive ─────────────────────────────────
+if (EKS) {
+    heading('[3] GitHub\'s way in, through the edge');
+    // GitHub's second webhook posts to CloudFront, which passes the path to the
+    // load balancer and on to Jenkins (jenkins/eks/ingress.yaml). No relay runs
+    // here, so a build GitHub's delivery started came that way and no other.
+    const relayRuns = (json(['get', 'deployments', '-n', 'jenkins']).items ?? []).some((d) => d.metadata.name === 'webhook-relay');
+    const builds = (await jenkinsJson('/job/' + JOB + '/api/json?tree=builds[number,result,actions[causes[shortDescription]]]'))?.builds ?? [];
+    const started = deployment ? buildForDeployment(builds, deployment.id) : null;
+    let reported = null;
+    try {
+        [reported] = deployment ? await github('/repos/' + REPOSITORY + '/deployments/' + deployment.id + '/statuses?per_page=1') : [];
+    } catch (error) {
+        deploymentError ||= error.message;
     }
-}
-record(
-    'A delivery posted to the channel arrives at Jenkins, signature intact',
-    delivered,
-    process.env.SMEE_URL
-        ? (delivered ? 'a signed ping went out to smee.io and Jenkins accepted it (the relay rebuilt the body and the signature still verified)' : 'the ping did not reach Jenkins within 30 s')
-        : '.env has no SMEE_URL'
-);
-const refusedTotal = relayCounter('refused');
-const unreachableTotal = relayCounter('unreachable');
+    let how;
+    if (!deployment) how = 'could not read GitHub\'s deployments: ' + deploymentError;
+    else if (!started) how = 'no build of ' + JOB + ' names deployment ' + deployment.id + ' and a GitHub delivery ID';
+    else {
+        how = 'deployment ' + deployment.id + ' (' + deployment.sha.slice(0, 12) + '): GitHub\'s delivery started build #' + started.number
+            + ', ' + started.result + '; GitHub shows ' + (reported ? reported.state + ', "' + reported.description + '"' : 'no status')
+            + (relayRuns ? '; a relay runs here too' : '; no relay runs here');
+    }
+    record(
+        'GitHub\'s own delivery reached Jenkins through CloudFront, and Jenkins reported back',
+        Boolean(started) && started.result === 'SUCCESS' && reported?.state === 'success' && !relayRuns,
+        how
+    );
 
-sections.push({
-    title: 'The relay',
-    body: [
-        'GitHub cannot reach a Jenkins on a laptop, so the repository\'s webhook posts to a smee.io channel and',
-        '`jenkins/relay/relay.mjs`, inside the cluster, replays each delivery to Jenkins with GitHub\'s own headers.',
-        'It never holds the webhook secret, so a delivery it invented would be refused like any other (above).',
-        'On AWS, GitHub calls Jenkins directly and the relay is not deployed.',
-        '',
-        '| | |',
-        '|---|---|',
-        '| Stream | ' + (relayConnected === 1 ? 'connected' : 'not connected') + ' |',
-        '| Times the stream was re-opened | ' + relayMetric('webhook_relay_reconnects_total') + ' |',
-        '| Deliveries accepted by Jenkins | ' + relayCounter('accepted') + ' |',
-        '| Refused by Jenkins | ' + refusedTotal + ' |',
-        '| Jenkins unreachable | ' + unreachableTotal + ' |',
-        '',
-        'smee.io keeps nothing for a listener that is away, so `WebhookRelayDisconnected` fires after five minutes',
-        'without the stream, and `WebhookDeliveryRefused` on anything Jenkins did not accept',
-        '(`jenkins/prometheusrule.yaml`, unit-tested in `npm run test:alerts`).',
-    ].join('\n'),
-});
+    // Only the webhook path of Jenkins is published: anything else of it,
+    // asked for at the edge, is the application's (a 404), never Jenkins'.
+    const elsewhere = [];
+    for (const path of ['/whoAmI/api/json', '/script', '/manage', '/job/' + JOB + '/build']) {
+        const response = await fetch(target.base + path, { redirect: 'manual', signal: AbortSignal.timeout(20_000) }).catch(() => null);
+        const text = response ? await response.text().catch(() => '') : '';
+        elsewhere.push({ path, status: response?.status ?? 0, jenkins: Boolean(response?.headers.get('x-jenkins')) || /hudson\.|jenkins\.model/i.test(text) });
+    }
+    record(
+        'Nothing of Jenkins but its webhook path answers through the edge',
+        elsewhere.every((probe) => probe.status > 0 && !probe.jenkins),
+        elsewhere.map((probe) => probe.path + ' ' + (probe.jenkins ? 'answered by JENKINS' : 'HTTP ' + probe.status + ', not Jenkins')).join('; ')
+    );
+    sections.push({
+        title: 'GitHub\'s way in',
+        body: [
+            'On AWS, GitHub calls Jenkins directly: its second webhook posts to CloudFront, which passes',
+            '`/generic-webhook-trigger/*` to the load balancer and on to Jenkins. Nothing else of Jenkins is published.',
+            '',
+            '| | |',
+            '|---|---|',
+            '| Delivery | ' + how + ' |',
+            ...elsewhere.map((probe) => '| `' + probe.path + '` at the edge | ' + (probe.jenkins ? '**Jenkins**' : 'HTTP ' + probe.status + ', the application') + ' |'),
+        ].join('\n'),
+    });
+} else {
+    heading('[3] The relay');
+    // Read from the relay itself: Prometheus scrapes every 30 s, so a sample
+    // taken while the stream was being re-opened would say "lost" about a relay
+    // that is already back. The alert has the 5 minutes it needs for that; this
+    // check does not.
+    const relayMetric = (name) => {
+        const metrics = kubectl(['exec', '-n', 'jenkins', 'deploy/webhook-relay', '--', 'wget', '-qO-', 'http://127.0.0.1:9090/metrics']).stdout;
+        const line = metrics.split('\n').find((l) => l.startsWith(name + ' ') || l.startsWith(name + '{'));
+        return Number(line?.split(' ').pop() ?? NaN);
+    };
+    const relayCounter = (result) => relayMetric('webhook_relay_deliveries_total{result="' + result + '"}');
+
+    let relayConnected = relayMetric('webhook_relay_connected');
+    // It reconnects on its own within seconds; only a stream that stays lost matters.
+    for (let i = 0; i < 10 && relayConnected !== 1; i += 1) {
+        await sleep(3000);
+        relayConnected = relayMetric('webhook_relay_connected');
+    }
+    const relayPod = json(['get', 'pods', '-n', 'jenkins', '-l', 'app.kubernetes.io/name=webhook-relay']).items?.[0];
+    const relayReady = relayPod?.status?.conditions?.some((c) => c.type === 'Ready' && c.status === 'True');
+    // Prometheus must also have the series, or the alert that watches it never fires.
+    const relayScraped = ((await promQuery('webhook_relay_connected{namespace="jenkins"}'))?.data?.result ?? []).length > 0;
+    record(
+        'The relay is holding the smee.io channel open',
+        relayConnected === 1 && Boolean(relayReady) && relayScraped,
+        'the relay reports connected, its pod is ' + (relayReady ? 'ready' : 'not ready')
+            + ', and Prometheus ' + (relayScraped ? 'scrapes it' : 'has no sample of it')
+            + '; it has re-opened the stream ' + relayMetric('webhook_relay_reconnects_total') + ' time(s) since it started'
+    );
+    const acceptedBefore = relayCounter('accepted');
+    let delivered = false;
+    if (process.env.SMEE_URL) {
+        // A signed ping, the way GitHub posts one. It must arrive at Jenkins and be
+        // accepted there; a ping starts no build.
+        await fetch(process.env.SMEE_URL, {
+            method: 'POST',
+            headers: {
+                'content-type': 'application/json',
+                'x-github-event': 'ping',
+                'x-github-delivery': 'delivery-verify-' + Date.now(),
+                'x-hub-signature-256': sign(pingBody),
+                'user-agent': 'GitHub-Hookshot/delivery-verify',
+            },
+            body: pingBody,
+        }).catch(() => null);
+        for (let i = 0; i < 20 && !delivered; i += 1) {
+            await sleep(1500);
+            delivered = relayCounter('accepted') > acceptedBefore;
+        }
+    }
+    record(
+        'A delivery posted to the channel arrives at Jenkins, signature intact',
+        delivered,
+        process.env.SMEE_URL
+            ? (delivered ? 'a signed ping went out to smee.io and Jenkins accepted it (the relay rebuilt the body and the signature still verified)' : 'the ping did not reach Jenkins within 30 s')
+            : '.env has no SMEE_URL'
+    );
+    const refusedTotal = relayCounter('refused');
+    const unreachableTotal = relayCounter('unreachable');
+
+    sections.push({
+        title: 'The relay',
+        body: [
+            'GitHub cannot reach a Jenkins on a laptop, so the repository\'s webhook posts to a smee.io channel and',
+            '`jenkins/relay/relay.mjs`, inside the cluster, replays each delivery to Jenkins with GitHub\'s own headers.',
+            'It never holds the webhook secret, so a delivery it invented would be refused like any other (above).',
+            'On AWS, GitHub calls Jenkins directly and the relay is not deployed.',
+            '',
+            '| | |',
+            '|---|---|',
+            '| Stream | ' + (relayConnected === 1 ? 'connected' : 'not connected') + ' |',
+            '| Times the stream was re-opened | ' + relayMetric('webhook_relay_reconnects_total') + ' |',
+            '| Deliveries accepted by Jenkins | ' + relayCounter('accepted') + ' |',
+            '| Refused by Jenkins | ' + refusedTotal + ' |',
+            '| Jenkins unreachable | ' + unreachableTotal + ' |',
+            '',
+            'smee.io keeps nothing for a listener that is away, so `WebhookRelayDisconnected` fires after five minutes',
+            'without the stream, and `WebhookDeliveryRefused` on anything Jenkins did not accept',
+            '(`jenkins/prometheusrule.yaml`, unit-tested in `npm run test:alerts`).',
+        ].join('\n'),
+    });
+}
 
 // ── 4. What a deploy build may do ─────────────────────────────────────────
 heading('[4] The deploy account');
@@ -387,13 +523,6 @@ sections.push({
 
 // ── 5. The release that is running ────────────────────────────────────────
 heading('[5] The release running now');
-let deployment = null;
-let deploymentError = '';
-try {
-    [deployment] = await github('/repos/' + REPOSITORY + '/deployments?environment=' + ENVIRONMENT + '&per_page=1');
-} catch (error) {
-    deploymentError = error.message;
-}
 const digest = deployment?.payload?.image?.split('@')[1] ?? '';
 const appPods = json(['get', 'pods', '-n', NS, '-l', 'app.kubernetes.io/name=splitx']).items
     .filter((pod) => !pod.metadata.deletionTimestamp && pod.status.conditions?.some((c) => c.type === 'Ready' && c.status === 'True'));
@@ -532,6 +661,27 @@ sections.push({
     ].join('\n'),
 });
 
+// What a visitor sees: on Kind, ingress-nginx on this machine; on EKS, the edge.
+function visit() {
+    if (EKS) {
+        return fetch(target.base + '/api/health/live', { signal: AbortSignal.timeout(5000) })
+            .then(async (res) => {
+                await res.arrayBuffer();
+                return res.status;
+            })
+            .catch(() => 0);
+    }
+    return new Promise((resolve) => {
+        const req = request({ host: '127.0.0.1', port: 80, path: '/api/health/live', headers: { Host: 'localhost' }, timeout: 5000 }, (res) => {
+            res.resume();
+            res.on('end', () => resolve(res.statusCode));
+        });
+        req.on('timeout', () => { req.destroy(); resolve(0); });
+        req.on('error', () => resolve(0));
+        req.end();
+    });
+}
+
 // ── 7. A release that cannot come up (--rollback) ─────────────────────────
 let rollback = null;
 if (withRollback) {
@@ -563,16 +713,7 @@ if (withRollback) {
         let running = true;
         const traffic = (async () => {
             while (running) {
-                const answer = await new Promise((resolve) => {
-                    const req = request({ host: '127.0.0.1', port: 80, path: '/api/health/live', headers: { Host: 'localhost' }, timeout: 5000 }, (res) => {
-                        res.resume();
-                        res.on('end', () => resolve(res.statusCode));
-                    });
-                    req.on('timeout', () => { req.destroy(); resolve(0); });
-                    req.on('error', () => resolve(0));
-                    req.end();
-                });
-                seen.push(answer);
+                seen.push(await visit());
                 await sleep(300);
             }
         })();
@@ -608,7 +749,7 @@ if (withRollback) {
         const counted = Date.now();
         let failedBuilds = null;
         while (build?.result === 'FAILURE' && failedBuilds === null && Date.now() - counted < 150_000) {
-            const value = promQuery('sum(default_jenkins_builds_failed_build_count_total{jenkins_job="' + JOB + '"})')?.data?.result?.[0]?.value?.[1];
+            const value = (await promQuery('sum(default_jenkins_builds_failed_build_count_total{jenkins_job="' + JOB + '"})'))?.data?.result?.[0]?.value?.[1];
             if (Number(value) >= 1) failedBuilds = Number(value);
             else await sleep(10_000);
         }
@@ -636,7 +777,8 @@ if (rollback) {
             '| What the rollout did | `maxUnavailable: 0`, so the new pod waited for readiness and the old pods kept serving |',
             '| What Jenkins did | waited ' + '150 s' + ' for the rollout, then rolled the deployment back to the revision it had recorded before applying |',
             '| Running after | `' + rollback.imageAfter.split('@').pop().slice(0, 19) + '…`, the image that ran before |',
-            '| What visitors saw | ' + rollback.served + ' of ' + (rollback.served + rollback.failed) + ' requests answered 200 during the failed release and its rollback |',
+            '| What visitors saw | ' + rollback.served + ' of ' + (rollback.served + rollback.failed) + ' requests ' + (EKS ? 'through CloudFront ' : '')
+                + 'answered 200 during the failed release and its rollback |',
             '',
             'The same path runs when a release is genuinely broken: the build fails and the cluster keeps the release',
             'it had. GitHub\'s own deployment is marked failed too, once `.env` holds a token that may write',
@@ -647,10 +789,10 @@ if (rollback) {
 
 // ── the report ────────────────────────────────────────────────────────────
 const report = [
-    '# Delivery — what happens between a merge and a running pod',
+    EKS ? '# Delivery on EKS — what happens between a merge and a running pod' : '# Delivery — what happens between a merge and a running pod',
     '',
-    'Written by `scripts/delivery-verify.mjs` (`npm run cd:verify`) on ' + new Date().toISOString().slice(0, 10) + '.',
-    'Every line is an answer from the running Jenkins, the running relay, the API server or GitHub.',
+    'Written by `scripts/delivery-verify.mjs` (`npm run cd:verify' + (EKS ? ' -- --target eks' : '') + '`) on ' + new Date().toISOString().slice(0, 10) + '.',
+    'Every line is an answer from the running Jenkins, ' + (EKS ? 'the edge' : 'the running relay') + ', the API server or GitHub.',
     '',
     '## Result',
     '',
@@ -665,16 +807,19 @@ const report = [
     '  -> GitHub Actions: test, build once, scan (Trivy), sign (cosign, keyless), publish to ghcr.io',
     '  -> GitHub deployment for the environment "' + ENVIRONMENT + '", naming the image by digest',
     '  -> webhook, signed by GitHub',
-    '  -> smee.io channel -> relay in the cluster -> Jenkins (signature checked here)',
+    EKS
+        ? '  -> CloudFront (HTTPS) -> the load balancer -> Jenkins (signature checked here)'
+        : '  -> smee.io channel -> relay in the cluster -> Jenkins (signature checked here)',
     '  -> Jenkins: newest? signed by main\'s workflow, same commit? then apply that commit\'s manifests',
-    '  -> rollout, checked through the ingress; anything unhealthy is rolled back',
+    '  -> rollout, checked through ' + (EKS ? 'the edge' : 'the ingress') + '; anything unhealthy is rolled back',
     '  -> the outcome is reported back on the GitHub deployment',
     '```',
     '',
     ...sections.flatMap((section) => ['## ' + section.title, '', section.body, '']),
 ].join('\n');
-writeFileSync(join(root, 'docs/evidence/delivery.md'), report + '\n');
+writeFileSync(join(root, target.reports.delivery), report + '\n');
+stopForwards();
 
 console.log('\n' + (checks.length - failures) + '/' + checks.length + ' checks passed.');
-console.log('Report: docs/evidence/delivery.md');
+console.log('Report: ' + target.reports.delivery);
 process.exit(failures ? 1 : 0);

@@ -3913,6 +3913,11 @@ D-100 has the five causes and their fixes.
 - **Where to read it:** the run's evidence artifact, `kind-e2e-36040446436`, is kept for 30 days.
   Every PASS line is also in the job log.
 
+**Run 7 (36075399900, the nightly run on `acc164f`) was green again.** Delivery in 74 s;
+`k8s:verify` 35/35 with 1 skipped; `cd:verify` 16/16; `ops-verify` 24/24. The lab's 5,389 plans:
+5,383 served, 6 refused on purpose, 0 failed, p95 206 ms. The autoscaler went from 2 pods to 10.
+Memory peaked at 8.0 GB in use, 6.6 GB of it anonymous.
+
 ### D-100 · What kind-e2e run 4 found: five causes, each read in the source of what was involved
 **2026-09-24** · ✅ fixed, unit-tested (1,302 → 1,311 tests) and proven by run 5, then again by run 6
 (D-099)
@@ -4065,6 +4070,150 @@ The dashboard is right; the check asked for something that can't exist yet.
 
 ---
 
+## Phase 15 — The same checks on EKS
+
+### D-103 · k8s:verify and cd:verify check EKS through CloudFront, and say what only Kind can check
+**2026-09-25** · 🚧 written, unit-tested (1,314 → 1,351 tests) and wired into `aws-up`; the Kind path
+is proven by the next kind-e2e run. The EKS path first runs on the rehearsal day (B-031).
+
+**What changed.** Both verifiers take `--target eks`. On EKS they check the platform `aws-up` built,
+the way visitors and GitHub reach it: through CloudFront.
+```
+npm run k8s:verify -- --target eks
+npm run cd:verify -- --target eks --rollback
+```
+`scripts/lib/verify-target.mjs` holds what differs between the two clusters:
+- **the context:** `splitx`, the name aws-up gives it;
+- **where visitors arrive:** the edge address committed in `k8s/overlays/aws`;
+- **the environments:** Jenkins deploys `eks`, and a deployment for `kind` must start nothing;
+- **the probe image:** busybox from ECR Public. The nodes share one NAT address, and Docker Hub
+  limits anonymous pulls per address;
+- **the reports:** `docs/evidence/kubernetes-eks.md` and `delivery-eks.md`.
+
+What the checks conclude is in `scripts/lib/platform-checks.mjs`, as pure functions, and each is
+unit-tested against the shapes Kubernetes and AWS answer with.
+
+**How the verifiers reach what isn't published.** On EKS, Prometheus, Alertmanager, Loki, Grafana,
+Jenkins and ops-api are all reached through `kubectl port-forward`.
+- The API server's service proxy, which Kind uses, can't reach them on EKS. The nodes' security
+  group (the EKS module's recommended rules) admits the control plane on 443, 10250 and the webhook
+  ports only, not on 9090, 9093, 3100 or 8080.
+- A port-forward goes through the kubelet, on 10250.
+
+**Where the secrets come from on EKS.** The Jenkins, webhook and Grafana values are read from the
+Kubernetes Secrets the External Secrets Operator makes from Secrets Manager. On GitHub's runners
+each is masked in the log before anything could print it. Kind still reads the owner's `.env`.
+
+**What `k8s:verify` checks on EKS**, mapped to B-031's list of what only a real day proves:
+- **Every pod is running, or finished.** Anything else is named, with what holds it up, such as an
+  image pull or a crash loop. That covers Docker Hub pulls through the NAT address. A Job's failed
+  pod is the Job's to report.
+- **Replicas across zones and nodes.** The two zones of the node group.
+- **The load balancer's readiness gates.** A pod is ready only once the ALB has it as a healthy
+  target.
+- **New connections from every app pod** to the database its own `DATABASE_URL` names (Neon's demo
+  branch), and to Redis.
+  - Node reads the host inside the pod, so nothing of the URL is printed.
+- **Volumes:** every claim is an EBS volume, and EC2 describes it as gp3, encrypted and attached.
+- **Pod Identity, for each of the five accounts `terraform/platform` gives a role.** Two things per
+  account:
+  - EKS gave its pods credentials;
+  - the credentials did the account's job:
+    - the load balancer controller made the ALB and its target group bindings;
+    - the EBS driver made the volumes;
+    - the Cluster Autoscaler found its node group through AWS;
+    - the External Secrets Operator made every Secret;
+    - ops-api read the stacks, EKS, CloudFront and the budget.
+
+  A unit test ties the list to Terraform.
+- **The edge:**
+  - The app is served through CloudFront.
+  - Eight spellings of the two internal paths are each refused by the edge function itself.
+    CloudFront says so in `X-Cache`, which proves the function in CloudFront's own runtime.
+  - The ALB's listener, rule by rule as AWS describes it:
+    - both internal paths are answered 403 by the ALB itself, before the app's catch-all (D-089's
+      `group.order` fix);
+    - the webhook path goes to Jenkins' target group;
+    - everything else goes to the app.
+  - The ALB doesn't answer this machine at all.
+  - Inside a pod, a request without CloudFront's `X-Origin-Verify` header gets 403 (D-092).
+- **The demo database** has the schema.
+  - A sign-up through CloudFront writes to it.
+  - The check then removes the account, and any confirmation link for it, from inside a pod, with
+    the app's own Prisma client. Only numbers come back, and an error prints Prisma's code, never
+    its message, which can name the host.
+- **Network policy, enforced by the VPC CNI's policy agent.** A pod in `default` must reach CoreDNS
+  over TCP, a control that no policy guards, and be refused by the app, Redis, ops-api, the traffic
+  lab, Jenkins and Nexus.
+- **A rolling restart with no request lost, through CloudFront.** The rollout waits up to 600 s,
+  because each new pod must also become a healthy ALB target.
+- **Monitoring** as on Kind.
+  - The email check follows the receiver `aws:secrets` copied, and is skipped when there is none.
+  - One request is followed from the answer CloudFront gave to the log line of the pod that served
+    it.
+
+**Skipped on EKS, each with its reason in the report** (`KIND_ONLY`):
+- kindnet: Kind's policy engine;
+- the control-plane placement: EKS has no control-plane node;
+- the database outage: stopping Neon would stop the demo, so Kind's own Postgres is taken down
+  instead;
+- the ingress-nginx trace: the ALB keeps no log Loki reads.
+
+**What `cd:verify` checks on EKS:**
+- Jenkins, its job, plugins and credentials, through a port-forward.
+- The webhook gate's six cases, sent the way GitHub's second webhook sends them: to CloudFront, with
+  the token in the address and no Jenkins credentials.
+- **GitHub's own delivery reached Jenkins through CloudFront.**
+  - The build that deployed the newest `eks` deployment names it, and a GitHub delivery UUID, in its
+    cause (the job's `causeString`).
+  - GitHub shows Jenkins' success on it, and no relay runs.
+  - That is B-031's "GitHub's webhook through CloudFront to Jenkins".
+- **Nothing of Jenkins answers through the edge but its webhook path.**
+- **Unchanged from Kind:** the deploy account's permissions (D-094's RBAC), the running image
+  against the signed digest, and admission.
+- **With `--rollback`:** the broken release, watched through CloudFront, and the failed-build
+  counter.
+
+**On Kind too:**
+- **The network probe is stronger.** It has the CoreDNS control and covers Postgres, ops-api, the
+  lab, Jenkins and Nexus as well as the app and Redis.
+- **Every pod must be running, or finished.**
+- **The "other cluster" deployment is `eks`**, the real other environment, not `aws`.
+- **Reads became async.** Prometheus, Alertmanager and Loki still go through the service proxy.
+
+**How it runs.** `.github/actions/eks-verify` runs both verifiers, keeps the two reports as an
+artifact for 30 days, adds their result tables to the run's summary, and fails the run if either
+failed.
+- **`aws-up` step 6** runs it after the delivery. The input `rehearse_rollback` is on by default.
+  - The rollback marks that deployment failed on GitHub, as on Kind, and adds a failed build to the
+    Delivery dashboard. On the demo day the user may untick it.
+- **`aws-verify`**, new, runs it alone against a platform that is up.
+  - It needs one approval, because the deploy role trusts `aws-demo` only.
+  - It shares the `aws` concurrency group, so it never overlaps `aws-up` or `aws-down`.
+  - It builds nothing: it is for a re-check after a fix, or later in the day.
+- The checks add about 15 minutes to `aws-up`, inside its 120.
+
+**Not proven until the first AWS day:**
+- CloudFront's exact `X-Cache` value for a function's response (`FunctionGeneratedResponse from
+  cloudfront`);
+- the Cluster Autoscaler 1.35's status format;
+- `kubectl port-forward` through EKS's API server;
+- the Prisma client loading from `node -` in the app's image;
+- the controller's target group names (`k8s-<namespace>-<service>-…`).
+
+The unit tests hold the logic, not these facts, and a wrong one fails with the real value in the
+report.
+
+**Rejected:**
+- **A rule in the nodes' security group for the service proxy.** It would open Prometheus, Loki and
+  Jenkins' ports to the control plane for the sake of a check. A port-forward needs nothing new.
+- **Skipping the write on EKS.** Sign-ups on the demo day depend on it. The probe row lives for
+  seconds and is removed by the same check.
+- **Reading the secrets from Secrets Manager.** The cluster's own Secrets are what Jenkins and
+  Grafana actually use.
+
+---
+
 ## Open problems
 
 | ID | Problem | Why it matters | Status / planned fix |
@@ -4099,7 +4248,7 @@ The dashboard is right; the check asked for something that can't exist yet.
 | B-028 | The AI chat builds its own balances: pairwise instead of the group plan, over every expense including deleted ones, in deleted groups too, with ±1 paisa counted as settled. | Its answers to "who owes me?" can disagree with Settle Up, and count expenses that were deleted. | ✅ Resolved 2026-09-22 — D-067. The chat's context is the ledger: balances per group over live expenses, and each group's settle-up plan. |
 | B-029 | Removing a member used to re-split their shares among the others (D-063). Groups that had a member removed may hold shares that were moved between people, and former members may still owe or be owed. | Balances in those groups reflect the old re-split, not what people agreed to. | ✅ Checked 2026-09-22 — D-069. `npm run ledger:audit -- --https` read production (1 group, 37 expenses, 62 shares, 0 settlements, 9 accounts) in a read-only transaction: no share of a former member, no former member with a balance, every expense adding up, every group netting to zero. Nothing to repair. |
 | B-030 | `npm audit` still reports one high advisory: `deepmerge-ts` below 8 (GHSA-ggr8-5vv4-36mx, stack exhaustion when merging self-referencing objects), through `prisma` → `@prisma/config`. | The Prisma CLI is a development and migration tool; the app's runtime (`@prisma/client`) doesn't use it, and the only objects it merges are our own config. | Accepted 2026-09-22 (D-070). The fix is Prisma 7, a major upgrade with its own changes. Still accepted after the migration baseline (D-072), which was done on Prisma 6: the upgrade is its own change. The CLI stays out of the runtime image. |
-| B-031 | Phase 4 (D-088 to D-090) is written and validated, but nothing in it has been applied. Only a real run proves: the `iam:PassedToService` value for the flow log's role (both candidates are allowed); that `splitx-ci-teardown`'s permissions cover a whole `terraform destroy` and the edge's offline apply; the ALB's lookup by the controller's tags (`ingress.k8s.aws/stack = splitx`); that the pinned add-on versions are still offered on the day; and the edge function in CloudFront's own runtime (it is tested in Node). | An AWS day that meets any of these unprepared loses hours of a rehearsal or the demo. | Open. `aws-edge` proves the edge's part as soon as the stacks and the `AWS_ACCOUNT_ID` secret exist. The rehearsal's first hour, a platform-only `aws-up` then `aws-down`, proves the rest (plan Phase 10). **2026-09-24, D-093 adds to the list:** the External Secrets Operator's Pod Identity credentials; the load balancer controller's IAM policy (the module's) against controller 3.5.0; the pod readiness gates; the VPC CNI agent admitting the kubelet and judging `172.20.0.1` as the API server; the prefix-list rule fitting the security group (weight 55 of 60); image volumes on the EKS node image; Docker Hub pulls through the NAT address; GitHub's webhook through CloudFront to Jenkins; and the Jenkins deploy RBAC of D-094. **D-095 and D-096 add:** whether EKS itself is allowed on the account's Free plan; the `m7i-flex.large` nodes; Nexus with a read-only root filesystem; and cosign's attestation output in the archive step. **D-097 adds:** Kyverno's admission metrics reaching Prometheus; the ops image passing the release's Trivy gate; ops-api's AWS reads through Pod Identity; and the traffic lab's load reaching CloudFront from the NAT address. **2026-09-24, from kind-e2e (D-099, D-100):** on Kind, Nexus with a read-only root filesystem ran in runs 2 to 4, the ops image passed the gate, and D-094's deploy RBAC was proven (run 4: 4 allowed, 5 refused). Run 4 found that Jenkins' Nexus role could not upload (fixed in D-100), and cosign's attestation output was then checked against cosign's source; the first run that archives proves it. |
+| B-031 | Phase 4 (D-088 to D-090) is written and validated, but nothing in it has been applied. Only a real run proves: the `iam:PassedToService` value for the flow log's role (both candidates are allowed); that `splitx-ci-teardown`'s permissions cover a whole `terraform destroy` and the edge's offline apply; the ALB's lookup by the controller's tags (`ingress.k8s.aws/stack = splitx`); that the pinned add-on versions are still offered on the day; and the edge function in CloudFront's own runtime (it is tested in Node). | An AWS day that meets any of these unprepared loses hours of a rehearsal or the demo. | Open. `aws-edge` proves the edge's part as soon as the stacks and the `AWS_ACCOUNT_ID` secret exist. The rehearsal's first hour, a platform-only `aws-up` then `aws-down`, proves the rest (plan Phase 10). **2026-09-24, D-093 adds to the list:** the External Secrets Operator's Pod Identity credentials; the load balancer controller's IAM policy (the module's) against controller 3.5.0; the pod readiness gates; the VPC CNI agent admitting the kubelet and judging `172.20.0.1` as the API server; the prefix-list rule fitting the security group (weight 55 of 60); image volumes on the EKS node image; Docker Hub pulls through the NAT address; GitHub's webhook through CloudFront to Jenkins; and the Jenkins deploy RBAC of D-094. **D-095 and D-096 add:** whether EKS itself is allowed on the account's Free plan; the `m7i-flex.large` nodes; Nexus with a read-only root filesystem; and cosign's attestation output in the archive step. **D-097 adds:** Kyverno's admission metrics reaching Prometheus; the ops image passing the release's Trivy gate; ops-api's AWS reads through Pod Identity; and the traffic lab's load reaching CloudFront from the NAT address. **2026-09-24, from kind-e2e (D-099, D-100):** on Kind, Nexus with a read-only root filesystem ran in runs 2 to 4, the ops image passed the gate, and D-094's deploy RBAC was proven (run 4: 4 allowed, 5 refused). Run 4 found that Jenkins' Nexus role could not upload (fixed in D-100), and cosign's attestation output was then checked against cosign's source; the first run that archives proves it. **Runs 5 and 6 did (D-099).** **2026-09-25, D-103:** `aws-up` now ends by verifying the platform through CloudFront (`k8s:verify` and `cd:verify --target eks`), and `aws-verify` repeats that alone. Together they check most of this list live on the day: ESO's Pod Identity credentials; the ALB controller's policy (it made the ALB and its bindings); the readiness gates; the VPC CNI agent enforcing, admitting the kubelet (every pod ready) and reaching 172.20.0.1 (ops-api's reads, Jenkins' agents); Docker Hub pulls through the NAT address (every pod running); GitHub's webhook through CloudFront to Jenkins; D-094's RBAC; ops-api's AWS reads; and the edge function in CloudFront's own runtime. What they can't check: the flow log role's `iam:PassedToService` and the add-on versions (aws-up's apply proves those), `splitx-ci-teardown`'s cover of a whole destroy (aws-down proves it), and EKS and `m7i-flex.large` on the Free plan (the apply again). |
 
 ## Environment notes (this machine)
 

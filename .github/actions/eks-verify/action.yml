@@ -1,0 +1,74 @@
+name: Verify the EKS platform
+description: >-
+  k8s:verify and cd:verify with --target eks (D-103), against the platform aws-up
+  built: the cluster, the edge and the delivery path, measured live through
+  CloudFront the way visitors and GitHub arrive. Used by aws-up after its
+  delivery, and by aws-verify on its own. Expects kubectl's context "splitx"
+  and the deploy role's credentials.
+
+inputs:
+  rollback:
+    description: Also deploy a release that can't come up, and watch Jenkins roll it back ('true' or 'false').
+    default: 'true'
+  github-token:
+    description: Reads the newest deployment for "eks" and the statuses Jenkins gave it.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: k8s:verify --target eks
+      id: cluster
+      continue-on-error: true
+      shell: bash
+      run: node scripts/cluster-verify.mjs --target eks
+
+    - name: cd:verify --target eks
+      id: delivery
+      continue-on-error: true
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        ROLLBACK: ${{ inputs.rollback }}
+      run: |
+        args=(--target eks)
+        if [[ "$ROLLBACK" == true ]]; then args+=(--rollback); fi
+        node scripts/delivery-verify.mjs "${args[@]}"
+
+    - name: Keep the evidence
+      if: ${{ always() }}
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: eks-verify-${{ github.run_id }}-${{ github.run_attempt }}
+        path: |
+          docs/evidence/kubernetes-eks.md
+          docs/evidence/delivery-eks.md
+        if-no-files-found: warn
+        retention-days: 30
+
+    - name: Summary
+      if: ${{ always() }}
+      shell: bash
+      run: |
+        # Each report's result table, as the verifier wrote it.
+        for report in docs/evidence/kubernetes-eks.md docs/evidence/delivery-eks.md; do
+          [[ -f "$report" ]] || continue
+          {
+            echo "### $(head -n 1 "$report" | sed 's/^# //')"
+            echo ""
+            sed -n '/^## Result$/,/^## /p' "$report" | sed '1,2d;$d'
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+        done
+
+    - name: Every check passed
+      shell: bash
+      env:
+        CLUSTER: ${{ steps.cluster.outcome }}
+        DELIVERY: ${{ steps.delivery.outcome }}
+      run: |
+        echo "k8s:verify: $CLUSTER; cd:verify: $DELIVERY"
+        if [[ "$CLUSTER" != success || "$DELIVERY" != success ]]; then
+          echo "::error::A check failed on EKS: its line reads FAIL in the log above, and the evidence says why."
+          exit 1
+        fi

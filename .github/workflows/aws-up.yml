@@ -13,12 +13,21 @@ name: AWS up
 #   4. the edge points at the load balancer, and is checked from outside
 #   5. the release is deployed again the way every later one will be: a
 #      GitHub deployment, its signed webhook through CloudFront, and Jenkins
+#   6. everything is verified live (k8s:verify and cd:verify --target eks,
+#      D-103): through CloudFront, with the evidence kept as an artifact.
+#      A failed check fails the run; the platform stays up to be looked at.
 #
 # Before an AWS day: `npm run aws:secrets` on the laptop (step 2 stops without
 # it), and the repository's second webhook exists (step 5 waits for it).
+# aws-verify runs step 6 again on its own, without rebuilding anything.
 
 on:
   workflow_dispatch:
+    inputs:
+      rehearse_rollback:
+        description: Also deploy a release that can't come up, and watch Jenkins roll it back (the site keeps serving)
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -252,3 +261,10 @@ jobs:
             echo "| Release | ${SHA:0:12} |"
             echo "| Deployed by | Jenkins on EKS, from GitHub deployment $id: $description |"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Verify the platform
+        # k8s:verify and cd:verify --target eks (D-103), through CloudFront.
+        uses: ./.github/actions/eks-verify
+        with:
+          rollback: ${{ inputs.rehearse_rollback }}
+          github-token: ${{ github.token }}

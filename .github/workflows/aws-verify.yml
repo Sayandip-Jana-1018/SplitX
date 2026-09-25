@@ -1,0 +1,66 @@
+name: AWS verify
+
+# Checks the EKS platform aws-up built, without building anything (D-103):
+# k8s:verify and cd:verify --target eks, through CloudFront, with the evidence
+# kept as an artifact. aws-up runs the same checks as its last step; this runs
+# them again, after a fix or later in an AWS day. The platform must be up.
+
+on:
+  workflow_dispatch:
+    inputs:
+      rehearse_rollback:
+        description: Also deploy a release that can't come up, and watch Jenkins roll it back (the site keeps serving)
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  id-token: write # GitHub's OIDC token, exchanged for the role splitx-ci-deploy
+  deployments: read # the newest deployment for "eks", and Jenkins' statuses on it
+
+# Never while aws-up or aws-down is changing the platform.
+concurrency:
+  group: aws
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ap-south-1 # the splitx-bootstrap stack's region
+  CLUSTER_NAME: splitx
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    # The deploy role trusts this environment only, so a reviewer approves.
+    environment: aws-demo
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - name: Setup Node
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 24
+
+      - name: AWS and Terraform
+        uses: ./.github/actions/aws-terraform
+        with:
+          role: splitx-ci-deploy
+          account-id: ${{ secrets.AWS_ACCOUNT_ID }}
+          region: ${{ env.AWS_REGION }}
+
+      - name: Connect to the cluster
+        run: |
+          if ! aws eks describe-cluster --name "$CLUSTER_NAME" --query cluster.status --output text > /tmp/status 2>&1; then
+            echo "::error::There is no EKS cluster $CLUSTER_NAME in $AWS_REGION: run AWS up first."
+            exit 1
+          fi
+          echo "The cluster is $(cat /tmp/status)"
+          aws eks update-kubeconfig --name "$CLUSTER_NAME" --region "$AWS_REGION" --alias splitx
+
+      - name: Verify the platform
+        uses: ./.github/actions/eks-verify
+        with:
+          rollback: ${{ inputs.rehearse_rollback }}
+          github-token: ${{ github.token }}

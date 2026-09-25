@@ -14,23 +14,41 @@
  * Each check runs inside the pod with busybox tools the image already has.
  */
 
+const REDIS = 'nc -z -w 3 splitx-redis.splitx.svc.cluster.local 6379 >/dev/null 2>&1 && echo redis=ok || echo redis=fail';
+
 const PROBE = [
     'nslookup splitx-postgres.splitx.svc.cluster.local >/dev/null 2>&1 && echo dns=ok || echo dns=fail',
     'nc -z -w 3 splitx-postgres.splitx.svc.cluster.local 5432 >/dev/null 2>&1 && echo postgres=ok || echo postgres=fail',
-    'nc -z -w 3 splitx-redis.splitx.svc.cluster.local 6379 >/dev/null 2>&1 && echo redis=ok || echo redis=fail',
+    REDIS,
+].join('; ');
+
+// On EKS the database is outside the cluster (Neon's demo branch, D-091): the
+// pod dials the host its own DATABASE_URL names. Node, which the image runs
+// on, reads the address; only the host and port reach the shell, and nothing
+// of the URL is printed.
+export const DATABASE_FROM_URL = 'node -e \'const u = new URL(process.env.DATABASE_URL); process.stdout.write(u.hostname + " " + (u.port || "5432"))\'';
+const PROBE_FROM_URL = [
+    'set -- $(' + DATABASE_FROM_URL + ' 2>/dev/null)',
+    'nslookup "$1" >/dev/null 2>&1 && echo dns=ok || echo dns=fail',
+    'nc -z -w 3 "$1" "$2" >/dev/null 2>&1 && echo postgres=ok || echo postgres=fail',
+    REDIS,
 ].join('; ');
 
 /**
  * @param {(argv: string[]) => { code: number, stdout: string }} kubectl  runs kubectl, capturing output
+ * @param {string} [namespace]
+ * @param {{ database?: 'in-cluster' | 'from-url' }} [options]  where the database is: the
+ *   splitx-postgres Service (Kind), or the host in each pod's DATABASE_URL (EKS)
  * @returns {{ pod: string, node: string, dns: boolean, postgres: boolean, redis: boolean, ok: boolean }[]}
  */
-export function checkNewConnections(kubectl, namespace = 'splitx') {
+export function checkNewConnections(kubectl, namespace = 'splitx', { database = 'in-cluster' } = {}) {
     const list = kubectl(['get', 'pods', '-n', namespace, '-l', 'app.kubernetes.io/name=splitx', '-o', 'json']);
     const pods = JSON.parse(list.stdout || '{"items":[]}').items
         .filter((pod) => pod.status.phase === 'Running' && !pod.metadata.deletionTimestamp);
+    const probe = database === 'from-url' ? PROBE_FROM_URL : PROBE;
 
     return pods.map((pod) => {
-        const out = kubectl(['exec', '-n', namespace, pod.metadata.name, '--', 'sh', '-c', PROBE]).stdout;
+        const out = kubectl(['exec', '-n', namespace, pod.metadata.name, '--', 'sh', '-c', probe]).stdout;
         const result = (name) => new RegExp('^' + name + '=ok$', 'm').test(out);
         const dns = result('dns');
         const postgres = result('postgres');
@@ -43,6 +61,63 @@ export function describe(results) {
     return results
         .map((r) => r.pod + ' on ' + r.node + ': dns ' + (r.dns ? 'ok' : 'FAIL') + ', postgres ' + (r.postgres ? 'ok' : 'FAIL') + ', redis ' + (r.redis ? 'ok' : 'FAIL'))
         .join('\n');
+}
+
+/**
+ * What a pod in another namespace tries (k8s:verify, D-040, D-103). The first
+ * is a control it must reach: CoreDNS over TCP, which no policy guards. A
+ * refusal after it is then the policy's, not a pod without a network, and a
+ * name that doesn't resolve is reported as such, never as refused.
+ */
+export const PROBE_CONTROL = { name: 'control', host: 'kube-dns.kube-system.svc.cluster.local', port: 53 };
+
+// Everything a default-deny policy guards (k8s/base, k8s/components, k8s/ops,
+// jenkins, nexus), by the Service's own port.
+const GUARDED = [
+    { name: 'app', namespace: 'splitx', service: 'splitx', port: 80 },
+    { name: 'postgres', namespace: 'splitx', service: 'splitx-postgres', port: 5432 },
+    { name: 'redis', namespace: 'splitx', service: 'splitx-redis', port: 6379 },
+    { name: 'ops-api', namespace: 'ops', service: 'ops-api', port: 8080 },
+    { name: 'traffic-lab', namespace: 'ops', service: 'traffic-lab', port: 8080 },
+    { name: 'jenkins', namespace: 'jenkins', service: 'jenkins', port: 8080 },
+    { name: 'nexus', namespace: 'nexus', service: 'nexus', port: 8081 },
+];
+
+/**
+ * The control, then each guarded Service this cluster has: Postgres only on
+ * Kind, ops-api and the lab only with an ops image.
+ * @param {Set<string>} services  "namespace/name" of every Service in the cluster
+ * @returns {{ name: string, host: string, port: number }[]}
+ */
+export function policyTargets(services) {
+    return [PROBE_CONTROL, ...GUARDED
+        .filter((guarded) => services.has(guarded.namespace + '/' + guarded.service))
+        .map((guarded) => ({ name: guarded.name, host: guarded.service + '.' + guarded.namespace + '.svc.cluster.local', port: guarded.port }))];
+}
+
+/** The probe pod's script: for each target, one line of name=reached, refused or unresolved. */
+export function policyProbeScript(targets) {
+    return targets.map(({ name, host, port }) => 'if nslookup ' + host + ' >/dev/null 2>&1; then '
+        + 'if nc -z -w 5 ' + host + ' ' + port + ' >/dev/null 2>&1; then echo ' + name + '=reached; else echo ' + name + '=refused; fi; '
+        + 'else echo ' + name + '=unresolved; fi').join('; ');
+}
+
+/**
+ * @param {string} log  the probe pod's output
+ * @param {{ name: string, host: string, port: number }[]} targets
+ */
+export function readPolicyProbe(log, targets) {
+    return targets.map((target) => ({
+        ...target,
+        verdict: log.match(new RegExp('^' + target.name + '=(reached|refused|unresolved)\\s*$', 'm'))?.[1] ?? 'no answer',
+    }));
+}
+
+/** Enforced: the control was reached, and every guarded target was refused. */
+export function policyEnforced(results) {
+    const [control, ...guarded] = results;
+    return control?.name === PROBE_CONTROL.name && control.verdict === 'reached'
+        && guarded.length > 0 && guarded.every((result) => result.verdict === 'refused');
 }
 
 // Runs inside a Kind node. Finds the kindnet container's cgroup and reads what
