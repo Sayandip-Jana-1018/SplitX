@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { Github, Twitter, Instagram, Linkedin } from 'lucide-react';
+// lucide-react 1 dropped its brand icons; react-icons carries Lucide's own drawings of them.
+import { LuGithub as Github, LuTwitter as Twitter, LuInstagram as Instagram, LuLinkedin as Linkedin } from 'react-icons/lu';
 import styles from '@/app/landing.module.css';
 
 const socials = [
