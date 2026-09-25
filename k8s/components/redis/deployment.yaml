@@ -31,7 +31,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: redis
-          image: redis:7.4.9-alpine@sha256:6ab0b6e7381779332f97b8ca76193e45b0756f38d4c0dcda72dbb3c32061ab99
+          image: redis:7.4.11-alpine@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
           # The password is written to a file the process reads, never passed as
           # an argument: anything on the command line is visible to every
           # process in the container and in `kubectl describe`.

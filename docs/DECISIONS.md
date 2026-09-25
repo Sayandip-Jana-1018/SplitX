@@ -4433,7 +4433,8 @@ The first hour of the rehearsal proves the first three. `aws-up`'s last step pro
   - Nothing had been written: no `splitx` secret existed afterwards (read-only check).
 - `09f2237` gives each call a fresh UUID. `secretWrites` in `scripts/lib/demo-secrets.mjs` builds
   both request bodies, and a test holds them.
-- The user runs it again.
+- **The user ran it again, and both secrets were written:** `splitx/demo/app` and
+  `splitx/demo/platform`, created at 15:11 IST (read-only check).
 
 ---
 
@@ -4728,8 +4729,9 @@ its own phone. An 8-second freeze on one bad scan is still a bug.
 - several trailing slashes on the site's address.
 
 ### D-110 · Dependabot's 13 pull requests: what was taken, what waits, and one Postgres major
-**2026-09-25** · 🚧 the first batch is pushed, with CI's full run and a Kind run to prove it. The
-majors come one at a time after it.
+**2026-09-25** · ✅ first batch proven: CI green on all ten jobs at `740dd85`, and kind-e2e run 11
+(36119947989) green on Postgres 17 with the new release. 🚧 The second batch (the majors) is pushed
+after it; its proof is recorded below.
 
 **Applied on `main`, not merged.** Pushes go straight to `main` (memory `push-to-main-policy`), and
 each pull request was opened against an older `main`. So each update was applied to today's code
@@ -4739,15 +4741,19 @@ and checked as a whole. Dependabot closes a pull request once `main` has what it
 |---|---|---|
 | #21 | 12 minor and patch updates: React 19.3, Prisma 6.19.3, zod 4.6, recharts 3.10, swr 2.5, supabase-js, Upstash, react-icons, eslint-config-next 16.3.5 and React's types | **Taken.** The Prisma CLI moved with its client, which the PR left behind. |
 | #26 | `actions/checkout` 7.0.1, `actions/setup-node` 7.0.0 | **Taken in all 11 workflows.** The PR covered 3; its base predates the rest. Both SHAs were checked against their tags. v6 and v7 keep the git credential in its own file (no job pushes with git), block fork pull requests on `pull_request_target` (unused here) and move to ESM. |
-| #27 | Compose: Postgres 18, Redis 8, SonarQube, Nexus | **Postgres 17.11 instead**, production's version (below). Redis stays at the cluster's 7.4.9. SonarQube's Community Build was taken. Nexus is pinned to the cluster's own 3.96.3. |
+| #27 | Compose: Postgres 18, Redis 8, SonarQube, Nexus | **Postgres 17.11 instead**, production's version (below). Redis stays on 7.4 with the cluster. SonarQube's Community Build was taken. Nexus is pinned to the cluster's own 3.96.3. |
 | #30 | `@types/node` 26 | **`^24` instead.** The types describe Node 24, which runs the app; they were `^20`. |
 | #29 | `@types/bcryptjs` 3 | **Removed instead.** bcryptjs 3 ships its own types, and `tsc` passes on them. |
 | #20 | Node 26 in the images | **Not yet.** Node 26 becomes LTS in October 2026. |
-| #22, #23 | Vitest 5, and its coverage | Next, one at a time. |
-| #31 | ESLint 10 | Next. It must suit every plugin eslint-config-next brings. |
-| #24 | framer-motion 13 | Next. |
-| #28 | lucide-react 1.x | Next. |
-| #25, #32 | commitlint 21 | Next. |
+| #22, #23 | Vitest 5, and its coverage | **Taken: 5.0.2** (second batch). |
+| #24 | framer-motion 13 | **Taken** (second batch). |
+| #28 | lucide-react 1.x | **Taken** (second batch); four brand icons moved to react-icons. |
+| #25, #32 | commitlint 21 | **Taken** (second batch). |
+| #35 | Playwright 1.63 | **Taken** (second batch). |
+| #33 | Redis 7.4.11 in Compose | **Taken in Compose, the cluster and CI together** (second batch), pinned by the digest Docker Hub lists. |
+| #34 | The naive image's rebuilt Node 24.21.0 | **Taken** (second batch). |
+| #31 | ESLint 10 | **Held:** eslint-config-next's plugins react, import and jsx-a11y accept ESLint 9 at most. |
+| #36 | TypeScript 7 | **Held:** typescript-eslint accepts TypeScript below 6.1. |
 
 **One Postgres major, production's.** Neon runs 17.11, and CI tests on 17.11 pinned by digest
 (D-072). Compose and the Kind cluster still ran 16, so the cluster proved the app on a Postgres it
@@ -4757,8 +4763,29 @@ never meets anywhere else. Both now run CI's image, and Dependabot's 18 would ha
   (`docker compose down -v`; it only holds local data) and a laptop cluster made before this
   (`npm run k8s:down`). The Kind runs start fresh each time.
 
-**Dependabot's other ignores:** majors of `@types/node`, which follows the runtime, and of the `node`
-image until LTS.
+**Dependabot's other ignores:**
+- majors of `@types/node`, which follows the runtime;
+- majors of the `node` image, until the new one is LTS;
+- ESLint and TypeScript majors, until the lint tools accept them.
+
+Each ignore sits next to its reason in `dependabot.yml`. After the first push, Dependabot closed the
+four pull requests that `main` or the new rules had answered (#20, #27, #29, #30), and opened #33 to #36.
+
+**The second batch, the majors.** Each was read against its breaking changes, then checked here:
+- **commitlint 21** needs Node 22 and prints its report in a new layout that nothing here parses.
+  A good message still passes, and a bad one fails.
+- **framer-motion 13** drops an optional Emotion dependency, which the app doesn't use.
+- **lucide-react 1** removes brand icons. `tsc` named the four the landing page's footer uses:
+  GitHub, Twitter, Instagram and LinkedIn. They now come from react-icons, which carries Lucide's
+  own drawings of them, so the footer looks the same. Its icons are now `aria-hidden` by default.
+- **Vitest 5:**
+  - Its breaking changes miss this suite: every `vi.mock` is already at the top level, every
+    async assertion is awaited, and the projects already set `extends: true`.
+  - `npm install vitest@5` hit a bug in npm 11.3's peer resolution ("Cannot read properties of
+    null (reading 'edgesOut')"). Setting the version in `package.json`, then a plain
+    `npm install`, worked.
+  - All 1,429 tests pass on it, and the coverage report Sonar reads is still written.
+- **Playwright 1.63:** CI installs its browser, and its browser tests gate the release.
 
 **The new ESLint config found two full reloads that are on purpose.** 16.3.5 adds
 `no-location-assign-relative-destination`, which asks for the router instead of `window.location`:
