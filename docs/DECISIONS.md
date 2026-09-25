@@ -3918,6 +3918,17 @@ D-100 has the five causes and their fixes.
 5,383 served, 6 refused on purpose, 0 failed, p95 206 ms. The autoscaler went from 2 pods to 10.
 Memory peaked at 8.0 GB in use, 6.6 GB of it anonymous.
 
+**Run 8 (36094752475, on `e66a699`, D-103's push) was green too, with D-103's Kind changes.**
+- **Delivery:** 63 s.
+- **`k8s:verify`:** 36/36, with 1 skipped (email). The two new checks passed:
+  - all 40 pods were running, or had finished;
+  - the network probe reached its control, CoreDNS, and all seven guarded Services refused it.
+- **`cd:verify`:** 16/16. A signed deployment for `eks` started nothing.
+- **`ops-verify`:** 24/24.
+  - The lab served 5,376 of 5,384 plans: 8 refused on purpose, 0 failed, p95 148 ms.
+  - The autoscaler went from 2 pods to 10.
+- **Memory** peaked at 8.0 GB in use, 6.6 GB of it anonymous.
+
 ### D-100 · What kind-e2e run 4 found: five causes, each read in the source of what was involved
 **2026-09-24** · ✅ fixed, unit-tested (1,302 → 1,311 tests) and proven by run 5, then again by run 6
 (D-099)
@@ -4073,8 +4084,8 @@ The dashboard is right; the check asked for something that can't exist yet.
 ## Phase 15 — The same checks on EKS
 
 ### D-103 · k8s:verify and cd:verify check EKS through CloudFront, and say what only Kind can check
-**2026-09-25** · 🚧 written, unit-tested (1,314 → 1,351 tests) and wired into `aws-up`; the Kind path
-is proven by the next kind-e2e run. The EKS path first runs on the rehearsal day (B-031).
+**2026-09-25** · 🚧 written, unit-tested (1,314 → 1,351 tests) and wired into `aws-up`. Kind-e2e
+run 8 proved the Kind path green (D-099). The EKS path first runs on the rehearsal day (B-031).
 
 **What changed.** Both verifiers take `--target eks`. On EKS they check the platform `aws-up` built,
 the way visitors and GitHub reach it: through CloudFront.
@@ -4214,6 +4225,70 @@ report.
 
 ---
 
+## Phase 16 — Demo day: the runbook, the pre-flight list and the guides
+
+### D-104 · A runbook for the AWS days, pre-flight on /ops, and guides that describe what exists
+**2026-09-25** · ✅ written, unit-tested (1,351 → 1,373 tests), and checked at 390 px in both themes
+
+**The runbook: [`docs/DEMO_DAY.md`](DEMO_DAY.md).** One page for the operator. It covers:
+- the one-time setup: the stacks, the edge, the OAuth callbacks, the second webhook and the Neon
+  branch;
+- the day before: `aws:secrets`, a green Kind run, a green teardown;
+- the morning: `aws-up` at T-120, its steps and how long each takes, pre-flight at T-30, and a live
+  merge at T-20;
+- the story through `/ops`, and what to do when a step fails;
+- the evening's teardown;
+- the rehearsal day, whose first hour is `aws-up` alone and `aws-down`, which proves the teardown
+  before anything else is built on it.
+
+**The pre-flight list at the top of `/ops`** (`src/lib/ops/preflight.ts`, `PreflightSection.tsx`).
+Before the demo, every tool shows green, or a red item says what to fix.
+- **It reads no source of its own.** Each item is a verdict on readings the page already shows, so
+  it can't disagree with them.
+- **The pipeline's items:** CI on main, and the release scanned, signed and attested. Then code
+  scanning and Dependabot at critical or high, and SonarQube Cloud's gate.
+- **The platform's items:** the nodes, with two zones on EKS, and the pods against the autoscaler's
+  minimum. Then the newest release running by digest, its evidence in Nexus, the autoscaler's CPU
+  reading, Kyverno, the alerts, the logs and the traffic lab. On EKS, CloudFront, the two stacks and
+  the budget too.
+- **"The newest release is what runs" compares the pods' digest with the newest deployment's
+  image.** It does not read the deployment's status.
+  - The morning's rollback rehearsal marks that deployment failed on purpose, while the pods rightly
+    run its image. A status-based item would show red on a healthy platform.
+  - A release that really failed leaves the pods on the old digest, and shows red.
+- **Four states:**
+  - *ready*;
+  - *fix*, which says what to do;
+  - *waiting*, when something is running or hasn't reported;
+  - *not here*, for the cluster on Vercel.
+- A source that can't be read is *fix*, in the source's own words. GitHub's "Dependabot alerts are
+  disabled for this repository" is one.
+- **Checked:** 22 unit tests, covering every item in every state, with 100 % of lines covered. The
+  page was checked at 390 px, in light and dark, against the local stand-in for ops-api: the rows
+  wrap, and nothing scrolls sideways.
+
+**The guides, rewritten to describe what exists** (B-009, B-022).
+- **`AWS_SETUP_GUIDE.md`** described ECR, eksctl, Ansible, us-east-1 and access keys pasted into
+  `aws configure`. Now it describes:
+  - the layers: the laptop's bounded IAM user, the CloudFormation account layer, the edge, the
+    one-day platform, the software and the secrets;
+  - the one-time setup in order: the environments `aws-demo` and `aws-teardown`, the vCPU quota,
+    CloudFront's account verification, and the edge;
+  - what it costs.
+- **`DEMO_GUIDE.html`** described Docker Compose services and the Helm chart deleted in D-034, and
+  held plaintext passwords for tools that no longer run: the Compose Grafana, Jenkins, SonarQube and
+  Nexus, and Argo CD.
+  - Those were rotated or retired with their tools (D-003, B-006), and history keeps them, as D-003
+    chose.
+  - Now it is the presenter's page: the timeline, the story as "show" and "say" beats, and the
+    fallbacks.
+  - It is self-contained, and follows the system's light or dark theme. At phone width its timeline
+    stacks.
+
+**Still to come in this phase:** the showcase README, rewritten last.
+
+---
+
 ## Open problems
 
 | ID | Problem | Why it matters | Status / planned fix |
@@ -4226,7 +4301,7 @@ report.
 | B-006 | Jenkins admin password is still the leaked one (user no longer knows it; it is in `jenkins/create-job.sh` history). | Jenkins becomes internet-reachable when the webhook tunnel opens. | ✅ Resolved 2026-09-20 — the Compose Jenkins is gone, and with it the image built from `jenkins/Dockerfile.jenkins`. The Jenkins in the cluster has no legacy home directory: its admin user is created by Configuration as Code from a Secret `k8s:up` builds from `.env`, generated on the first run (D-055). The leaked password now unlocks nothing that exists. |
 | B-007 | Committed avatars may still be referenced by production profiles. | Removing them could change what real users see. | ✅ Resolved 2026-09-14 — production returned 0; the files are untracked (D-017). |
 | B-008 | Jenkinsfile stages are still theatre (`docker images` as "build", `|| echo` after Sonar). Only the secrets were removed in phase 0. It also deploys the Helm chart deleted in D-034. | Examiner-visible, and now pointing at a path that no longer exists. | ✅ Resolved 2026-09-20 — rewritten (D-055). Every stage does something whose failure fails the build: cosign verification, `kubectl apply -k` of the release commit, a rollout wait, a check through the ingress, and an automatic rollback. Proven by a real release and a deliberately broken one (`npm run cd:verify`). |
-| B-009 | `DEMO_GUIDE.html`, `AWS_SETUP_GUIDE.md` describe removed or wrong things (Ansible, t3.small, 23 resources). | Misleading docs. | Phase 8. |
+| B-009 | `DEMO_GUIDE.html`, `AWS_SETUP_GUIDE.md` describe removed or wrong things (Ansible, t3.small, 23 resources). | Misleading docs. | ✅ Resolved 2026-09-25 — D-104. Both are rewritten to describe what exists: the setup of the account layer, the edge and the environments, and the presenter's timeline, story and fallbacks. The operator's steps are in `docs/DEMO_DAY.md`. |
 | B-010 | Prisma pool size across up to 12 pods is unset. | Connection exhaustion under autoscaling. | ✅ Resolved 2026-09-16 — D-042. `connection_limit=5&pool_timeout=10` is set on the URL the cluster builds, so ten pods use at most 50 connections. |
 | B-011 | `/api/metrics` and `/api/health/ready` will be reachable through CloudFront. | Metrics are token-protected, but readiness pings the DB per request. | ✅ Resolved for the cluster 2026-09-16 — D-043. Both paths answer 403 through ingress-nginx; the AWS overlay does the same with an ALB fixed-response rule. **2026-09-23:** CloudFront's own function refuses both too, after normalising the path (D-089); proven through CloudFront once the platform is online (B-031). |
 | B-012 | Supabase access policies not reviewed. | Any anon policy on the `receipts` bucket was pure risk once the app stopped writing with the anon key. | ✅ Resolved 2026-09-16 — the user deleted every policy and set the bucket to 10 MB and image types only. Verified: an SVG is refused (HTTP 415) even through a valid signed upload URL. |
@@ -4239,7 +4314,7 @@ report.
 | B-020 | The Docker image's browser code had no Supabase URL or key, so uploads could not work from a container. | Receipt uploads would have failed on Kubernetes. | ✅ Resolved 2026-09-16 — the browser now PUTs to the signed URL alone, with no key and no Supabase client (D-028). |
 | B-018 | One profile still carried an avatar that wasn’t a normal storage URL. | Photos kept as `data:` text sit in every API response that includes that user — group members, expense payers, settlement participants. | ✅ Resolved 2026-09-17. The corrected query found **one** `data:` avatar and **no** email-named files (the first query was wrong: the old code replaced `@` with `_`, so `LIKE '%@%'` could never match). It was **828 KB of text** — a 621 KB JPEG — carried in every response that mentioned that user. `scripts/migrate-avatars.mjs --apply --https` uploaded it to `avatars/<id>/`, rewrote the row only while it still held the `data:` value, and confirmed the stored copy is served as `image/jpeg` and **byte-identical** to the original. A backup of the old value was written first. Production now has 0 `data:` avatars. |
 | B-021 | The AWS root user still had two active access keys. | Root keys cannot be restricted by any policy. | ✅ Resolved 2026-09-16 — the user deleted both. Root keeps MFA (a security key), the CLI uses `splitx-devops`, and no repository file or GitHub Actions secret holds AWS keys. |
-| B-022 | `argocd/`, `jenkins/Jenkinsfile`, `AWS_SETUP_GUIDE.md` and `DEMO_GUIDE.html` still reference the `helm/splitx` chart deleted in D-034, and `argocd/kind-cluster.yml` is a second, stale Kind config. | Anyone following those files sets up something that no longer exists. | 🚧 Narrowed 2026-09-20 — `argocd/` and the old Jenkins files are deleted, and the Jenkinsfile is the one that runs (D-055): GitOps does not return, because Jenkins is the deployer. `AWS_SETUP_GUIDE.md` and `DEMO_GUIDE.html` still describe the deleted chart; phase 8 rewrites the guides. |
+| B-022 | `argocd/`, `jenkins/Jenkinsfile`, `AWS_SETUP_GUIDE.md` and `DEMO_GUIDE.html` still reference the `helm/splitx` chart deleted in D-034, and `argocd/kind-cluster.yml` is a second, stale Kind config. | Anyone following those files sets up something that no longer exists. | 🚧 Narrowed 2026-09-20 — `argocd/` and the old Jenkins files are deleted, and the Jenkinsfile is the one that runs (D-055): GitOps does not return, because Jenkins is the deployer. `AWS_SETUP_GUIDE.md` and `DEMO_GUIDE.html` still describe the deleted chart; phase 8 rewrites the guides. **2026-09-25: ✅ Resolved — D-104.** Neither guide mentions the deleted chart any more. |
 | B-023 | metrics-server runs with `--kubelet-insecure-tls` on Kind, because Kind’s kubelets serve metrics with a certificate the cluster CA did not issue. | The flag disables verification of what the autoscaler reads. It is in a values file, not hidden in a script, precisely so it cannot be copied to AWS by accident. | 🚧 2026-09-23 — EKS's own metrics-server add-on, without the flag (D-089); aws-up checks that it answers. That the HPA reads CPU from it is checked on EKS in plan Phase 8. |
 | B-024 | In the final saturation run, 155 of 7,442 requests spent over 3 s inside a pod, all 30 to 50 s into the overload, on both pods, with none after. | A transient stall right when a burst arrives is exactly when a classroom notices. | 🚧 Narrowed 2026-09-18 — D-053. Not garbage collection: the stall belongs to freshly started pods at their 1-CPU limit. Without the limit, fresh pods had 0 and 89 requests over 3 s in a pod (175 to 228 with it), the longest 2.9 and 6.3 s, and served 45% more. Left: the remaining cold start; phase 7 measures the ALB slow start for new targets. |
 | B-025 | Sign-up, login and password reset are still limited to 10 a minute per address (D-022). | A room asked to register at once from one campus network would be refused after the first ten. The demo page needs no account, so it is not affected. | ✅ Resolved 2026-09-22 — D-076. Credential routes are limited per device under a network ceiling of 240 a minute; guessing stays capped per account and inbox flooding per address. |

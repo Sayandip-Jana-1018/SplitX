@@ -10,6 +10,7 @@ import { getNetworkErrorCopy, NetworkTaggedError } from '@/lib/networkErrors';
 import { fetcher } from '@/lib/swr';
 import ClusterPanels from './ClusterPanels';
 import { OutLink, REPOSITORY_URL } from './parts';
+import { PreflightSection } from './PreflightSection';
 import { DeliveriesSection, JoinCard, PipelineSection, ReleaseCard, ToolsSection, type OpsSummary } from './SummaryPanels';
 import styles from './ops.module.css';
 
@@ -42,6 +43,8 @@ export default function OpsPage() {
                 title="SplitX, live"
                 subtitle="Every number is read from its source as the page refreshes: the pipeline every 15 seconds, the cluster every 5. Where a source can't be read, it says so."
             />
+
+            <PreflightSection summary={data} cluster={cluster} />
 
             <div className={styles.grid}>
                 <ReleaseCard pipeline={data.pipeline} deliveries={data.deliveries} />

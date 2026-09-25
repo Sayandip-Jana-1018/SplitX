@@ -1,518 +1,99 @@
-# ☁️ SplitX — AWS Full Setup Guide
-# From Scratch to Production-Grade DevOps Pipeline
-# You have $100 AWS Credit — This guide costs ~$6 for a 24hr demo
+# SplitX on AWS: the setup
 
-> **Prerequisite tools already installed on your machine:**
-> `aws`, `terraform`, `kubectl`, `helm`, `docker` — all confirmed working locally.
+SplitX's demo platform runs on AWS only on the days that need it. This guide sets up what stays in
+the account between those days. It is done once, and costs nothing, or cents, while idle. What to do
+on each AWS day is in the runbook, [docs/DEMO_DAY.md](docs/DEMO_DAY.md). Why each part is built this
+way is in [docs/DECISIONS.md](docs/DECISIONS.md): D-087 to D-103.
 
----
+## What lives where
 
-## 💰 Cost Estimate (with $100 credit)
-
-| Resource | Per Hour | Per Day | Notes |
+| Layer | Made by | Stays | What it holds |
 |---|---|---|---|
-| EKS Control Plane | $0.10 | $2.40 | 1 cluster |
-| 2× t3.medium EC2 nodes | $0.083 | $2.00 | Worker nodes |
-| ALB Load Balancer | $0.025 | $0.60 | App traffic |
-| ECR Storage | ~$0.01 | $0.24 | Docker images |
-| **TOTAL** | **~$0.22** | **~$5.25** | |
-
-> **$100 credit = ~19 days** even if you forget to destroy. But always run `terraform destroy` after the presentation.
-
----
-
-## 📋 Phase 0 — AWS Account & CLI Setup
-
-### Step 1: Configure AWS CLI with your credentials
-
-Go to **AWS Console → IAM → Users → Your User → Security Credentials → Create Access Key**
-
-```bash
-aws configure
-# AWS Access Key ID: <paste from console>
-# AWS Secret Access Key: <paste from console>
-# Default region: us-east-1
-# Default output format: json
-```
-
-Verify it works:
-```bash
-aws sts get-caller-identity
-```
-
-Expected output:
-```json
-{
-    "UserId": "AIDAXXXXXXXXXXXXXXXXX",
-    "Account": "918183256068",
-    "Arn": "arn:aws:iam::918183256068:user/your-username"
-}
-```
-
-### Step 2: Install eksctl (needed for EKS nodegroup management)
-
-```powershell
-# Windows — download eksctl
-curl -L "https://github.com/weaveworks/eksctl/releases/latest/download/eksctl_Windows_amd64.zip" -o eksctl.zip
-Expand-Archive eksctl.zip -DestinationPath C:\tools\
-# Add C:\tools to your PATH
-```
-
----
-
-## 📦 Phase 1 — ECR (Elastic Container Registry)
-
-Create the Docker image registry where Jenkins will push your built images.
-
-### Step 1: Create ECR Repository
-
-```bash
-aws ecr create-repository \
-    --repository-name splitx-app \
-    --region us-east-1 \
-    --image-scanning-configuration scanOnPush=true
-```
-
-Expected output (save the `repositoryUri`):
-```json
-{
-    "repository": {
-        "repositoryUri": "918183256068.dkr.ecr.us-east-1.amazonaws.com/splitx-app",
-        "repositoryName": "splitx-app"
-    }
-}
-```
-
-### Step 2: Login Docker to ECR
-
-```bash
-aws ecr get-login-password --region us-east-1 | \
-    docker login --username AWS --password-stdin \
-    918183256068.dkr.ecr.us-east-1.amazonaws.com
-```
-
-Expected: `Login Succeeded`
-
-### Step 3: Build and Push Your Image to ECR
-
-```bash
-# Build (from SplitX project root)
-docker build -t splitx-app:latest .
-
-# Tag for ECR
-docker tag splitx-app:latest \
-    918183256068.dkr.ecr.us-east-1.amazonaws.com/splitx-app:latest
-
-# Push
-docker push 918183256068.dkr.ecr.us-east-1.amazonaws.com/splitx-app:latest
-```
-
----
-
-## 🏗️ Phase 2 — Terraform (Infrastructure as Code)
-
-Terraform creates your entire AWS infrastructure: VPC, subnets, EKS cluster, EC2 nodes, IAM roles, security groups.
-
-### Step 1: Create S3 bucket for Terraform remote state
-
-```bash
-aws s3 mb s3://splitx-terraform-state-918183256068 --region us-east-1
-
-# Enable versioning (important for state recovery)
-aws s3api put-bucket-versioning \
-    --bucket splitx-terraform-state-918183256068 \
-    --versioning-configuration Status=Enabled
-```
-
-### Step 2: Update terraform/backend.tf to use S3
-
-Open `terraform/backend.tf` and change to:
-```hcl
-terraform {
-  backend "s3" {
-    bucket = "splitx-terraform-state-918183256068"
-    key    = "splitx/terraform.tfstate"
-    region = "us-east-1"
-  }
-}
-```
-
-### Step 3: Initialize and Plan
-
-```bash
-cd terraform
-terraform init -reconfigure
-terraform plan
-```
-
-Expected: `Plan: 23 to add, 0 to change, 0 to destroy.`
-
-Key resources Terraform creates:
-- VPC with public + private subnets across 2 AZs
-- Internet Gateway + NAT Gateway
-- EKS cluster (`splitx-eks`)
-- EKS managed node group (2× t3.medium)
-- ECR repository (if not created in Phase 1)
-- IAM roles for EKS + nodes + ALB controller
-- Security groups
-
-### Step 4: Apply (takes ~15 minutes)
-
-```bash
-terraform apply
-# Type: yes
-```
-
-Expected final output:
-```
-Apply complete! Resources: 23 added, 0 changed, 0 destroyed.
-
-Outputs:
-  eks_cluster_name   = "splitx-eks"
-  eks_cluster_endpoint = "https://XXXXX.gr7.us-east-1.eks.amazonaws.com"
-  ecr_repository_url = "918183256068.dkr.ecr.us-east-1.amazonaws.com/splitx-app"
-```
-
----
-
-## ⚙️ Phase 3 — Ansible (EC2 Node Configuration)
-
-Ansible configures the EC2 worker nodes with required software (Docker, kubectl, aws-cli, monitoring agents).
-
-### Step 1: Get EC2 node IPs from AWS
-
-```bash
-aws ec2 describe-instances \
-    --filters "Name=tag:kubernetes.io/cluster/splitx-eks,Values=owned" \
-    --query "Reservations[*].Instances[*].PublicIpAddress" \
-    --output text
-```
-
-### Step 2: Update inventory file
-
-Edit `ansible/inventory/hosts.ini`:
-```ini
-[k8s_workers]
-<NODE_1_IP> ansible_user=ec2-user ansible_ssh_private_key_file=~/.ssh/splitx-key.pem
-<NODE_2_IP> ansible_user=ec2-user ansible_ssh_private_key_file=~/.ssh/splitx-key.pem
-```
-
-### Step 3: Create SSH key pair (if not done)
-
-```bash
-aws ec2 create-key-pair \
-    --key-name splitx-key \
-    --query 'KeyMaterial' \
-    --output text > ~/.ssh/splitx-key.pem
-chmod 400 ~/.ssh/splitx-key.pem
-```
-
-### Step 4: Run the playbook
-
-```bash
-cd ansible
-ansible-playbook -i inventory/hosts.ini playbooks/setup-node.yml
-```
-
-Expected: All tasks complete with `ok` or `changed`, no failures.
-
----
-
-## ☸️ Phase 4 — Kubernetes + kubectl
-
-### Step 1: Connect kubectl to your EKS cluster
-
-```bash
-aws eks update-kubeconfig \
-    --name splitx-eks \
-    --region us-east-1
-```
-
-### Step 2: Verify cluster is running
-
-```bash
-kubectl get nodes
-```
-
-Expected:
-```
-NAME                          STATUS   ROLES    AGE   VERSION
-ip-10-0-1-xx.ec2.internal     Ready    <none>   5m    v1.32.x
-ip-10-0-2-xx.ec2.internal     Ready    <none>   5m    v1.32.x
-```
-
-### Step 3: Create namespaces
-
-```bash
-kubectl create namespace splitx
-kubectl create namespace monitoring
-kubectl create namespace argocd
-```
-
-### Step 4: Create secret for database connection
-
-```bash
-kubectl create secret generic splitx-env \
-    --namespace splitx \
-    --from-literal=DATABASE_URL="postgresql://user:pass@host/db?sslmode=require" \
-    --from-literal=NEXTAUTH_SECRET="your-secret" \
-    --from-literal=NEXTAUTH_URL="http://<ALB_DNS_NAME>"
-```
-
----
-
-## 🪖 Phase 5 — Helm (Deploy SplitX App)
-
-### Step 1: Install AWS Load Balancer Controller (required for ALB)
-
-```bash
-# Add EKS Helm repo
-helm repo add eks https://aws.github.io/eks-charts
-helm repo update
-
-# Install ALB controller
-helm install aws-load-balancer-controller eks/aws-load-balancer-controller \
-    --namespace kube-system \
-    --set clusterName=splitx-eks \
-    --set serviceAccount.create=true
-```
-
-### Step 2: Deploy SplitX with Helm
-
-```bash
-cd /path/to/SplitX
-
-helm install splitx ./helm/splitx \
-    --namespace splitx \
-    --create-namespace \
-    --set image.repository=918183256068.dkr.ecr.us-east-1.amazonaws.com/splitx-app \
-    --set image.tag=latest \
-    --set image.pullPolicy=Always \
-    --set ingress.enabled=true \
-    --set ingress.className=alb
-```
-
-### Step 3: Verify deployment
-
-```bash
-# Watch pods come up
-kubectl get pods -n splitx -w
-
-# Check HPA (auto-scaling)
-kubectl get hpa -n splitx
-
-# Get the ALB DNS name (your app's public URL)
-kubectl get ingress -n splitx
-```
-
-Expected pod output:
-```
-NAME                              READY   STATUS    RESTARTS   AGE
-splitx-app-7d9f8b-xxxxx           1/1     Running   0          2m
-splitx-app-7d9f8b-yyyyy           1/1     Running   0          2m
-```
-
-### Step 4: Verify Helm release
-
-```bash
-helm list -n splitx
-helm history splitx -n splitx
-```
-
----
-
-## 📊 Phase 6 — Monitoring on EKS (Prometheus + Grafana + Loki)
-
-### Deploy Prometheus Stack to EKS
-
-```bash
-helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-helm repo update
-
-helm install monitoring prometheus-community/kube-prometheus-stack \
-    --namespace monitoring \
-    --create-namespace \
-    --set grafana.adminPassword="$GF_ADMIN_PASSWORD" \
-    --set prometheus.prometheusSpec.serviceMonitorSelectorNilUsesHelmValues=false
-```
-
-### Deploy Loki Stack to EKS
-
-```bash
-helm repo add grafana https://grafana.github.io/helm-charts
-
-helm install loki grafana/loki-stack \
-    --namespace monitoring \
-    --set grafana.enabled=false \
-    --set promtail.enabled=true
-```
-
-### Access Grafana on EKS
-
-```bash
-# Port-forward Grafana to localhost
-kubectl port-forward svc/monitoring-grafana -n monitoring 3001:80
-# Open: http://localhost:3001
-# Login: admin / splitx_grafana
-```
-
----
-
-## 🔄 Phase 7 — ArgoCD on EKS
-
-### Step 1: Install ArgoCD
-
-```bash
-kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
-
-# Wait for pods to be ready
-kubectl wait --for=condition=available deployment/argocd-server -n argocd --timeout=300s
-```
-
-### Step 2: Get ArgoCD admin password
-
-```bash
-kubectl -n argocd get secret argocd-initial-admin-secret \
-    -o jsonpath="{.data.password}" | base64 -d
-```
-
-### Step 3: Access ArgoCD UI
-
-```bash
-kubectl port-forward svc/argocd-server -n argocd 8090:443
-# Open: https://localhost:8090
-# Login: admin / <password from step 2>
-```
-
-### Step 4: Create the SplitX ArgoCD Application
-
-```bash
-kubectl apply -f argocd/splitx-app.yml
-```
-
-ArgoCD will immediately connect to GitHub and sync the Helm chart. The spiderweb tree will show all Kubernetes resources.
-
----
-
-## 🔧 Phase 8 — Jenkins CI/CD Full Integration
-
-### Update Jenkins environment variables
-
-In Jenkins → Manage Jenkins → Environment Variables, add:
-```
-ECR_REGISTRY=918183256068.dkr.ecr.us-east-1.amazonaws.com
-ECR_REPO=splitx-app
-EKS_CLUSTER=splitx-eks
-AWS_REGION=us-east-1
-ARGOCD_SERVER=<your-argocd-server-address>
-ARGOCD_TOKEN=<generated from ArgoCD UI → Settings → Accounts → Generate Token>
-```
-
-### Jenkins pipeline will now run all 9 stages automatically:
-
-1. ✅ Checkout from GitHub
-2. ✅ npm ci
-3. ✅ ESLint
-4. ✅ SonarQube quality gate
-5. ✅ `docker build` → tag for ECR
-6. ✅ Trivy CVE scan
-7. ✅ `docker push` → ECR
-8. ✅ `helm upgrade` on EKS
-9. ✅ Update `values-dev.yaml` → git push → ArgoCD auto-syncs
-
----
-
-## 🔍 Phase 9 — Verification Checklist
-
-Run these commands to confirm everything is working:
-
-```bash
-# 1. EKS nodes healthy
-kubectl get nodes
-
-# 2. SplitX pods running
-kubectl get pods -n splitx
-
-# 3. App publicly accessible
-kubectl get ingress -n splitx
-# Open the ADDRESS in browser
-
-# 4. HPA configured
-kubectl get hpa -n splitx
-
-# 5. Helm release healthy
-helm status splitx -n splitx
-
-# 6. ArgoCD synced
-kubectl get application splitx -n argocd
-
-# 7. Loki receiving logs
-kubectl port-forward svc/loki -n monitoring 3100:3100 &
-curl http://localhost:3100/loki/api/v1/labels
-
-# 8. ECR image present
-aws ecr list-images --repository-name splitx-app --region us-east-1
-```
-
----
-
-## 🛑 IMPORTANT: Destroy After Presentation
-
-**Run this the moment your presentation ends to stop all charges:**
-
-```bash
-# 1. Delete Helm releases first
-helm uninstall splitx -n splitx
-helm uninstall monitoring -n monitoring
-helm uninstall loki -n monitoring
-
-# 2. Destroy all Terraform resources (~10 min)
-cd terraform
-terraform destroy
-# Type: yes
-
-# 3. Delete ECR images (optional, ECR has tiny cost)
-aws ecr delete-repository \
-    --repository-name splitx-app \
-    --region us-east-1 \
-    --force
-
-# 4. Delete S3 state bucket (optional)
-aws s3 rb s3://splitx-terraform-state-918183256068 --force
-```
-
-Verify no resources remain:
-```bash
-aws eks list-clusters --region us-east-1
-# Expected: { "clusters": [] }
-
-aws ec2 describe-instances \
-    --filters "Name=instance-state-name,Values=running" \
-    --query "Reservations[*].Instances[*].InstanceId" \
-    --output text
-# Expected: (empty)
-```
-
----
-
-## 📌 Quick Reference Card
-
-| Action | Command |
+| **The laptop's identity** | by hand, once | always | The IAM user `splitx-devops`, for the laptop's CLI calls. It may manage only `splitx-*` IAM names, and every role it makes must carry the permissions boundary ([terraform/bootstrap](terraform/bootstrap/README.md)). The root user keeps MFA and has no access keys. |
+| **The account layer** | CloudFormation, `npm run aws:bootstrap` | always | `splitx-bootstrap`: Terraform's state bucket, GitHub's OIDC provider, the roles `splitx-ci-deploy` (builds; only the reviewed environment `aws-demo` may assume it) and `splitx-ci-teardown` (can only remove), and the boundary both carry. `splitx-guardrails`: a $15 monthly budget and the alert topic ([cloudformation](cloudformation/README.md)). |
+| **The edge** | Terraform, `terraform/edge`, the **AWS edge** workflow | always, $0 idle | The CloudFront distribution and its function, which refuses the internal paths and serves an offline page while the platform is down. |
+| **The platform** | Terraform, `terraform/platform`, in **AWS up** | one day at a time | A VPC in two zones, EKS 1.35 with its add-ons, 3 to 4 `m7i-flex.large` nodes, and each workload's role through EKS Pod Identity. |
+| **The software** | `scripts/cluster-up.mjs --target eks`, in **AWS up** | one day at a time | External Secrets, Prometheus, Grafana, Loki, Kyverno, the AWS Load Balancer Controller, the Cluster Autoscaler, Jenkins, Nexus, the app, ops-api and the traffic lab. |
+| **The secrets** | `npm run aws:secrets`, from `.env` | only during an AWS day | `splitx/demo/app` and `splitx/demo/platform` in Secrets Manager. `aws-down` deletes them. |
+
+No workflow holds an AWS key. GitHub's OIDC token is exchanged for a role, for at most three hours,
+and only in `ap-south-1`.
+
+## The one-time setup
+
+### 1. The laptop's CLI
+
+1. Create the user `splitx-devops` and its policy as described in
+   [terraform/bootstrap/README.md](terraform/bootstrap/README.md). Run this as an administrator, not as
+   the user itself.
+2. Create its access key in the IAM console, and enter it with `aws configure`, region `ap-south-1`.
+   Never paste a key into a file in this repository.
+3. Check it: `aws sts get-caller-identity` names `splitx-devops`.
+
+### 2. The account layer
+
+1. Put `BUDGET_EMAIL` in `.env`: where budget alerts are emailed.
+2. See the changes first with `npm run aws:bootstrap -- --plan`, then deploy them with
+   `npm run aws:bootstrap`.
+3. Confirm the subscription: AWS emails a link to `BUDGET_EMAIL` first.
+
+### 3. GitHub
+
+1. **Environment `aws-demo`**, with you as its required reviewer (Settings → Environments). Only its
+   jobs may assume `splitx-ci-deploy`, so **AWS edge**, **AWS up** and **AWS verify** wait for your
+   approval.
+2. **Environment `aws-teardown`**, with no reviewer. **AWS down** runs in it, including at night.
+3. **The repository secret `AWS_ACCOUNT_ID`**: the 12-digit account number. GitHub masks it in the
+   public logs.
+
+### 4. The account's limits
+
+- **vCPU quota:** four `m7i-flex.large` nodes need 8 vCPUs. Service Quotas → Amazon EC2 → "Running
+  On-Demand Standard (A, C, D, H, I, M, R, T, Z) instances" (`L-1216C47A`). `aws-up` checks it before
+  building anything.
+- **CloudFront:** a new account may have to be verified by AWS Support before it can create a
+  distribution. The **AWS edge** workflow says so in AWS's own words ("Your account must be verified
+  before you can add new CloudFront resources"). Open a support case, and run the workflow again when
+  AWS confirms.
+
+### 5. The edge
+
+1. GitHub → Actions → **AWS edge** → Run workflow, then approve `aws-demo`.
+2. Its summary names the distribution's domain. Commit it as `NEXTAUTH_URL=https://<domain>` in
+   `k8s/overlays/aws/kustomization.yaml`, the one place the address is written down.
+   - `cluster-up` refuses to install when the two disagree.
+   - While the platform is up behind the edge, the release job deploys every release to EKS too.
+
+### 6. What depends on the edge's address
+
+These are the runbook's §1, in [docs/DEMO_DAY.md](docs/DEMO_DAY.md):
+- the second GitHub OAuth App (`AWS_GITHUB_ID` and `AWS_GITHUB_SECRET` in `.env`);
+- Google's redirect URI;
+- the second repository webhook, which reaches Jenkins through CloudFront;
+- the Neon branch `demo`, schema only (`DEMO_DATABASE_URL` in `.env`).
+
+## Each AWS day
+
+Follow [docs/DEMO_DAY.md](docs/DEMO_DAY.md):
+1. `npm run aws:secrets`, the day before;
+2. **AWS up**, about two hours before;
+3. **AWS verify**, after any fix;
+4. **AWS down** in the evening. It also runs by itself at 23:30 IST.
+
+## What it costs
+
+| | |
 |---|---|
-| Verify AWS login | `aws sts get-caller-identity` |
-| Deploy infrastructure | `cd terraform && terraform apply` |
-| Connect kubectl to EKS | `aws eks update-kubeconfig --name splitx-eks --region us-east-1` |
-| ECR login | `aws ecr get-login-password --region us-east-1 \| docker login --username AWS --password-stdin 918183256068.dkr.ecr.us-east-1.amazonaws.com` |
-| Push image to ECR | `docker push 918183256068.dkr.ecr.us-east-1.amazonaws.com/splitx-app:latest` |
-| Deploy app | `helm install splitx ./helm/splitx -n splitx --create-namespace` |
-| Update app | `helm upgrade splitx ./helm/splitx -n splitx --set image.tag=v2` |
-| Rollback app | `helm rollback splitx 1 -n splitx` |
-| ArgoCD UI | `kubectl port-forward svc/argocd-server -n argocd 8090:443` |
-| Grafana UI | `kubectl port-forward svc/monitoring-grafana -n monitoring 3001:80` |
-| View app logs | `kubectl logs -n splitx -l app=splitx --tail=50` |
-| **DESTROY EVERYTHING** | `cd terraform && terraform destroy` |
+| Between AWS days | Cents: the state bucket, and CloudFront with no traffic. |
+| An AWS day of about 6 hours | About $3: EKS, three or four nodes, the NAT gateway, the load balancer and the volumes. |
+| The budget | $15 a month, counted without credits. It emails at 50 %, 80 % and 100 %, and on the forecast. |
 
----
+AWS's billing data lags 8 to 12 hours, so the budget can't notice a platform that was left up. The
+nightly **AWS down** can, and it removes it.
 
-*SplitX AWS Setup Guide — Account: 918183256068 | Region: us-east-1*
-*Estimated cost for 24hr full demo: ~$6 of your $100 credit*
+## Checking the setup
+
+- `npm run aws:secrets -- --check` names every key the platform needs, and anything missing in `.env`.
+- The newest **Kind end-to-end** run tests the same platform on a GitHub runner, every night.
+- **AWS up** checks the cluster, the edge and the delivery as it goes, and ends with **Verify the
+  platform**: `k8s:verify` and `cd:verify` on EKS, through CloudFront.
