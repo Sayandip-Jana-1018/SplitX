@@ -76,7 +76,7 @@
     "fast-check": "^4.10.2",
     "husky": "^9.1.7",
     "prisma": "^6.19.3",
-    "typescript": "^5",
+    "typescript": "^7",
     "vitest": "4.1.11"
   },
   "overrides": {
