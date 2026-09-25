@@ -4485,6 +4485,70 @@ worth seeing.
   later.
 - **Checking the database every 15 minutes,** for the compute hours above.
 
+**2026-09-25, later:** the first scheduled and pushed runs on GitHub passed all 6 checks (run
+36102807424, on `ded12b7`). The incident issue has not been opened yet; the first real failure will.
+
+### D-107 · The flows a classroom uses, tested in a phone's browser before every release
+**2026-09-25** · ✅ 11 tests green locally against a production build. CI's `e2e` job runs them on
+every push (plan Phase 1b).
+
+**What they do.** Playwright 1.61, a Pixel 7's Chromium, and only the page: each test taps, types
+and reads what a person would, never the API behind it. The seven flows of the plan:
+
+| Flow | Tests (`tests/e2e/`) |
+|---|---|
+| 1. An account | Sign up, sign out, sign in again. A wrong password and an unknown address get the same words. A page that needs an account sends a visitor to sign in, and back after. |
+| 2. A group and its invite | One person makes it and shares the link; a friend joins from it on their own phone, and each sees the other. A link to no group says it has expired. |
+| 3. Expenses | ₹900 split equally and ₹300 split by amounts (the last person's share filled in by the composer) leave the friend owing ₹650, on both phones. A custom split over the amount can't be saved. |
+| 4. Change and remove | An expense's title and amount changed, another deleted; the balance follows each. |
+| 5. Settling up | Paid in cash, sent back as not received, paid again, approved: the balance clears only at the end (D-066's transitions). |
+| 6. Removing a member | Refused while they owe, in the server's words; allowed once settled; their old invite link stops working. |
+| 7. A shared phone | After sign-out, no session cookie, the account's pages send you to sign in, and the browser's caches hold only the offline page. Copies an older service worker might have left are gone too. |
+
+Each test makes its own people with addresses unique to the run, so no test depends on another.
+They run one at a time, since they share one database.
+
+**Where they run.** CI's `e2e` job:
+- a production build: the service worker and the `__Secure-` session cookie exist only there;
+- Postgres 17.11, migrated, and Redis, as production and EKS have;
+- a session secret made for the run and masked, and no repository secret.
+
+The release job waits for it, so a release that breaks a flow is never signed or deployed.
+Vercel deploys `main` on its own: pushes go straight to `main` (memory `push-to-main-policy`), so no
+branch rule can hold them. The report, with each failure's screenshots and trace, is kept 7 days.
+
+**What the tests found: the fallback limiter made a classroom one person again.**
+- When Redis is missing or down, sign-in, sign-up and password reset fail closed: the app counts
+  them itself (`src/lib/rateLimit/local.ts`).
+- It counted them by network address alone, at the per-device limit of 10 a minute. The fifth
+  sign-up in a minute from the laptop was refused "Too many requests".
+- A room signing up at once from one campus address would have met it too: B-025's fix (per phone,
+  under a network ceiling of 240 a minute) held only while Redis was up.
+- **The fix:** the fallback counts as the shared limiter does, per phone and against the network's
+  ceiling. A request without a device is still limited by its address.
+- **Tests:** four new unit tests. 25 phones on one address all pass. One phone still stops at ten.
+  The network ceiling holds, since device cookies cost nothing to make.
+
+**Not covered, and why.**
+- **The emailed confirmation link.** Production has no email sender, so no confirmation is asked
+  for (`lib/emailVerification.ts`). When one is chosen, a Mailpit container in the job can catch
+  the email and the test can follow its link.
+- **Split by items.** It follows the AI receipt scan, which needs a paid key. A real receipt on
+  production checks it instead.
+- **UPI payments.** They open a payment app, which no browser test can follow; the cash path covers
+  the same states.
+- **The frontend review** half of plan Phase 1b is still to do.
+
+**On the laptop:** `node <tools>/e2e-local.mjs build|start|test` (handoff). It blanks every key
+`.env` defines before running. Next.js never overrides a variable that is already set, so without
+this a local run would send real email and use production's Redis. It runs on the throwaway
+Postgres (memory `local-postgres-testing`).
+
+**Rejected:**
+- **Testing through the API.** It would pass with a broken screen.
+- **One long test** of all seven flows. A failure would hide everything after it.
+- **Raising the limits for the tests.** The limiter they tripped is the one a classroom would trip.
+
 ---
 
 ## Open problems
@@ -4515,7 +4579,7 @@ worth seeing.
 | B-022 | `argocd/`, `jenkins/Jenkinsfile`, `AWS_SETUP_GUIDE.md` and `DEMO_GUIDE.html` still reference the `helm/splitx` chart deleted in D-034, and `argocd/kind-cluster.yml` is a second, stale Kind config. | Anyone following those files sets up something that no longer exists. | 🚧 Narrowed 2026-09-20 — `argocd/` and the old Jenkins files are deleted, and the Jenkinsfile is the one that runs (D-055): GitOps does not return, because Jenkins is the deployer. `AWS_SETUP_GUIDE.md` and `DEMO_GUIDE.html` still describe the deleted chart; phase 8 rewrites the guides. **2026-09-25: ✅ Resolved — D-104.** Neither guide mentions the deleted chart any more. |
 | B-023 | metrics-server runs with `--kubelet-insecure-tls` on Kind, because Kind’s kubelets serve metrics with a certificate the cluster CA did not issue. | The flag disables verification of what the autoscaler reads. It is in a values file, not hidden in a script, precisely so it cannot be copied to AWS by accident. | 🚧 2026-09-23 — EKS's own metrics-server add-on, without the flag (D-089); aws-up checks that it answers. That the HPA reads CPU from it is checked on EKS in plan Phase 8. |
 | B-024 | In the final saturation run, 155 of 7,442 requests spent over 3 s inside a pod, all 30 to 50 s into the overload, on both pods, with none after. | A transient stall right when a burst arrives is exactly when a classroom notices. | 🚧 Narrowed 2026-09-18 — D-053. Not garbage collection: the stall belongs to freshly started pods at their 1-CPU limit. Without the limit, fresh pods had 0 and 89 requests over 3 s in a pod (175 to 228 with it), the longest 2.9 and 6.3 s, and served 45% more. Left: the remaining cold start; phase 7 measures the ALB slow start for new targets. |
-| B-025 | Sign-up, login and password reset are still limited to 10 a minute per address (D-022). | A room asked to register at once from one campus network would be refused after the first ten. The demo page needs no account, so it is not affected. | ✅ Resolved 2026-09-22 — D-076. Credential routes are limited per device under a network ceiling of 240 a minute; guessing stays capped per account and inbox flooding per address. |
+| B-025 | Sign-up, login and password reset are still limited to 10 a minute per address (D-022). | A room asked to register at once from one campus network would be refused after the first ten. The demo page needs no account, so it is not affected. | ✅ Resolved 2026-09-22 — D-076. Credential routes are limited per device under a network ceiling of 240 a minute; guessing stays capped per account and inbox flooding per address. **2026-09-25, D-107:** the browser tests found that this held only while Redis was up: the fallback limiter counted by address alone. It now counts per device under the same ceiling. |
 | B-026 | Jenkins' deploy builds and `cd:verify` read GitHub's deployments without a token, and this network's public address shares GitHub's anonymous allowance (60 an hour) with other devices. | A deploy would fail at its first step whenever someone else on the network had spent the allowance: on 2026-09-21 its hour began eleven minutes before this laptop booted, and it was spent when `cd:verify` ran, which failed 2 of its 15 checks on it. | Open — the user creates a fine-grained token (this repository only, Deployments read and write) and puts it in `.env` as `JENKINS_GITHUB_TOKEN`; `k8s:up` hands it to Jenkins. Both scripts now say when the allowance is spent and until when, instead of a bare 403, and the build log no longer repeats GitHub's message, which names the address. **2026-09-21:** the token is in `.env` and works (5,000 an hour). |
 | B-027 | With the cluster running, the 6 GB WSL VM held about 4 GB in memory and all 8 GB of its swap (2026-09-21), about 12 GB against the 4.6 GB the same cluster used the day before. | The control plane crash-looped and the app answered 503. On Windows, the swap file held the SSD at a queue of 100–245 and 61 ms reads, which froze the laptop. Release `7e3509e` (deployment 6572256500, 15:45 UTC) reached no relay and was never deployed: no delivery was logged after 15:30 UTC. | ✅ Answered 2026-09-24 — D-099. Measured on a GitHub runner from before the cluster existed: the platform peaks at 7.0 GB in use, 5.7 GB of it anonymous (Nexus 1.24 GB, the API server 0.99 GB, Jenkins 0.63 GB, Grafana 0.48 GB, Prometheus 0.35 GB); shared memory 0.13 GB; no swap. It no longer fits the laptop's 6 GB VM, so the full platform runs on GitHub's runners (kind-e2e), and the laptop runs none of it. Release 7e3509e is long superseded; each kind-e2e run delivers the release it tests through GitHub's own webhook. |
 | B-028 | The AI chat builds its own balances: pairwise instead of the group plan, over every expense including deleted ones, in deleted groups too, with ±1 paisa counted as settled. | Its answers to "who owes me?" can disagree with Settle Up, and count expenses that were deleted. | ✅ Resolved 2026-09-22 — D-067. The chat's context is the ledger: balances per group over live expenses, and each group's settle-up plan. |

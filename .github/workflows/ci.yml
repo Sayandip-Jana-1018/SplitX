@@ -185,6 +185,101 @@ jobs:
           npx prisma migrate deploy
           npm run test:db
 
+  e2e:
+    # The flows a classroom uses, in a phone's browser (Playwright, D-107): an
+    # account, a group and its invite link, expenses split equally and by
+    # amounts, changed and removed, settling up through each state, removing a
+    # member, and a shared phone after sign-out. Against a production build, on
+    # a real Postgres and Redis, as production runs. A release waits for it.
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:17.11-alpine3.24@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: splitx_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+      redis:
+        image: redis:7.4.9-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres@127.0.0.1:5432/splitx_e2e
+      DIRECT_URL: postgresql://postgres@127.0.0.1:5432/splitx_e2e
+      # The rate limiter's shared store, as on Vercel (Upstash) and EKS.
+      REDIS_URL: redis://127.0.0.1:6379/0
+      NEXTAUTH_URL: http://localhost:3000
+      AUTH_URL: http://localhost:3000
+      AUTH_TRUST_HOST: 'true'
+      AI_DISABLED: 'true'
+      NEXT_TELEMETRY_DISABLED: 1
+      E2E_BASE_URL: http://localhost:3000
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - name: Setup Node
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: A session secret for this run only
+        run: |
+          secret="$(openssl rand -base64 32)"
+          echo "::add-mask::$secret"
+          echo "NEXTAUTH_SECRET=$secret" >> "$GITHUB_ENV"
+          echo "AUTH_SECRET=$secret" >> "$GITHUB_ENV"
+
+      - name: Migrate the database
+        run: npx prisma migrate deploy
+
+      - name: Build
+        run: npm run build
+
+      - name: Install the browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Serve the build, as production does
+        run: |
+          nohup npx next start -p 3000 > next.log 2>&1 &
+          for attempt in $(seq 1 60); do
+            curl -sf http://localhost:3000/api/health/ready > /dev/null && exit 0
+            sleep 1
+          done
+          cat next.log
+          exit 1
+
+      - name: The flows
+        run: npx playwright test
+
+      - name: Keep the report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: e2e-report
+          path: |
+            playwright-report/
+            test-results/
+            next.log
+          retention-days: 7
+
   secret-scan:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -448,7 +543,7 @@ jobs:
     # A commit on main that passed every job above becomes a release: built
     # once, published, scanned, signed, and handed to Jenkins as a GitHub
     # deployment. Jenkins deploys only images this job signed (D-054).
-    needs: [verify, integration, database, secret-scan, manifests, iac, terraform]
+    needs: [verify, integration, database, e2e, secret-scan, manifests, iac, terraform]
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     timeout-minutes: 30

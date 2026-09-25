@@ -71,3 +71,8 @@ __pycache__/
 .cluster-up-ops-*/
 # kind-e2e.yml: what a run measures on its runner, uploaded as an artifact (D-099)
 e2e-evidence/
+
+# Playwright (tests/e2e, D-107): the report, and each failure's screenshots and trace
+playwright-report/
+test-results/
+blob-report/

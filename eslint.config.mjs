@@ -16,6 +16,10 @@ const eslintConfig = defineConfig([
     "coverage/**",
     // The OCR engine, minified, copied from node_modules at build (scripts/tesseract-assets.mjs).
     "public/tesseract/**",
+    // Playwright's report and traces (tests/e2e).
+    "playwright-report/**",
+    "test-results/**",
+    "blob-report/**",
   ]),
 ]);
 
