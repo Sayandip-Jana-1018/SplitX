@@ -87,6 +87,23 @@ function appUrl() {
     return url;
 }
 
+/**
+ * The words of an HTML fragment, for an email's plain-text copy: everything from
+ * a "<" to the next ">" is left out, one character at a time. No "<" survives,
+ * so the pieces one pass of a tag pattern leaves behind ("<scr<b>ipt>") can't
+ * come together into a tag.
+ */
+export function stripTags(html: string) {
+    let text = '';
+    let inTag = false;
+    for (const char of html) {
+        if (char === '<') inTag = true;
+        else if (inTag) inTag = char !== '>';
+        else text += char;
+    }
+    return text;
+}
+
 /** One layout for every SplitX email: a heading, a sentence, a button, and a plain-text copy. */
 function layout(params: { icon: string; title: string; body: string; button: string; url: string; footnote: string }) {
     const html = `<!DOCTYPE html>
@@ -114,9 +131,7 @@ function layout(params: { icon: string; title: string; body: string; button: str
     </div>
 </body>
 </html>`;
-    // A tag can't hold "<", so each "<" is looked at once: the templates' tags come out the same.
-    const strip = (value: string) => value.replace(/<[^<>]+>/g, '');
-    const text = `${strip(params.title)}\n\n${strip(params.body)}\n\n${params.button}: ${params.url}\n\n${strip(params.footnote).replace(/\s+/g, ' ')}\n`;
+    const text = `${stripTags(params.title)}\n\n${stripTags(params.body)}\n\n${params.button}: ${params.url}\n\n${stripTags(params.footnote).replace(/\s+/g, ' ')}\n`;
     return { html, text };
 }
 

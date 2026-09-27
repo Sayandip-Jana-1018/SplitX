@@ -65,6 +65,21 @@ describe('emailTransport', () => {
     });
 });
 
+describe('stripTags, for the plain-text copy', () => {
+    it("keeps the templates' words and drops their tags", () => {
+        expect(email.stripTags('This link expires in <strong style="color:#c4b5fd;">1 hour</strong>.')).toBe('This link expires in 1 hour.');
+        expect(email.stripTags('You can ignore this email.<br>Your password stays the same.')).toBe('You can ignore this email.Your password stays the same.');
+        expect(email.stripTags('No tags at all, and a > on its own.')).toBe('No tags at all, and a > on its own.');
+    });
+
+    it('leaves no "<", so the pieces of a broken-up tag never join into one', () => {
+        for (const html of ['<scr<b>ipt>alert(1)</script>', '<<script>script>x', 'a < b', '<img src=x onerror=alert(1)', '<<<>>>']) {
+            expect(email.stripTags(html)).not.toContain('<');
+        }
+        expect(email.stripTags('<scr<b>ipt>alert(1)</script>')).toBe('ipt>alert(1)');
+    });
+});
+
 describe('sending', () => {
     it('sends over SMTP from the SMTP account, with a plain-text copy and a link back to the site', async () => {
         useSmtp();

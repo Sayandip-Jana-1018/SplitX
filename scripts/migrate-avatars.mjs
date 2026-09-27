@@ -24,14 +24,15 @@
  *
  * Safety:
  *   • nothing is written without --apply
- *   • the old value is saved to a backup file before any row changes
+ *   • the old value is saved to a backup file before any row changes, in
+ *     ~/splitx-backups (a folder only this user can open)
  *   • the image type comes from the bytes, never from the data URL's own claim
  *   • uploads never overwrite, and the row update only applies if the profile
  *     still holds a data: avatar — otherwise the new upload is removed again
  */
 import { randomUUID } from 'node:crypto';
-import { writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { createClient } from '@supabase/supabase-js';
 
@@ -109,8 +110,13 @@ try {
     if (rows.length === 0) process.exit(0);
 
     if (apply) {
-        const backupPath = join(tmpdir(), 'splitx-avatar-backup-' + Date.now() + '.json');
-        writeFileSync(backupPath, JSON.stringify(rows.map((row) => ({ id: row.id, image: row.image })), null, 2));
+        // People's photos, so not the shared temp folder, where another account on the
+        // machine could read the file or put one in its place first. The folder is this
+        // user's alone, and 'wx' refuses to write through anything already at the path.
+        const backupDir = join(homedir(), 'splitx-backups');
+        mkdirSync(backupDir, { recursive: true, mode: 0o700 });
+        const backupPath = join(backupDir, 'avatar-backup-' + Date.now() + '.json');
+        writeFileSync(backupPath, JSON.stringify(rows.map((row) => ({ id: row.id, image: row.image })), null, 2), { mode: 0o600, flag: 'wx' });
         console.log('Previous values saved to ' + backupPath);
     }
 
