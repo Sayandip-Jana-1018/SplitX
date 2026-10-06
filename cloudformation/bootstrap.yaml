@@ -188,7 +188,7 @@ Resources:
       ManagedPolicyName: splitx-ci-deploy-policy
       Description: >-
         What aws-up and aws-edge do: build and remove the platform (VPC, EKS,
-        load balancer, CloudFront), read and write Terraform's state, the demo's
+        load balancer, the API Gateway edge), read and write Terraform's state, the demo's
         secrets, and the platform's own roles, each bounded. Regional services
         only in this stack's region.
       PolicyDocument:
@@ -204,6 +204,8 @@ Resources:
               - ec2:*
               - eks:*
               - elasticloadbalancing:*
+              # The edge: an HTTP API in front of the load balancer (D-114).
+              - apigateway:*
               - logs:*
               - tag:*
               # Read only: a key of our own costs every month and lingers for
@@ -224,6 +226,8 @@ Resources:
               StringEquals:
                 aws:RequestedRegion: !Ref AWS::Region
           # Global services answer from us-east-1, whatever the stack's region.
+          # CloudFront stays until terraform/edge has removed what its first
+          # tries left (D-114): the account can't create a distribution.
           - Sid: GlobalServices
             Effect: Allow
             Action:
@@ -331,16 +335,16 @@ Resources:
   # ── What a teardown may do (aws-down; unattended) ──────────────
   # The scheduled teardown runs at night without a reviewer, so its role can
   # look at everything and remove the platform, and nothing else: no create,
-  # run, attach or start action appears here. The one change it may make is to
-  # switch the edge to its offline page.
+  # run, attach or start action appears here. The one change it may make
+  # besides removing is to take the edge offline, by removing its route.
   TeardownPolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
       ManagedPolicyName: splitx-ci-teardown-policy
       Description: >-
-        What aws-down does, unattended: read the platform, switch the edge to
-        its offline page, and delete the platform and its leftovers in this
-        region. It can't create, start or enlarge anything.
+        What aws-down does, unattended: read the platform, take the edge
+        offline (remove its route), and delete the platform and its leftovers
+        in this region. It can't create, start or enlarge anything.
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -359,6 +363,10 @@ Resources:
               - logs:ListTagsForResource
               - logs:ListTagsLogGroup
               - secretsmanager:ListSecrets
+              # The EKS node image's public parameter, which a destroy reads
+              # again before it deletes the node group (AWS down #14).
+              - ssm:GetParameter
+              - ssm:GetParameters
               - tag:GetResources
             Resource: '*'
             Condition:
@@ -367,9 +375,6 @@ Resources:
           - Sid: ReadGlobalServices
             Effect: Allow
             Action:
-              - cloudfront:Describe*
-              - cloudfront:Get*
-              - cloudfront:List*
               - iam:Get*
               - iam:List*
               - sts:GetCallerIdentity
@@ -466,23 +471,22 @@ Resources:
             Resource:
               - !GetAtt StateBucket.Arn
               - !Sub '${StateBucket.Arn}/*'
-          - Sid: ReadTheEdgeBuckets
+          # The edge (terraform/edge, D-114): read it, then remove its route and
+          # integration, which takes the site offline. The API itself stays: its
+          # address is the one the OAuth callback and the webhook name.
+          - Sid: ReadTheEdge
             Effect: Allow
-            Action:
-              - s3:Get*
-              - s3:List*
+            Action: apigateway:GET
             Resource:
-              - arn:aws:s3:::splitx-edge-*
-              - arn:aws:s3:::splitx-edge-*/*
+              - !Sub arn:aws:apigateway:${AWS::Region}::/apis
+              - !Sub arn:aws:apigateway:${AWS::Region}::/apis/*
+              - !Sub arn:aws:apigateway:${AWS::Region}::/tags/*
           - Sid: TakeTheEdgeOffline
             Effect: Allow
-            Action:
-              - cloudfront:PublishFunction
-              - cloudfront:UpdateDistribution
-              - cloudfront:UpdateFunction
+            Action: apigateway:DELETE
             Resource:
-              - !Sub arn:aws:cloudfront::${AWS::AccountId}:distribution/*
-              - !Sub arn:aws:cloudfront::${AWS::AccountId}:function/splitx-*
+              - !Sub arn:aws:apigateway:${AWS::Region}::/apis/*/routes/*
+              - !Sub arn:aws:apigateway:${AWS::Region}::/apis/*/integrations/*
 
   TeardownRole:
     Type: AWS::IAM::Role
