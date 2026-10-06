@@ -427,6 +427,9 @@ Resources:
               - eks:DeleteNodegroup
               - eks:DeletePodIdentityAssociation
               - eks:DisassociateAccessPolicy
+              # Deleting an add-on that holds a Pod Identity association (the
+              # EBS CSI driver) updates the association first (AWS down #15).
+              - eks:UpdatePodIdentityAssociation
             Resource:
               - !Sub arn:aws:eks:${AWS::Region}:${AWS::AccountId}:cluster/${ClusterName}
               - !Sub arn:aws:eks:${AWS::Region}:${AWS::AccountId}:nodegroup/${ClusterName}/*
