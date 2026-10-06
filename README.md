@@ -65,7 +65,7 @@ Prisma on Neon Postgres, and NextAuth v5, and it is live on Vercel for real user
 - **On AWS EKS, on demo days,** behind an HTTPS edge (API Gateway). It is built that morning, and removed that evening.
 
 Every decision, what was rejected, and the measurement behind each claim is in
-**[docs/DECISIONS.md](docs/DECISIONS.md)**: 114 decisions, with the open problems at the end.
+**[docs/DECISIONS.md](docs/DECISIONS.md)**: 115 decisions, with the open problems at the end.
 
 ---
 

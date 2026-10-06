@@ -5080,6 +5080,46 @@ a request policy and two empty buckets. The deploy role keeps `cloudfront:*` for
 
 Totals: 1,446 unit tests, `tsc`, ESLint, knip and `terraform fmt`.
 
+### D-115 · Next.js 16.3.8: the release gate stopped a critical advisory
+**2026-10-06** · ✅ fixed in code; CI's release job proves it on the next push.
+
+**What happened.** On 2026-09-30 GitHub published GHSA-vcvr-r3jv-pc5j, a critical one: remote code
+execution through `next/og`'s `ImageResponse`, in Next.js 16.2.0 to 16.3.5. The release that passed
+on 2026-09-22 was clean only until then, which is D-061's point.
+- CI's release job scans the app image before it signs anything (D-054). On `448ed79` (D-114) it
+  found the advisory and stopped, so no release of that commit was signed or announced.
+- kind-e2e on `448ed79` waited its 30 minutes for that release, then failed. Every other CI job
+  passed.
+
+**The app was never exposed:** it doesn't import `next/og`. The gate stops any critical or high
+finding that has a fix, whether the app reaches the code or not. Proving it can't would take longer
+than the upgrade.
+
+**16.3.8, not 16.3.6:**
+- 16.3.6 fixes this advisory alone.
+- 16.3.8, the newest patch (2026-09-30), also fixes:
+  - a high one: server-side request forgery in Image Optimization (GHSA-cjq9-62q9-8jv4), which the
+    app uses;
+  - six medium and low ones, among them cache poisoning of SSG and ISR pages on self-hosted servers.
+- Trivy would stop the next release on those as soon as they reach its database.
+- 16.3.7, between them, backports bug fixes.
+
+**Changed:**
+- `next` and `eslint-config-next` move together. Only Next.js's own 12 packages changed in the
+  lockfile.
+- Dependabot's #43 bumps Next.js too, among 14 updates, and Dependabot updates it after this push.
+  Its other 12 wait until after the demo on 2026-10-15: `npm audit` finds nothing they fix.
+- `ops/.npmrc` pins the HTTPS registry, as the root's has since D-015. npm reads the nearest
+  package's `.npmrc`, so in `ops/` this machine's plain-`http://` setting applied, and
+  `npm audit` there failed with 426.
+
+**Left as they are:** `npm audit` lists 9 high findings at the root, in build and test tools:
+`braces` under ESLint's Next.js config, `deepmerge-ts` under the Prisma CLI, and `source-map-js`.
+The image holds only Next.js's standalone output, its static files and `public/`, and none of
+them is there, so neither the release gate nor a visitor meets them. They wait until after the demo.
+
+**Checks:** 1,446 unit tests, the hardening checks, `tsc`, ESLint, knip and `db-schema --check`.
+
 ---
 
 ## Open problems
