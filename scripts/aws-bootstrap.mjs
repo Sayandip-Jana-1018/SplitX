@@ -49,16 +49,23 @@ const budgetEmail = process.env.BUDGET_EMAIL;
 if (!budgetEmail) fail('set BUDGET_EMAIL in .env: where budget alerts are emailed');
 
 // ── GitHub's OIDC provider exists once per account ──
+// The stack makes it unless the account has one the stack didn't make. One
+// it made on an earlier run is its own: asking for none then would delete
+// it, and every workflow would lose AWS (the plan of 2026-10-06 showed
+// "Remove GitHubOidcProvider").
 const providers = aws(['iam', 'list-open-id-connect-providers']);
 if (providers.status !== 0) fail(`could not list OIDC providers: ${providers.stderr.trim()}`);
 const hasGitHubProvider = JSON.parse(providers.stdout).OpenIDConnectProviderList
     .some(({ Arn }) => Arn.endsWith(':oidc-provider/token.actions.githubusercontent.com'));
+const stackOwnsProvider = aws(['cloudformation', 'describe-stack-resource', '--stack-name', 'splitx-bootstrap',
+    '--logical-resource-id', 'GitHubOidcProvider'], { quiet: true }).status === 0;
+const createProvider = stackOwnsProvider || !hasGitHubProvider;
 
 const stacks = [
     {
         name: 'splitx-bootstrap',
         template: 'cloudformation/bootstrap.yaml',
-        parameters: [`CreateOidcProvider=${hasGitHubProvider ? 'false' : 'true'}`],
+        parameters: [`CreateOidcProvider=${createProvider}`],
     },
     {
         name: 'splitx-guardrails',

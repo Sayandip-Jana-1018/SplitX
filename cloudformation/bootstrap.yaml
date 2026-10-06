@@ -186,9 +186,12 @@ Resources:
     Type: AWS::IAM::ManagedPolicy
     Properties:
       ManagedPolicyName: splitx-ci-deploy-policy
+      # IAM can't change a policy's description: a new one replaces the policy,
+      # whose fixed name then collides (the update of 2026-10-06 failed so). The
+      # edge is an API Gateway now (D-114); the description keeps its words.
       Description: >-
         What aws-up and aws-edge do: build and remove the platform (VPC, EKS,
-        load balancer, the API Gateway edge), read and write Terraform's state, the demo's
+        load balancer, CloudFront), read and write Terraform's state, the demo's
         secrets, and the platform's own roles, each bounded. Regional services
         only in this stack's region.
       PolicyDocument:
@@ -341,10 +344,12 @@ Resources:
     Type: AWS::IAM::ManagedPolicy
     Properties:
       ManagedPolicyName: splitx-ci-teardown-policy
+      # Immutable, as DeployPolicy's: taking the edge offline now removes its
+      # route (D-114).
       Description: >-
-        What aws-down does, unattended: read the platform, take the edge
-        offline (remove its route), and delete the platform and its leftovers
-        in this region. It can't create, start or enlarge anything.
+        What aws-down does, unattended: read the platform, switch the edge to
+        its offline page, and delete the platform and its leftovers in this
+        region. It can't create, start or enlarge anything.
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
