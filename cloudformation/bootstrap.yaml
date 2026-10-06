@@ -428,7 +428,8 @@ Resources:
               - eks:DeletePodIdentityAssociation
               - eks:DisassociateAccessPolicy
               # Deleting an add-on that holds a Pod Identity association (the
-              # EBS CSI driver) updates the association first (AWS down #15).
+              # EBS CSI driver) updates the association first (AWS down #15),
+              # passing its role again (PassWorkloadRolesToEks below).
               - eks:UpdatePodIdentityAssociation
             Resource:
               - !Sub arn:aws:eks:${AWS::Region}:${AWS::AccountId}:cluster/${ClusterName}
@@ -436,6 +437,18 @@ Resources:
               - !Sub arn:aws:eks:${AWS::Region}:${AWS::AccountId}:addon/${ClusterName}/*
               - !Sub arn:aws:eks:${AWS::Region}:${AWS::AccountId}:access-entry/${ClusterName}/*
               - !Sub arn:aws:eks:${AWS::Region}:${AWS::AccountId}:podidentityassociation/${ClusterName}/*
+          # EKS checks iam:PassRole on the association's role while it deletes
+          # such an add-on (AWS down #16). Only the platform's workload roles,
+          # and only to EKS: nothing here can create the association or the pod.
+          - Sid: PassWorkloadRolesToEks
+            Effect: Allow
+            Action: iam:PassRole
+            Resource: !Sub arn:aws:iam::${AWS::AccountId}:role/splitx-wl-*
+            Condition:
+              StringEquals:
+                iam:PassedToService:
+                  - pods.eks.amazonaws.com
+                  - eks.amazonaws.com
           - Sid: RemoveThePlatformLogsAndAlarms
             Effect: Allow
             Action:
