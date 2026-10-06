@@ -34,16 +34,6 @@ export function storeRegion(store) {
     return match[1];
 }
 
-/**
- * The CloudFront prefix list the load balancer admits
- * (alb.ingress.kubernetes.io/security-group-prefix-lists in the AWS overlay).
- * @param {string} ingressPatch  k8s/overlays/aws/patches/ingress.yaml
- */
-export function admittedPrefixList(ingressPatch) {
-    const match = ingressPatch.match(/alb\.ingress\.kubernetes\.io\/security-group-prefix-lists:\s*"?(pl-[0-9a-f]+)"?/);
-    if (!match) throw new Error('k8s/overlays/aws/patches/ingress.yaml admits no prefix list');
-    return match[1];
-}
 
 /**
  * The image to run, when one is given: our registry, by digest, never a tag.

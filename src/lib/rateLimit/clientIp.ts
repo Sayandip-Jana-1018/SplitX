@@ -10,7 +10,7 @@ import { isIP } from 'node:net';
  * TRUSTED_PROXY_HOPS entries from the right:
  *
  *   Vercel, ingress-nginx, a single ALB   → 1 (default)
- *   CloudFront → ALB                      → 2
+ *   API Gateway → ALB (the EKS edge)      → 2
  *   Nothing in front (local Docker)       → 0: no trustworthy address exists
  */
 export function trustedProxyHops(): number {

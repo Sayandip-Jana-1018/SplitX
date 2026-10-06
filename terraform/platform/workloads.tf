@@ -140,10 +140,11 @@ module "ops_api_identity" {
       ]
     },
     {
-      # CloudFront's read actions can't be narrowed to one distribution.
+      # The edge, an HTTP API (terraform/edge, D-114): its route, integration
+      # and stage, read only.
       sid       = "Edge"
-      actions   = ["cloudfront:GetDistribution", "cloudfront:ListDistributions"]
-      resources = ["*"]
+      actions   = ["apigateway:GET"]
+      resources = ["arn:${local.partition}:apigateway:${var.region}::/apis/*"]
     },
     {
       sid       = "Budget"

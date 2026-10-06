@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CHARTS, GAUGES } from '../../../ops/api/queries.mjs';
 import {
-    byLabel, bytes, cpuCores, scalar, series, summariseAlerts, summariseAutoscaler, summariseBudget, summariseDistribution,
+    byLabel, bytes, cpuCores, scalar, series, summariseAlerts, summariseApi, summariseAutoscaler, summariseBudget,
     summariseEks, summariseEvidence, summariseLogs, summariseNodes, summarisePods, summariseStacks,
 } from '../../../ops/api/summaries.mjs';
 import { LIMITS, parseRun, summariseK6 } from '../../../ops/lab/limits.mjs';
@@ -159,17 +159,23 @@ describe('what ops-api makes of each source', () => {
             [{ nodegroupName: 'main', status: 'ACTIVE', instanceTypes: ['m7i-flex.large'], scalingConfig: { minSize: 3, maxSize: 4, desiredSize: 3 }, nodegroupArn: 'arn:aws:eks:x:123456789012:nodegroup/x' }],
             [{ addonName: 'vpc-cni', addonVersion: 'v1', status: 'ACTIVE', addonArn: 'arn:aws:eks:x:123456789012:addon/x' }],
         );
-        const edge = summariseDistribution({
-            Id: 'E123', DomainName: 'd1.cloudfront.net', Status: 'Deployed', Enabled: true,
-            Origins: { Items: [{ DomainName: 'k8s-splitx-1.ap-south-1.elb.amazonaws.com', CustomHeaders: { Items: [{ HeaderName: 'X-Origin-Verify', HeaderValue: 'the-secret' }] } }] },
-        });
+        const api = { ApiId: 'a1b2c3d4e5', ApiEndpoint: 'https://a1b2c3d4e5.execute-api.ap-south-1.amazonaws.com', CreatedDate: new Date('2026-10-06T00:00:00Z') };
+        const route = { RouteKey: '$default', Target: 'integrations/i1' };
+        const integration = {
+            IntegrationId: 'i1', IntegrationUri: 'http://k8s-splitx-1.ap-south-1.elb.amazonaws.com',
+            RequestParameters: { 'overwrite:header.x-origin-verify': 'the-secret', 'overwrite:path': '$request.path' },
+        };
+        const stage = { StageName: '$default', DefaultRouteSettings: { ThrottlingRateLimit: 500, ThrottlingBurstLimit: 1000 } };
+        const edge = summariseApi(api, [route], [integration], stage);
         const shown = JSON.stringify({ eks, edge });
         expect(shown).not.toContain('123456789012');
         expect(shown).not.toContain('arn:');
         expect(shown).not.toContain('the-secret');
-        expect(shown).not.toContain('X-Origin-Verify');
-        expect(edge).toMatchObject({ online: true, origin: 'the load balancer' });
-        expect(summariseDistribution({ Origins: { Items: [{ DomainName: 'splitx-edge-offline.s3.ap-south-1.amazonaws.com' }] } })).toMatchObject({ online: false, origin: 'the offline page' });
+        expect(shown.toLowerCase()).not.toContain('x-origin-verify');
+        expect(edge).toMatchObject({ domain: 'a1b2c3d4e5.execute-api.ap-south-1.amazonaws.com', online: true, origin: 'the load balancer', rateLimit: 500, burstLimit: 1000 });
+        expect(summariseApi(api, [], [], stage)).toMatchObject({ online: false, origin: 'nothing (it is offline)' });
+        expect(summariseApi(api, [route], [{ ...integration, IntegrationUri: 'https://example.com' }], null))
+            .toMatchObject({ online: false, origin: 'something other than the load balancer', rateLimit: null });
     });
 
     it('reads the stacks\' drift and the budget as AWS reports them', () => {
@@ -253,11 +259,11 @@ describe('what cluster-up gives ops-api and the lab', () => {
     });
 
     it('writes the platform\'s facts without empty values, and gives the lab an origin, never a path', () => {
-        const { items } = opsConfigMaps({ facts: { PLATFORM_TARGET: 'eks', AWS_REGION: 'ap-south-1', VPC_CIDR: '' }, target: 'https://d1.cloudfront.net' });
+        const { items } = opsConfigMaps({ facts: { PLATFORM_TARGET: 'eks', AWS_REGION: 'ap-south-1', VPC_CIDR: '' }, target: 'https://a1b2c3d4e5.execute-api.ap-south-1.amazonaws.com' });
         expect(items[0]).toMatchObject({ metadata: { name: 'platform-facts', namespace: 'ops' }, data: { PLATFORM_TARGET: 'eks', AWS_REGION: 'ap-south-1' } });
         expect(items[0].data).not.toHaveProperty('VPC_CIDR');
-        expect(items[1]).toMatchObject({ metadata: { name: 'traffic-lab', namespace: 'ops' }, data: { target: 'https://d1.cloudfront.net' } });
-        for (const target of ['https://d1.cloudfront.net/api', 'ftp://x', 'd1.cloudfront.net']) {
+        expect(items[1]).toMatchObject({ metadata: { name: 'traffic-lab', namespace: 'ops' }, data: { target: 'https://a1b2c3d4e5.execute-api.ap-south-1.amazonaws.com' } });
+        for (const target of ['https://a1b2c3d4e5.execute-api.ap-south-1.amazonaws.com/api', 'ftp://x', 'a1b2c3d4e5.execute-api.ap-south-1.amazonaws.com']) {
             expect(() => opsConfigMaps({ facts: {}, target }), target).toThrow(/origin/);
         }
     });

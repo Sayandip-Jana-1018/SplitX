@@ -17,7 +17,7 @@ describe('clientIp', () => {
         }
     });
 
-    it('walks back one entry per trusted hop (CloudFront → ALB)', () => {
+    it('walks back one entry per trusted hop (API Gateway → ALB)', () => {
         expect(clientIp(headers('6.6.6.6, 198.51.100.7, 130.176.0.1'), 2)).toBe('198.51.100.7');
     });
 

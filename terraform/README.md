@@ -5,7 +5,7 @@ state bucket, the two CI roles and their boundary, the budget. Terraform makes t
 
 | Root | Applied by | Lives | Holds |
 |---|---|---|---|
-| [`edge`](edge) | `aws-edge` once; `aws-up` points it at the platform, `aws-down` takes it offline | kept; costs nothing idle | CloudFront: HTTPS and a fixed address for the platform, the edge function, access logs |
+| [`edge`](edge) | `aws-edge` once; `aws-up` points it at the platform, `aws-down` takes it offline | kept; costs nothing idle | An API Gateway HTTP API (D-114): HTTPS and a fixed address for the platform |
 | [`platform`](platform) | `aws-up`; destroyed by `aws-down` | one AWS day | the VPC, EKS and its add-ons, the nodes, the workloads' Pod Identity roles, the ALB's alarms |
 
 [`bootstrap`](bootstrap) is not a root: it is the policy of `splitx-devops`, the IAM user that
@@ -21,4 +21,4 @@ deploys the CloudFormation stacks from the laptop.
   module to an exact version, the providers' checksums in each root's `.terraform.lock.hcl`, and the
   EKS add-ons in [`platform/cluster.tf`](platform/cluster.tf).
 
-Why each choice was made: `docs/DECISIONS.md`, D-088 to D-090.
+Why each choice was made: `docs/DECISIONS.md`, D-088 to D-090, and D-114 for the edge.

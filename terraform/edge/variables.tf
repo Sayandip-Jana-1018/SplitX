@@ -1,5 +1,5 @@
 variable "region" {
-  description = "Where the edge's buckets live: the splitx-bootstrap stack's region. CloudFront itself is global."
+  description = "Where the edge lives: the splitx-bootstrap stack's region, the platform's."
   type        = string
   default     = "ap-south-1"
 }
@@ -18,7 +18,7 @@ variable "origin_domain" {
 }
 
 variable "origin_secret" {
-  description = "Sent to the load balancer as X-Origin-Verify while online; the app refuses requests without it (src/proxy.ts), so no other CloudFront distribution can front the platform. aws-up reads it from Secrets Manager (splitx/demo/app, ORIGIN_VERIFY_SECRET) into TF_VAR_origin_secret."
+  description = "Sent to the load balancer as X-Origin-Verify while online; the app refuses requests without it (src/proxy.ts), so nothing but this edge can front the platform. aws-up reads it from Secrets Manager (splitx/demo/app, ORIGIN_VERIFY_SECRET) into TF_VAR_origin_secret."
   type        = string
   default     = ""
   sensitive   = true

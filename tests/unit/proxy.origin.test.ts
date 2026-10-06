@@ -4,12 +4,15 @@ import { metrics } from '@/lib/metrics';
 import { setRateLimitStore } from '@/lib/rateLimit';
 import type { RateLimitStore } from '@/lib/rateLimit/store';
 import { proxy } from '@/proxy';
+import { INTERNAL_SPELLINGS } from '../../scripts/lib/platform-checks.mjs';
 
 /*
- * On the EKS platform the load balancer admits CloudFront's addresses, which
- * every CloudFront distribution shares. Only requests carrying the header our
- * own distribution adds may reach the app; the rest are refused before any
- * other work is done.
+ * On the EKS platform the load balancer is open to the internet, the only way
+ * the edge (an API Gateway HTTP API, D-114) can reach it. Only requests
+ * carrying the header our edge adds may reach the app; the rest are refused
+ * before any other work is done. Through the edge, the internal paths are
+ * refused in every spelling, which an edge function did when the edge was
+ * to be CloudFront.
  */
 
 const SECRET = 'a'.repeat(64);
@@ -85,6 +88,20 @@ describe('only through our edge', () => {
 
         it('does not exempt the combined health endpoint, which only the edge serves', async () => {
             expect((await visit('/api/health')).status).toBe(403);
+        });
+
+        it.each(INTERNAL_SPELLINGS)('refuses %s when it came through the edge, and counts it', async (path) => {
+            const before = await refusals();
+            const res = await visit(path, { 'x-origin-verify': SECRET });
+
+            expect(res.status).toBe(403);
+            expect(await res.text()).toBe('Not available');
+            expect(await refusals()).toBe(before + 1);
+        });
+
+        it('still serves the live probe through the edge, which the workflows check it by', async () => {
+            const res = await visit('/api/health/live', { 'x-origin-verify': SECRET });
+            expect(res.status).not.toBe(403);
         });
     });
 });

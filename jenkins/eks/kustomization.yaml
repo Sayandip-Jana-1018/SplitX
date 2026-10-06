@@ -5,7 +5,7 @@
 #
 #     ../rbac              the deploy builds' permissions, in splitx only (as on Kind)
 #     networkpolicy.yaml   who may talk to what, with EKS's addresses
-#     ingress.yaml         GitHub's deliveries, through CloudFront and the load balancer
+#     ingress.yaml         GitHub's deliveries, through the edge and the load balancer
 #
 #   Kind's relay and its alerts (jenkins/relay.yaml, jenkins/prometheusrule.yaml)
 #   are not here: GitHub reaches this Jenkins directly, so there is no smee.io

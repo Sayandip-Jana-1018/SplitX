@@ -100,7 +100,7 @@
   <div class="eyebrow">Demo day</div>
   <h1>SplitX, live on AWS</h1>
   <p>A merge becomes a signed release, GitHub announces it, Jenkins verifies and deploys it on EKS
-  behind CloudFront, and the room's phones drive the autoscaler. Every number on screen is read live
+  behind an HTTPS edge (API Gateway), and the room's phones drive the autoscaler. Every number on screen is read live
   from the tool that owns it. The full runbook is <code>docs/DEMO_DAY.md</code>.</p>
 </header>
 
@@ -159,7 +159,7 @@
     <li>
       <div class="beat-title">Pipeline and deliveries</div>
       <p class="show">The release's jobs, then each environment's newest deployment: <code>kind</code>, <code>eks</code> and Production.</p>
-      <p class="say">A merge becomes a GitHub deployment. GitHub's signed webhook reaches Jenkins through CloudFront. Jenkins checks the webhook's signature and the image's before it deploys, and rolls back anything that doesn't come up.</p>
+      <p class="say">A merge becomes a GitHub deployment. GitHub's signed webhook reaches Jenkins through the edge. Jenkins checks the webhook's signature and the image's before it deploys, and rolls back anything that doesn't come up.</p>
     </li>
     <li>
       <div class="beat-title">The cluster</div>
@@ -178,7 +178,7 @@
     </li>
     <li>
       <div class="beat-title">AWS</div>
-      <p class="show">The CloudFormation stacks and their drift, EKS and its add-ons, CloudFront, and the budget.</p>
+      <p class="show">The CloudFormation stacks and their drift, EKS and its add-ons, the edge, and the budget.</p>
       <p class="say">No workflow holds an AWS key. The roles are assumed through GitHub's OIDC, bounded, and only this one environment may build.</p>
     </li>
   </ol>

@@ -9,8 +9,8 @@
 # with everything else, and never looks the ALB up (alb_ready defaults to
 # false), so it works after the ALB is gone.
 #
-# There are no CloudFront alarms: CloudFront's metrics exist only in us-east-1,
-# an alarm can only notify a topic in its own region, and /ops shows the edge
+# No alarm watches the edge (an API Gateway HTTP API, D-114): what it forwards
+# reaches the load balancer, whose alarms are here, and /ops shows the edge
 # live (D-088).
 
 data "aws_lb" "app" {

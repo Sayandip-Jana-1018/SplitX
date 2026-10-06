@@ -106,11 +106,11 @@ export function demoSecrets(env, { alertmanagerTemplate }) {
         REDIS_PASSWORD: value('REDIS_PASSWORD'),
         NEXTAUTH_SECRET: value('NEXTAUTH_SECRET'),
         METRICS_TOKEN: value('METRICS_TOKEN'),
-        // CloudFront sends it on every request to the load balancer; the app
+        // The edge sends it on every request to the load balancer; the app
         // refuses requests that come without it (src/proxy.ts).
         ORIGIN_VERIFY_SECRET: value('ORIGIN_VERIFY_SECRET'),
     };
-    // GitHub allows one callback address per OAuth app, so the CloudFront
+    // GitHub allows one callback address per OAuth app, so the edge's
     // address has an app of its own (AWS_GITHUB_ID). Without it the EKS site
     // simply doesn't offer GitHub sign-in.
     if (value('AWS_GITHUB_ID') && value('AWS_GITHUB_SECRET')) {

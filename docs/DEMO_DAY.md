@@ -2,8 +2,7 @@
 
 SplitX's demo platform runs on AWS only on the two days that need it: the **rehearsal** and the
 **demo**. `aws-up` builds it that morning, and `aws-down` removes it that evening, or at 23:30 IST by
-itself. On any other day, `splitsj.vercel.app` serves the app, and the CloudFront address shows an
-offline page.
+itself. On any other day, `splitsj.vercel.app` serves the app, and the edge's address answers 404.
 
 Each step below says what to click, what should happen, and what to do if it doesn't. The design
 behind each part is in [DECISIONS.md](DECISIONS.md): D-087 to D-103.
@@ -24,14 +23,14 @@ These are done once, and stay done.
 1. **The two CloudFormation stacks exist:** `splitx-bootstrap` and `splitx-guardrails`
    (`npm run aws:bootstrap`, D-087).
 2. **The edge exists.**
-   - GitHub → Actions → **AWS edge** → Run workflow, then approve `aws-demo`. It makes the CloudFront
-     distribution, which costs nothing while idle.
+   - GitHub → Actions → **AWS edge** → Run workflow, then approve `aws-demo`. It makes the edge, an
+     API Gateway HTTP API (D-114), which costs nothing while idle.
    - Commit its domain as `NEXTAUTH_URL=https://<domain>` in `k8s/overlays/aws/kustomization.yaml`,
      the one place it is written down.
-3. **Sign-in works on the edge.** `/ops` admits operators by their GitHub or Google account.
+3. **Sign-in works on the edge.** `/ops` admits operators by their GitHub account there: Google may
+   refuse an `amazonaws.com` address, which nobody can prove they own.
    - A second GitHub OAuth App, with the callback `https://<domain>/api/auth/callback/github`. Its ID
      and secret go in `.env` as `AWS_GITHUB_ID` and `AWS_GITHUB_SECRET`.
-   - The redirect URI `https://<domain>/api/auth/callback/google` in Google's console.
 4. **GitHub can reach Jenkins on EKS.** Add a second repository webhook (Settings → Webhooks → Add):
    - **Payload URL:** `https://<domain>/generic-webhook-trigger/invoke?token=<JENKINS_TRIGGER_TOKEN>`
    - **Content type:** `application/json`
@@ -76,8 +75,8 @@ What `aws-up` does, and roughly how long each step takes:
 | The platform checked | 2 min | nodes, zones, add-ons, the policy agent, gp3, metrics-server, teardown access |
 | `cluster-up --target eks` | 15–20 min | Secrets from Secrets Manager, the charts, the newest signed release, Jenkins, Nexus, ops-api |
 | The load balancer's alarms | 2 min | a second apply, once the ALB exists |
-| The edge, online | 5–15 min | CloudFront points at the ALB; `/api/health/live` 200 and `/api/metrics` 403 through it |
-| The release, through Jenkins | 2–5 min | a GitHub deployment for `eks`; GitHub's webhook reaches Jenkins through CloudFront |
+| The edge, online | 1 min | the edge's route points at the ALB; `/api/health/live` 200 and `/api/metrics` 403 through it; `/` 403 at the ALB itself |
+| The release, through Jenkins | 2–5 min | a GitHub deployment for `eks`; GitHub's webhook reaches Jenkins through the edge |
 | **Verify the platform** | about 15 min | `k8s:verify` and `cd:verify --target eks` (D-103): every line PASS or SKIP |
 
 The run's summary page shows each step's table, and the last step shows both verifiers' results. The
@@ -118,7 +117,7 @@ About 15 minutes. Each section on the page is one tool, read live from its own s
    - the application's log, with request IDs;
    - each deployment's evidence in Nexus: its SBOM, the vulnerability report and the deployment
      record, each checked with cosign before it was stored.
-8. **AWS:** the CloudFormation stacks and their drift, EKS and its add-ons, CloudFront, and the budget.
+8. **AWS:** the CloudFormation stacks and their drift, EKS and its add-ons, the edge, and the budget.
 
 **Grafana, if you want it.** It isn't published on the edge. From the laptop:
 ```bash

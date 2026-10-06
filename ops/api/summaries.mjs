@@ -203,22 +203,25 @@ export function summariseEks(cluster, nodegroups, addons) {
 }
 
 /**
- * The CloudFront distribution, from ListDistributions' summary. Fields are
- * copied one by one: the origins carry the edge's secret header (D-092),
+ * The edge, an API Gateway HTTP API (D-114), from GetApi, GetRoutes,
+ * GetIntegrations and its $default stage. Fields are copied one by one: the
+ * integration's request parameters carry the edge's secret header (D-092),
  * which must never reach a page.
  */
-export function summariseDistribution(distribution) {
-    const origin = distribution.Origins?.Items?.[0]?.DomainName ?? null;
+export function summariseApi(api, routes, integrations, stage) {
+    const route = routes.find((candidate) => candidate.RouteKey === '$default') ?? null;
+    const integration = route ? integrations.find((candidate) => route.Target === 'integrations/' + candidate.IntegrationId) ?? null : null;
+    const toBalancer = /^http:\/\/[a-z0-9-]+\.[a-z0-9-]+\.elb\.amazonaws\.com$/.test(integration?.IntegrationUri ?? '');
+    let origin = 'nothing (it is offline)';
+    if (route) origin = toBalancer ? 'the load balancer' : 'something other than the load balancer';
     return {
-        id: distribution.Id,
-        domain: distribution.DomainName,
-        status: distribution.Status,
-        enabled: distribution.Enabled,
-        online: typeof origin === 'string' && origin.endsWith('.elb.amazonaws.com'),
-        origin: typeof origin === 'string' && origin.endsWith('.elb.amazonaws.com') ? 'the load balancer' : 'the offline page',
-        httpVersion: distribution.HttpVersion ?? null,
-        priceClass: distribution.PriceClass ?? null,
-        lastModified: iso(distribution.LastModifiedTime),
+        id: api.ApiId,
+        domain: (api.ApiEndpoint ?? '').replace(/^https:\/\//, ''),
+        online: toBalancer,
+        origin,
+        rateLimit: stage?.DefaultRouteSettings?.ThrottlingRateLimit ?? null,
+        burstLimit: stage?.DefaultRouteSettings?.ThrottlingBurstLimit ?? null,
+        lastModified: iso(stage?.LastUpdatedDate ?? api.CreatedDate),
     };
 }
 

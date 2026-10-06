@@ -12,11 +12,11 @@
  * it?) and a rolling restart under continuous traffic (is a release lossless?)
  * — because those are the claims a deployment usually makes without evidence.
  *
- * On EKS the same checks go through CloudFront, where visitors arrive. The
+ * On EKS the same checks go through the edge, where visitors arrive. The
  * ones only Kind has something to check (kindnet, the database outage,
  * ingress-nginx's log) are reported as skipped, with the reason, and EKS adds
  * what only it has: zones, the load balancer's readiness gates and rules, Pod
- * Identity, EBS volumes and the edge function (scripts/lib/platform-checks.mjs).
+ * Identity, EBS volumes and the edge's refusals (scripts/lib/platform-checks.mjs).
  */
 import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
@@ -29,7 +29,7 @@ import {
 import { dashboardDatasourceUids, dashboardQueries, FIRST_EVENT_SERIES, metricNamesIn, withoutGrafanaVariables } from './lib/dashboards.mjs';
 import {
     albFindings, autoscalerHealth, awsReadings, DATABASE_PROBE, ebsFindings, eksClusterOf, identityProblem, INTERNAL_SPELLINGS,
-    madeByEdgeFunction, podIdentityFindings, spreadOf, ungatedPods, unhealthyPods,
+    podIdentityFindings, spreadOf, ungatedPods, unhealthyPods,
 } from './lib/platform-checks.mjs';
 import { clusterSecret, KIND_ONLY, portForward, stopForwards, verifyTarget } from './lib/verify-target.mjs';
 
@@ -46,7 +46,7 @@ try {
 const EKS = target.name === 'eks';
 const NS = 'splitx';
 const CONTEXT = target.context;
-// Where visitors arrive: ingress-nginx on Kind, CloudFront on EKS.
+// Where visitors arrive: ingress-nginx on Kind, the edge (API Gateway) on EKS.
 const BASE = target.base;
 const PROBE_IMAGE = target.probeImage;
 
@@ -374,27 +374,28 @@ if (EKS) {
 console.log('[2] The edge');
 if (EKS) {
     const edge = { '/': await status('/'), '/login': await status('/login'), '/api/health/live': await status('/api/health/live') };
-    record('The application is served at ' + BASE, edge['/'] === 200 && edge['/login'] === 200, '/ ' + edge['/'] + ' and /login ' + edge['/login'] + ', through CloudFront');
+    record('The application is served at ' + BASE, edge['/'] === 200 && edge['/login'] === 200, '/ ' + edge['/'] + ' and /login ' + edge['/login'] + ', through the edge');
     record('Liveness stays reachable for a load balancer', edge['/api/health/live'] === 200, 'HTTP ' + edge['/api/health/live']);
 
-    // The edge function (terraform/edge) refuses the internal paths before
-    // CloudFront contacts the load balancer, whatever their spelling.
+    // The internal paths, in every spelling the verifier knows: the load
+    // balancer refuses their exact spelling, and the app's proxy every other
+    // one that came through the edge (D-114).
     const spellings = [];
     for (const path of INTERNAL_SPELLINGS) {
         const response = await fetch(BASE + path, { redirect: 'manual', signal: AbortSignal.timeout(20_000) }).catch(() => null);
         await response?.arrayBuffer().catch(() => null);
-        spellings.push({ path, status: response?.status ?? 0, xCache: response?.headers.get('x-cache') ?? '' });
+        spellings.push({ path, status: response?.status ?? 0 });
     }
-    const passedOn = spellings.filter((spelling) => spelling.status !== 403 || !madeByEdgeFunction(spelling.xCache));
+    const passedOn = spellings.filter((spelling) => spelling.status !== 403);
     record(
-        'CloudFront refuses the internal paths itself, however they are spelled',
+        'The internal paths are refused through the edge, however they are spelled',
         passedOn.length === 0,
         passedOn.length
-            ? passedOn.map((spelling) => spelling.path + ': HTTP ' + spelling.status + ', ' + (spelling.xCache || 'no X-Cache')).join('; ')
-            : spellings.length + ' spellings, each answered 403 by the edge function ("' + spellings[0].xCache + '")'
+            ? passedOn.map((spelling) => spelling.path + ': HTTP ' + spelling.status).join('; ')
+            : spellings.length + " spellings, each answered 403, by the load balancer's rule or the app's proxy"
     );
 
-    // The load balancer's own rules: the second lock, and the only way in.
+    // The load balancer's own rules: the first lock, for the exact spellings.
     const balancer = aws(['elbv2', 'describe-load-balancers']).value?.LoadBalancers?.find((lb) => lb.DNSName?.toLowerCase() === albHost.toLowerCase());
     const listener = balancer ? aws(['elbv2', 'describe-listeners', '--load-balancer-arn', balancer.LoadBalancerArn]).value?.Listeners?.find((l) => l.Port === 80) : null;
     const rules = listener ? aws(['elbv2', 'describe-rules', '--listener-arn', listener.ListenerArn]).value?.Rules ?? [] : [];
@@ -404,40 +405,41 @@ if (EKS) {
         rules.length > 0 && routes.every((route) => route.ok),
         rules.length ? routes.map((route) => route.path + ' ' + route.detail).join('; ') : 'could not read its rules' + (albHost ? '' : ': the Ingress has no load balancer')
     );
+    // Open to the internet, the only way API Gateway can reach it. What skips
+    // the edge has no header, and the app refuses it (D-092).
     const direct = albHost
-        ? await fetch('http://' + albHost + '/api/health/live', { signal: AbortSignal.timeout(10_000) }).then((response) => response.status).catch(() => 0)
+        ? await fetch('http://' + albHost + '/', { redirect: 'manual', signal: AbortSignal.timeout(10_000) }).then((response) => response.status).catch(() => 0)
         : -1;
     record(
-        'The load balancer answers nobody but CloudFront',
-        direct === 0,
-        direct === 0 ? 'a request from here had no answer in 10 s: its security group admits CloudFront\'s prefix list only' : 'HTTP ' + direct + ': it answered this machine'
+        'The load balancer is open, but the app serves nothing that skipped the edge',
+        direct === 403,
+        direct === 403 ? "GET / at the load balancer itself, without the edge's header: HTTP 403" : 'HTTP ' + direct + ' at the load balancer itself'
     );
-    // Someone else's CloudFront shares those addresses; ours alone adds the header (D-092).
     const unrouted = k(['exec', placement[0].pod, '--', 'sh', '-c', 'wget -qO- http://127.0.0.1:3000/ 2>&1 | head -1']);
     const unroutedSaid = (unrouted.stdout + ' ' + unrouted.stderr).trim();
     record(
         'The application refuses a request that did not come through SplitX\'s edge',
         unroutedSaid.includes('403'),
-        unroutedSaid.includes('403') ? 'GET / inside a pod, without CloudFront\'s X-Origin-Verify: HTTP 403' : unroutedSaid.slice(0, 80)
+        unroutedSaid.includes('403') ? "GET / inside a pod, without the edge's X-Origin-Verify: HTTP 403" : unroutedSaid.slice(0, 80)
     );
     sections.push({
         title: 'What the edge exposes',
         body: [
-            '| Path | Status through CloudFront | Why |',
+            '| Path | Status through the edge | Why |',
             '|---|---|---|',
             '| `/` | ' + edge['/'] + ' | the application |',
             '| `/login` | ' + edge['/login'] + ' | a real page, not just the root |',
             '| `/api/health/live` | ' + edge['/api/health/live'] + ' | a load balancer has to be able to ask |',
-            ...spellings.map((spelling) => '| `' + spelling.path + '` | ' + spelling.status + ' (' + (spelling.xCache || 'no X-Cache') + ') | an internal path, refused at the edge |'),
+            ...spellings.map((spelling) => '| `' + spelling.path + '` | ' + spelling.status + ' | an internal path, refused |'),
             '',
-            'Behind CloudFront, the load balancer\'s listener, rule by rule, as AWS describes it:',
+            "Behind the edge, the load balancer's listener, rule by rule, as AWS describes it:",
             '',
             '| Path | What the load balancer does | Why |',
             '|---|---|---|',
             ...routes.map((route) => '| `' + route.path + '` | ' + route.detail + ' | ' + route.why + ' |'),
             '',
-            'The load balancer itself admits only CloudFront\'s origin-facing addresses (a request from here got '
-                + (direct === 0 ? 'no answer' : 'HTTP ' + direct) + '), and the application refuses anything without our edge\'s header.',
+            "The load balancer is open to the internet, as API Gateway needs, and the application refuses anything without our edge's header "
+                + '(a request to the load balancer itself got HTTP ' + direct + ').',
         ].join('\n'),
     });
 } else {
@@ -529,7 +531,7 @@ if (EKS) {
     record(
         'A write through the edge reaches the database',
         registered.status === 201 && database.stored === 1 && database.left === 0,
-        'POST /api/register -> ' + registered.status + ' through CloudFront; '
+        'POST /api/register -> ' + registered.status + ' through the edge; '
             + (database.error ? 'the database could not be read: ' + database.error : database.stored + ' row found in the User table, then removed')
     );
 } else {
@@ -565,7 +567,7 @@ record(
         ? '400 members planned in ' + previewBody.data.computeMs + ' ms by ' + previewBody.data.servedBy + ' (' + (Date.now() - previewStarted) + ' ms round trip)'
         : 'HTTP ' + preview.status
 );
-const via = EKS ? 'through CloudFront' : 'through ingress-nginx';
+const via = EKS ? 'through the edge' : 'through ingress-nginx';
 sections.push({
     title: 'The application, not just the pods',
     body: [
@@ -786,7 +788,7 @@ record(
 sections.push({
     title: 'A release with no dropped requests',
     body: [
-        '`kubectl rollout restart` with four concurrent clients hitting ' + (EKS ? 'CloudFront' : 'the ingress') + ' throughout.',
+        '`kubectl rollout restart` with four concurrent clients hitting ' + (EKS ? 'the edge' : 'the ingress') + ' throughout.',
         'The deployment uses `maxSurge: 1, maxUnavailable: 0`, so a new pod must pass its readiness',
         EKS
             ? 'probe, and be a healthy target of the load balancer, before an old one is taken out. A `preStop` sleep of 20 s'
@@ -1040,7 +1042,7 @@ if (EKS) {
         'A request through the edge is logged, under the ID it was answered with, by the pod that served it',
         Boolean(trace) && trace.pod === tracedBy,
         trace
-            ? 'X-Request-Id ' + tracedId + ': answered by ' + tracedBy + ' through CloudFront, and ' + trace.pod + ' logged the same ID'
+            ? 'X-Request-Id ' + tracedId + ': answered by ' + tracedBy + ' through the edge, and ' + trace.pod + ' logged the same ID'
             : 'request ' + (tracedId || 'without an ID') + ' not found in the application\'s log within 45 s'
     );
 } else {
@@ -1102,7 +1104,7 @@ sections.push({
         EKS
             ? 'Logs: Alloy reads the application\'s log through the Kubernetes API and ships it to Loki, parsing its JSON.'
             : 'Logs: Alloy reads the application and ingress-nginx logs through the Kubernetes API and ships',
-        EKS ? 'One request made through CloudFront during this run:' : 'them to Loki, parsing the JSON both write. One request made during this run:',
+        EKS ? 'One request made through the edge during this run:' : 'them to Loki, parsing the JSON both write. One request made during this run:',
         '',
         '| | |',
         '|---|---|',

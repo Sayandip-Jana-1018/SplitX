@@ -1,15 +1,15 @@
 output "domain_name" {
-  description = "The site's address (https://<this>): NEXTAUTH_URL and the Ingress host in k8s/overlays/aws, the OAuth callbacks, and the GitHub webhook."
-  value       = aws_cloudfront_distribution.edge.domain_name
+  description = "The site's address (https://<this>): NEXTAUTH_URL in k8s/overlays/aws, the OAuth callback, and the GitHub webhook."
+  value       = trimprefix(aws_apigatewayv2_api.edge.api_endpoint, "https://")
 }
 
-output "distribution_id" {
-  description = "For aws cloudfront wait distribution-deployed, and for /ops."
-  value       = aws_cloudfront_distribution.edge.id
+output "api_id" {
+  description = "The HTTP API's ID, for /ops."
+  value       = aws_apigatewayv2_api.edge.id
 }
 
 output "mode" {
-  description = "online while the edge forwards to the platform's load balancer, offline while it answers with its offline page."
+  description = "online while the edge forwards to the platform's load balancer, offline while it has no route and answers 404."
   value       = local.online ? "online" : "offline"
 }
 

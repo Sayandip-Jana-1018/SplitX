@@ -109,8 +109,9 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Take the edge offline
-        # First, so visitors get the offline page rather than errors. Money
-        # comes first, though: the platform comes down even if this fails.
+        # First, so the edge stops sending visitors, and its header, to a load
+        # balancer about to go; it answers 404 until the next AWS day (D-114).
+        # Money comes first, though: the platform comes down even if this fails.
         if: steps.state.outputs.edge == 'online'
         continue-on-error: true
         run: terraform -chdir=terraform/edge apply -input=false -auto-approve

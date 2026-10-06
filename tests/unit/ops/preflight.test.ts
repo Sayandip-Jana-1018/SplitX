@@ -65,7 +65,7 @@ function readings(target = 'eks', overrides: Partial<ClusterReadings> = {}): Clu
         admissions: ok({ allowed: 47, refused: 0 }),
         traffic: ok({ from: 0, to: 0, step: 15, charts: {} as Traffic['charts'] }),
         servingPods: ok([]),
-        lab: ok({ state: 'idle', target: 'https://d1234abcd.cloudfront.net' }),
+        lab: ok({ state: 'idle', target: 'https://a1b2c3d4e5.execute-api.ap-south-1.amazonaws.com' }),
         alerts: ok([]),
         logs: ok([{ time: at, level: 'info', message: 'GET /', requestId: null, pod: 'splitx-1' }]),
         delivery: ok({ lastResult: 'success', lastSeconds: 73 }),
@@ -75,9 +75,9 @@ function readings(target = 'eks', overrides: Partial<ClusterReadings> = {}): Clu
             { name: 'splitx-guardrails', status: 'UPDATE_COMPLETE', updatedAt: at, drift: 'NOT_CHECKED', driftCheckedAt: null },
         ]),
         eks: ok({ name: 'splitx', version: '1.35', platformVersion: 'eks.3', status: 'ACTIVE', authenticationMode: 'API', nodegroups: [], addons: [] }),
-        edge: ok({ id: 'E1', domain: 'd1234abcd.cloudfront.net', status: 'Deployed', enabled: true, online: true, origin: 'the load balancer', httpVersion: 'http2', priceClass: null, lastModified: at }),
+        edge: ok({ id: 'a1b2c3d4e5', domain: 'a1b2c3d4e5.execute-api.ap-south-1.amazonaws.com', online: true, origin: 'the load balancer', rateLimit: 500, burstLimit: 1000, lastModified: at }),
         budget: ok({ name: 'splitx-monthly', unit: 'USD', limit: 15, actual: 3.2, forecast: 6.1 }),
-        platform: ok({ target, region: 'ap-south-1', kubernetesVersion: 'v1.35.3', vpcCidr: '10.0.0.0/16', serviceCidr: '172.20.0.0/16', edge: 'd1234abcd.cloudfront.net' }),
+        platform: ok({ target, region: 'ap-south-1', kubernetesVersion: 'v1.35.3', vpcCidr: '10.0.0.0/16', serviceCidr: '172.20.0.0/16', edge: 'a1b2c3d4e5.execute-api.ap-south-1.amazonaws.com' }),
         ...overrides,
     };
 }
@@ -282,13 +282,12 @@ describe('the platform\'s items', () => {
 });
 
 describe('what only EKS has', () => {
-    const edge = { id: 'E1', domain: 'd1234abcd.cloudfront.net', status: 'Deployed', enabled: true, online: true, origin: 'the load balancer', httpVersion: null, priceClass: null, lastModified: null };
+    const edge = { id: 'a1b2c3d4e5', domain: 'a1b2c3d4e5.execute-api.ap-south-1.amazonaws.com', online: true, origin: 'the load balancer', rateLimit: 500, burstLimit: 1000, lastModified: null };
 
-    it('wants CloudFront deployed, in front of the load balancer', () => {
-        expect(one('edge', withCluster({ edge: ok({ ...edge, status: 'InProgress' }) })).readiness).toBe('wait');
-        expect(one('edge', withCluster({ edge: ok({ ...edge, online: false, origin: 'the offline page' }) })))
-            .toMatchObject({ readiness: 'fix', detail: 'd1234abcd.cloudfront.net points at the offline page: aws-up takes it online.' });
-        expect(one('edge', withCluster({ edge: ok({ ...edge, enabled: false }) })).readiness).toBe('fix');
+    it('wants the edge in front of the load balancer', () => {
+        expect(one('edge', withCluster({ edge: ok(edge) }))).toMatchObject({ readiness: 'go', detail: 'a1b2c3d4e5.execute-api.ap-south-1.amazonaws.com, in front of the load balancer.' });
+        expect(one('edge', withCluster({ edge: ok({ ...edge, online: false, origin: 'nothing (it is offline)' }) })))
+            .toMatchObject({ readiness: 'fix', detail: 'a1b2c3d4e5.execute-api.ap-south-1.amazonaws.com points at nothing (it is offline): aws-up takes it online.' });
         expect(one('edge', withCluster({ edge: unread('AccessDenied') })).readiness).toBe('fix');
     });
 

@@ -1,6 +1,6 @@
 # CloudFormation: the account layer
 
-Terraform builds SplitX's platform (the network, EKS, the load balancer, CloudFront),
+Terraform builds SplitX's platform (the network, EKS, the load balancer, the edge),
 but it needs a few things to exist before it can run at all. CloudFormation makes
 those, in two stacks deployed once from the laptop as `splitx-devops`
 ([`terraform/bootstrap`](../terraform/bootstrap)), and they stay.

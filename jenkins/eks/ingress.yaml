@@ -3,7 +3,7 @@
 #   balancer the application uses (IngressGroup "splitx").
 #
 #   GitHub posts deployment events to
-#   https://<edge>/generic-webhook-trigger/invoke?token=..., CloudFront passes
+#   https://<edge>/generic-webhook-trigger/invoke?token=..., the edge passes
 #   that path to the load balancer (terraform/edge), and this rule sends it to
 #   the Jenkins controller. Nothing else of Jenkins is published: its UI is
 #   reached with `kubectl port-forward`. Each delivery must still carry

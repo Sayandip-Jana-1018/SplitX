@@ -48,7 +48,7 @@
       "targets": ["eks"],
       "values": "helm/platform/eks/aws-load-balancer-controller.values.yaml",
       "set": { "clusterName": "cluster_name", "region": "region", "vpcId": "vpc_id" },
-      "why": "Turns the Ingresses into one Application Load Balancer, which admits only CloudFront, with the pods as its targets. Replaces ingress-nginx on EKS."
+      "why": "Turns the Ingresses into one Application Load Balancer, behind the API Gateway edge, with the pods as its targets. Replaces ingress-nginx on EKS."
     },
     {
       "release": "ingress-nginx",

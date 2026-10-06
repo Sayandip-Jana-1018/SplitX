@@ -6,7 +6,7 @@
  *
  *   1. what the platform is: terraform/platform's outputs, and three committed
  *      facts checked against AWS: the edge's address (k8s/overlays/aws), the
- *      secrets' region (k8s/eks/secrets) and CloudFront's prefix list
+ *      secrets' region (k8s/eks/secrets)
  *   2. the namespaces, with their Pod Security levels
  *   3. the External Secrets Operator, then the Secrets it makes from
  *      splitx/demo/* (k8s/eks/secrets): the names and keys k8s:up builds from
@@ -24,7 +24,7 @@
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { admittedPrefixList, committedEdge, releaseImage, storeRegion } from './eks-facts.mjs';
+import { committedEdge, releaseImage, storeRegion } from './eks-facts.mjs';
 import { applyOps, opsKustomization } from './ops-platform.mjs';
 import { chartsFor, helmInstallArgs, reposOf } from './platform-charts.mjs';
 
@@ -81,25 +81,20 @@ export async function upEks({ root, context = 'splitx', image = '', opsImage = '
     console.log('    cluster ' + outputs.cluster_name + ', Kubernetes ' + outputs.kubernetes_version + ', ' + outputs.region + ', ' + outputs.vpc_id);
 
     // The edge's address is committed once (NEXTAUTH_URL) and must be the
-    // distribution terraform/edge manages: the app builds its links from it,
-    // and Jenkins checks each release through it.
+    // HTTP API terraform/edge manages (D-114): the app builds its links from
+    // it, and Jenkins checks each release through it.
     const edge = committedEdge(read('k8s/overlays/aws/kustomization.yaml'));
     if (!edge) fail('k8s/overlays/aws has no address yet: run the AWS edge workflow, then commit its domain as NEXTAUTH_URL there');
     const distribution = run('terraform', ['-chdir=terraform/edge', 'output', '-raw', 'domain_name'], { capture: true, allowFailure: true }).stdout.trim();
-    if (distribution !== edge.host) fail('k8s/overlays/aws says ' + edge.host + ', but terraform/edge\'s distribution is ' + (distribution || 'not there'));
+    if (distribution !== edge.host) fail('k8s/overlays/aws says ' + edge.host + ', but terraform/edge\'s address is ' + (distribution || 'not there'));
     console.log('    the edge: ' + edge.url);
 
     const secretsRegion = storeRegion(read('k8s/eks/secrets/clustersecretstore.yaml'));
     if (secretsRegion !== outputs.region) fail('k8s/eks/secrets reads Secrets Manager in ' + secretsRegion + ', but the platform is in ' + outputs.region);
 
-    // Prefix list IDs differ by region. The committed one must be CloudFront's
-    // here, or the load balancer would admit nobody (or somebody else).
-    const admitted = admittedPrefixList(read('k8s/overlays/aws/patches/ingress.yaml'));
-    const cloudfront = run('aws', ['ec2', 'describe-managed-prefix-lists', '--region', outputs.region,
-        '--filters', 'Name=prefix-list-name,Values=com.amazonaws.global.cloudfront.origin-facing',
-        '--query', 'PrefixLists[0].PrefixListId', '--output', 'text'], { capture: true }).stdout.trim();
-    if (cloudfront !== admitted) fail('k8s/overlays/aws admits ' + admitted + ', but CloudFront\'s origin-facing prefix list in ' + outputs.region + ' is ' + cloudfront);
-    console.log('    the load balancer will admit ' + admitted + ' (CloudFront, origin-facing) and nothing else');
+    // The load balancer is open to the internet, as API Gateway needs; the app
+    // answers only requests that carry the edge's header (D-092).
+    console.log('    the load balancer will admit the internet; the app, only what came through the edge');
 
     // ── 2. namespaces ─────────────────────────────────────────────────────────
     heading('Namespaces, with their Pod Security levels');
@@ -206,7 +201,7 @@ export async function upEks({ root, context = 'splitx', image = '', opsImage = '
                 SERVICE_CIDR: outputs.service_cidr,
                 EDGE_DOMAIN: edge.host,
             },
-            // The way visitors arrive: through CloudFront, which alone carries
+            // The way visitors arrive: through the edge, which alone carries
             // the origin header the app requires (D-092).
             target: edge.url,
         });

@@ -4447,6 +4447,14 @@ stacks show no drift".
 
 The first hour of the rehearsal proves the first three. `aws-up`'s last step proves the rest.
 
+**2026-10-06: the first hour, done early** (D-114). CloudFront was still unverified, so the edge
+became an API Gateway. The demo is on 2026-10-15.
+- **AWS up #1:** the Free plan allows EKS, the flow log's role was passed (the platform built), and
+  "Check the platform" passed.
+- **AWS down:** needed three teardown permissions, and its fourth run removed everything.
+
+D-114 has the details.
+
 **2026-09-25, later: the secrets.** The user filled in `.env` and ran `npm run aws:secrets`.
 - It generated `ORIGIN_VERIFY_SECRET` and the three Nexus passwords into `.env`.
 - Secrets Manager refused the first write: "You must provide a ClientRequestToken value".
@@ -4979,6 +4987,99 @@ rewrite of a regular expression (2026-09-25).
     `<`;
   - `tsc`, ESLint, knip and `db-schema --check`.
 
+### D-114 · The edge is an API Gateway HTTP API, and the teardown is proven on AWS
+**2026-10-06** · 🚧 written and unit-tested; the next `aws-edge` makes it, and the rehearsal proves
+it through the platform. ✅ The platform's teardown is proven on AWS.
+
+**Why.** CloudFront needs AWS to verify a new account. This one asked on 2026-09-24 and had no
+answer by 2026-10-06, nine days before the demo, after three `aws-edge` runs refused with the same
+403. The user didn't want to spend money on a domain of their own, and left API Gateway or plain
+HTTP to this choice:
+- **Plain HTTP can't work.** The app's session cookie is `__Secure-`, which browsers refuse over
+  HTTP, so nobody could sign in. And the load balancer's address changes every AWS day: the OAuth
+  callback, the webhook and `NEXTAUTH_URL` would change with it.
+- **An API Gateway HTTP API needs no verification.** It gives HTTPS at
+  `https://<id>.execute-api.ap-south-1.amazonaws.com`, the same address until it is destroyed.
+  Idle, it costs nothing.
+
+**What the edge does now** (`terraform/edge`):
+- **Online (`aws-up`):** one `$default` route to the load balancer, over HTTP inside AWS.
+  - It passes the visitor's path (`overwrite:path`).
+  - It adds `X-Origin-Verify` (D-092), replacing any a visitor sends.
+- **Offline (`aws-down`):** no route, so the address answers 404. The teardown role may delete the
+  route and the integration, never the API, whose address everything else names.
+- **A ceiling:** 500 requests a second, bursts of 1,000. A classroom opening the site at once and the
+  lab's 30 plans a second fit, and a flood costs at most about $2 an hour.
+- **No access log** (Trivy AWS-0001 accepted): CloudWatch Logs would bill for a log nobody reads.
+
+**What CloudFront did, and where it went:**
+
+| CloudFront | Now |
+|---|---|
+| HTTPS without a domain | API Gateway's own certificate |
+| Its function refused `/api/metrics` and `/api/health/ready` in any spelling | The load balancer refuses the exact paths (D-043); the app's proxy refuses every other spelling that came through the edge (`src/lib/security/internalPaths.ts`) |
+| Only its prefix list reached the load balancer | The load balancer is open, since API Gateway has no fixed addresses; the app serves only requests with the edge's header (D-092) |
+| An offline page | 404 |
+| Cached the build's static files | Nothing is cached: each page's files come from the pods |
+
+**Checked before any AWS day:**
+- **Redirects stay on the edge.** The proxy builds its redirects from `request.url`, which on a
+  self-hosted Next.js is the server's own address. Next.js then makes a redirect to that origin
+  relative (`getRelativeURL` in `resolve-routes.js`), so the browser stays on the edge, whatever
+  `Host` API Gateway sends.
+- **Nothing else reads the host.** The app has no Server Actions, and Auth.js and every link use
+  `NEXTAUTH_URL`.
+- **API Gateway's limits fit.** A request's line and headers may total 10,240 bytes, which a session
+  cookie is far below; an answer may take 30 s; a body may be 10 MB, and photos go straight to
+  Supabase.
+
+**What only the rehearsal proves:**
+- the query string travelling with `overwrite:path`;
+- the visitor's address still second from the right in `X-Forwarded-For` (`TRUSTED_PROXY_HOPS=2`);
+- every `Set-Cookie` passed through;
+- GitHub's webhook arriving with its signature intact.
+
+**Changed:**
+- `terraform/edge`, and the roles in `cloudformation/bootstrap.yaml`;
+- `aws-edge`, `aws-up` and `aws-down`;
+- the AWS overlay's load balancer, now open to `0.0.0.0/0`;
+- `cluster-up --target eks`, which no longer checks a prefix list;
+- `k8s:verify`'s edge checks:
+  - every internal spelling answers 403 through the edge;
+  - `/` at the load balancer itself answers 403;
+- ops-api, which reads the edge through `@aws-sdk/client-apigatewayv2` with `apigateway:GET` on the
+  API only, and never passes on the integration's parameters, which hold the secret;
+- `/ops`' edge panel and its pre-flight item, and the guides.
+
+The first `aws-edge` also removes what the CloudFront attempts left in the edge's state: a function,
+a request policy and two empty buckets. The deploy role keeps `cloudfront:*` for that.
+
+**The platform's teardown, proven on 2026-10-06** (B-031):
+- **AWS up #1** built the platform half on the Free plan: 82 resources in 12 minutes, and three nodes
+  that "Check the platform" passed. It then stopped where it had to, with no edge address committed.
+- **AWS down needed four runs.** Each stopped at the next permission the teardown role lacked:
+  - **#14:** `ssm:GetParameter`, for the EKS node image's public parameter a destroy reads again;
+  - **#15:** `eks:UpdatePodIdentityAssociation`, which deleting the EBS CSI add-on calls. The other
+    50 resources went;
+  - **#16:** `iam:PassRole`, for the same add-on's role. The teardown role may now pass
+    `splitx-wl-*` roles to EKS only;
+  - **#17:** removed the last 31, and its report: "What the platform left in ap-south-1: nothing".
+- **The update script asked AWS to delete GitHub's OIDC provider.** `aws-bootstrap.mjs` set
+  `CreateOidcProvider=false` whenever the account had one, including the one this stack made itself.
+  - The first update's plan showed "Remove GitHubOidcProvider".
+  - That update failed for another reason and rolled back cleanly: an IAM policy's description can't
+    change in place, so the policy was to be replaced, and its fixed name collided.
+  - Had it succeeded, every workflow would have lost AWS.
+  - The script now keeps a provider the stack owns, and the descriptions keep their old words.
+
+**Tests:**
+- every internal spelling is refused through the edge, and the live probe still answers;
+- `isInternalPath` on its own;
+- the edge's summary never carries the integration's parameters;
+- the AWS ingress admits the internet over plain HTTP only.
+
+Totals: 1,446 unit tests, `tsc`, ESLint, knip and `terraform fmt`.
+
 ---
 
 ## Open problems
@@ -5015,7 +5116,7 @@ rewrite of a regular expression (2026-09-25).
 | B-028 | The AI chat builds its own balances: pairwise instead of the group plan, over every expense including deleted ones, in deleted groups too, with ±1 paisa counted as settled. | Its answers to "who owes me?" can disagree with Settle Up, and count expenses that were deleted. | ✅ Resolved 2026-09-22 — D-067. The chat's context is the ledger: balances per group over live expenses, and each group's settle-up plan. |
 | B-029 | Removing a member used to re-split their shares among the others (D-063). Groups that had a member removed may hold shares that were moved between people, and former members may still owe or be owed. | Balances in those groups reflect the old re-split, not what people agreed to. | ✅ Checked 2026-09-22 — D-069. `npm run ledger:audit -- --https` read production (1 group, 37 expenses, 62 shares, 0 settlements, 9 accounts) in a read-only transaction: no share of a former member, no former member with a balance, every expense adding up, every group netting to zero. Nothing to repair. |
 | B-030 | `npm audit` still reports one high advisory: `deepmerge-ts` below 8 (GHSA-ggr8-5vv4-36mx, stack exhaustion when merging self-referencing objects), through `prisma` → `@prisma/config`. | The Prisma CLI is a development and migration tool; the app's runtime (`@prisma/client`) doesn't use it, and the only objects it merges are our own config. | Accepted 2026-09-22 (D-070). The fix is Prisma 7, a major upgrade with its own changes. Still accepted after the migration baseline (D-072), which was done on Prisma 6: the upgrade is its own change. The CLI stays out of the runtime image. |
-| B-031 | Phase 4 (D-088 to D-090) is written and validated, but nothing in it has been applied. Only a real run proves: the `iam:PassedToService` value for the flow log's role (both candidates are allowed); that `splitx-ci-teardown`'s permissions cover a whole `terraform destroy` and the edge's offline apply; the ALB's lookup by the controller's tags (`ingress.k8s.aws/stack = splitx`); that the pinned add-on versions are still offered on the day; and the edge function in CloudFront's own runtime (it is tested in Node). | An AWS day that meets any of these unprepared loses hours of a rehearsal or the demo. | Open. `aws-edge` proves the edge's part as soon as the stacks and the `AWS_ACCOUNT_ID` secret exist. The rehearsal's first hour, a platform-only `aws-up` then `aws-down`, proves the rest (plan Phase 10). **2026-09-24, D-093 adds to the list:** the External Secrets Operator's Pod Identity credentials; the load balancer controller's IAM policy (the module's) against controller 3.5.0; the pod readiness gates; the VPC CNI agent admitting the kubelet and judging `172.20.0.1` as the API server; the prefix-list rule fitting the security group (weight 55 of 60); image volumes on the EKS node image; Docker Hub pulls through the NAT address; GitHub's webhook through CloudFront to Jenkins; and the Jenkins deploy RBAC of D-094. **D-095 and D-096 add:** whether EKS itself is allowed on the account's Free plan; the `m7i-flex.large` nodes; Nexus with a read-only root filesystem; and cosign's attestation output in the archive step. **D-097 adds:** Kyverno's admission metrics reaching Prometheus; the ops image passing the release's Trivy gate; ops-api's AWS reads through Pod Identity; and the traffic lab's load reaching CloudFront from the NAT address. **2026-09-24, from kind-e2e (D-099, D-100):** on Kind, Nexus with a read-only root filesystem ran in runs 2 to 4, the ops image passed the gate, and D-094's deploy RBAC was proven (run 4: 4 allowed, 5 refused). Run 4 found that Jenkins' Nexus role could not upload (fixed in D-100), and cosign's attestation output was then checked against cosign's source; the first run that archives proves it. **Runs 5 and 6 did (D-099).** **2026-09-25, D-103:** `aws-up` now ends by verifying the platform through CloudFront (`k8s:verify` and `cd:verify --target eks`), and `aws-verify` repeats that alone. Together they check most of this list live on the day: ESO's Pod Identity credentials; the ALB controller's policy (it made the ALB and its bindings); the readiness gates; the VPC CNI agent enforcing, admitting the kubelet (every pod ready) and reaching 172.20.0.1 (ops-api's reads, Jenkins' agents); Docker Hub pulls through the NAT address (every pod running); GitHub's webhook through CloudFront to Jenkins; D-094's RBAC; ops-api's AWS reads; and the edge function in CloudFront's own runtime. What they can't check: the flow log role's `iam:PassedToService` and the add-on versions (aws-up's apply proves those), `splitx-ci-teardown`'s cover of a whole destroy (aws-down proves it), and EKS and `m7i-flex.large` on the Free plan (the apply again). **2026-09-25, D-105:** checked read-only ahead of the day: EKS 1.35 is in standard support, all six pinned add-on versions are still offered, `m7i-flex.large` is offered in all three zones and is Free-plan eligible, and the vCPU quota is 8. Both stacks are in sync. |
+| B-031 | Phase 4 (D-088 to D-090) is written and validated, but nothing in it has been applied. Only a real run proves: the `iam:PassedToService` value for the flow log's role (both candidates are allowed); that `splitx-ci-teardown`'s permissions cover a whole `terraform destroy` and the edge's offline apply; the ALB's lookup by the controller's tags (`ingress.k8s.aws/stack = splitx`); that the pinned add-on versions are still offered on the day; and the edge function in CloudFront's own runtime (it is tested in Node). | An AWS day that meets any of these unprepared loses hours of a rehearsal or the demo. | Open. `aws-edge` proves the edge's part as soon as the stacks and the `AWS_ACCOUNT_ID` secret exist. The rehearsal's first hour, a platform-only `aws-up` then `aws-down`, proves the rest (plan Phase 10). **2026-09-24, D-093 adds to the list:** the External Secrets Operator's Pod Identity credentials; the load balancer controller's IAM policy (the module's) against controller 3.5.0; the pod readiness gates; the VPC CNI agent admitting the kubelet and judging `172.20.0.1` as the API server; the prefix-list rule fitting the security group (weight 55 of 60); image volumes on the EKS node image; Docker Hub pulls through the NAT address; GitHub's webhook through CloudFront to Jenkins; and the Jenkins deploy RBAC of D-094. **D-095 and D-096 add:** whether EKS itself is allowed on the account's Free plan; the `m7i-flex.large` nodes; Nexus with a read-only root filesystem; and cosign's attestation output in the archive step. **D-097 adds:** Kyverno's admission metrics reaching Prometheus; the ops image passing the release's Trivy gate; ops-api's AWS reads through Pod Identity; and the traffic lab's load reaching CloudFront from the NAT address. **2026-09-24, from kind-e2e (D-099, D-100):** on Kind, Nexus with a read-only root filesystem ran in runs 2 to 4, the ops image passed the gate, and D-094's deploy RBAC was proven (run 4: 4 allowed, 5 refused). Run 4 found that Jenkins' Nexus role could not upload (fixed in D-100), and cosign's attestation output was then checked against cosign's source; the first run that archives proves it. **Runs 5 and 6 did (D-099).** **2026-09-25, D-103:** `aws-up` now ends by verifying the platform through CloudFront (`k8s:verify` and `cd:verify --target eks`), and `aws-verify` repeats that alone. Together they check most of this list live on the day: ESO's Pod Identity credentials; the ALB controller's policy (it made the ALB and its bindings); the readiness gates; the VPC CNI agent enforcing, admitting the kubelet (every pod ready) and reaching 172.20.0.1 (ops-api's reads, Jenkins' agents); Docker Hub pulls through the NAT address (every pod running); GitHub's webhook through CloudFront to Jenkins; D-094's RBAC; ops-api's AWS reads; and the edge function in CloudFront's own runtime. What they can't check: the flow log role's `iam:PassedToService` and the add-on versions (aws-up's apply proves those), `splitx-ci-teardown`'s cover of a whole destroy (aws-down proves it), and EKS and `m7i-flex.large` on the Free plan (the apply again). **2026-09-25, D-105:** checked read-only ahead of the day: EKS 1.35 is in standard support, all six pinned add-on versions are still offered, `m7i-flex.large` is offered in all three zones and is Free-plan eligible, and the vCPU quota is 8. Both stacks are in sync. **2026-10-06, D-114:** proven on AWS: the Free plan allows EKS and `m7i-flex.large`; the flow log role's `iam:PassedToService` holds; `splitx-ci-teardown` covers a whole destroy, after three permissions were added. CloudFront was never verified, so the edge is an API Gateway HTTP API: what this list names 'through CloudFront' now goes through it, and its own unknowns are in D-114. |
 | B-032 | Errors reach no one, and the live site's scheduled checks run only when GitHub's scheduler gets to them. Most API routes catch their errors and log them, and logs on Vercel's free plan are short-lived. The 15-minute production check (D-106) ran at 12:06 and 12:41 UTC on 2026-09-25, then not until 17:15. | An outage or a broken page between demo days is found by a user, not by us. | Open, 2026-09-25. The user asked for real-time errors. Planned for D-114: Sentry's free plan (5,000 errors a month, email alerts, one uptime monitor checking every minute). It reports browser and server errors, including those `logger.error` records, through a tunnel on the site itself, so the CSP is unchanged. `/ops` shows its count, and the GitHub check stays as the second opinion. Waits on the user's Sentry account and DSN. |
 
 ## Environment notes (this machine)

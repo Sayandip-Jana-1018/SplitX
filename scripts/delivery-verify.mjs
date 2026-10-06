@@ -11,8 +11,8 @@
  *
  * The chain: GitHub Actions builds, scans and signs every release on main and
  * announces it as a GitHub deployment (D-054). GitHub's webhook reaches
- * Jenkins through the relay on Kind (D-056), and through CloudFront and the
- * load balancer on EKS (D-093). Jenkins checks the webhook's signature, then
+ * Jenkins through the relay on Kind (D-056), and through the edge and the
+ * load balancer on EKS (D-093, D-114). Jenkins checks the webhook's signature, then
  * the image's, then deploys the release's own manifests and rolls back
  * anything that does not come up healthy (D-055).
  *
@@ -160,7 +160,7 @@ const pingBody = JSON.stringify({ zen: 'Non-blocking is better than blocking.', 
 /**
  * Posts a delivery to Jenkins' webhook endpoint. On Kind, the way the relay
  * does: to Jenkins itself, the token as a header. On EKS, the way GitHub's
- * second webhook does (D-093): through CloudFront and the load balancer, the
+ * second webhook does (D-093): through the edge and the load balancer, the
  * token in the address, and no Jenkins credentials at all.
  */
 async function invoke(body, { token, ...headers }) {
@@ -330,7 +330,7 @@ sections.push({
         'The job is started by GitHub\'s `deployment` webhook and nothing else. The Generic Webhook Trigger',
         'verifies GitHub\'s `X-Hub-Signature-256` against the webhook\'s secret before any job sees the delivery,',
         EKS
-            ? 'so CloudFront and the load balancer that carry it are only couriers: they cannot forge or change one.'
+            ? 'so the edge and the load balancer that carry it are only couriers: they cannot forge or change one.'
             : 'so the relay that carries it (D-056) is only a courier: it cannot forge or change one.',
         ...(EKS ? ['Each delivery below went the way GitHub\'s do: to ' + target.base + '/generic-webhook-trigger/invoke, the token in the address.'] : []),
         '',
@@ -348,7 +348,7 @@ sections.push({
 // ── 3. The way GitHub's deliveries arrive ─────────────────────────────────
 if (EKS) {
     heading('[3] GitHub\'s way in, through the edge');
-    // GitHub's second webhook posts to CloudFront, which passes the path to the
+    // GitHub's second webhook posts to the edge, which passes the path to the
     // load balancer and on to Jenkins (jenkins/eks/ingress.yaml). No relay runs
     // here, so a build GitHub's delivery started came that way and no other.
     const relayRuns = (json(['get', 'deployments', '-n', 'jenkins']).items ?? []).some((d) => d.metadata.name === 'webhook-relay');
@@ -369,7 +369,7 @@ if (EKS) {
             + (relayRuns ? '; a relay runs here too' : '; no relay runs here');
     }
     record(
-        'GitHub\'s own delivery reached Jenkins through CloudFront, and Jenkins reported back',
+        'GitHub\'s own delivery reached Jenkins through the edge, and Jenkins reported back',
         Boolean(started) && started.result === 'SUCCESS' && reported?.state === 'success' && !relayRuns,
         how
     );
@@ -390,7 +390,7 @@ if (EKS) {
     sections.push({
         title: 'GitHub\'s way in',
         body: [
-            'On AWS, GitHub calls Jenkins directly: its second webhook posts to CloudFront, which passes',
+            'On AWS, GitHub calls Jenkins directly: its second webhook posts to the edge (API Gateway), which passes',
             '`/generic-webhook-trigger/*` to the load balancer and on to Jenkins. Nothing else of Jenkins is published.',
             '',
             '| | |',
@@ -779,7 +779,7 @@ if (rollback) {
             '| What the rollout did | `maxUnavailable: 0`, so the new pod waited for readiness and the old pods kept serving |',
             '| What Jenkins did | waited ' + '150 s' + ' for the rollout, then rolled the deployment back to the revision it had recorded before applying |',
             '| Running after | `' + rollback.imageAfter.split('@').pop().slice(0, 19) + '…`, the image that ran before |',
-            '| What visitors saw | ' + rollback.served + ' of ' + (rollback.served + rollback.failed) + ' requests ' + (EKS ? 'through CloudFront ' : '')
+            '| What visitors saw | ' + rollback.served + ' of ' + (rollback.served + rollback.failed) + ' requests ' + (EKS ? 'through the edge ' : '')
                 + 'answered 200 during the failed release and its rollback |',
             '',
             'The same path runs when a release is genuinely broken: the build fails and the cluster keeps the release',
@@ -810,7 +810,7 @@ const report = [
     '  -> GitHub deployment for the environment "' + ENVIRONMENT + '", naming the image by digest',
     '  -> webhook, signed by GitHub',
     EKS
-        ? '  -> CloudFront (HTTPS) -> the load balancer -> Jenkins (signature checked here)'
+        ? '  -> the edge, API Gateway (HTTPS) -> the load balancer -> Jenkins (signature checked here)'
         : '  -> smee.io channel -> relay in the cluster -> Jenkins (signature checked here)',
     '  -> Jenkins: newest? signed by main\'s workflow, same commit? then apply that commit\'s manifests',
     '  -> rollout, checked through ' + (EKS ? 'the edge' : 'the ingress') + '; anything unhealthy is rolled back',

@@ -125,7 +125,7 @@ describe('the traffic lab\'s buttons', () => {
 
     it('ask ops-api to start and stop the run, and pass on what the lab said', async () => {
         opsViewer.mockResolvedValue(operator);
-        fetchMock.mockResolvedValueOnce(json({ state: 'running', rate: 30, seconds: 180, target: 'https://d1.cloudfront.net' }, 202));
+        fetchMock.mockResolvedValueOnce(json({ state: 'running', rate: 30, seconds: 180, target: 'https://a1b2c3d4e5.execute-api.ap-south-1.amazonaws.com' }, 202));
         const started = await start({ rate: 30, seconds: 180 });
         expect(started.status).toBe(202);
         expect(await started.json()).toMatchObject({ state: 'running', rate: 30 });

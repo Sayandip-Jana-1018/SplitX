@@ -42,7 +42,7 @@ spec:
     - Egress
   ingress:
     - from:
-        # GitHub's deliveries, through CloudFront and the load balancer. Only
+        # GitHub's deliveries, through the edge and the load balancer. Only
         # /generic-webhook-trigger/ is routed here (jenkins/eks/ingress.yaml).
         - ipBlock:
             cidr: 10.0.64.0/24
@@ -149,7 +149,7 @@ spec:
           protocol: TCP
     # The internet: the release's source on GitHub, its image and signature on
     # ghcr.io, Sigstore's trust root and log, GitHub's API for statuses, and
-    # the smoke test, which goes through CloudFront over HTTPS like a visitor.
+    # the smoke test, which goes through the edge over HTTPS like a visitor.
     - to:
         - ipBlock:
             cidr: 0.0.0.0/0

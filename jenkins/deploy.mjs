@@ -7,7 +7,7 @@
  *   node jenkins/deploy.mjs deploy     apply the commit's manifests with the verified image
  *   node jenkins/deploy.mjs wait       the database and the schema Job (where the overlay has them) and the application roll out
  *   node jenkins/deploy.mjs check      every ready pod runs the image, and the edge serves only them
- *                                      (Kind: through ingress-nginx; EKS: through CloudFront over HTTPS)
+ *                                      (Kind: through ingress-nginx; EKS: through the edge over HTTPS)
  *   node jenkins/deploy.mjs archive    cosign verifies the release's SBOM and vulnerability report; both go to
  *                                      Nexus with the deployment's record (D-096)
  *   node jenkins/deploy.mjs rollback   put the application back to the revision it had before `deploy`
@@ -93,7 +93,7 @@ async function github(method, path, body) {
 }
 
 // The way users arrive: through the ingress controller on Kind, and through
-// CloudFront over HTTPS on EKS, where DEPLOY_EDGE_URL is the edge itself.
+// the edge (API Gateway, D-114) over HTTPS on EKS, where DEPLOY_EDGE_URL is the edge itself.
 function edge(method, path, body) {
     return new Promise((resolve) => {
         const url = new URL(path, env.DEPLOY_EDGE_URL);
@@ -366,7 +366,7 @@ async function report(status, description) {
         description: description.slice(0, 140),
         log_url: env.BUILD_URL,
         // Where visitors reach this environment: http://localhost/ on Kind,
-        // the CloudFront address on EKS.
+        // the edge's address on EKS.
         environment_url: new URL(env.DEPLOY_EDGE_URL).protocol + '//' + env.DEPLOY_EDGE_HOST + '/',
     });
     say('reported to GitHub deployment ' + deployment.id + ': ' + status);

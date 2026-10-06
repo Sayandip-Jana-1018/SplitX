@@ -129,15 +129,15 @@ interface EksSummary {
     addons: { name: string; version: string; status: string }[];
 }
 
+/** The edge, an API Gateway HTTP API (D-114). */
 interface EdgeSummary {
     id: string;
     domain: string;
-    status: string;
-    enabled: boolean;
     online: boolean;
     origin: string;
-    httpVersion: string | null;
-    priceClass: string | null;
+    /** Requests a second, and the burst, its $default stage allows. */
+    rateLimit: number | null;
+    burstLimit: number | null;
     lastModified: string | null;
 }
 

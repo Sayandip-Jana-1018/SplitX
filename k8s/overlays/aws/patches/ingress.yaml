@@ -21,15 +21,16 @@ metadata:
     # The pods themselves are the targets, so the ALB sees each pod's health
     # and a rollout can wait for it (patches/namespace.yaml).
     alb.ingress.kubernetes.io/target-type: ip
-    # HTTP only. CloudFront holds the certificate and the visitor's HTTPS
-    # connection and forwards over HTTP (terraform/edge), so an HTTPS listener
-    # would need a certificate for a domain SplitX doesn't have.
+    # HTTP only. The edge, an API Gateway HTTP API, holds the visitor's HTTPS
+    # connection and forwards over HTTP (terraform/edge, D-114), so an HTTPS
+    # listener would need a certificate for a domain SplitX doesn't have.
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
-    # Only CloudFront may connect: its origin-facing prefix list in
-    # ap-south-1. cluster-up checks this ID against AWS before every install.
-    # Anyone else's CloudFront distribution shares these addresses; the app
-    # refuses those requests itself (X-Origin-Verify, D-092).
-    alb.ingress.kubernetes.io/security-group-prefix-lists: pl-9aa247f3
+    # Open to the internet: API Gateway reaches the load balancer from AWS's
+    # public addresses, which no list names. What makes it SplitX's edge only
+    # is the header the edge adds: the app refuses every request without it
+    # (X-Origin-Verify, D-092), and refuses the internal paths before that
+    # (ingress-internal.yaml).
+    alb.ingress.kubernetes.io/inbound-cidrs: 0.0.0.0/0
     alb.ingress.kubernetes.io/healthcheck-path: /api/health/live
     # Give a leaving pod 30 s to finish its requests, not the default 300.
     alb.ingress.kubernetes.io/target-group-attributes: deregistration_delay.timeout_seconds=30

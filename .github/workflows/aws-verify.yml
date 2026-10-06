@@ -1,7 +1,7 @@
 name: AWS verify
 
 # Checks the EKS platform aws-up built, without building anything (D-103):
-# k8s:verify and cd:verify --target eks, through CloudFront, with the evidence
+# k8s:verify and cd:verify --target eks, through the edge, with the evidence
 # kept as an artifact. aws-up runs the same checks as its last step; this runs
 # them again, after a fix or later in an AWS day. The platform must be up.
 

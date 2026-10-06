@@ -12,6 +12,7 @@ import { DEVICE_COOKIE, deviceCookieOptions, mintDevice, verifyDevice } from '@/
 import { resolveIdentity, verifiedSessionUserId } from '@/lib/rateLimit/identity';
 import { PREVIEW_ADMISSION_HEADER, tryAdmitPreview } from '@/lib/previewAdmission';
 import { arrivalTime, previewMaxQueueMs, REQUEST_START_HEADER, requestStartValue } from '@/lib/requestQueue';
+import { isInternalPath } from '@/lib/security/internalPaths';
 
 /**
  * Next.js Proxy — runs on every matched request.
@@ -78,11 +79,10 @@ function clearSessionCookies(request: NextRequest, response: NextResponse) {
 }
 
 /**
- * On the EKS platform, only requests that came through SplitX's own edge. The
- * load balancer admits CloudFront's addresses, and every CloudFront
- * distribution shares them, so anyone could put a distribution of their own in
- * front of it and skip ours: its HTTPS redirect, and the function that refuses
- * the internal paths. Ours adds this header with a value only it has
+ * On the EKS platform, only requests that came through SplitX's own edge, an
+ * API Gateway HTTP API (D-114). The load balancer is open to the internet, the
+ * only way API Gateway can reach it, so anyone could call it directly and skip
+ * the edge's HTTPS. The edge adds this header with a value only it has
  * (terraform/edge, from Secrets Manager). Where ORIGIN_VERIFY_SECRET is unset
  * (Vercel, Kind) nothing changes.
  */
@@ -91,12 +91,27 @@ const ORIGIN_VERIFY_HEADER = 'x-origin-verify';
 // the kubelet's probes, and Prometheus (whose endpoint wants its own token).
 const DIRECT_PATHS = new Set(['/api/health/live', '/api/health/ready', '/api/metrics']);
 
-function fromOurEdge(request: NextRequest): boolean {
-    const expected = process.env.ORIGIN_VERIFY_SECRET;
-    if (!expected || DIRECT_PATHS.has(request.nextUrl.pathname)) return true;
+function carriesEdgeHeader(request: NextRequest, expected: string): boolean {
     const given = Buffer.from(request.headers.get(ORIGIN_VERIFY_HEADER) ?? '');
     const wanted = Buffer.from(expected);
     return given.length === wanted.length && timingSafeEqual(given, wanted);
+}
+
+function fromOurEdge(request: NextRequest): boolean {
+    const expected = process.env.ORIGIN_VERIFY_SECRET;
+    if (!expected || DIRECT_PATHS.has(request.nextUrl.pathname)) return true;
+    return carriesEdgeHeader(request, expected);
+}
+
+/**
+ * A visitor asking for an internal path in any spelling (lib/security/
+ * internalPaths.ts): the request came through the edge, whose header only the
+ * edge adds. The cluster's own callers, Prometheus and the probes, reach the
+ * pod without it.
+ */
+function internalPathFromOutside(request: NextRequest): boolean {
+    const expected = process.env.ORIGIN_VERIFY_SECRET;
+    return Boolean(expected) && isInternalPath(request.nextUrl.pathname) && carriesEdgeHeader(request, expected as string);
 }
 
 /** Lets the request continue to its route, carrying its trace and arrival time. */
@@ -175,7 +190,7 @@ export async function proxy(request: NextRequest) {
     // ── Only through our edge (EKS) ──
     // Counted, not logged: someone else's distribution could otherwise turn a
     // flood of refused requests into a flood of log lines.
-    if (!fromOurEdge(request)) {
+    if (!fromOurEdge(request) || internalPathFromOutside(request)) {
         const response = new NextResponse('Not available', {
             status: 403,
             headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' },

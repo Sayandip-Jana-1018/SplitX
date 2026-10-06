@@ -8,7 +8,7 @@
  *
  * What goes where is decided in scripts/lib/demo-secrets.mjs. The values nobody
  * has to choose are generated into .env on the first run: ORIGIN_VERIFY_SECRET
- * (the header CloudFront sends the load balancer), NEXUS_ADMIN_PASSWORD, and
+ * (the header the edge sends the load balancer), NEXUS_ADMIN_PASSWORD, and
  * the passwords of Jenkins' and ops-api's Nexus accounts (D-096, D-097).
  *
  * Values are never printed, never put on a command line and never written to a
@@ -40,7 +40,7 @@ function ensureEnv(key, comment) {
     process.env[key] = value;
     generated.push(key);
 }
-ensureEnv('ORIGIN_VERIFY_SECRET', 'CloudFront sends this to the load balancer, and the app refuses requests without it');
+ensureEnv('ORIGIN_VERIFY_SECRET', 'The edge sends this to the load balancer, and the app refuses requests without it');
 ensureEnv('NEXUS_ADMIN_PASSWORD', 'The Nexus admin password on the demo platform (user admin)');
 ensureEnv('NEXUS_JENKINS_PASSWORD', 'The password of Jenkins\' Nexus account, which may only read and add release evidence');
 ensureEnv('NEXUS_OPS_PASSWORD', 'The password of ops-api\'s Nexus account, which may only read release evidence');

@@ -549,10 +549,10 @@ function InfrastructureSection({ c }: Readonly<{ c: ClusterReadings }>) {
                         </ListGroup>
                     )}
                 </Panel>
-                <Panel title="CloudFront" reading={edge} code="terraform/edge/main.tf">
+                <Panel title="The edge (API Gateway)" reading={edge} code="terraform/edge/main.tf">
                     {edge.ok && (
                         <ListGroup className={styles.flush}>
-                            <ListRow wrap title={<span className={styles.mono}>{edge.data.domain}</span>} subtitle={`serving ${edge.data.origin}`} trailing={<Tag tone={edge.data.online ? 'success' : 'neutral'}>{edge.data.online ? 'online' : 'offline page'}</Tag>} trailingSub={edge.data.status.toLowerCase()} />
+                            <ListRow wrap title={<span className={styles.mono}>{edge.data.domain}</span>} subtitle={`serving ${edge.data.origin}`} trailing={<Tag tone={edge.data.online ? 'success' : 'neutral'}>{edge.data.online ? 'online' : 'offline'}</Tag>} trailingSub={edge.data.rateLimit === null ? undefined : `at most ${edge.data.rateLimit} a second`} />
                         </ListGroup>
                     )}
                 </Panel>

@@ -70,7 +70,7 @@ function readings() {
         const evidence = readSource('Nexus: splitx-evidence', async () => summariseEvidence(await nexusEvidence()));
         const stacks = readSource('AWS CloudFormation', aws ? aws.readStacks : noRole);
         const eks = readSource('Amazon EKS', aws ? aws.readEks : noRole);
-        const edge = readSource('Amazon CloudFront', aws ? aws.readEdge : noRole);
+        const edge = readSource('Amazon API Gateway', aws ? aws.readEdge : noRole);
         const budget = readSource('AWS Budgets', aws ? aws.readBudget : noRole);
         const platform = readSource('the platform\'s facts, as cluster-up passed them', async () => ({
             target: TARGET,

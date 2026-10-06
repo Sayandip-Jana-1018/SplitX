@@ -243,9 +243,10 @@ export function albFindings(rules) {
 }
 
 /**
- * Spellings of the two internal paths. terraform/edge's function decodes,
- * lower-cases and collapses slashes before it compares, so each must be
- * refused at the edge, never passed on.
+ * Spellings of the two internal paths. The load balancer refuses the exact
+ * ones; the app's proxy decodes, lower-cases and collapses slashes before it
+ * compares (src/lib/security/internalPaths.ts), so through the edge each must
+ * be refused, never passed on (D-114).
  */
 export const INTERNAL_SPELLINGS = [
     '/api/metrics',
@@ -257,11 +258,6 @@ export const INTERNAL_SPELLINGS = [
     '//api/health/ready',
     '/api/health/ready/',
 ];
-
-/** Whether CloudFront made a response itself, in a function: it says so in X-Cache. */
-export function madeByEdgeFunction(xCache) {
-    return /FunctionGeneratedResponse/i.test(xCache ?? '');
-}
 
 /**
  * Run inside an application pod on EKS (`kubectl exec -i <pod> -- node - <email>`),

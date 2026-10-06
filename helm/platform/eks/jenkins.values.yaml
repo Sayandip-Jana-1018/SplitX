@@ -3,7 +3,7 @@
 #   which hold the plugins, the JCasC and the splitx-deploy job both clusters
 #   share. Only where this Jenkins deploys, and how GitHub reaches it, differ.
 #
-#   GitHub's second webhook posts to CloudFront, which passes
+#   GitHub's second webhook posts to the edge (API Gateway), which passes
 #   /generic-webhook-trigger/* to the load balancer and on to Jenkins
 #   (jenkins/eks/ingress.yaml): no relay, and nothing else of Jenkins is
 #   reachable from outside. Every delivery must still carry GitHub's

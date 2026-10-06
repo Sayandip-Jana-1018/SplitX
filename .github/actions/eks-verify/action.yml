@@ -2,7 +2,7 @@ name: Verify the EKS platform
 description: >-
   k8s:verify and cd:verify with --target eks (D-103), against the platform aws-up
   built: the cluster, the edge and the delivery path, measured live through
-  CloudFront the way visitors and GitHub arrive. Used by aws-up after its
+  the edge (API Gateway, D-114) the way visitors and GitHub arrive. Used by aws-up after its
   delivery, and by aws-verify on its own. Expects kubectl's context "splitx"
   and the deploy role's credentials.
 

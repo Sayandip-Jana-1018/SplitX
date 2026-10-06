@@ -11,7 +11,7 @@ way is in [docs/DECISIONS.md](docs/DECISIONS.md): D-087 to D-103.
 |---|---|---|---|
 | **The laptop's identity** | by hand, once | always | The IAM user `splitx-devops`, for the laptop's CLI calls. It may manage only `splitx-*` IAM names, and every role it makes must carry the permissions boundary ([terraform/bootstrap](terraform/bootstrap/README.md)). The root user keeps MFA and has no access keys. |
 | **The account layer** | CloudFormation, `npm run aws:bootstrap` | always | `splitx-bootstrap`: Terraform's state bucket, GitHub's OIDC provider, the roles `splitx-ci-deploy` (builds; only the reviewed environment `aws-demo` may assume it) and `splitx-ci-teardown` (can only remove), and the boundary both carry. `splitx-guardrails`: a $15 monthly budget and the alert topic ([cloudformation](cloudformation/README.md)). |
-| **The edge** | Terraform, `terraform/edge`, the **AWS edge** workflow | always, $0 idle | The CloudFront distribution and its function, which refuses the internal paths and serves an offline page while the platform is down. |
+| **The edge** | Terraform, `terraform/edge`, the **AWS edge** workflow | always, $0 idle | An API Gateway HTTP API (D-114): HTTPS and a fixed address for the platform. While the platform is down it has no route and answers 404. |
 | **The platform** | Terraform, `terraform/platform`, in **AWS up** | one day at a time | A VPC in two zones, EKS 1.35 with its add-ons, 3 to 4 `m7i-flex.large` nodes, and each workload's role through EKS Pod Identity. |
 | **The software** | `scripts/cluster-up.mjs --target eks`, in **AWS up** | one day at a time | External Secrets, Prometheus, Grafana, Loki, Kyverno, the AWS Load Balancer Controller, the Cluster Autoscaler, Jenkins, Nexus, the app, ops-api and the traffic lab. |
 | **The secrets** | `npm run aws:secrets`, from `.env` | only during an AWS day | `splitx/demo/app` and `splitx/demo/platform` in Secrets Manager. `aws-down` deletes them. |
@@ -51,15 +51,14 @@ and only in `ap-south-1`.
 - **vCPU quota:** four `m7i-flex.large` nodes need 8 vCPUs. Service Quotas → Amazon EC2 → "Running
   On-Demand Standard (A, C, D, H, I, M, R, T, Z) instances" (`L-1216C47A`). `aws-up` checks it before
   building anything.
-- **CloudFront:** a new account may have to be verified by AWS Support before it can create a
-  distribution. The **AWS edge** workflow says so in AWS's own words ("Your account must be verified
-  before you can add new CloudFront resources"). Open a support case, and run the workflow again when
-  AWS confirms.
+- **Why not CloudFront:** a new account may have to be verified by AWS Support before it can create
+  a distribution. This one asked on 2026-09-24 and had no answer by the demo, so the edge is an API
+  Gateway HTTP API, which needs no verification (D-114).
 
 ### 5. The edge
 
 1. GitHub → Actions → **AWS edge** → Run workflow, then approve `aws-demo`.
-2. Its summary names the distribution's domain. Commit it as `NEXTAUTH_URL=https://<domain>` in
+2. Its summary names the edge's address. Commit it as `NEXTAUTH_URL=https://<domain>` in
    `k8s/overlays/aws/kustomization.yaml`, the one place the address is written down.
    - `cluster-up` refuses to install when the two disagree.
    - While the platform is up behind the edge, the release job deploys every release to EKS too.
@@ -68,8 +67,7 @@ and only in `ap-south-1`.
 
 These are the runbook's §1, in [docs/DEMO_DAY.md](docs/DEMO_DAY.md):
 - the second GitHub OAuth App (`AWS_GITHUB_ID` and `AWS_GITHUB_SECRET` in `.env`);
-- Google's redirect URI;
-- the second repository webhook, which reaches Jenkins through CloudFront;
+- the second repository webhook, which reaches Jenkins through the edge;
 - the Neon branch `demo`, schema only (`DEMO_DATABASE_URL` in `.env`).
 
 ## Each AWS day
@@ -84,7 +82,7 @@ Follow [docs/DEMO_DAY.md](docs/DEMO_DAY.md):
 
 | | |
 |---|---|
-| Between AWS days | Cents: the state bucket, and CloudFront with no traffic. |
+| Between AWS days | Cents: the state bucket, and an API Gateway with no traffic. |
 | An AWS day of about 6 hours | About $3: EKS, three or four nodes, the NAT gateway, the load balancer and the volumes. |
 | The budget | $15 a month, counted without credits. It emails at 50 %, 80 % and 100 %, and on the forecast. |
 
@@ -96,4 +94,4 @@ nightly **AWS down** can, and it removes it.
 - `npm run aws:secrets -- --check` names every key the platform needs, and anything missing in `.env`.
 - The newest **Kind end-to-end** run tests the same platform on a GitHub runner, every night.
 - **AWS up** checks the cluster, the edge and the delivery as it goes, and ends with **Verify the
-  platform**: `k8s:verify` and `cd:verify` on EKS, through CloudFront.
+  platform**: `k8s:verify` and `cd:verify` on EKS, through the edge.

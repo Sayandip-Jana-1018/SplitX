@@ -119,7 +119,7 @@ spec:
       ports:
         - port: 80
           protocol: TCP
-    # AWS's APIs (CloudFormation, EKS, CloudFront, Budgets).
+    # AWS's APIs (CloudFormation, EKS, API Gateway, Budgets).
     - to:
         - ipBlock:
             cidr: 0.0.0.0/0

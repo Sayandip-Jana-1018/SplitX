@@ -1,6 +1,6 @@
 # ═══════════════════════════════════════════════════════════════
-#   AWS overlay: EKS, behind CloudFront and an Application Load Balancer
-#   (D-093). `node scripts/cluster-up.mjs --target eks` applies it on an AWS
+#   AWS overlay: EKS, behind the edge (an API Gateway HTTP API, D-114) and an
+#   Application Load Balancer (D-093). `node scripts/cluster-up.mjs --target eks` applies it on an AWS
 #   day, and Jenkins on EKS deploys every later release with it.
 #
 #   Differences from local, and why each one exists:
@@ -8,9 +8,9 @@
 #       scanned and signed (D-054), the same digest Jenkins deploys here
 #     • no in-cluster Postgres: EKS talks to a Neon branch that has the
 #       schema and none of production's data (splitx/demo/app, D-091)
-#     • two proxies in front of a pod (CloudFront -> ALB), not one
-#     • one plain-HTTP listener, which admits only CloudFront's addresses:
-#       CloudFront holds the HTTPS certificate and the visitor's connection,
+#     • two proxies in front of a pod (API Gateway -> ALB), not one
+#     • one plain-HTTP listener, open to the internet as API Gateway needs:
+#       the edge holds the HTTPS certificate and the visitor's connection,
 #       and the app accepts only requests carrying our edge's header (D-092)
 #     • replicas spread across availability zones, not just nodes
 #     • rollouts wait for the load balancer, in both directions
@@ -51,7 +51,7 @@ configMapGenerator:
   - name: splitx-config
     behavior: merge
     literals:
-      # CloudFront -> ALB -> pod: the visitor's address is second from the right
+      # API Gateway -> ALB -> pod: the visitor's address is second from the right
       # of X-Forwarded-For. Getting this wrong would rate-limit the ALB instead
       # of the visitor, or let a visitor forge an address and dodge the limit.
       - TRUSTED_PROXY_HOPS=2

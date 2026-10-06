@@ -5,11 +5,11 @@
  * the edge and the budget, and is denied Cost Explorer. On Kind there is no
  * role, and every reading here says so instead of guessing.
  */
+import { ApiGatewayV2Client, GetApiCommand, GetIntegrationsCommand, GetRoutesCommand, GetStageCommand } from '@aws-sdk/client-apigatewayv2';
 import { BudgetsClient, DescribeBudgetCommand } from '@aws-sdk/client-budgets';
 import { CloudFormationClient, DescribeStacksCommand } from '@aws-sdk/client-cloudformation';
-import { CloudFrontClient, ListDistributionsCommand } from '@aws-sdk/client-cloudfront';
 import { DescribeAddonCommand, DescribeClusterCommand, DescribeNodegroupCommand, EKSClient, ListAddonsCommand, ListNodegroupsCommand } from '@aws-sdk/client-eks';
-import { summariseBudget, summariseDistribution, summariseEks, summariseStacks } from './summaries.mjs';
+import { summariseApi, summariseBudget, summariseEks, summariseStacks } from './summaries.mjs';
 
 const REGION = process.env.AWS_REGION ?? 'ap-south-1';
 const CLUSTER = process.env.CLUSTER_NAME ?? 'splitx';
@@ -53,16 +53,19 @@ export async function readEks() {
     return summariseEks(cluster, groups, addons);
 }
 
-/** The distribution serving the edge's domain (EDGE_DOMAIN, from the platform's facts). */
+/** The HTTP API serving the edge's domain (EDGE_DOMAIN, from the platform's facts; D-114). */
 export async function readEdge() {
     withRole();
     const domain = process.env.EDGE_DOMAIN;
     if (!domain) throw new Error('the edge\'s domain is not configured');
-    const cloudfront = client('cloudfront', () => new CloudFrontClient({ region: 'us-east-1' }));
-    const list = await cloudfront.send(new ListDistributionsCommand({}));
-    const distribution = list.DistributionList?.Items?.find((item) => item.DomainName === domain);
-    if (!distribution) throw new Error('no CloudFront distribution serves ' + domain);
-    return summariseDistribution(distribution);
+    const id = /^([a-z0-9]+)\.execute-api\.[a-z0-9-]+\.amazonaws\.com$/.exec(domain)?.[1];
+    if (!id) throw new Error(domain + ' is not an API Gateway address');
+    const gateway = client('apigatewayv2', () => new ApiGatewayV2Client({ region: REGION }));
+    const api = await gateway.send(new GetApiCommand({ ApiId: id }));
+    const routes = (await gateway.send(new GetRoutesCommand({ ApiId: id }))).Items ?? [];
+    const integrations = (await gateway.send(new GetIntegrationsCommand({ ApiId: id }))).Items ?? [];
+    const stage = await gateway.send(new GetStageCommand({ ApiId: id, StageName: '$default' })).catch(() => null);
+    return summariseApi(api, routes, integrations, stage);
 }
 
 export async function readBudget() {

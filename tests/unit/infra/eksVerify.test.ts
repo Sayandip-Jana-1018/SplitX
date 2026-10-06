@@ -5,7 +5,7 @@ import {
 } from '../../../scripts/lib/cluster-network.mjs';
 import {
     ALB_EXPECTED, albDecision, albFindings, autoscalerHealth, awsReadings, buildForDeployment, cosignVerification, DATABASE_PROBE, ebsFindings, eksClusterOf,
-    identityProblem, INTERNAL_SPELLINGS, madeByEdgeFunction, matchesPathPattern, POD_IDENTITY_ACCOUNTS, podIdentityFindings, spreadOf,
+    identityProblem, INTERNAL_SPELLINGS, matchesPathPattern, POD_IDENTITY_ACCOUNTS, podIdentityFindings, spreadOf,
     ungatedPods, unhealthyPods,
 } from '../../../scripts/lib/platform-checks.mjs';
 import { forwardedPort, KIND_ONLY, verifyTarget } from '../../../scripts/lib/verify-target.mjs';
@@ -33,15 +33,15 @@ describe('which cluster the verifiers check', () => {
     });
 
     it('on EKS, is reached through the edge the overlay commits, as visitors are', () => {
-        const eks = verifyTarget(['--target', 'eks', '--rollback'], overlay('https://d1234abcd.cloudfront.net'));
+        const eks = verifyTarget(['--target', 'eks', '--rollback'], overlay('https://a1b2c3d4e5.execute-api.ap-south-1.amazonaws.com'));
         expect(eks).toMatchObject({
-            name: 'eks', context: 'splitx', base: 'https://d1234abcd.cloudfront.net', host: 'd1234abcd.cloudfront.net',
+            name: 'eks', context: 'splitx', base: 'https://a1b2c3d4e5.execute-api.ap-south-1.amazonaws.com', host: 'a1b2c3d4e5.execute-api.ap-south-1.amazonaws.com',
             environment: 'eks', otherEnvironment: 'kind',
         });
         expect(eks.reports).toEqual({ cluster: 'docs/evidence/kubernetes-eks.md', delivery: 'docs/evidence/delivery-eks.md' });
         // Never Docker Hub's anonymous allowance from one NAT address.
         expect(eks.probeImage).toBe('public.ecr.aws/docker/library/busybox:1.37.0');
-        expect(verifyTarget(['--target', 'eks', '--context', 'mine'], overlay('https://d1234abcd.cloudfront.net')).context).toBe('mine');
+        expect(verifyTarget(['--target', 'eks', '--context', 'mine'], overlay('https://a1b2c3d4e5.execute-api.ap-south-1.amazonaws.com')).context).toBe('mine');
     });
 
     it('refuses EKS before the edge exists, and any other target', () => {
@@ -257,20 +257,9 @@ describe('the load balancer\'s rules', () => {
 });
 
 describe('the edge', () => {
-    const template = read('terraform/edge/edge.js.tftpl').replace('${online}', 'true');
-    const handler = new Function(`${template}\nreturn handler;`)() as (event: { request: { uri: string } }) => { statusCode?: number };
-
-    it('refuses every spelling the verifier tries, as CloudFront runs the function', () => {
+    it('tries enough spellings of the internal paths, which the app refuses through the edge (tests/unit/internalPaths.test.ts)', () => {
         expect(INTERNAL_SPELLINGS.length).toBeGreaterThanOrEqual(8);
-        for (const spelling of INTERNAL_SPELLINGS) expect(handler({ request: { uri: spelling } }).statusCode, spelling).toBe(403);
-        expect(handler({ request: { uri: '/api/health/live' } }).statusCode).toBeUndefined();
-    });
-
-    it('knows a response the function made from one the load balancer did', () => {
-        expect(madeByEdgeFunction('FunctionGeneratedResponse from cloudfront')).toBe(true);
-        expect(madeByEdgeFunction('Miss from cloudfront')).toBe(false);
-        expect(madeByEdgeFunction('Error from cloudfront')).toBe(false);
-        expect(madeByEdgeFunction(null)).toBe(false);
+        expect(INTERNAL_SPELLINGS).toEqual(expect.arrayContaining(['/api/metrics', '/api/health/ready']));
     });
 });
 

@@ -3,8 +3,8 @@
 #
 #   It turns the Ingresses of the IngressGroup "splitx" (the app's two in
 #   k8s/overlays/aws and Jenkins' webhook path in jenkins/eks) into one
-#   internet-facing Application Load Balancer. Its security group admits only
-#   CloudFront's origin-facing addresses, and its targets are the pods
+#   internet-facing Application Load Balancer. Its security group admits the
+#   internet, as the API Gateway edge needs (D-114), and its targets are the pods
 #   themselves. AWS credentials come through EKS Pod Identity
 #   (splitx-wl-alb-controller, terraform/platform/workloads.tf).
 #

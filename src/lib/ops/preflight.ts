@@ -239,11 +239,10 @@ function lab(cluster: ClusterReadings): PreflightItem {
 /* What only the EKS platform has: the edge, the account's stacks, the budget. */
 
 function edge(cluster: ClusterReadings): PreflightItem {
-    const title = 'CloudFront';
+    const title = 'The edge';
     if (!cluster.edge.ok) return unread('edge', title, cluster.edge);
-    const { domain, status, enabled, online, origin } = cluster.edge.data;
-    if (status !== 'Deployed') return item('edge', title, 'wait', `${domain} is still deploying a change.`);
-    if (!enabled || !online) return item('edge', title, 'fix', `${domain} points at ${origin}: aws-up takes it online.`);
+    const { domain, online, origin } = cluster.edge.data;
+    if (!online) return item('edge', title, 'fix', `${domain} points at ${origin}: aws-up takes it online.`);
     return item('edge', title, 'go', `${domain}, in front of the load balancer.`);
 }
 

@@ -12,9 +12,9 @@ name: AWS up
 #   3. the load balancer's alarms (a second apply, alb_ready=true)
 #   4. the edge points at the load balancer, and is checked from outside
 #   5. the release is deployed again the way every later one will be: a
-#      GitHub deployment, its signed webhook through CloudFront, and Jenkins
+#      GitHub deployment, its signed webhook through the edge, and Jenkins
 #   6. everything is verified live (k8s:verify and cd:verify --target eks,
-#      D-103): through CloudFront, with the evidence kept as an artifact.
+#      D-103): through the edge, with the evidence kept as an artifact.
 #      A failed check fails the run; the platform stays up to be looked at.
 #
 # Before an AWS day: `npm run aws:secrets` on the laptop (step 2 stops without
@@ -184,9 +184,9 @@ jobs:
           echo "Alarms: $(terraform -chdir=terraform/platform output -json alb_alarms | jq -r 'join(", ")')"
 
       - name: The edge, online
-        # CloudFront's origin becomes the load balancer, and every request to
-        # it carries the origin header the app checks (D-092), read here from
-        # Secrets Manager and masked in this log.
+        # The edge (an API Gateway HTTP API, D-114) gets its route to the load
+        # balancer, and every request on it carries the origin header the app
+        # checks (D-092), read here from Secrets Manager and masked in this log.
         run: |
           fail() { echo "::error::$1"; exit 1; }
           alb="$(kubectl -n splitx get ingress splitx -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')"
@@ -196,8 +196,6 @@ jobs:
           export TF_VAR_origin_secret="$secret"
           terraform -chdir=terraform/edge plan -input=false -out=edge.tfplan -var "origin_domain=$alb"
           terraform -chdir=terraform/edge apply -input=false edge.tfplan
-          echo "Waiting for the distribution to reach every edge location."
-          aws cloudfront wait distribution-deployed --id "$(terraform -chdir=terraform/edge output -raw distribution_id)"
           domain="$(terraform -chdir=terraform/edge output -raw domain_name)"
 
           status() { curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "$@" || true; }
@@ -209,24 +207,23 @@ jobs:
           [[ "$live" == 200 ]] || fail "https://$domain/api/health/live answered $live, not 200"
           metrics="$(status "https://$domain/api/metrics")"
           [[ "$metrics" == 403 ]] || fail "/api/metrics answered $metrics through the edge, not 403"
-          # Only CloudFront may reach the load balancer: from this runner it
-          # must not even answer.
-          if curl -sS -o /dev/null --max-time 10 "http://$alb/api/health/live" 2>/dev/null; then
-            fail "the load balancer answered this runner directly; it must admit only CloudFront"
-          fi
+          # API Gateway reaches the load balancer over the internet, so anyone
+          # can; what skipped the edge has no header, and the app refuses it.
+          direct="$(status "http://$alb/")"
+          [[ "$direct" == 403 ]] || fail "the load balancer answered / directly with $direct, not 403: the app must refuse what skipped the edge"
           {
             echo "### The edge"
             echo ""
             echo "| | |"
             echo "|---|---|"
             echo "| Address | https://$domain |"
-            echo "| Origin | the load balancer, which admits only CloudFront |"
-            echo "| Checked | /api/health/live 200 and /api/metrics 403 through the edge; the load balancer did not answer this runner |"
+            echo "| Origin | the load balancer; the app serves only what carries the edge's header |"
+            echo "| Checked | /api/health/live 200 and /api/metrics 403 through the edge; / 403 at the load balancer itself |"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: The release, deployed through Jenkins
         # What every later release goes through on an AWS day: a GitHub
-        # deployment for "eks", GitHub's signed webhook through CloudFront to
+        # deployment for "eks", GitHub's signed webhook through the edge to
         # Jenkins, which checks the request and the image's signature, applies
         # the commit's manifests, checks the site through the edge, and reports
         # back. The release already runs, so nothing rolls; the path is proved.
@@ -263,7 +260,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Verify the platform
-        # k8s:verify and cd:verify --target eks (D-103), through CloudFront.
+        # k8s:verify and cd:verify --target eks (D-103), through the edge.
         uses: ./.github/actions/eks-verify
         with:
           rollback: ${{ inputs.rehearse_rollback }}

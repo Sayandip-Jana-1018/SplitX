@@ -54,7 +54,7 @@ export function verifyTarget(argv, read) {
         name,
         // aws-up names it (aws eks update-kubeconfig --alias splitx).
         context: option('--context') ?? 'splitx',
-        // Visitors arrive through CloudFront, which alone adds the header the app requires (D-092).
+        // Visitors arrive through the edge, which alone adds the header the app requires (D-092).
         base: edge.url,
         host: edge.host,
         environment: 'eks',

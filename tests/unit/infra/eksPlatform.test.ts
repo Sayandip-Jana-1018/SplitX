@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { demoSecrets } from '../../../scripts/lib/demo-secrets.mjs';
-import { admittedPrefixList, committedEdge, releaseImage, storeRegion } from '../../../scripts/lib/eks-facts.mjs';
+import { committedEdge, releaseImage, storeRegion } from '../../../scripts/lib/eks-facts.mjs';
 import { chartsFor, helmInstallArgs, reposOf } from '../../../scripts/lib/platform-charts.mjs';
 
 /*
@@ -153,9 +153,10 @@ describe('the load balancer', () => {
         expect(order('jenkins/eks/ingress.yaml')).toBeLessThan(order('k8s/overlays/aws/patches/ingress.yaml'));
     });
 
-    it('admits CloudFront\'s prefix list, over plain HTTP only', () => {
+    it('admits the internet over plain HTTP only, since API Gateway has no fixed addresses (D-114)', () => {
         const ingress = read('k8s/overlays/aws/patches/ingress.yaml');
-        expect(admittedPrefixList(ingress)).toMatch(/^pl-[0-9a-f]+$/);
+        expect(ingress).toContain('alb.ingress.kubernetes.io/inbound-cidrs: 0.0.0.0/0');
+        expect(ingress).not.toContain('security-group-prefix-lists');
         expect(ingress).toContain(`listen-ports: '[{"HTTP": 80}]'`);
         expect(ingress).not.toMatch(/certificate-arn|ssl-redirect/);
     });
@@ -171,10 +172,10 @@ describe('the load balancer', () => {
 describe('the edge\'s address, committed once', () => {
     it('is still the placeholder until terraform/edge exists, and then a bare https origin', () => {
         expect(committedEdge('      - NEXTAUTH_URL=https://REPLACE_WITH_PUBLIC_HOSTNAME\n')).toBeNull();
-        expect(committedEdge('      - NEXTAUTH_URL=https://d111111abcdef8.cloudfront.net\n'))
-            .toEqual({ url: 'https://d111111abcdef8.cloudfront.net', host: 'd111111abcdef8.cloudfront.net' });
-        expect(() => committedEdge('      - NEXTAUTH_URL=http://d111111abcdef8.cloudfront.net\n')).toThrow(/https/);
-        expect(() => committedEdge('      - NEXTAUTH_URL=https://d111111abcdef8.cloudfront.net/app\n')).toThrow(/https/);
+        expect(committedEdge('      - NEXTAUTH_URL=https://a1b2c3d4e5.execute-api.ap-south-1.amazonaws.com\n'))
+            .toEqual({ url: 'https://a1b2c3d4e5.execute-api.ap-south-1.amazonaws.com', host: 'a1b2c3d4e5.execute-api.ap-south-1.amazonaws.com' });
+        expect(() => committedEdge('      - NEXTAUTH_URL=http://a1b2c3d4e5.execute-api.ap-south-1.amazonaws.com\n')).toThrow(/https/);
+        expect(() => committedEdge('      - NEXTAUTH_URL=https://a1b2c3d4e5.execute-api.ap-south-1.amazonaws.com/app\n')).toThrow(/https/);
         expect(() => committedEdge('literals: []\n')).toThrow(/NEXTAUTH_URL/);
     });
 

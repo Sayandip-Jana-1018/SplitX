@@ -62,10 +62,10 @@ Prisma on Neon Postgres, and NextAuth v5, and it is live on Vercel for real user
 
 **Where it runs:**
 - **On GitHub's runners, every night:** the whole platform on Kind, driven end to end.
-- **On AWS EKS, on demo days,** behind CloudFront. It is built that morning, and removed that evening.
+- **On AWS EKS, on demo days,** behind an HTTPS edge (API Gateway). It is built that morning, and removed that evening.
 
 Every decision, what was rejected, and the measurement behind each claim is in
-**[docs/DECISIONS.md](docs/DECISIONS.md)**: 113 decisions, with the open problems at the end.
+**[docs/DECISIONS.md](docs/DECISIONS.md)**: 114 decisions, with the open problems at the end.
 
 ---
 
@@ -79,11 +79,11 @@ flowchart LR
     neonProd[("Neon<br/>production")]
 
     subgraph edge["AWS edge, permanent"]
-        cf["CloudFront<br/>+ edge function"]
+        cf["API Gateway<br/>the HTTPS edge"]
     end
 
     subgraph eks["EKS, on demo days"]
-        alb["ALB<br/>admits CloudFront only"]
+        alb["ALB<br/>the app serves only the edge"]
         app["SplitX pods<br/>autoscaled 2 to 10"]
         redis[("Redis")]
         opsapi["ops-api"]
@@ -137,7 +137,7 @@ flowchart TB
     sign --> dep["GitHub deployment<br/>kind, and eks on AWS days"]
     subgraph cluster["The cluster"]
         direction LR
-        way{"Kind: smee.io + relay<br/>EKS: CloudFront + ALB"} --> jen["Jenkins<br/>checks the HMAC,<br/>then the image's signature"]
+        way{"Kind: smee.io + relay<br/>EKS: API Gateway + ALB"} --> jen["Jenkins<br/>checks the HMAC,<br/>then the image's signature"]
         jen --> apply["Applies that commit's<br/>overlay, image by digest"]
         apply --> ok{"Healthy<br/>through the edge?"}
         ok -->|yes| done["Evidence to Nexus<br/>success to GitHub"]
@@ -199,10 +199,10 @@ cosign verify ghcr.io/sayandip-jana-1018/splitx:<first 12 characters of a commit
 
 ```mermaid
 flowchart TB
-    user(["Visitors"]) --> cf["CloudFront<br/>HTTPS · edge function · static files cached"]
+    user(["Visitors"]) --> cf["API Gateway<br/>HTTPS · a route while the platform is up"]
     subgraph vpc["VPC 10.0.0.0/16 · ap-south-1 · two zones"]
         subgraph pub["Public subnets"]
-            alb["ALB<br/>CloudFront's prefix list only"]
+            alb["ALB<br/>refuses the internal paths"]
             nat["NAT gateway"]
         end
         subgraph priv["Private subnets"]
@@ -230,7 +230,7 @@ flowchart TB
         guard["splitx-guardrails<br/>the $15 budget,<br/>SNS alerts"]
     end
     subgraph tf["Terraform"]
-        edge["terraform/edge<br/>permanent, $0 idle<br/>CloudFront, its function,<br/>the offline page"]
+        edge["terraform/edge<br/>permanent, $0 idle<br/>an API Gateway HTTP API"]
         plat["terraform/platform<br/>one day at a time<br/>the VPC, EKS and its add-ons,<br/>the nodes, Pod Identity roles, alarms"]
     end
     subgraph up["cluster-up --target eks"]
@@ -327,7 +327,7 @@ flowchart LR
 | **k6** | The traffic lab, and the load tests | `ops/lab/`, `scripts/load-run.mjs` | [Load tests](docs/evidence/load-tests.md); `ops-verify` |
 | **CloudFormation** | The account layer: the state bucket, OIDC, the bounded roles, the budget | `cloudformation/` | cfn-lint and Trivy in CI; both stacks deployed |
 | **Terraform** | The edge and the platform | `terraform/edge`, `terraform/platform` | `validate`, `tflint` and Trivy in CI |
-| **AWS services** | VPC, EKS, EBS, ALB, CloudFront with a Function, S3, CloudWatch, Secrets Manager, IAM with OIDC and a boundary, Pod Identity, Budgets, SNS | `terraform/`, `cloudformation/` | `aws-up` checks each as it builds; `aws-verify` |
+| **AWS services** | VPC, EKS, EBS, ALB, API Gateway (the HTTPS edge), S3, CloudWatch, Secrets Manager, IAM with OIDC and a boundary, Pod Identity, Budgets, SNS | `terraform/`, `cloudformation/` | `aws-up` checks each as it builds; `aws-verify` |
 
 ---
 
