@@ -518,7 +518,7 @@ jobs:
 
       - name: Install tflint
         if: ${{ !cancelled() }}
-        uses: terraform-linters/setup-tflint@1cf010d3c7aef302051ccdb68c14c5dc2efa34ef # v6.3.1
+        uses: terraform-linters/setup-tflint@6ffdbaa3be476b3431f7275c26966ef32ff60337 # v6.3.2
         with:
           tflint_version: v0.64.0
 
@@ -560,7 +560,7 @@ jobs:
           path: coverage
 
       - name: Scan, and wait for the quality gate
-        uses: SonarSource/sonarqube-scan-action@ba9859eae8dd6bd29e412f25ddbbef3d032000f4 # v8.2.2
+        uses: SonarSource/sonarqube-scan-action@d209202bc7d53ff1cc128f7f907dac145c9d6ae9 # v8.3.0
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         with:
@@ -682,7 +682,7 @@ jobs:
 
       - name: Show the image's vulnerabilities in the Security tab
         if: ${{ always() && steps.reports.outcome == 'success' }}
-        uses: github/codeql-action/upload-sarif@1c5b675653bb5c22dbe9b12b556ec555138e09fd # v4.38.1
+        uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
         with:
           sarif_file: release-evidence/trivy.sarif
           category: trivy-image
