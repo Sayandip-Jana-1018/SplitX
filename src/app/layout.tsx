@@ -1,18 +1,30 @@
 import type { Metadata, Viewport } from 'next';
-import { Geist, JetBrains_Mono } from 'next/font/google';
+import localFont from 'next/font/local';
 import './globals.css';
 import { ThemeProvider } from '@/components/providers/ThemeProvider';
 import { ToastProvider } from '@/components/ui/Toast';
 import AuthProvider from '@/components/providers/AuthProvider';
 import ServiceWorker from '@/components/providers/ServiceWorker';
 
-const geist = Geist({ subsets: ['latin'], variable: '--font-geist', display: 'swap' });
-
-const jetBrainsMono = JetBrains_Mono({
-  subsets: ['latin'],
-  variable: '--font-jetbrains-mono',
-  weight: ['400', '500', '600'],
+/*
+ * Both fonts ship with the app (./fonts, OFL-1.1, Fontsource 5.3.0's Latin
+ * subsets of the variable fonts), so a build never waits on Google Fonts: a
+ * download that failed there once failed a release with it.
+ */
+const geist = localFont({
+  src: './fonts/geist-latin-wght-normal.woff2',
+  variable: '--font-geist',
+  weight: '100 900',
   display: 'swap',
+});
+
+const jetBrainsMono = localFont({
+  src: './fonts/jetbrains-mono-latin-wght-normal.woff2',
+  variable: '--font-jetbrains-mono',
+  weight: '100 800',
+  display: 'swap',
+  // Arial's metrics, the default, would make a poor stand-in for a monospace font.
+  adjustFontFallback: false,
 });
 
 /**
@@ -37,7 +49,15 @@ export const metadata: Metadata = {
     statusBarStyle: 'black-translucent',
     title: 'SplitX',
   },
-  icons: [{ rel: 'icon', url: '/icons/icon.svg', type: 'image/svg+xml' }],
+  // The SVG for browsers that take one, favicon.ico for the rest, and a
+  // 180 px PNG for an iPhone's home screen, which otherwise shows a screenshot.
+  icons: {
+    icon: [
+      { url: '/favicon.ico', sizes: '48x48' },
+      { url: '/icons/icon.svg', type: 'image/svg+xml' },
+    ],
+    apple: [{ url: '/icons/apple-touch-icon.png', sizes: '180x180' }],
+  },
   openGraph: {
     title: 'SplitX — Split expenses. Settle smarter.',
     description: 'Shared money, beautifully simple. Track, split and settle group expenses in seconds.',
