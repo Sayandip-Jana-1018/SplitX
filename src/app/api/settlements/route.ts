@@ -314,7 +314,7 @@ export async function POST(req: Request) {
                 actorId: user.id,
                 type: 'group_activity',
                 title: 'Settlement request created',
-                body: `${user.name || 'Someone'} created a ${parsed.data.method} settlement request for ₹${(parsed.data.amount / 100).toLocaleString('en-IN')}.`,
+                body: `${user.name || 'Someone'} created a ${parsed.data.method} settlement request for ${formatCurrency(parsed.data.amount)}.`,
                 link: '/settlements',
             });
         }

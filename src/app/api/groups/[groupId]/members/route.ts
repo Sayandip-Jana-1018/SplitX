@@ -7,10 +7,11 @@ import { createAuditLog } from '@/lib/auditLog';
 import { balanceOf, loadGroupLedger, pendingSettlementsOf } from '@/lib/ledger';
 import { newInviteCode } from '@/lib/groupInvite';
 import { logger } from '@/lib/logger';
+import { formatCurrency } from '@/lib/utils';
 
 const RemoveMemberSchema = z.object({ userId: z.string().min(1).max(64) });
 
-const rupees = (paise: number) => `₹${(Math.abs(paise) / 100).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+const rupees = (paise: number) => formatCurrency(Math.abs(paise));
 
 class RemovalRefused extends Error {
     constructor(message: string, readonly status: number) {

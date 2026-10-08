@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { logger } from '@/lib/logger';
 import { istMonthKey, istMonthStart } from '@/lib/indiaTime';
+import { formatCurrency } from '@/lib/utils';
 
 const CATEGORY_LABELS: Record<string, string> = {
     food: 'Food',
@@ -242,7 +243,7 @@ export async function GET(req: Request) {
             const topPayer = memberSpending[0];
             insights.push({
                 type: 'top-payer',
-                message: `${topPayer.name} has paid the most so far with ${formatCompactAmount(topPayer.amount)}.`,
+                message: `${topPayer.name} has paid the most so far with ${formatCurrency(topPayer.amount)}.`,
                 severity: 'success',
             });
         }
@@ -251,7 +252,7 @@ export async function GET(req: Request) {
         if (settlementTotal > 0) {
             insights.push({
                 type: 'settlements',
-                message: `${formatCompactAmount(settlementTotal)} settled inside ${selectedGroup.name} this month.`,
+                message: `${formatCurrency(settlementTotal)} settled inside ${selectedGroup.name} this month.`,
                 severity: 'info',
             });
         }
@@ -278,9 +279,3 @@ export async function GET(req: Request) {
     }
 }
 
-function formatCompactAmount(amount: number) {
-    return `₹${(amount / 100).toLocaleString('en-IN', {
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 2,
-    })}`;
-}

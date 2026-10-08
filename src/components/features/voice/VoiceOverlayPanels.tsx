@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { Mic, MicOff, AlertCircle, Check, RotateCcw } from 'lucide-react';
 import { MemberAvatar } from './MemberAvatar';
 import type { VoiceParseResult, MemberInfo } from './types';
+import { formatCurrency, toPaise } from '@/lib/utils';
 
 // ── Helpers ──
 
@@ -307,7 +308,7 @@ export function ResultPanel({ result, members, onRetry, onAccept }: ResultPanelP
                         WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
                         backgroundClip: 'text',
                     }}>
-                        ₹{result.amount.toLocaleString('en-IN')}
+                        {formatCurrency(toPaise(result.amount))}
                     </p>
                 </motion.div>
 
@@ -434,7 +435,7 @@ export function ResultPanel({ result, members, onRetry, onAccept }: ResultPanelP
                                         color: 'var(--accent-500, #8b5cf6)', fontSize: 15, fontWeight: 700,
                                         fontFeatureSettings: "'tnum'",
                                     }}>
-                                        ₹{m.amount.toLocaleString('en-IN')}
+                                        {formatCurrency(toPaise(m.amount))}
                                     </span>
                                 )}
                                 {m.confidence < 0.6 && (

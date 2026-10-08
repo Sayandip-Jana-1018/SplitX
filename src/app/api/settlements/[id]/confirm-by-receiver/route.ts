@@ -6,6 +6,7 @@ import { createNotification } from '@/lib/notifications';
 import { recordSettlementCompleted } from '@/lib/metrics';
 import { refusalResponse, transitionSettlement, TransitionRefused, type SettlementAction } from '@/lib/settlementTransitions';
 import { logger } from '@/lib/logger';
+import { formatCurrency } from '@/lib/utils';
 
 const ActionSchema = z.object({
     action: z.enum(['confirm', 'accept_cash', 'reject']).default('confirm'),
@@ -16,8 +17,6 @@ const MOVES: Record<z.infer<typeof ActionSchema>['action'], SettlementAction> = 
     accept_cash: 'accept_cash',
     reject: 'decline',
 };
-
-const formatRupees = (paise: number) => `₹${(paise / 100).toLocaleString('en-IN')}`;
 
 // POST /api/settlements/:id/confirm-by-receiver — the receiver records what
 // happened: they were handed cash (completed), it was never paid (cancelled),
@@ -61,7 +60,7 @@ export async function POST(
                     userId: settlement.fromId,
                     type: 'settlement_rejected',
                     title: 'Settlement Rejected',
-                    body: `${settlement.to.name || 'The receiver'} marked your ${formatRupees(settlement.amount)} payment as not received`,
+                    body: `${settlement.to.name || 'The receiver'} marked your ${formatCurrency(settlement.amount)} payment as not received`,
                     link: '/settlements',
                 });
             } catch { /* notification failures are non-critical */ }
@@ -75,7 +74,7 @@ export async function POST(
                     userId: settlement.fromId,
                     type: 'settlement_completed',
                     title: 'Settlement Completed',
-                    body: `${settlement.to.name || 'The receiver'} confirmed receiving ${formatRupees(settlement.amount)} in cash`,
+                    body: `${settlement.to.name || 'The receiver'} confirmed receiving ${formatCurrency(settlement.amount)} in cash`,
                     link: '/settlements',
                 });
             } catch { /* notification failures are non-critical */ }

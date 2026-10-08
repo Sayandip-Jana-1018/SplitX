@@ -11,6 +11,7 @@ import { isOwnReceiptUrl, isTrustedReceiptUrl } from '@/lib/receiptUrl';
 import { logger } from '@/lib/logger';
 import { MAX_EXPENSE_PAISE, resolveSplits, SPLIT_TYPES } from '@/lib/expenseSplits';
 import { IDEMPOTENCY_KEY_PATTERN } from '@/lib/idempotency';
+import { formatCurrency } from '@/lib/utils';
 
 /** What a created expense is answered with, the first time and on any repeat. */
 const CREATED_INCLUDE = {
@@ -303,7 +304,7 @@ export async function POST(req: Request) {
             if (otherMemberIds.length > 0) {
                 const payerName = user.name || 'Someone';
                 const categoryLabel = CATEGORY_LABELS[category] || category;
-                const amountFormatted = `₹${(amount / 100).toLocaleString('en-IN')}`;
+                const amountFormatted = formatCurrency(amount);
 
                 await prisma.notification.createMany({
                     data: otherMemberIds.map((memberId: string) => ({

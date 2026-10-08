@@ -2,14 +2,19 @@
  * SplitX — Utility Functions
  */
 
-/** Format paise to rupee string: 45000 → "₹450.00" */
+/**
+ * Paise as rupees: whole rupees bare, and two decimals whenever there are
+ * paise: 45000 → "₹450", 49950 → "₹499.50" (never "₹499.5"),
+ * 123456700 → "₹12,34,567". Every amount the app shows or sends goes through it.
+ */
 export function formatCurrency(paise: number, currency = 'INR'): string {
     const amount = paise / 100;
+    const decimals = Number.isInteger(amount) ? 0 : 2;
     return new Intl.NumberFormat('en-IN', {
         style: 'currency',
         currency,
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 2,
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals,
     }).format(amount);
 }
 

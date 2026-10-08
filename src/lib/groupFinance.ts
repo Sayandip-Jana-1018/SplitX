@@ -1,6 +1,7 @@
 import { planSettlement } from '@/lib/settlementPlanner';
 import { isCompletedSettlementStatus } from '@/lib/settlementStatus';
 import { compareCodeUnits } from '@/lib/splits';
+import { formatCurrency } from '@/lib/utils';
 
 export interface FinanceMember {
     id: string;
@@ -225,10 +226,10 @@ export function summarizeUserRoute(
 ) {
     const outgoing = transfers
         .filter((transfer) => transfer.from === userId)
-        .map((transfer) => `Pay ${transfer.toName} ${formatCompactAmount(transfer.amount)}`);
+        .map((transfer) => `Pay ${transfer.toName} ${formatCurrency(transfer.amount)}`);
     const incoming = transfers
         .filter((transfer) => transfer.to === userId)
-        .map((transfer) => `Receive ${formatCompactAmount(transfer.amount)} from ${transfer.fromName}`);
+        .map((transfer) => `Receive ${formatCurrency(transfer.amount)} from ${transfer.fromName}`);
 
     if (outgoing.length === 0 && incoming.length === 0) {
         return 'All settled up';
@@ -575,7 +576,7 @@ function describeTransactionAuditEvent(
     const afterAmount = transactionUserImpact(afterSnapshot, userId);
 
     if ((beforeSnapshot?.amount || 0) !== (afterSnapshot?.amount || 0)) {
-        return `"${afterSnapshot.title}" changed from ${formatCompactAmount(beforeSnapshot?.amount || 0)} to ${formatCompactAmount(afterSnapshot.amount)}. Your share moved from ${formatCompactAmount(Math.abs(beforeAmount))} to ${formatCompactAmount(Math.abs(afterAmount))}.`;
+        return `"${afterSnapshot.title}" changed from ${formatCurrency(beforeSnapshot?.amount || 0)} to ${formatCurrency(afterSnapshot.amount)}. Your share moved from ${formatCurrency(Math.abs(beforeAmount))} to ${formatCurrency(Math.abs(afterAmount))}.`;
     }
 
     const beforeParticipants = participantNames(beforeSnapshot, memberNames);
@@ -592,12 +593,12 @@ function describeSettlementEvent(
     userId: string
 ) {
     if (settlement.fromId === userId) {
-        return `You paid ${formatCompactAmount(settlement.amount)} to ${settlement.toName} via ${settlement.method || 'settlement'}.`;
+        return `You paid ${formatCurrency(settlement.amount)} to ${settlement.toName} via ${settlement.method || 'settlement'}.`;
     }
     if (settlement.toId === userId) {
-        return `${settlement.fromName} paid you ${formatCompactAmount(settlement.amount)} via ${settlement.method || 'settlement'}.`;
+        return `${settlement.fromName} paid you ${formatCurrency(settlement.amount)} via ${settlement.method || 'settlement'}.`;
     }
-    return `${settlement.fromName} settled ${formatCompactAmount(settlement.amount)} with ${settlement.toName}.`;
+    return `${settlement.fromName} settled ${formatCurrency(settlement.amount)} with ${settlement.toName}.`;
 }
 
 function describeRouteChange(beforeRouteSummary: string, afterRouteSummary: string) {
@@ -623,14 +624,6 @@ function participantNames(
         .map((split) => split.userName || memberNames.get(split.userId) || split.userId)
         .sort(compareCodeUnits)
         .join('|');
-}
-
-function formatCompactAmount(amount: number) {
-    const normalized = (amount / 100).toLocaleString('en-IN', {
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 2,
-    });
-    return `₹${normalized}`;
 }
 
 function parseTransactionAuditDetails(details: unknown): TransactionAuditDetails | null {

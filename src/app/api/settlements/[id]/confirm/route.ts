@@ -5,6 +5,7 @@ import { auth } from '@/lib/auth';
 import { createNotification } from '@/lib/notifications';
 import { refusalResponse, settlementRow, transitionSettlement, TransitionRefused } from '@/lib/settlementTransitions';
 import { logger } from '@/lib/logger';
+import { formatCurrency } from '@/lib/utils';
 
 const ConfirmSchema = z.object({
     action: z.literal('paid').optional(),
@@ -54,7 +55,7 @@ export async function POST(
             actorId: user.id,
             type: 'settlement_approval_request',
             title: 'Payment approval needed',
-            body: `${settlement.from.name || 'Someone'} says they paid you ₹${(settlement.amount / 100).toLocaleString('en-IN')}${paidInCash ? ' in cash' : ''}. Approve it once you receive the money${utrNumber ? ` (UTR: ${utrNumber})` : ''}.`,
+            body: `${settlement.from.name || 'Someone'} says they paid you ${formatCurrency(settlement.amount)}${paidInCash ? ' in cash' : ''}. Approve it once you receive the money${utrNumber ? ` (UTR: ${utrNumber})` : ''}.`,
             link: '/settlements',
         });
 

@@ -6,6 +6,7 @@ import { createBulkNotifications, createNotification } from '@/lib/notifications
 import { refusalResponse, settlementRow, transitionSettlement, TransitionRefused } from '@/lib/settlementTransitions';
 import { recordSettlementCompleted } from '@/lib/metrics';
 import { logger } from '@/lib/logger';
+import { formatCurrency } from '@/lib/utils';
 
 const ApprovalSchema = z.object({
     action: z.enum(['approve', 'reject']).default('approve'),
@@ -46,7 +47,7 @@ export async function POST(
             throw error;
         }
 
-        const amount = `₹${(settlement.amount / 100).toLocaleString('en-IN')}`;
+        const amount = formatCurrency(settlement.amount);
 
         if (approving) {
             recordSettlementCompleted(settlement.method, settlement.amount);
@@ -87,7 +88,7 @@ export async function POST(
                     groupId: settlement.trip.groupId,
                     senderId: user.id,
                     type: 'system',
-                    content: `✅ ${settlement.to.name || 'Someone'} confirmed receiving ₹${(settlement.amount / 100).toFixed(0)} from ${settlement.from.name || 'someone'}.`,
+                    content: `✅ ${settlement.to.name || 'Someone'} confirmed receiving ${formatCurrency(settlement.amount)} from ${settlement.from.name || 'someone'}.`,
                     settlementId: settlement.id,
                 },
             });

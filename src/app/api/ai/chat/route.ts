@@ -8,6 +8,7 @@ import { takeAiQuota } from '@/lib/aiQuota';
 import { generateWithGemini } from '@/lib/gemini';
 import { loadGroupLedgers, planLedgerTransfers } from '@/lib/ledger';
 import { logger } from '@/lib/logger';
+import { formatCurrency } from '@/lib/utils';
 
 /**
  * POST /api/ai/chat — the expense assistant.
@@ -29,8 +30,8 @@ const CATEGORY_LABELS: Record<string, string> = {
     other: 'Other',
 };
 
-const rupees = (paise: number) => `₹${(paise / 100).toFixed(2)}`;
-const signed = (paise: number) => (paise > 0 ? `+${rupees(paise)} (is owed)` : paise < 0 ? `-${rupees(-paise)} (owes)` : '₹0.00 (settled)');
+const rupees = (paise: number) => formatCurrency(paise);
+const signed = (paise: number) => (paise > 0 ? `+${rupees(paise)} (is owed)` : paise < 0 ? `-${rupees(-paise)} (owes)` : '₹0 (settled)');
 
 const BUSY_NOTE = '_The AI assistant is busy right now, so here is a quick answer from your data._\n\n';
 
@@ -261,13 +262,13 @@ function generateLocalResponse(
 
         let response = '';
         if (ctx.peopleWhoOweUser.length > 0) {
-            response += `💰 **People who owe you:**\n${ctx.peopleWhoOweUser.map(p => `• ${p}`).join('\n')}\n\nTotal owed to you: ₹${(ctx.totalOwedToUser / 100).toFixed(2)}`;
+            response += `💰 **People who owe you:**\n${ctx.peopleWhoOweUser.map(p => `• ${p}`).join('\n')}\n\nTotal owed to you: ${rupees(ctx.totalOwedToUser)}`;
         } else {
             response += '✅ No one owes you right now.';
         }
 
         if (ctx.userOwesPeople.length > 0) {
-            response += `\n\n💸 **You owe:**\n${ctx.userOwesPeople.map(p => `• ${p}`).join('\n')}\nTotal: ₹${(ctx.totalUserOwes / 100).toFixed(2)}`;
+            response += `\n\n💸 **You owe:**\n${ctx.userOwesPeople.map(p => `• ${p}`).join('\n')}\nTotal: ${rupees(ctx.totalUserOwes)}`;
         }
 
         return response;
@@ -278,24 +279,24 @@ function generateLocalResponse(
         if (ctx.userOwesPeople.length === 0) {
             return `🎉 You're debt-free, ${ctx.userName}! No pending payments.`;
         }
-        return `💸 **Your pending payments:**\n${ctx.userOwesPeople.map(p => `• ${p}`).join('\n')}\n\nTotal you owe: ₹${(ctx.totalUserOwes / 100).toFixed(2)}`;
+        return `💸 **Your pending payments:**\n${ctx.userOwesPeople.map(p => `• ${p}`).join('\n')}\n\nTotal you owe: ${rupees(ctx.totalUserOwes)}`;
     }
 
     // Balance / net
     if (msg.includes('balance') || msg.includes('net') || msg.includes('status') || msg.includes('summary') || msg.includes('overview')) {
         const netStr = ctx.netBalance > 1
-            ? `+₹${(ctx.netBalance / 100).toFixed(2)} (you're owed overall) 📈`
+            ? `+${rupees(ctx.netBalance)} (you're owed overall) 📈`
             : ctx.netBalance < -1
-                ? `-₹${(Math.abs(ctx.netBalance) / 100).toFixed(2)} (you owe overall) 📉`
+                ? `-${rupees(Math.abs(ctx.netBalance))} (you owe overall) 📉`
                 : '₹0 — all settled! ✅';
 
-        let response = `📊 **Your Financial Summary**\n\nNet balance: ${netStr}\nTotal paid by you: ₹${(ctx.totalSpent / 100).toFixed(2)}`;
+        let response = `📊 **Your Financial Summary**\n\nNet balance: ${netStr}\nTotal paid by you: ${rupees(ctx.totalSpent)}`;
 
         if (ctx.peopleWhoOweUser.length > 0) {
-            response += `\n\n💰 Owed to you: ₹${(ctx.totalOwedToUser / 100).toFixed(2)} from ${ctx.peopleWhoOweUser.length} person(s)`;
+            response += `\n\n💰 Owed to you: ${rupees(ctx.totalOwedToUser)} from ${ctx.peopleWhoOweUser.length} person(s)`;
         }
         if (ctx.userOwesPeople.length > 0) {
-            response += `\n💸 You owe: ₹${(ctx.totalUserOwes / 100).toFixed(2)} to ${ctx.userOwesPeople.length} person(s)`;
+            response += `\n💸 You owe: ${rupees(ctx.totalUserOwes)} to ${ctx.userOwesPeople.length} person(s)`;
         }
 
         return response;
@@ -309,11 +310,11 @@ function generateLocalResponse(
             .sort((a, b) => b[1] - a[1]);
 
         const catStr = catEntries
-            .map(([c, a]) => `• ${c}: ₹${(a / 100).toFixed(2)}`)
+            .map(([c, a]) => `• ${c}: ${rupees(a)}`)
             .join('\n');
 
         const topCat = catEntries[0];
-        return `📊 **Your Spending Breakdown**\n\nTotal paid: ₹${(ctx.totalSpent / 100).toFixed(2)}\n\n${catStr}\n\n🏆 Top category: ${topCat[0]} (₹${(topCat[1] / 100).toFixed(2)})`;
+        return `📊 **Your Spending Breakdown**\n\nTotal paid: ${rupees(ctx.totalSpent)}\n\n${catStr}\n\n🏆 Top category: ${topCat[0]} (${rupees(topCat[1])})`;
     }
 
     // Groups
@@ -329,7 +330,7 @@ function generateLocalResponse(
     if (msg.includes('recent') || msg.includes('transaction') || msg.includes('history') || msg.includes('activity')) {
         if (ctx.recentTxns.length === 0) return 'No transactions yet. Add your first expense! 📝';
         const txnStr = ctx.recentTxns.map(t =>
-            `• ${t.payer} paid ₹${(t.amount / 100).toFixed(2)} for "${t.title}" (${t.category})`
+            `• ${t.payer} paid ${rupees(t.amount)} for "${t.title}" (${t.category})`
         ).join('\n');
         return `🧾 **Recent Transactions**\n\n${txnStr}`;
     }
@@ -352,9 +353,9 @@ function generateLocalResponse(
     // Greeting
     if (msg.includes('hi') || msg.includes('hello') || msg.includes('hey') || msg.includes('help')) {
         const netStr = ctx.netBalance > 1
-            ? `You're owed ₹${(ctx.netBalance / 100).toFixed(2)} overall.`
+            ? `You're owed ${rupees(ctx.netBalance)} overall.`
             : ctx.netBalance < -1
-                ? `You owe ₹${(Math.abs(ctx.netBalance) / 100).toFixed(2)} overall.`
+                ? `You owe ${rupees(Math.abs(ctx.netBalance))} overall.`
                 : 'All settled up!';
         return `Hey ${ctx.userName}! 👋 I'm your SplitX AI assistant.\n\n${netStr}\n\nTry asking:\n• "Who owes me?"\n• "My spending breakdown"\n• "Show my balance"\n• "Recent transactions"\n• "How to settle up?"`;
     }
