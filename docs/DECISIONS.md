@@ -5149,6 +5149,52 @@ pre-flight's Dependabot item red: it counts every critical and high alert.
   T-30 pre-flight shows it before anyone pushes.
 - **Checks:** 1,447 unit tests, the hardening checks, `tsc`, ESLint, knip and `db-schema --check`.
 
+
+### D-116 · A walkthrough on the laptop: rupee amounts, fonts, icons and a locked-out dev server
+**2026-10-08** · ✅ fixed and tested; CI and kind-e2e prove the release.
+
+Before the rehearsal the app ran on the laptop against a throwaway Postgres with sample data (four
+friends on a Goa trip, two flatmates), and every page was opened, signed in and signed out.
+
+**Amounts with paise showed one decimal** ("₹499.5", "₹9,900.5"). `formatCurrency` allowed none to
+two decimals.
+- It now shows whole rupees bare, and two decimals whenever there are paise: ₹450, ₹499.50,
+  ₹12,34,567.
+- Every message that built its amount by hand uses it now. These were the settle-up and expense
+  notifications, a member's removal, the balance journey, analytics, the voice screen, and the AI
+  assistant (which said "₹3.00" and grouped no digits).
+- One of them was wrong, not just untidy: the group chat line for an approved settlement rounded
+  ₹499.50 to "₹500".
+- Tests: the format itself, and the assistant's answers.
+
+**The fonts ship with the app.** `next/font/google` fetched Geist and JetBrains Mono from Google at
+every build, which failed a build once; on demo day it would fail the live release.
+- The Latin subsets of both variable fonts (Fontsource 5.3.0, OFL-1.1, 70 KB together) are in
+  `src/app/fonts`, with their licences.
+- Checked in the browser: the same faces, served from `/_next/static/media`, and no request to
+  Google.
+
+**`/favicon.ico` answered 404,** on Vercel too, and an iPhone's home screen would have shown a
+screenshot: there was no touch icon. Both are made from the app's own icon (`public/favicon.ico` at
+16, 32 and 48 px, and a 180 px `apple-touch-icon.png`), and the page links them.
+
+**`next dev` refused every page with 403** once `npm run aws:secrets` had written
+`ORIGIN_VERIFY_SECRET` into `.env` (D-092), since the dev server reads `.env` too.
+- The edge check now ignores the secret under `next dev`.
+- A production build fixes `NODE_ENV` when it is built, so nothing at run time can turn the check
+  off.
+- Test: the dev server serves pages with the secret set.
+
+**Looked at, and fine:**
+- every balance on the sample trip matched a hand calculation, and the suggested payments settle it
+  in the fewest transfers (three);
+- the page for an unknown invite code, and signing out.
+
+The count-ups and the settle-up map wait for the browser's animation frames, so a hidden window
+shows them unfinished; a visible one finishes them within a second.
+
+**Checks:** 1,451 unit tests, the hardening checks, `tsc`, ESLint, knip and `db-schema --check`.
+
 ---
 
 ## Open problems
