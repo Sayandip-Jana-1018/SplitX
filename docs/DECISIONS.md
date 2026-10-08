@@ -5093,7 +5093,7 @@ Totals: 1,446 unit tests, `tsc`, ESLint, knip and `terraform fmt`.
 - **Checks:** 1,447 unit tests, the hardening checks, `tsc`, ESLint, knip and `db-schema --check`.
 
 ### D-115 · Next.js 16.3.8: the release gate stopped a critical advisory
-**2026-10-06** · ✅ fixed in code; CI's release job proves it on the next push.
+**2026-10-06** · ✅ fixed in code, and released by CI on `87dc5a0`; two more advisories on 2026-10-08.
 
 **What happened.** On 2026-09-30 GitHub published GHSA-vcvr-r3jv-pc5j, a critical one: remote code
 execution through `next/og`'s `ImageResponse`, in Next.js 16.2.0 to 16.3.5. The release that passed
@@ -5131,6 +5131,23 @@ The image holds only Next.js's standalone output, its static files and `public/`
 them is there, so neither the release gate nor a visitor meets them. They wait until after the demo.
 
 **Checks:** 1,446 unit tests, the hardening checks, `tsc`, ESLint, knip and `db-schema --check`.
+
+**2026-10-08: two more, two days later.** Dependabot raised two high alerts, which turned the `/ops`
+pre-flight's Dependabot item red: it counts every critical and high alert.
+- **`sharp` 0.35.4** (GHSA-wq5f-xc86-pv6w, published that day): a vulnerability in librsvg, the
+  SVG library inside sharp's image binaries.
+  - sharp ships in the image: Next.js resizes photos with it.
+  - Trivy stopped the release of `184519f` on it the same morning, as it had stopped `448ed79`, and
+    kind-e2e on `184519f` again waited for a release that never came.
+- **`source-map-js` 1.2.1** (GHSA-68fv-2mgg-jv7q): a build tool, so it isn't in the image, but
+  Dependabot counts it. Above, it was to wait until after the demo; the pre-flight decided otherwise.
+- **Only the lockfile changed.** Both fixes are inside the ranges their parents ask for (`next` wants
+  `sharp ^0.35.4`, `postcss` wants `source-map-js ^1.2.1`), so `npm update` took:
+  - `sharp` 0.35.5, with its platform packages and their libvips 1.3.4 builds;
+  - `source-map-js` 1.2.2.
+- **On demo day** a new advisory can stop a release the same way. That is the gate working, and the
+  T-30 pre-flight shows it before anyone pushes.
+- **Checks:** 1,447 unit tests, the hardening checks, `tsc`, ESLint, knip and `db-schema --check`.
 
 ---
 
