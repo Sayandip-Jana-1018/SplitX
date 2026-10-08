@@ -103,5 +103,14 @@ describe('only through our edge', () => {
             const res = await visit('/api/health/live', { 'x-origin-verify': SECRET });
             expect(res.status).not.toBe(403);
         });
+
+        it('changes nothing under next dev, which never runs behind the edge, though .env holds the secret', async () => {
+            vi.stubEnv('NODE_ENV', 'development');
+            const res = await visit('/dashboard');
+
+            expect(res.status).not.toBe(403);
+            expect(res.headers.get('location')).toContain('/login');
+            expect((await visit('/login')).headers.get('x-middleware-next')).toBe('1');
+        });
     });
 });

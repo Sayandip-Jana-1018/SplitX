@@ -91,6 +91,16 @@ const ORIGIN_VERIFY_HEADER = 'x-origin-verify';
 // the kubelet's probes, and Prometheus (whose endpoint wants its own token).
 const DIRECT_PATHS = new Set(['/api/health/live', '/api/health/ready', '/api/metrics']);
 
+/**
+ * The value our edge sends, where the app runs behind it. `next dev` never
+ * does, while the developer's .env holds the value for aws:secrets (D-092),
+ * which would refuse every page of their own dev server. A production build
+ * fixes NODE_ENV when it is built, so nothing at run time turns this off.
+ */
+function edgeSecret(): string | undefined {
+    return process.env.NODE_ENV === 'development' ? undefined : process.env.ORIGIN_VERIFY_SECRET;
+}
+
 function carriesEdgeHeader(request: NextRequest, expected: string): boolean {
     const given = Buffer.from(request.headers.get(ORIGIN_VERIFY_HEADER) ?? '');
     const wanted = Buffer.from(expected);
@@ -98,7 +108,7 @@ function carriesEdgeHeader(request: NextRequest, expected: string): boolean {
 }
 
 function fromOurEdge(request: NextRequest): boolean {
-    const expected = process.env.ORIGIN_VERIFY_SECRET;
+    const expected = edgeSecret();
     if (!expected || DIRECT_PATHS.has(request.nextUrl.pathname)) return true;
     return carriesEdgeHeader(request, expected);
 }
@@ -110,7 +120,7 @@ function fromOurEdge(request: NextRequest): boolean {
  * pod without it.
  */
 function internalPathFromOutside(request: NextRequest): boolean {
-    const expected = process.env.ORIGIN_VERIFY_SECRET;
+    const expected = edgeSecret();
     return Boolean(expected) && isInternalPath(request.nextUrl.pathname) && carriesEdgeHeader(request, expected as string);
 }
 
