@@ -85,8 +85,8 @@ export async function upEks({ root, context = 'splitx', image = '', opsImage = '
     // it, and Jenkins checks each release through it.
     const edge = committedEdge(read('k8s/overlays/aws/kustomization.yaml'));
     if (!edge) fail('k8s/overlays/aws has no address yet: run the AWS edge workflow, then commit its domain as NEXTAUTH_URL there');
-    const distribution = run('terraform', ['-chdir=terraform/edge', 'output', '-raw', 'domain_name'], { capture: true, allowFailure: true }).stdout.trim();
-    if (distribution !== edge.host) fail('k8s/overlays/aws says ' + edge.host + ', but terraform/edge\'s address is ' + (distribution || 'not there'));
+    const managed = run('terraform', ['-chdir=terraform/edge', 'output', '-raw', 'domain_name'], { capture: true, allowFailure: true }).stdout.trim();
+    if (managed !== edge.host) fail('k8s/overlays/aws says ' + edge.host + ', but terraform/edge\'s address is ' + (managed || 'not there'));
     console.log('    the edge: ' + edge.url);
 
     const secretsRegion = storeRegion(read('k8s/eks/secrets/clustersecretstore.yaml'));

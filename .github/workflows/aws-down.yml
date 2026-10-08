@@ -160,7 +160,7 @@ jobs:
 
       - name: GitHub no longer lists the EKS site as live
         # The newest "eks" deployment stays active in GitHub's records until
-        # told otherwise, while its address now shows the offline page.
+        # told otherwise, while its address now answers 404.
         if: always()
         continue-on-error: true
         env:

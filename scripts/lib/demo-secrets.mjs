@@ -64,7 +64,6 @@ export const REQUIRED = [
 
 /** Copied into the app's secret as they are, when present. */
 const APP_OPTIONAL = [
-    'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET',
     'NEXT_PUBLIC_SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY',
     'GEMINI_API_KEY', 'OPENAI_API_KEY',
     'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASSWORD', 'RESEND_API_KEY', 'EMAIL_FROM',
@@ -116,6 +115,15 @@ export function demoSecrets(env, { alertmanagerTemplate }) {
     if (value('AWS_GITHUB_ID') && value('AWS_GITHUB_SECRET')) {
         app.GITHUB_ID = value('AWS_GITHUB_ID');
         app.GITHUB_SECRET = value('AWS_GITHUB_SECRET');
+    }
+    // A Google client may list several callback addresses, but Google may
+    // refuse the edge's amazonaws.com address (D-114). Production's client, which
+    // doesn't list it, would answer every visitor with redirect_uri_mismatch, so
+    // the EKS site offers Google only with a client that lists the edge's
+    // address (AWS_GOOGLE_CLIENT_ID).
+    if (value('AWS_GOOGLE_CLIENT_ID') && value('AWS_GOOGLE_CLIENT_SECRET')) {
+        app.GOOGLE_CLIENT_ID = value('AWS_GOOGLE_CLIENT_ID');
+        app.GOOGLE_CLIENT_SECRET = value('AWS_GOOGLE_CLIENT_SECRET');
     }
     for (const key of APP_OPTIONAL) if (value(key)) app[key] = value(key);
 

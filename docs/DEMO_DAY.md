@@ -31,6 +31,10 @@ These are done once, and stay done.
    refuse an `amazonaws.com` address, which nobody can prove they own.
    - A second GitHub OAuth App, with the callback `https://<domain>/api/auth/callback/github`. Its ID
      and secret go in `.env` as `AWS_GITHUB_ID` and `AWS_GITHUB_SECRET`.
+   - Google, if you want it there: a Google client whose redirect URIs include
+     `https://<domain>/api/auth/callback/google`, if Google accepts that address. Its ID and secret go
+     in `.env` as `AWS_GOOGLE_CLIENT_ID` and `AWS_GOOGLE_CLIENT_SECRET`. Without them the EKS site
+     offers GitHub and passwords only: production's Google client never goes there.
 4. **GitHub can reach Jenkins on EKS.** Add a second repository webhook (Settings → Webhooks → Add):
    - **Payload URL:** `https://<domain>/generic-webhook-trigger/invoke?token=<JENKINS_TRIGGER_TOKEN>`
    - **Content type:** `application/json`

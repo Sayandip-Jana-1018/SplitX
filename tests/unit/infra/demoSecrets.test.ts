@@ -53,6 +53,18 @@ describe('what goes into the demo secrets', () => {
         expect(withApp.GITHUB_SECRET).toBe('aws-secret');
     });
 
+    it('offers Google on EKS only through a client of its own, never production\'s', () => {
+        const production = { GOOGLE_CLIENT_ID: 'vercel-client', GOOGLE_CLIENT_SECRET: 'vercel-secret' };
+        const withoutClient = demoSecrets({ ...complete, ...production }).app!;
+        expect(withoutClient).not.toHaveProperty('GOOGLE_CLIENT_ID');
+        expect(withoutClient).not.toHaveProperty('GOOGLE_CLIENT_SECRET');
+        expect(demoSecrets({ ...complete, ...production, AWS_GOOGLE_CLIENT_ID: 'aws-client' }).app).not.toHaveProperty('GOOGLE_CLIENT_ID');
+
+        const withClient = demoSecrets({ ...complete, ...production, AWS_GOOGLE_CLIENT_ID: 'aws-client', AWS_GOOGLE_CLIENT_SECRET: 'aws-secret' }).app!;
+        expect(withClient.GOOGLE_CLIENT_ID).toBe('aws-client');
+        expect(withClient.GOOGLE_CLIENT_SECRET).toBe('aws-secret');
+    });
+
     it('gives the app what /ops needs on EKS, when .env has it: its operators, its GitHub token, the Sonar project', () => {
         const { app } = demoSecrets({ ...complete, OPS_ADMINS: 'github:1', OPS_GITHUB_TOKEN: 'token', SONAR_PROJECT_KEY: 'splitx' });
         expect(app).toMatchObject({ OPS_ADMINS: 'github:1', OPS_GITHUB_TOKEN: 'token', SONAR_PROJECT_KEY: 'splitx' });

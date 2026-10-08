@@ -60,6 +60,7 @@ if (missing.length) {
 console.log(`${APP_SECRET}: ${Object.keys(app).sort().join(', ')}`);
 console.log(`${PLATFORM_SECRET}: ${Object.keys(platform).sort().join(', ')}`);
 if (!app.GITHUB_ID) console.log('  (no AWS_GITHUB_ID in .env: the EKS site will not offer GitHub sign-in)');
+if (!app.GOOGLE_CLIENT_ID) console.log('  (no AWS_GOOGLE_CLIENT_ID in .env: the EKS site will not offer Google sign-in)');
 if (!platform.JENKINS_GITHUB_TOKEN) console.log('  (no JENKINS_GITHUB_TOKEN in .env: Jenkins on EKS reads GitHub anonymously and reports nothing back)');
 const unsetAlertKeys = ALERT_KEYS.filter((key) => !process.env[key]?.trim());
 if (unsetAlertKeys.length) console.log(`  (no ${unsetAlertKeys.join(', ')} in .env: alerts fire on EKS but are not emailed)`);

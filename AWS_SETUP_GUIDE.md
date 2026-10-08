@@ -67,6 +67,8 @@ and only in `ap-south-1`.
 
 These are the runbook's §1, in [docs/DEMO_DAY.md](docs/DEMO_DAY.md):
 - the second GitHub OAuth App (`AWS_GITHUB_ID` and `AWS_GITHUB_SECRET` in `.env`);
+- optionally, a Google client that lists the edge's callback (`AWS_GOOGLE_CLIENT_ID` and
+  `AWS_GOOGLE_CLIENT_SECRET`);
 - the second repository webhook, which reaches Jenkins through the edge;
 - the Neon branch `demo`, schema only (`DEMO_DATABASE_URL` in `.env`).
 

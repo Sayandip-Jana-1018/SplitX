@@ -748,7 +748,7 @@ jobs:
         # The EKS platform exists only on AWS days (aws-up builds it in the
         # morning, aws-down removes it at night). While it answers through the
         # edge, its Jenkins gets the release the same way, as a deployment for
-        # "eks"; on any other day the edge shows its offline page and nothing
+        # "eks"; on any other day the edge answers 404 and nothing
         # is asked of it (D-093). The edge's address is the one committed in
         # k8s/overlays/aws.
         env:

@@ -4988,8 +4988,8 @@ rewrite of a regular expression (2026-09-25).
   - `tsc`, ESLint, knip and `db-schema --check`.
 
 ### D-114 · The edge is an API Gateway HTTP API, and the teardown is proven on AWS
-**2026-10-06** · 🚧 written and unit-tested; the next `aws-edge` makes it, and the rehearsal proves
-it through the platform. ✅ The platform's teardown is proven on AWS.
+**2026-10-06** · ✅ made on 2026-10-08 (AWS edge #4); the rehearsal proves it through the platform.
+✅ The platform's teardown is proven on AWS.
 
 **Why.** CloudFront needs AWS to verify a new account. This one asked on 2026-09-24 and had no
 answer by 2026-10-06, nine days before the demo, after three `aws-edge` runs refused with the same
@@ -5079,6 +5079,18 @@ a request policy and two empty buckets. The deploy role keeps `cloudfront:*` for
 - the AWS ingress admits the internet over plain HTTP only.
 
 Totals: 1,446 unit tests, `tsc`, ESLint, knip and `terraform fmt`.
+
+**2026-10-08: the edge exists.**
+- **AWS edge #4** made the API and its stage, and removed the 15 things the CloudFront attempts had
+  left: a function, a request policy, and two buckets with their settings. The apply took 11 s.
+- **`/` answers 404,** from GitHub's runner and from outside AWS: no route while the platform is down.
+- **Its address is committed** as `NEXTAUTH_URL` in `k8s/overlays/aws`, the one place it is written.
+- **A gap this decision had left, closed.** The EKS app's secret carried production's Google client.
+  - The sign-in page shows every provider the server has, so the EKS site would have offered Google.
+  - Google would then have refused the edge's callback (`redirect_uri_mismatch`).
+  - The EKS site now offers Google only with a client of its own (`AWS_GOOGLE_CLIENT_ID`), as GitHub
+    always needed one. A test proves that production's client never reaches the EKS secret.
+- **Checks:** 1,447 unit tests, the hardening checks, `tsc`, ESLint, knip and `db-schema --check`.
 
 ### D-115 · Next.js 16.3.8: the release gate stopped a critical advisory
 **2026-10-06** · ✅ fixed in code; CI's release job proves it on the next push.

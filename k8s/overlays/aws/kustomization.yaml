@@ -57,5 +57,5 @@ configMapGenerator:
       - TRUSTED_PROXY_HOPS=2
       # The edge's address (terraform/edge), the one place it is written down:
       # the app builds its links from it, and cluster-up checks it against the
-      # distribution Terraform manages before anything is installed.
-      - NEXTAUTH_URL=https://REPLACE_WITH_PUBLIC_HOSTNAME
+      # HTTP API Terraform manages before anything is installed (D-114).
+      - NEXTAUTH_URL=https://f9kh2glki1.execute-api.ap-south-1.amazonaws.com

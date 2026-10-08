@@ -45,7 +45,7 @@ describe('which cluster the verifiers check', () => {
     });
 
     it('refuses EKS before the edge exists, and any other target', () => {
-        expect(() => verifyTarget(['--target', 'eks'], read)).toThrow(/no edge address yet/);
+        expect(() => verifyTarget(['--target', 'eks'], overlay('https://REPLACE_WITH_PUBLIC_HOSTNAME'))).toThrow(/no edge address yet/);
         expect(() => verifyTarget(['--target', 'aws'], read)).toThrow(/kind \(the default\) or eks/);
     });
 

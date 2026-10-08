@@ -188,8 +188,8 @@ export async function proxy(request: NextRequest) {
     const trace = newTraceContext();
 
     // ── Only through our edge (EKS) ──
-    // Counted, not logged: someone else's distribution could otherwise turn a
-    // flood of refused requests into a flood of log lines.
+    // Counted, not logged: the load balancer is open to the internet (D-114),
+    // and a flood of refused requests must not become a flood of log lines.
     if (!fromOurEdge(request) || internalPathFromOutside(request)) {
         const response = new NextResponse('Not available', {
             status: 403,
