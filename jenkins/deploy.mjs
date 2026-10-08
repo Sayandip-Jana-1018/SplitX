@@ -189,7 +189,10 @@ function stepDeploy() {
         apiVersion: 'kustomize.config.k8s.io/v1beta1',
         kind: 'Kustomization',
         resources: ['../release/' + env.DEPLOY_OVERLAY],
-        images: [{ name: APP, newName: IMAGE_REPOSITORY, digest }],
+        // By both names, as scripts/lib/eks-facts.mjs releaseImages(): the AWS
+        // overlay names the published package with a release of its own, which
+        // an override by APP alone would leave running (D-093).
+        images: [APP, IMAGE_REPOSITORY].map((name) => ({ name, newName: IMAGE_REPOSITORY, digest })),
     };
     if (deployment.fault === 'unready') {
         // A release whose pods start but never become ready, as a wrong

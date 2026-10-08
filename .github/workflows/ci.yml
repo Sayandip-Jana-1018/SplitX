@@ -374,6 +374,32 @@ jobs:
           echo "$images"
           test "$images" = "ghcr.io/sayandip-jana-1018/splitx@$digest"
 
+      - name: cluster-up and Jenkins pin the app's image by digest, on both overlays
+        # The AWS overlay names the published package with a release of its
+        # own; an override by "splitx" alone left it running, and only the
+        # first full AWS rehearsal found it (D-093). Jenkins writes the same
+        # two names as releaseImages().
+        run: |
+          grep -q "\[APP, IMAGE_REPOSITORY\].map((name) => ({ name, newName: IMAGE_REPOSITORY, digest }))" jenkins/deploy.mjs
+          digest="sha256:$(printf 'e%.0s' $(seq 64))"
+          for overlay in local aws; do
+            work="$(mktemp -d "$PWD/.cluster-up-app-XXXX")"
+            node --input-type=module -e "
+              import { writeFileSync } from 'node:fs';
+              import { releaseImages } from './scripts/lib/eks-facts.mjs';
+              const [dir, digest, overlay] = process.argv.slice(1);
+              writeFileSync(dir + '/kustomization.yaml', JSON.stringify({
+                apiVersion: 'kustomize.config.k8s.io/v1beta1', kind: 'Kustomization',
+                resources: ['../k8s/overlays/' + overlay],
+                images: releaseImages({ name: 'ghcr.io/sayandip-jana-1018/splitx', digest }),
+              }));
+            " "$work" "$digest" "$overlay"
+            images="$(kubectl kustomize "$work" | sed -n 's/^ *image: //p' | grep splitx | sort -u)"
+            rm -rf "$work"
+            echo "$overlay: $images"
+            test "$images" = "ghcr.io/sayandip-jana-1018/splitx@$digest"
+          done
+
       - name: Alert rules fire when they should, and the Alertmanager config is valid
         # promtool and amtool at the versions the cluster runs. The rules are
         # read from the PrometheusRule that is deployed, not from a copy.

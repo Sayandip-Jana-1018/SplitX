@@ -3370,6 +3370,19 @@ The rehearsal counts them.
 - whether the ALB policy that `eks-pod-identity` 2.9.0 writes covers every call controller 3.5.0 makes;
 - metrics-server's resolution, which is the add-on's own default (its schema takes no arguments).
 
+**2026-10-08: the first full rehearsal, and what Kind could not show.** AWS up had only ever built
+the cluster; its second half ran for the first time and stopped twice:
+- **External Secrets 2.11 refused its values** (AWS up #2): PushSecrets were off and ClusterPushSecrets
+  on, which the chart rejects. Kind never installs this chart. Both are off now, and every pinned
+  chart was rendered for both targets with `helm template` before the next run.
+- **EKS ran the overlay's own release, not the one chosen** (AWS up #3). The AWS overlay names the
+  published package and pins a real release; cluster-up's override matched only `splitx`, so it
+  changed nothing, and the pods ran that older release, which predates the edge's header check. The
+  edge step caught it: the load balancer answered `/` with 200, not 403. Jenkins' override had the same
+  flaw, so its first deploy on EKS would have failed. Both now override by both names
+  (`releaseImages()` in `scripts/lib/eks-facts.mjs`), and the manifests job renders both overlays
+  with it, as it already did for the ops image (D-099).
+
 ### D-094 · Jenkins could not deploy any release made after the daily scan was added
 **2026-09-24** · 🚧 fixed in code; proven when Jenkins next deploys (plan Phase 7 on Kind, or an AWS day)
 

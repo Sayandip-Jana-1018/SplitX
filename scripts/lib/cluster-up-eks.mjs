@@ -24,7 +24,7 @@
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { committedEdge, releaseImage, storeRegion } from './eks-facts.mjs';
+import { committedEdge, releaseImage, releaseImages, storeRegion } from './eks-facts.mjs';
 import { applyOps, opsKustomization } from './ops-platform.mjs';
 import { chartsFor, helmInstallArgs, reposOf } from './platform-charts.mjs';
 
@@ -153,7 +153,7 @@ export async function upEks({ root, context = 'splitx', image = '', opsImage = '
     const work = mkdtempSync(join(root, '.cluster-up-eks-'));
     try {
         const kustomization = { apiVersion: 'kustomize.config.k8s.io/v1beta1', kind: 'Kustomization', resources: ['../k8s/overlays/aws'] };
-        if (release) kustomization.images = [{ name: 'splitx', newName: release.name, digest: release.digest }];
+        if (release) kustomization.images = releaseImages(release);
         writeFileSync(join(work, 'kustomization.yaml'), JSON.stringify(kustomization, null, 2));
         kubectl(['apply', '-k', work]);
     } finally {

@@ -44,3 +44,15 @@ export function releaseImage(image) {
     if (!match) throw new Error(`--image must be ghcr.io/sayandip-jana-1018/splitx@sha256:<digest>, not ${image}`);
     return { name: match[1], digest: match[2] };
 }
+
+/**
+ * The kustomize `images` that pin the app to one release on any overlay: by
+ * 'splitx', the name the Kind overlay keeps, and by the published package,
+ * which the AWS overlay names with a release of its own. By 'splitx' alone the
+ * AWS overlay kept that release, and EKS ran it (D-093). jenkins/deploy.mjs
+ * does the same; CI's manifests job renders both overlays with these.
+ * @param {{ name: string, digest: string }} release
+ */
+export function releaseImages(release) {
+    return ['splitx', release.name].map((name) => ({ name, newName: release.name, digest: release.digest }));
+}
