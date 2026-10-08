@@ -401,7 +401,7 @@ npm run dev
 ```
 
 **Tests:**
-- `npm test`: unit and property tests, 1,449 of them.
+- `npm test`: unit and property tests, 1,451 of them.
 - `npm run test:integration`: against a real Redis.
 - `npm run test:db`: against a real Postgres.
 - `npm run test:alerts`: the alert rules, with promtool.
