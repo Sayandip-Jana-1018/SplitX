@@ -87,9 +87,10 @@ spec:
       ports:
         - port: 8080
           protocol: TCP
-    # The internet, for Neon, Supabase Storage and the Gemini API — but not the
-    # private ranges, so a compromised pod cannot reach the node network, the
-    # control plane or another namespace's databases.
+    # The internet, for Neon, Supabase Storage, the Gemini API and the mail
+    # server (SMTP on 587 or 465: address confirmations and password resets,
+    # D-070) — but not the private ranges, so a compromised pod cannot reach
+    # the node network, the control plane or another namespace's databases.
     - to:
         - ipBlock:
             cidr: 0.0.0.0/0
@@ -101,4 +102,8 @@ spec:
         - port: 443
           protocol: TCP
         - port: 5432
+          protocol: TCP
+        - port: 587
+          protocol: TCP
+        - port: 465
           protocol: TCP

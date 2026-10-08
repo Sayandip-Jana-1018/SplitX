@@ -2210,6 +2210,13 @@ resend route answering the same for every address.
   Vercel runs without it. So links fall back to `VERCEL_PROJECT_PRODUCTION_URL`, the production
   domain Vercel sets on every deployment, instead of every email failing to send.
 
+**2026-10-08: the clusters could not send it.** The cluster's secret carried the SMTP settings, but
+the app's network policy (`k8s/base/networkpolicy.yaml`) is older than this decision and opened the
+internet on 443 and 5432 only. On Kind and EKS every confirmation and reset email waited ten seconds
+and failed, so a password account made there could never be confirmed; GitHub sign-in hid it. The
+policy now opens 587 and 465 as well, still never to the private ranges, and
+`tests/unit/infra/appNetwork.test.ts` holds both. Found while checking the rehearsal's sign-in paths.
+
 ### D-071 · Every page says what it may load and use
 **2026-09-22** · ✅ written and unit-tested (1,006 → 1,015 tests) · ✅ live since PR #18 (all four headers checked on production) · report-only; enforce after production shows the app itself breaks no rule
 
