@@ -197,7 +197,7 @@ function QuickAddContent() {
                 setLoadingGroups(false);
             }
         }
-        loadGroups();
+        void loadGroups();
     }, [searchParams]);
 
     useEffect(() => {
@@ -344,7 +344,7 @@ function QuickAddContent() {
             }
         }
 
-        loadGroupDetail();
+        void loadGroupDetail();
         return () => { cancelled = true; };
     }, [selectedGroupId, currentUser]);
 
@@ -371,7 +371,7 @@ function QuickAddContent() {
     useEffect(() => {
         if (!activeTripId) return;
         let cancelled = false;
-        (async () => {
+        void (async () => {
             try {
                 const res = await fetch(`/api/transactions?tripId=${activeTripId}&limit=20`);
                 if (!res.ok) return;

@@ -282,7 +282,7 @@ export default function GroupDetailPage() {
                 await navigator.share({ title: `Join ${group.name} on SplitX`, text: `Split expenses with us in "${group.name}".`, url: inviteLink });
             } catch { /* dismissed */ }
         } else {
-            copyInvite();
+            void copyInvite();
         }
     };
 

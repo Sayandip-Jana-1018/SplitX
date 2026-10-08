@@ -166,14 +166,14 @@ export default function NotificationPanel() {
                 transition={{ delay: Math.min(index * 0.03, 0.24), duration: 0.2 }}
                 className={cn(styles.item, !notif.read && styles.itemUnread, clickable && styles.itemClickable)}
                 onClick={() => {
-                    if (!isPendingInvite) handleNotificationClick(notif);
+                    if (!isPendingInvite) void handleNotificationClick(notif);
                 }}
                 role={clickable ? 'button' : undefined}
                 tabIndex={clickable ? 0 : undefined}
                 onKeyDown={(event) => {
                     if (clickable && (event.key === 'Enter' || event.key === ' ')) {
                         event.preventDefault();
-                        handleNotificationClick(notif);
+                        void handleNotificationClick(notif);
                     }
                 }}
             >
@@ -194,7 +194,7 @@ export default function NotificationPanel() {
                                 disabled={actionLoading?.startsWith(notif.id)}
                                 onClick={(event) => {
                                     event.stopPropagation();
-                                    handleInvitationAction(notif, 'accepted');
+                                    void handleInvitationAction(notif, 'accepted');
                                 }}
                             >
                                 {actionLoading === `${notif.id}-accepted` ? <Loader2 size={14} className="spin" /> : <Check size={14} />}
@@ -206,7 +206,7 @@ export default function NotificationPanel() {
                                 disabled={actionLoading?.startsWith(notif.id)}
                                 onClick={(event) => {
                                     event.stopPropagation();
-                                    handleInvitationAction(notif, 'declined');
+                                    void handleInvitationAction(notif, 'declined');
                                 }}
                             >
                                 {actionLoading === `${notif.id}-declined` ? <Loader2 size={14} className="spin" /> : <X size={14} />}

@@ -61,7 +61,7 @@ export default function SplitByItems({
     useEffect(() => {
         if (!isOpen) return;
         let cancelled = false;
-        (async () => {
+        void (async () => {
             try {
                 const res = await fetch('/api/groups');
                 if (!res.ok) return;

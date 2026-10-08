@@ -5185,6 +5185,12 @@ screenshot: there was no touch icon. Both are made from the app's own icon (`pub
   off.
 - Test: the dev server serves pages with the secret set.
 
+**SonarQube Cloud rated reliability C, for 15 findings of one rule** (S9383): a promise started
+without being awaited, caught, or marked as deliberately not awaited.
+- They were the clipboard, invite, notification and chat handlers, and the add-expense page's loads.
+- Each already caught its own errors, so none could reject unhandled today. They are now marked with
+  `void`, as `signIn` already was, so a later edit can't make one reject silently.
+
 **Looked at, and fine:**
 - every balance on the sample trip matched a hand calculation, and the suggested payments settle it
   in the fewest transfers (three);

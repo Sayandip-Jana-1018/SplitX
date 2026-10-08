@@ -142,7 +142,7 @@ function GroupsContent() {
                 // share sheet dismissed
             }
         } else {
-            handleCopy();
+            void handleCopy();
         }
     };
 
@@ -304,7 +304,7 @@ function GroupsContent() {
                                 value={groupName}
                                 maxLength={50}
                                 onChange={(event) => setGroupName(event.target.value)}
-                                onKeyDown={(event) => { if (event.key === 'Enter') handleCreate(); }}
+                                onKeyDown={(event) => { if (event.key === 'Enter') void handleCreate(); }}
                                 leftIcon={<Users size={18} />}
                                 autoFocus
                             />
@@ -396,7 +396,7 @@ function GroupsContent() {
                         placeholder="splitx.app/join/abc123"
                         value={joinInput}
                         onChange={(event) => setJoinInput(event.target.value)}
-                        onKeyDown={(event) => { if (event.key === 'Enter') handleJoin(); }}
+                        onKeyDown={(event) => { if (event.key === 'Enter') void handleJoin(); }}
                         leftIcon={<Link2 size={18} />}
                         autoFocus
                     />

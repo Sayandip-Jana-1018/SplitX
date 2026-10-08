@@ -158,7 +158,7 @@ export default function GroupChat({ groupId, currentUserId, members, balances, o
     const handleKeyDown = (e: React.KeyboardEvent) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
-            sendMessage(input);
+            void sendMessage(input);
         }
     };
 

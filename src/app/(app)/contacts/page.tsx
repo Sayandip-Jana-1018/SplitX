@@ -273,7 +273,7 @@ export default function ContactsPage() {
                 await navigator.share({ title: 'Join me on SplitX', text: shareData.message });
             } catch { /* dismissed */ }
         } else {
-            copyLink();
+            void copyLink();
         }
     };
 

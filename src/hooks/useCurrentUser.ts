@@ -51,7 +51,7 @@ export function useCurrentUser() {
             fetchPromise = fetchUser();
         }
 
-        fetchPromise.then((u) => {
+        void fetchPromise.then((u) => {
             cachedUser = u;
             setUser(u);
             setLoading(false);
