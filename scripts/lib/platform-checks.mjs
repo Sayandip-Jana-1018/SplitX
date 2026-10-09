@@ -134,10 +134,14 @@ export function identityProblem(finding) {
  */
 export function autoscalerHealth(status) {
     const text = (status ?? '').replace(/\r\n/g, '\n');
-    const healthy = /clusterWide:\s*\n\s+health:\s*\n\s+status:\s*Healthy\b/.test(text)
+    // YAML keys come in any order (1.34 writes them alphabetically, so health's
+    // status follows lastProbeTime and nodeCounts): read the whole block.
+    const clusterHealth = text.match(/^clusterWide:\s*\n {2}health:\s*\n((?: {4}.*(?:\n|$))*)/m)?.[1] ?? '';
+    const healthy = /^ {4}status:\s*Healthy\b/m.test(clusterHealth)
         || /Cluster-wide:\s*\n\s+Health:\s+Healthy\b/.test(text);
     const groups = text.split(/\n(?:nodeGroups|NodeGroups):[^\n]*\n/)[1] ?? '';
-    const listed = (groups.match(/^\s*- name:\s*\S+/gm) ?? []).length;
+    // One list item per group, "- health:" or "- name:" first, and its name at the item's own level.
+    const listed = groups.split(/^- /m).slice(1).filter((item) => /^(?: {2})?name:\s*\S+/m.test(item)).length;
     const nodeGroups = listed || (groups.match(/^\s*Name:\s*\S+/gm) ?? []).length;
     return { healthy, nodeGroups };
 }
@@ -215,8 +219,10 @@ export function albDecision(rules, path) {
  * k8s-<namespace>-<service>-<hash> by the controller.
  */
 export const ALB_EXPECTED = [
-    { path: '/api/metrics', expect: { action: 'respond', status: 403 }, why: 'the second lock on Prometheus\' endpoint (the edge function is the first)' },
-    { path: '/api/health/ready', expect: { action: 'respond', status: 403 }, why: 'the second lock on the probe that queries the database' },
+    { path: '/api/metrics', expect: { action: 'respond', status: 403 }, why: 'a lock on Prometheus\' endpoint (the app\'s proxy is the other)' },
+    { path: '/api/metrics/', expect: { action: 'respond', status: 403 }, why: 'the same, spelled with the slash Next.js would redirect before the proxy runs' },
+    { path: '/api/health/ready', expect: { action: 'respond', status: 403 }, why: 'a lock on the probe that queries the database' },
+    { path: '/api/health/ready/', expect: { action: 'respond', status: 403 }, why: 'the same, with the trailing slash' },
     { path: '/generic-webhook-trigger/invoke', expect: { action: 'forward', group: 'k8s-jenkins-jenkins-' }, why: 'GitHub\'s deliveries, to Jenkins' },
     { path: '/api/health/live', expect: { action: 'forward', group: 'k8s-splitx-splitx-' }, why: 'liveness, for anyone' },
     { path: '/', expect: { action: 'forward', group: 'k8s-splitx-splitx-' }, why: 'the application' },
@@ -244,9 +250,10 @@ export function albFindings(rules) {
 
 /**
  * Spellings of the two internal paths. The load balancer refuses the exact
- * ones; the app's proxy decodes, lower-cases and collapses slashes before it
- * compares (src/lib/security/internalPaths.ts), so through the edge each must
- * be refused, never passed on (D-114).
+ * ones and their trailing-slash spellings (Next.js redirects those before the
+ * proxy runs); the app's proxy decodes, lower-cases and collapses slashes
+ * before it compares (src/lib/security/internalPaths.ts), so through the edge
+ * each must be refused, never passed on (D-114).
  */
 export const INTERNAL_SPELLINGS = [
     '/api/metrics',
@@ -275,16 +282,33 @@ const prisma = new PrismaClient();
 (async () => {
     if (!/^k8s-verify\\+\\d+@example\\.invalid$/.test(email)) throw Object.assign(new Error(), { code: 'not a check address' });
     const [schema] = await prisma.$queryRawUnsafe("SELECT count(*)::int AS tables FROM information_schema.tables WHERE table_schema = 'public'");
+    const [ledger] = await prisma.$queryRawUnsafe("SELECT to_regclass('public._prisma_migrations')::text AS name");
+    const migrations = ledger.name
+        ? (await prisma.$queryRawUnsafe('SELECT migration_name FROM "_prisma_migrations" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL')).map((row) => row.migration_name)
+        : [];
     const stored = await prisma.user.count({ where: { email } });
     const links = await prisma.verificationToken.deleteMany({ where: { identifier: email } });
     const removed = await prisma.user.deleteMany({ where: { email } });
     const left = await prisma.user.count({ where: { email } });
-    console.log(JSON.stringify({ tables: schema.tables, stored, removed: removed.count, links: links.count, left }));
+    console.log(JSON.stringify({ tables: schema.tables, migrations, stored, removed: removed.count, links: links.count, left }));
 })().catch((error) => {
     console.log(JSON.stringify({ error: error.code ?? error.errorCode ?? error.name }));
     process.exitCode = 1;
 }).finally(() => prisma.$disconnect());
 `;
+
+/**
+ * The migrations in prisma/migrations a database hasn't recorded as applied.
+ * Neon's demo branch was made from production's schema and nothing migrates
+ * it on its own, so it can fall behind the release: it once lacked a column
+ * the app read, and every page that lists groups failed (D-093).
+ * @param {string[]} inRepository  migration directory names
+ * @param {string[]} applied  the database's _prisma_migrations
+ */
+export function missingMigrations(inRepository, applied) {
+    const done = new Set(applied);
+    return inRepository.filter((name) => !done.has(name));
+}
 
 /** The AWS readings ops-api makes with its Pod Identity role (ops/api/aws.mjs). */
 const AWS_READINGS = ['stacks', 'eks', 'edge', 'budget'];

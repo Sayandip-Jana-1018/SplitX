@@ -81,6 +81,16 @@ describe('stripTags, for the plain-text copy', () => {
 });
 
 describe('sending', () => {
+    it('sends nothing to a reserved domain, where mail can only bounce back to the sender', async () => {
+        useSmtp();
+        await email.sendVerificationEmail('k8s-verify+1760000000000@example.invalid', 'token');
+        expect(sendMail).not.toHaveBeenCalled();
+        expect(email.deliverable('friend@example.com')).toBe(true);
+        for (const address of ['a@splitx.test', 'b@demo.example', 'c@box.localhost', 'D@EXAMPLE.INVALID']) {
+            expect(email.deliverable(address)).toBe(false);
+        }
+    });
+
     it('sends over SMTP from the SMTP account, with a plain-text copy and a link back to the site', async () => {
         useSmtp();
         sendMail.mockResolvedValue({ messageId: 'm1' });

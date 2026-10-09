@@ -14,8 +14,10 @@ metadata:
     alb.ingress.kubernetes.io/group.order: "10"
     # nginx's source-range annotation means nothing to an ALB. The equivalent
     # is a listener rule that answers by itself and never reaches a pod. The
-    # edge refuses these paths too (terraform/edge's function): this is the
-    # second lock, as nginx's rule is on Kind.
+    # app's proxy refuses every other spelling of these paths that comes
+    # through the edge (D-114): this is the other lock, as nginx's rule is on
+    # Kind. The trailing-slash spellings are here too: Next.js redirects them
+    # (308) before the proxy runs, so the proxy never sees them.
     alb.ingress.kubernetes.io/actions.deny-internal: >-
       {"type":"fixed-response","fixedResponseConfig":{"contentType":"text/plain","statusCode":"403","messageBody":"Not available"}}
 spec:
@@ -30,7 +32,21 @@ spec:
                 name: deny-internal
                 port:
                   name: use-annotation
+          - path: /api/metrics/
+            pathType: Exact
+            backend:
+              service:
+                name: deny-internal
+                port:
+                  name: use-annotation
           - path: /api/health/ready
+            pathType: Exact
+            backend:
+              service:
+                name: deny-internal
+                port:
+                  name: use-annotation
+          - path: /api/health/ready/
             pathType: Exact
             backend:
               service:

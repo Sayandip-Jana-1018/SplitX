@@ -55,8 +55,8 @@ These are done once, and stay done.
    For `/ops` on EKS, also `OPS_ADMINS`, `OPS_GITHUB_TOKEN` and `SONAR_PROJECT_KEY`. For alert emails,
    `ALERT_SMTP_USERNAME`, `ALERT_SMTP_PASSWORD` and `ALERT_EMAIL_TO`.
 2. **Copy them to AWS:** `npm run aws:secrets`. It writes `splitx/demo/app` and `splitx/demo/platform`
-   in Secrets Manager and prints key names only. `aws-down` deletes both that evening; `.env` keeps
-   the originals.
+   in Secrets Manager and prints key names only. `aws-down` deletes both, the automatic 23:30 run too,
+   so run it again before every AWS up that follows a teardown; `.env` keeps the originals.
 3. **The Kind rehearsal is green.** GitHub → Actions → **Kind end-to-end**: the newest run, nightly or
    after a push, passed every check. It runs the same platform on a GitHub runner.
 4. **Nothing is up already.** The last **AWS down** run is green. A platform left up costs money
@@ -143,6 +143,11 @@ Then open http://localhost:3000 and sign in as `admin`, with `GF_ADMIN_PASSWORD`
 
   The platform built so far stays up. Fix, then run **AWS up** again: every step picks up where the
   platform is.
+- **The demo database is behind:** `k8s:verify` names the migrations it lacks. Nothing migrates Neon's
+  demo branch on its own, so every migration a release adds has to reach it too. Run each one's
+  `migration.sql` in a transaction from inside an app pod (the laptop's network can't reach port
+  5432), and record it in `_prisma_migrations`. D-093 describes how the branch was brought up to date
+  on 2026-10-09.
 - **AWS is unavailable, or the platform won't come up in time.**
   - **First fallback:** the newest green **Kind end-to-end** run. Its summary page has every
     verifier's table (the same platform, its delivery through GitHub's webhook, the traffic lab and

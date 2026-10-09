@@ -5,7 +5,7 @@ import {
 } from '../../../scripts/lib/cluster-network.mjs';
 import {
     ALB_EXPECTED, albDecision, albFindings, autoscalerHealth, awsReadings, buildForDeployment, cosignVerification, DATABASE_PROBE, ebsFindings, eksClusterOf,
-    identityProblem, INTERNAL_SPELLINGS, matchesPathPattern, POD_IDENTITY_ACCOUNTS, podIdentityFindings, spreadOf,
+    identityProblem, INTERNAL_SPELLINGS, matchesPathPattern, missingMigrations, POD_IDENTITY_ACCOUNTS, podIdentityFindings, spreadOf,
     ungatedPods, unhealthyPods,
 } from '../../../scripts/lib/platform-checks.mjs';
 import { forwardedPort, KIND_ONLY, verifyTarget } from '../../../scripts/lib/verify-target.mjs';
@@ -175,6 +175,36 @@ describe('Pod Identity', () => {
         expect(autoscalerHealth(undefined)).toEqual({ healthy: false, nodeGroups: 0 });
     });
 
+    it('reads the autoscaler\'s status with its keys in alphabetical order, as the first AWS rehearsal found them', () => {
+        // The shape cluster-autoscaler 1.34 wrote on EKS (2026-10-09), cut down.
+        const status = [
+            'autoscalerStatus: Running',
+            'clusterWide:',
+            '  health:',
+            '    lastProbeTime: "2026-10-09T02:05:15Z"',
+            '    nodeCounts:',
+            '      registered:',
+            '        ready: 3',
+            '        unready:',
+            '          total: 0',
+            '    status: Healthy',
+            '  scaleDown:',
+            '    status: NoCandidates',
+            'nodeGroups:',
+            '- health:',
+            '    cloudProviderTarget: 3',
+            '    maxSize: 4',
+            '    status: Healthy',
+            '  name: eks-splitx-general-dcd08f26',
+            '  scaleUp:',
+            '    status: NoActivity',
+            'time: 2026-10-09 02:05:15 +0000 UTC',
+        ].join('\n');
+        expect(autoscalerHealth(status)).toEqual({ healthy: true, nodeGroups: 1 });
+        // A group's own health, or the scale-down status, is not the cluster's.
+        expect(autoscalerHealth(status.replace('    status: Healthy\n  scaleDown:', '    status: Unhealthy\n  scaleDown:'))).toEqual({ healthy: false, nodeGroups: 1 });
+    });
+
     it('holds ops-api to the four readings it makes with its role', () => {
         const ok = { ok: true };
         expect(awsReadings({ stacks: ok, eks: ok, edge: ok, budget: ok }).every((reading: { ok: boolean }) => reading.ok)).toBe(true);
@@ -215,9 +245,11 @@ describe('the load balancer\'s rules', () => {
     // What the controller makes of the IngressGroup "splitx" (group.order 10, 20, 100).
     const rules = [
         { Priority: '1', Conditions: path('/api/metrics'), Actions: [deny], IsDefault: false },
-        { Priority: '2', Conditions: path('/api/health/ready'), Actions: [deny], IsDefault: false },
-        { Priority: '3', Conditions: path('/generic-webhook-trigger/*'), Actions: [to('k8s-jenkins-jenkins-5f8a0c1b2d')], IsDefault: false },
-        { Priority: '4', Conditions: path('/*'), Actions: [to('k8s-splitx-splitx-9e7d6c5b4a')], IsDefault: false },
+        { Priority: '2', Conditions: path('/api/metrics/'), Actions: [deny], IsDefault: false },
+        { Priority: '3', Conditions: path('/api/health/ready'), Actions: [deny], IsDefault: false },
+        { Priority: '4', Conditions: path('/api/health/ready/'), Actions: [deny], IsDefault: false },
+        { Priority: '5', Conditions: path('/generic-webhook-trigger/*'), Actions: [to('k8s-jenkins-jenkins-5f8a0c1b2d')], IsDefault: false },
+        { Priority: '6', Conditions: path('/*'), Actions: [to('k8s-splitx-splitx-9e7d6c5b4a')], IsDefault: false },
         { Priority: 'default', Conditions: [], Actions: [{ Type: 'fixed-response', FixedResponseConfig: { StatusCode: '404' } }], IsDefault: true },
     ];
 
@@ -233,7 +265,8 @@ describe('the load balancer\'s rules', () => {
 
     it('decides each path by the first rule that matches it, and names groups without the account', () => {
         expect(albDecision(rules, '/api/metrics')).toEqual({ priority: '1', action: 'respond', status: 403 });
-        expect(albDecision(rules, '/')).toEqual({ priority: '4', action: 'forward', targetGroup: 'k8s-splitx-splitx-9e7d6c5b4a' });
+        expect(albDecision(rules, '/')).toEqual({ priority: '6', action: 'forward', targetGroup: 'k8s-splitx-splitx-9e7d6c5b4a' });
+        expect(albDecision(rules, '/api/metrics/')).toEqual({ priority: '2', action: 'respond', status: 403 });
         expect(albDecision(rules.filter((rule) => !rule.IsDefault).slice(0, 2), '/')).toEqual({ priority: null, action: 'none' });
         expect(JSON.stringify(albFindings(rules))).not.toContain(ACCOUNT);
     });
@@ -243,14 +276,14 @@ describe('the load balancer\'s rules', () => {
     });
 
     it('fails the one D-089 fixed, where the catch-all outranks the refusals', () => {
-        const unordered = rules.map((rule) => ({ ...rule, Priority: { '1': '2', '2': '3', '3': '4', '4': '1' }[rule.Priority] ?? rule.Priority }));
+        const unordered = rules.map((rule) => ({ ...rule, Priority: { '1': '2', '2': '3', '3': '4', '4': '5', '5': '6', '6': '1' }[rule.Priority] ?? rule.Priority }));
         const failed = albFindings(unordered).filter((finding: { ok: boolean }) => !finding.ok).map((finding: { path: string }) => finding.path);
-        expect(failed).toEqual(['/api/metrics', '/api/health/ready', '/generic-webhook-trigger/invoke']);
+        expect(failed).toEqual(['/api/metrics', '/api/metrics/', '/api/health/ready', '/api/health/ready/', '/generic-webhook-trigger/invoke']);
     });
 
     it('expects what the committed Ingresses say', () => {
         const internal = read('k8s/overlays/aws/patches/ingress-internal.yaml');
-        for (const refused of ['/api/metrics', '/api/health/ready']) expect(internal).toContain('path: ' + refused);
+        for (const refused of ['/api/metrics', '/api/metrics/', '/api/health/ready', '/api/health/ready/']) expect(internal).toContain('path: ' + refused + '\n');
         expect(internal).toContain('"statusCode":"403"');
         expect(read('jenkins/eks/ingress.yaml')).toMatch(/path: \/generic-webhook-trigger\/\n\s+pathType: Prefix\n[\s\S]*name: jenkins/);
     });
@@ -358,7 +391,11 @@ describe('the database, asked from inside a pod on EKS', () => {
         class PrismaClient {
             user = table('user', rows);
             verificationToken = table('verificationToken', 0);
-            $queryRawUnsafe = vi.fn(async () => [{ tables: 20 }]);
+            $queryRawUnsafe = vi.fn(async (sql: string) => {
+                if (sql.includes('information_schema.tables')) return [{ tables: 20 }];
+                if (sql.includes('to_regclass')) return [{ name: '_prisma_migrations' }];
+                return [{ migration_name: '0_baseline' }, { migration_name: '20260925165652_group_invite_issued_at' }];
+            });
             $disconnect = vi.fn(async () => calls.push('disconnect'));
         }
         const printed: string[] = [];
@@ -371,7 +408,7 @@ describe('the database, asked from inside a pod on EKS', () => {
     it('finds the check\'s account, removes it and its link, and prints only numbers', async () => {
         const email = 'k8s-verify+1760000000000@example.invalid';
         const { printed, calls, exitCode } = await probe(email);
-        expect(printed).toEqual([{ tables: 20, stored: 1, removed: 1, links: 0, left: 0 }]);
+        expect(printed).toEqual([{ tables: 20, migrations: ['0_baseline', '20260925165652_group_invite_issued_at'], stored: 1, removed: 1, links: 0, left: 0 }]);
         expect(calls).toContain('user.deleteMany ' + JSON.stringify({ email }));
         expect(calls).toContain('verificationToken.deleteMany ' + JSON.stringify({ identifier: email }));
         expect(exitCode).toBe(0);
@@ -387,6 +424,13 @@ describe('the database, asked from inside a pod on EKS', () => {
     it('never prints Prisma\'s message, which can name the host', () => {
         expect(DATABASE_PROBE).not.toMatch(/error\.message/);
         expect(DATABASE_PROBE).toMatch(/error\.code \?\? error\.errorCode \?\? error\.name/);
+    });
+
+    it('names the migrations the database has not recorded, as the demo branch once lacked one', () => {
+        const repository = ['0_baseline', '20260922180425_user_token_version', '20260925165652_group_invite_issued_at'];
+        expect(missingMigrations(repository, repository)).toEqual([]);
+        expect(missingMigrations(repository, repository.slice(0, 2))).toEqual(['20260925165652_group_invite_issued_at']);
+        expect(missingMigrations(repository, [])).toEqual(repository);
     });
 });
 

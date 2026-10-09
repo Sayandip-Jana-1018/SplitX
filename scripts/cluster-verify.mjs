@@ -19,7 +19,7 @@
  * Identity, EBS volumes and the edge's refusals (scripts/lib/platform-checks.mjs).
  */
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { request } from 'node:http';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -29,7 +29,7 @@ import {
 import { dashboardDatasourceUids, dashboardQueries, FIRST_EVENT_SERIES, metricNamesIn, withoutGrafanaVariables } from './lib/dashboards.mjs';
 import {
     albFindings, autoscalerHealth, awsReadings, DATABASE_PROBE, ebsFindings, eksClusterOf, identityProblem, INTERNAL_SPELLINGS,
-    podIdentityFindings, spreadOf, ungatedPods, unhealthyPods,
+    missingMigrations, podIdentityFindings, spreadOf, ungatedPods, unhealthyPods,
 } from './lib/platform-checks.mjs';
 import { clusterSecret, KIND_ONLY, portForward, stopForwards, verifyTarget } from './lib/verify-target.mjs';
 
@@ -528,6 +528,19 @@ if (EKS) {
         Number(database.tables) >= 18,
         database.error ? 'could not ask it: ' + database.error : database.tables + ' tables in the public schema of Neon\'s demo branch'
     );
+    // Counting tables missed a column the release read (D-093): every
+    // migration in the repository must be recorded as applied.
+    const inRepository = readdirSync(join(root, 'prisma', 'migrations'), { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort();
+    const behind = missingMigrations(inRepository, database.migrations ?? []);
+    record(
+        'The demo database has every migration the release expects',
+        !database.error && behind.length === 0,
+        database.error
+            ? 'could not ask it: ' + database.error
+            : behind.length
+                ? 'not applied: ' + behind.join(', ') + ' (docs/DEMO_DAY.md §5, "The demo database is behind")'
+                : inRepository.length + ' migrations recorded, the newest ' + inRepository.at(-1)
+    );
     record(
         'A write through the edge reaches the database',
         registered.status === 201 && database.stored === 1 && database.left === 0,
@@ -955,7 +968,12 @@ for (const [, name, type] of declared.matchAll(/^# TYPE (\S+) (\S+)$/gm)) {
     if (type === 'histogram') for (const suffix of ['_bucket', '_sum', '_count']) storedNames.add(name + suffix);
     if (type === 'summary') for (const suffix of ['_sum', '_count']) storedNames.add(name + suffix);
 }
-const queries = dashboardQueries(root);
+// Kind's webhook relay (jenkins/relay.yaml) has no counterpart on EKS, where
+// GitHub delivers through the edge, so its panels are empty there by design.
+const relayOnly = (query) => metricNamesIn(query.expr).some((name) => name.startsWith('webhook_relay_'));
+const allQueries = dashboardQueries(root);
+const queries = EKS ? allQueries.filter((query) => !relayOnly(query)) : allQueries;
+const skippedPanels = [...new Set(allQueries.filter((query) => !queries.includes(query)).map((query) => query.panel))];
 // Jenkins' plugin gathers its build metrics every 30 s and Prometheus scrapes
 // it every 30 s (helm/platform/jenkins.values.yaml), so a build that ended just
 // before this check can take a minute to appear. A name still missing is looked
@@ -985,6 +1003,7 @@ record(
         ? queryProblems.join('; ')
         : queries.length + ' queries on ' + wanted.length + ' metrics'
             + [...notYet].map((name) => '; not published yet: ' + name + ', because ' + FIRST_EVENT_SERIES.get(name)).join('')
+            + (skippedPanels.length ? '; Kind\'s webhook relay only, not checked here: ' + skippedPanels.join(', ') : '')
 );
 
 // Logs: Alloy reads them through the Kubernetes API and ships them to Loki.

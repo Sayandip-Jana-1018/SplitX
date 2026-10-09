@@ -177,6 +177,18 @@ export async function upEks({ root, context = 'splitx', image = '', opsImage = '
     }
     if (!alb) fail('no load balancer after 10 minutes; its controller says why: kubectl -n kube-system logs deployment/aws-load-balancer-controller');
     console.log('    the load balancer: ' + alb);
+    // The controller gives its readiness gate only to pods made once it has a
+    // target group for the Service, and the first pods can come before that:
+    // they then count as ready without the load balancer's word, as the first
+    // full rehearsal found (D-093). By now the target groups exist, so one
+    // restart makes pods that carry the gate.
+    const appPods = JSON.parse(kubectl(['-n', 'splitx', 'get', 'pods', '-l', 'app.kubernetes.io/name=splitx', '-o', 'json'], { capture: true }).stdout).items;
+    const ungated = appPods.filter((pod) => !(pod.spec?.readinessGates ?? []).some((gate) => gate.conditionType.startsWith('target-health.elbv2.k8s.aws/')));
+    if (ungated.length) {
+        console.log('    ' + ungated.length + ' app pod(s) came before the load balancer\'s readiness gate; restarting them so it vouches for every pod');
+        kubectl(['-n', 'splitx', 'rollout', 'restart', 'deployment/splitx']);
+        kubectl(['-n', 'splitx', 'rollout', 'status', 'deployment/splitx', '--timeout=600s']);
+    }
     // Nexus' first start creates its database; the Job then sets it up (D-096).
     kubectl(['-n', 'nexus', 'wait', '--for=condition=complete', 'job/nexus-provision', '--timeout=900s']);
     console.log('    Nexus is set up: licence accepted, anonymous access off, the evidence repository and Jenkins\' account in place');

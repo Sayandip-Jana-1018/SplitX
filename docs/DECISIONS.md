@@ -3383,6 +3383,29 @@ the cluster; its second half ran for the first time and stopped twice:
   (`releaseImages()` in `scripts/lib/eks-facts.mjs`), and the manifests job renders both overlays
   with it, as it already did for the ops image (D-099).
 
+AWS up #4 (2026-10-09) built everything: the edge refused what skipped it, GitHub's webhook reached
+Jenkins on EKS, and the delivery check passed 16 of 16, the rollback included. Signing in then showed
+the next gap, and the cluster check named four more:
+- **The demo branch was a migration behind.** It was made from production's schema before
+  `20260925165652_group_invite_issued_at`, nothing migrates it, and counting its tables can't tell. Every
+  page that lists groups answered 500. The column was added from inside an app pod, in one transaction
+  with all five migrations recorded in `_prisma_migrations`; its columns and indexes now match
+  `schema.sql` exactly. The check now compares those records with `prisma/migrations`.
+- **The autoscaler's status was misread.** Cluster Autoscaler 1.34 writes its keys alphabetically, so
+  `status: Healthy` follows `nodeCounts`, and each node group starts with `- health:`; the parser took
+  it for "0 node groups, unhealthy". It reads either order now, tested with the real status.
+- **The first pods missed the load balancer's readiness gate.** The controller adds it only to pods made
+  once its target group exists, and cluster-up's first pods came before. Pods made later all had it.
+  cluster-up now restarts the app once if any pod lacks it.
+- **`/api/metrics/` got 308, not 403.** Next.js redirects a trailing slash before the proxy runs, so
+  the proxy never refused it; the redirect led to a refused path, but a lock should not depend on that.
+  The load balancer refuses both trailing-slash spellings now.
+- **Kind's webhook relay has no metrics on EKS,** where GitHub delivers through the edge, so its three
+  Delivery panels are empty there by design; the dashboard check leaves them out on EKS and says so.
+
+The bounce the verifier's sign-up caused, once the cluster could send email (D-070), also stopped:
+nothing is sent to the reserved top-level domains (`.invalid`, `.test`, `.example`, `.localhost`).
+
 ### D-094 · Jenkins could not deploy any release made after the daily scan was added
 **2026-09-24** · 🚧 fixed in code; proven when Jenkins next deploys (plan Phase 7 on Kind, or an AWS day)
 

@@ -60,7 +60,21 @@ export interface OutgoingEmail {
     text: string;
 }
 
+/**
+ * Top-level domains reserved so that they never resolve (RFC 2606, RFC 6761).
+ * Mail to them can only bounce, back to SplitX's own sender: the cluster's
+ * verifier signs up a `…@example.invalid` account on every AWS day.
+ */
+const RESERVED_TLD = /\.(?:invalid|test|example|localhost)$/i;
+
+/** False for an address no mail server can receive for. */
+export function deliverable(address: string): boolean {
+    const domain = address.slice(address.lastIndexOf('@') + 1).trim();
+    return !RESERVED_TLD.test(domain);
+}
+
 export async function sendEmail(mail: OutgoingEmail) {
+    if (!deliverable(mail.to)) return;
     const transport = emailTransport();
     if (transport === 'smtp') {
         await smtpTransport().sendMail({
