@@ -155,6 +155,11 @@
     border-color: rgba(var(--accent-500-rgb), 0.35);
 }
 
+/* Desktop only (the sort button does this job on phones) */
+.toolbar .sortSegmented {
+    display: none;
+}
+
 /* ── Day groups ── */
 .days {
     display: flex;
@@ -416,6 +421,24 @@
     .summary {
         padding: 26px 22px 22px;
         border-radius: 28px;
+    }
+
+    /* The search gets the column's full width; the order sits under it */
+    .side .toolbar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .side .search {
+        flex: none;
+    }
+
+    .side .sortButton {
+        display: none;
+    }
+
+    .side .toolbar .sortSegmented {
+        display: flex;
     }
 
     .side .chips {

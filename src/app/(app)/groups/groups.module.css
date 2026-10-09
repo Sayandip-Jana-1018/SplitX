@@ -354,4 +354,9 @@
         grid-template-columns: repeat(3, minmax(0, 1fr));
         gap: 20px;
     }
+
+    /* One or two groups share the row rather than leave a third of it empty */
+    .list:has(> :last-child:nth-child(-n + 2)) {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
 }

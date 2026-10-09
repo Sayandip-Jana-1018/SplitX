@@ -25,7 +25,7 @@ import ErrorState from '@/components/ui/ErrorState';
 import { Input } from '@/components/ui/Input';
 import { TransactionSkeleton } from '@/components/ui/Skeleton';
 import { CategoryTile, PaymentTag, getCategoryConfig } from '@/components/ui/Icons';
-import { Amount, Chip, ChipRow, ListGroup, ListRow, Notice, Stagger, StaggerItem, Tag } from '@/components/ui/kit';
+import { Amount, Chip, ChipRow, ListGroup, ListRow, Notice, Segmented, Stagger, StaggerItem, Tag } from '@/components/ui/kit';
 import { useToast } from '@/components/ui/Toast';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { fetcher, refreshMoneyData } from '@/lib/swr';
@@ -246,6 +246,18 @@ function TransactionsContent() {
                                     {sortBy === 'time' ? <CalendarClock size={16} /> : <ArrowDownWideNarrow size={16} />}
                                     {sortBy === 'time' ? 'Recent' : 'Highest'}
                                 </button>
+                                {/* Desktop: the search takes the column's width and both orders show */}
+                                <Segmented<SortKey>
+                                    className={styles.sortSegmented}
+                                    size="sm"
+                                    ariaLabel="Sort order"
+                                    value={sortBy}
+                                    onChange={setSortBy}
+                                    options={[
+                                        { value: 'time', label: <><CalendarClock size={15} />Recent</> },
+                                        { value: 'amount', label: <><ArrowDownWideNarrow size={15} />Highest</> },
+                                    ]}
+                                />
                             </div>
                         </StaggerItem>
                     )}

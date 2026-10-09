@@ -312,7 +312,7 @@
 @media (min-width: 1024px) {
     .page {
         display: grid;
-        grid-template-columns: minmax(300px, 340px) minmax(0, 1fr);
+        grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
         grid-template-rows: auto 1fr;
         gap: 22px 32px;
         align-items: start;
@@ -367,8 +367,20 @@
         grid-column: 1 / -1;
     }
 
-    /* Section headings of one height, so cards side by side start on one line */
+    /* Each section takes two rows, its heading and its card, shared with the section beside it:
+       headings side by side get one height, so their titles and their cards line up */
+    .overview > section {
+        display: grid;
+        grid-row: span 2;
+        grid-template-rows: subgrid;
+        row-gap: 12px;
+    }
+
     .overview > section > :first-child {
-        min-height: 42px;
+        align-items: flex-start;
+    }
+
+    .overview > section > :last-child {
+        align-self: start;
     }
 }

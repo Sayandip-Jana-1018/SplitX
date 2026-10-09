@@ -333,7 +333,7 @@ export default function SettingsPage() {
                                 <div className={styles.panelDivider} />
                                 <div className={styles.panelBlock}>
                                     <span className={styles.panelLabel}>Accent colour</span>
-                                    <PalettePicker value={palette} onChange={setPalette} />
+                                    <PalettePicker value={palette} onChange={setPalette} className={styles.palette} />
                                 </div>
                             </div>
                         </Section>

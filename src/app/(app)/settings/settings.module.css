@@ -289,8 +289,8 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   Desktop: the profile and sign out on the left; the settings two
-   to a row beside them, appearance across both
+   Desktop: the profile and sign out on the left, the settings
+   beside them; from 1280px two to a row, appearance across both
    ═══════════════════════════════════════════════════════════════ */
 @media (min-width: 1024px) {
     .page {
@@ -314,11 +314,8 @@
     .mainCol {
         display: grid;
         grid-area: main;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        grid-template-areas:
-            "paid help"
-            "look look"
-            "data app";
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-areas: "paid" "help" "look" "data" "app";
         gap: 30px 24px;
         align-items: start;
         min-width: 0;
@@ -330,6 +327,11 @@
     .dataArea { grid-area: data; min-width: 0; }
     .appArea { grid-area: app; min-width: 0; }
 
+    /* Sixteen accents as two even rows */
+    .panel .palette {
+        grid-template-columns: repeat(8, minmax(0, 1fr));
+    }
+
     .profile {
         padding: 34px 22px 26px;
         border-radius: 30px;
@@ -337,5 +339,23 @@
 
     .footer {
         margin-top: 0;
+    }
+}
+
+/* Wide enough for the settings two to a row without cutting their descriptions short */
+@media (min-width: 1280px) {
+    .mainCol {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-areas:
+            "paid help"
+            "look look"
+            "data app";
+    }
+
+    /* Headings of one height side by side, so both cards start on one line */
+    .paidArea section > :first-child,
+    .helpArea section > :first-child {
+        min-height: 42px;
+        align-items: flex-start;
     }
 }

@@ -5302,6 +5302,24 @@ timing; its code is unchanged on phones.
 account menu, search, notifications and assistant opened from the bar in the browser, with no console
 or server errors.
 
+**Addendum (same day): gaps and cut-off text found by going over every desktop page with the demo's
+data** (two groups, as on AWS):
+- Home showed the groups four to a row, so two groups and "New group" left a quarter of the row
+  empty; Groups showed three to a row and left a third. Fewer cards now share the row.
+- A group: "Suggested payments" sat lower than "Balances" beside it (one heading has a line under
+  it, the other not). Each overview section now spans two rows of a subgrid, heading and card, so
+  headings side by side take one height and their cards start on one line. At 1,024 px the group's
+  card was too narrow for "Add expense"; its column is 360 px now.
+- Activity: the search's hint was cut off beside the sort button. On desktop the search takes the
+  column's width, with the order as Recent | Highest under it.
+- Settings: at 1,024 px two columns cut every description short; the settings are one column until
+  1,280 px. Getting paid and Help line up, and the sixteen accents sit in two rows of eight (they
+  wrapped eleven and five).
+
+Phones and tablets: 11 pages on a phone, 5 in dark mode and 6 on a tablet were shot from the
+committed code and again with the change, and all 22 are identical pixel for pixel. A scan of 11
+pages at 1,024, 1,100, 1,280 and 1,440 px finds no text cut off.
+
 ---
 
 ## Open problems

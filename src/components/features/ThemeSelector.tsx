@@ -7,12 +7,13 @@ import { useThemeContext, COLOR_PALETTES } from '@/components/providers/ThemePro
 import type { PaletteId, ThemePreference } from '@/components/providers/ThemeProvider';
 import { Segmented } from '@/components/ui/kit';
 import Modal from '@/components/ui/Modal';
+import { cn } from '@/lib/utils';
 import styles from './theme.module.css';
 
 /** Grid of accent swatches. */
-export function PalettePicker({ value, onChange }: { value: PaletteId; onChange: (id: PaletteId) => void }) {
+export function PalettePicker({ value, onChange, className }: { value: PaletteId; onChange: (id: PaletteId) => void; className?: string }) {
     return (
-        <div className={styles.paletteGrid} role="radiogroup" aria-label="Accent colour">
+        <div className={cn(styles.paletteGrid, className)} role="radiogroup" aria-label="Accent colour">
             {COLOR_PALETTES.map((palette) => {
                 const active = palette.id === value;
                 return (
