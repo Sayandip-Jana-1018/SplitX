@@ -253,8 +253,10 @@
     }
 }
 
+/* Under the desktop top bar, flush with the right edge of the page column */
 @media (min-width: 1024px) {
     .panel {
-        right: 24px;
+        top: calc(var(--topbar-height) + 4px);
+        right: max(var(--desktop-gutter), calc((100% - var(--desktop-max)) / 2));
     }
 }

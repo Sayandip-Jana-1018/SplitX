@@ -57,8 +57,13 @@ const TOUR_STEPS: TourStep[] = [
 
 const STORAGE_KEY = TOUR_STORAGE_KEY;
 
+/** The first match that is on screen: the phone dock and the desktop top bar carry the same targets. */
+function findTarget(selector: string) {
+    return Array.from(document.querySelectorAll(selector)).find((element) => element.getClientRects().length > 0) ?? null;
+}
+
 function isStepAvailable(step: TourStep) {
-    return !step.target || Boolean(document.querySelector(step.target));
+    return !step.target || Boolean(findTarget(step.target));
 }
 
 export default function OnboardingTour() {
@@ -126,7 +131,7 @@ export default function OnboardingTour() {
                     setSpotlightRect(null);
                     return;
                 }
-                const element = document.querySelector(current.target);
+                const element = findTarget(current.target);
                 if (!element) {
                     setSpotlightRect(null);
                     return;

@@ -198,80 +198,82 @@ function TransactionsContent() {
     return (
         <>
             <Stagger className={styles.page}>
-                <StaggerItem>
-                    <section className={styles.summary}>
-                        <span className={styles.summaryLabel}>{isFiltering ? 'Matching expenses' : 'Total spent'}</span>
-                        <span className={styles.summaryValue}>{formatCurrency(totalSpent)}</span>
-                        <span className={styles.summaryMeta}>
-                            {filtered.length} expense{filtered.length === 1 ? '' : 's'}
-                            {currentUser && myShareTotal > 0 && <> · your share <strong>{formatCurrency(myShareTotal)}</strong></>}
-                        </span>
-                        <div className={styles.summaryActions}>
-                            <Button variant="secondary" leftIcon={<ScanLine size={17} />} onClick={() => router.push('/transactions/scan')}>
-                                Scan
-                            </Button>
-                            <Button leftIcon={<Plus size={17} />} onClick={() => router.push('/transactions/new')}>
-                                Add expense
-                            </Button>
-                        </div>
-                    </section>
-                </StaggerItem>
-
-                {transactions.length > 0 && (
+                <div className={styles.side}>
                     <StaggerItem>
-                        <div className={styles.toolbar}>
-                            <label className={styles.search}>
-                                <Search size={17} className={styles.searchIcon} />
-                                <input
-                                    className={styles.searchInput}
-                                    placeholder="Search expenses, people, groups"
-                                    value={search}
-                                    onChange={(event) => setSearch(event.target.value)}
-                                    aria-label="Search expenses"
-                                    enterKeyHint="search"
-                                />
-                                {search && (
-                                    <button type="button" className={styles.searchClear} onClick={() => setSearch('')} aria-label="Clear search">
-                                        <X size={14} />
-                                    </button>
-                                )}
-                            </label>
-                            <button
-                                type="button"
-                                className={cn(styles.sortButton, sortBy === 'amount' && styles.sortButtonActive)}
-                                onClick={() => setSortBy(sortBy === 'time' ? 'amount' : 'time')}
-                                aria-label={sortBy === 'time' ? 'Sort by highest amount' : 'Sort by most recent'}
-                            >
-                                {sortBy === 'time' ? <CalendarClock size={16} /> : <ArrowDownWideNarrow size={16} />}
-                                {sortBy === 'time' ? 'Recent' : 'Highest'}
-                            </button>
-                        </div>
+                        <section className={styles.summary}>
+                            <span className={styles.summaryLabel}>{isFiltering ? 'Matching expenses' : 'Total spent'}</span>
+                            <span className={styles.summaryValue}>{formatCurrency(totalSpent)}</span>
+                            <span className={styles.summaryMeta}>
+                                {filtered.length} expense{filtered.length === 1 ? '' : 's'}
+                                {currentUser && myShareTotal > 0 && <> · your share <strong>{formatCurrency(myShareTotal)}</strong></>}
+                            </span>
+                            <div className={styles.summaryActions}>
+                                <Button variant="secondary" leftIcon={<ScanLine size={17} />} onClick={() => router.push('/transactions/scan')}>
+                                    Scan
+                                </Button>
+                                <Button leftIcon={<Plus size={17} />} onClick={() => router.push('/transactions/new')}>
+                                    Add expense
+                                </Button>
+                            </div>
+                        </section>
                     </StaggerItem>
-                )}
 
-                {categoriesInUse.length > 1 && (
-                    <StaggerItem>
-                        <ChipRow>
-                            <Chip active={!filterCategory} onClick={() => setFilterCategory(null)}>All</Chip>
-                            {categoriesInUse.map((key) => {
-                                const config = getCategoryConfig(key);
-                                const Icon = config.Icon;
-                                return (
-                                    <Chip
-                                        key={key}
-                                        active={filterCategory === key}
-                                        onClick={() => setFilterCategory(filterCategory === key ? null : key)}
-                                        icon={<Icon size={14} style={{ color: filterCategory === key ? undefined : config.color }} />}
-                                    >
-                                        {config.label}
-                                    </Chip>
-                                );
-                            })}
-                        </ChipRow>
-                    </StaggerItem>
-                )}
+                    {transactions.length > 0 && (
+                        <StaggerItem>
+                            <div className={styles.toolbar}>
+                                <label className={styles.search}>
+                                    <Search size={17} className={styles.searchIcon} />
+                                    <input
+                                        className={styles.searchInput}
+                                        placeholder="Search expenses, people, groups"
+                                        value={search}
+                                        onChange={(event) => setSearch(event.target.value)}
+                                        aria-label="Search expenses"
+                                        enterKeyHint="search"
+                                    />
+                                    {search && (
+                                        <button type="button" className={styles.searchClear} onClick={() => setSearch('')} aria-label="Clear search">
+                                            <X size={14} />
+                                        </button>
+                                    )}
+                                </label>
+                                <button
+                                    type="button"
+                                    className={cn(styles.sortButton, sortBy === 'amount' && styles.sortButtonActive)}
+                                    onClick={() => setSortBy(sortBy === 'time' ? 'amount' : 'time')}
+                                    aria-label={sortBy === 'time' ? 'Sort by highest amount' : 'Sort by most recent'}
+                                >
+                                    {sortBy === 'time' ? <CalendarClock size={16} /> : <ArrowDownWideNarrow size={16} />}
+                                    {sortBy === 'time' ? 'Recent' : 'Highest'}
+                                </button>
+                            </div>
+                        </StaggerItem>
+                    )}
 
-                <StaggerItem>
+                    {categoriesInUse.length > 1 && (
+                        <StaggerItem>
+                            <ChipRow className={styles.chips}>
+                                <Chip active={!filterCategory} onClick={() => setFilterCategory(null)}>All</Chip>
+                                {categoriesInUse.map((key) => {
+                                    const config = getCategoryConfig(key);
+                                    const Icon = config.Icon;
+                                    return (
+                                        <Chip
+                                            key={key}
+                                            active={filterCategory === key}
+                                            onClick={() => setFilterCategory(filterCategory === key ? null : key)}
+                                            icon={<Icon size={14} style={{ color: filterCategory === key ? undefined : config.color }} />}
+                                        >
+                                            {config.label}
+                                        </Chip>
+                                    );
+                                })}
+                            </ChipRow>
+                        </StaggerItem>
+                    )}
+                </div>
+
+                <StaggerItem className={styles.listArea}>
                     {filtered.length === 0 ? (
                         isFiltering ? (
                             <EmptyState

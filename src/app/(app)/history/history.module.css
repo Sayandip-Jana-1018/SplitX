@@ -9,3 +9,56 @@
     font-size: 22px;
     line-height: 1;
 }
+
+/* ── Desktop: a left-aligned heading over a grid of group cards ── */
+@media (min-width: 1024px) {
+    .page {
+        gap: 30px;
+        padding-top: 0;
+    }
+
+    .page .intro {
+        align-items: flex-start;
+        padding: 0;
+        text-align: left;
+    }
+
+    .page .intro h1 {
+        font-size: 36px;
+    }
+
+    .page .intro p {
+        max-width: none;
+        font-size: 15px;
+    }
+
+    .page .list {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 18px;
+        overflow: visible;
+        background: none;
+        border: 0;
+        box-shadow: none;
+    }
+
+    .page .list > * {
+        min-height: 84px;
+        padding: 18px 20px;
+        border-radius: var(--radius-2xl);
+        background: var(--surface-card);
+        border: 1px solid var(--border-default);
+        box-shadow: var(--shadow-card);
+    }
+
+    .page .list > *::before {
+        display: none;
+    }
+}
+
+@media (min-width: 1024px) and (hover: hover) and (pointer: fine) {
+    .page .list > *:hover {
+        background: var(--surface-card-hover);
+        border-color: var(--border-strong);
+    }
+}

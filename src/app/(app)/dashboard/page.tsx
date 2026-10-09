@@ -56,11 +56,11 @@ interface TransactionSummary {
     splits?: { userId: string; amount: number }[];
 }
 
-const QUICK_ACTIONS: { href: string; label: string; icon: LucideIcon; primary?: boolean }[] = [
-    { href: '/transactions/new', label: 'Add', icon: Plus, primary: true },
-    { href: '/settlements', label: 'Settle', icon: ArrowRightLeft },
-    { href: '/transactions/scan', label: 'Scan', icon: ScanLine },
-    { href: '/analytics', label: 'Insights', icon: PieChart },
+const QUICK_ACTIONS: { href: string; label: string; hint: string; icon: LucideIcon; primary?: boolean }[] = [
+    { href: '/transactions/new', label: 'Add', hint: 'Split a new expense', icon: Plus, primary: true },
+    { href: '/settlements', label: 'Settle', hint: 'Pay back or remind', icon: ArrowRightLeft },
+    { href: '/transactions/scan', label: 'Scan', hint: 'Read a bill with AI', icon: ScanLine },
+    { href: '/analytics', label: 'Insights', hint: 'See where it went', icon: PieChart },
 ];
 
 const swrOptions = { keepPreviousData: true, revalidateOnFocus: true, dedupingInterval: 5000 };
@@ -143,39 +143,44 @@ export default function DashboardPage() {
                         </header>
                     </StaggerItem>
 
-                    <StaggerItem>
-                        <BalanceCard
-                            net={balances.net}
-                            youOwe={balances.youOwe}
-                            owedToYou={balances.owedToYou}
-                            refreshing={refreshing}
-                            onRefresh={handleRefresh}
-                        />
-                    </StaggerItem>
+                    <div className={styles.topRow}>
+                        <StaggerItem>
+                            <BalanceCard
+                                net={balances.net}
+                                youOwe={balances.youOwe}
+                                owedToYou={balances.owedToYou}
+                                refreshing={refreshing}
+                                onRefresh={handleRefresh}
+                            />
+                        </StaggerItem>
 
-                    <StaggerItem>
-                        <div className={styles.quick} data-tour="quick-actions">
-                            {QUICK_ACTIONS.map((action) => {
-                                const Icon = action.icon;
-                                return (
-                                    <Link
-                                        key={action.href}
-                                        href={action.href}
-                                        className={styles.quickItem}
-                                        onClick={() => haptics.light()}
-                                    >
-                                        <motion.span
-                                            className={cn(styles.quickIcon, action.primary && styles.quickIconPrimary)}
-                                            whileTap={{ scale: 0.9 }}
+                        <StaggerItem>
+                            <div className={styles.quick} data-tour="quick-actions">
+                                {QUICK_ACTIONS.map((action) => {
+                                    const Icon = action.icon;
+                                    return (
+                                        <Link
+                                            key={action.href}
+                                            href={action.href}
+                                            className={styles.quickItem}
+                                            onClick={() => haptics.light()}
                                         >
-                                            <Icon size={22} strokeWidth={action.primary ? 2.5 : 2} />
-                                        </motion.span>
-                                        <span className={styles.quickLabel}>{action.label}</span>
-                                    </Link>
-                                );
-                            })}
-                        </div>
-                    </StaggerItem>
+                                            <motion.span
+                                                className={cn(styles.quickIcon, action.primary && styles.quickIconPrimary)}
+                                                whileTap={{ scale: 0.9 }}
+                                            >
+                                                <Icon size={22} strokeWidth={action.primary ? 2.5 : 2} />
+                                            </motion.span>
+                                            <span className={styles.quickText}>
+                                                <span className={styles.quickLabel}>{action.label}</span>
+                                                <span className={styles.quickHint}>{action.hint}</span>
+                                            </span>
+                                        </Link>
+                                    );
+                                })}
+                            </div>
+                        </StaggerItem>
+                    </div>
 
                     <StaggerItem>
                         <Section title="Your groups" action={groups.length ? { label: 'See all', href: '/groups' } : undefined}>
@@ -228,107 +233,109 @@ export default function DashboardPage() {
                         </Section>
                     </StaggerItem>
 
-                    <StaggerItem>
-                        <Section
-                            title="Settle up"
-                            action={balances.mine.length ? { label: 'Open', href: '/settlements' } : undefined}
-                        >
-                            {balances.mine.length > 0 ? (
-                                <ListGroup>
-                                    {balances.mine.slice(0, 4).map((transfer, index) => {
-                                        const iOwe = transfer.from === balances.userId;
-                                        const otherName = iOwe ? transfer.toName : transfer.fromName;
-                                        const otherImage = iOwe ? transfer.toImage : transfer.fromImage;
-                                        return (
-                                            <ListRow
-                                                key={`${transfer.groupId}-${transfer.from}-${transfer.to}-${index}`}
-                                                href="/settlements"
-                                                leading={<Avatar name={otherName || 'Friend'} image={otherImage} size="md" />}
-                                                title={iOwe ? `You owe ${firstName(otherName)}` : `${firstName(otherName)} owes you`}
-                                                subtitle={[transfer.groupEmoji, transfer.groupName].filter(Boolean).join(' ')}
-                                                trailing={<Amount value={iOwe ? -transfer.amount : transfer.amount} tone="auto" signed />}
-                                                trailingSub={iOwe ? 'Tap to pay' : 'Tap to remind'}
-                                            />
-                                        );
-                                    })}
-                                </ListGroup>
-                            ) : (
-                                <div className={styles.settledCard}>
-                                    <span className={styles.settledIcon}><CheckCheck size={20} /></span>
-                                    <div>
-                                        <p className={styles.settledTitle}>You&apos;re all settled up</p>
-                                        <p className={styles.settledText}>Nothing pending across your groups. Nice.</p>
+                    <div className={styles.lowerRow}>
+                        <StaggerItem className={styles.settleArea}>
+                            <Section
+                                title="Settle up"
+                                action={balances.mine.length ? { label: 'Open', href: '/settlements' } : undefined}
+                            >
+                                {balances.mine.length > 0 ? (
+                                    <ListGroup>
+                                        {balances.mine.slice(0, 4).map((transfer, index) => {
+                                            const iOwe = transfer.from === balances.userId;
+                                            const otherName = iOwe ? transfer.toName : transfer.fromName;
+                                            const otherImage = iOwe ? transfer.toImage : transfer.fromImage;
+                                            return (
+                                                <ListRow
+                                                    key={`${transfer.groupId}-${transfer.from}-${transfer.to}-${index}`}
+                                                    href="/settlements"
+                                                    leading={<Avatar name={otherName || 'Friend'} image={otherImage} size="md" />}
+                                                    title={iOwe ? `You owe ${firstName(otherName)}` : `${firstName(otherName)} owes you`}
+                                                    subtitle={[transfer.groupEmoji, transfer.groupName].filter(Boolean).join(' ')}
+                                                    trailing={<Amount value={iOwe ? -transfer.amount : transfer.amount} tone="auto" signed />}
+                                                    trailingSub={iOwe ? 'Tap to pay' : 'Tap to remind'}
+                                                />
+                                            );
+                                        })}
+                                    </ListGroup>
+                                ) : (
+                                    <div className={styles.settledCard}>
+                                        <span className={styles.settledIcon}><CheckCheck size={20} /></span>
+                                        <div>
+                                            <p className={styles.settledTitle}>You&apos;re all settled up</p>
+                                            <p className={styles.settledText}>Nothing pending across your groups. Nice.</p>
+                                        </div>
                                     </div>
-                                </div>
-                            )}
-                        </Section>
-                    </StaggerItem>
+                                )}
+                            </Section>
+                        </StaggerItem>
 
-                    <StaggerItem>
-                        <Section
-                            title="Recent activity"
-                            action={transactions.length ? { label: 'See all', href: '/transactions' } : undefined}
-                        >
-                            {transactions.length > 0 ? (
-                                <ListGroup>
-                                    {transactions.map((transaction) => {
-                                        const share = transaction.splits?.find((split) => split.userId === balances.userId)?.amount;
-                                        const payerIsMe = transaction.payer?.id === balances.userId;
-                                        return (
-                                            <ListRow
-                                                key={transaction.id}
-                                                href={`/transactions?focus=${transaction.id}`}
-                                                leading={<CategoryTile category={transaction.category} />}
-                                                title={transaction.title}
-                                                subtitle={`${payerIsMe ? 'You' : firstName(transaction.payer?.name)} paid · ${timeAgo(transaction.createdAt)}`}
-                                                trailing={<Amount value={transaction.amount} />}
-                                                trailingSub={typeof share === 'number' ? `Your share ${formatCurrency(share)}` : 'Not in split'}
-                                            />
-                                        );
-                                    })}
-                                </ListGroup>
-                            ) : (
-                                <EmptyState
-                                    compact
-                                    icon={<ReceiptText size={22} />}
-                                    title="No expenses yet"
-                                    description="Add your first expense and it will show up here instantly."
-                                    actionLabel="Add expense"
-                                    actionHref="/transactions/new"
-                                />
-                            )}
-                        </Section>
-                    </StaggerItem>
-
-                    <StaggerItem>
-                        <Section title="Explore">
-                            <ListGroup>
-                                {firstGroup && isFeatureEnabled('balanceJourney') && (
-                                    <ListRow
-                                        href={`/groups/${firstGroup.id}/journey`}
-                                        leading={<IconTile><GitBranch size={18} /></IconTile>}
-                                        title="Balance journey"
-                                        subtitle={`See why your balance moved in ${firstGroup.name}`}
-                                        chevron
+                        <StaggerItem className={styles.activityArea}>
+                            <Section
+                                title="Recent activity"
+                                action={transactions.length ? { label: 'See all', href: '/transactions' } : undefined}
+                            >
+                                {transactions.length > 0 ? (
+                                    <ListGroup>
+                                        {transactions.map((transaction) => {
+                                            const share = transaction.splits?.find((split) => split.userId === balances.userId)?.amount;
+                                            const payerIsMe = transaction.payer?.id === balances.userId;
+                                            return (
+                                                <ListRow
+                                                    key={transaction.id}
+                                                    href={`/transactions?focus=${transaction.id}`}
+                                                    leading={<CategoryTile category={transaction.category} />}
+                                                    title={transaction.title}
+                                                    subtitle={`${payerIsMe ? 'You' : firstName(transaction.payer?.name)} paid · ${timeAgo(transaction.createdAt)}`}
+                                                    trailing={<Amount value={transaction.amount} />}
+                                                    trailingSub={typeof share === 'number' ? `Your share ${formatCurrency(share)}` : 'Not in split'}
+                                                />
+                                            );
+                                        })}
+                                    </ListGroup>
+                                ) : (
+                                    <EmptyState
+                                        compact
+                                        icon={<ReceiptText size={22} />}
+                                        title="No expenses yet"
+                                        description="Add your first expense and it will show up here instantly."
+                                        actionLabel="Add expense"
+                                        actionHref="/transactions/new"
                                     />
                                 )}
-                                <ListRow
-                                    href="/analytics"
-                                    leading={<IconTile tone="success"><PieChart size={18} /></IconTile>}
-                                    title="Spending insights"
-                                    subtitle="Trends, categories and who paid what"
-                                    chevron
-                                />
-                                <ListRow
-                                    onClick={openAssistant}
-                                    leading={<IconTile tone="solid"><Sparkles size={18} /></IconTile>}
-                                    title="Ask SplitX AI"
-                                    subtitle="“How much did we spend on food?”"
-                                    chevron
-                                />
-                            </ListGroup>
-                        </Section>
-                    </StaggerItem>
+                            </Section>
+                        </StaggerItem>
+
+                        <StaggerItem className={styles.exploreArea}>
+                            <Section title="Explore">
+                                <ListGroup>
+                                    {firstGroup && isFeatureEnabled('balanceJourney') && (
+                                        <ListRow
+                                            href={`/groups/${firstGroup.id}/journey`}
+                                            leading={<IconTile><GitBranch size={18} /></IconTile>}
+                                            title="Balance journey"
+                                            subtitle={`See why your balance moved in ${firstGroup.name}`}
+                                            chevron
+                                        />
+                                    )}
+                                    <ListRow
+                                        href="/analytics"
+                                        leading={<IconTile tone="success"><PieChart size={18} /></IconTile>}
+                                        title="Spending insights"
+                                        subtitle="Trends, categories and who paid what"
+                                        chevron
+                                    />
+                                    <ListRow
+                                        onClick={openAssistant}
+                                        leading={<IconTile tone="solid"><Sparkles size={18} /></IconTile>}
+                                        title="Ask SplitX AI"
+                                        subtitle="“How much did we spend on food?”"
+                                        chevron
+                                    />
+                                </ListGroup>
+                            </Section>
+                        </StaggerItem>
+                    </div>
                 </Stagger>
             )}
         </div>

@@ -306,3 +306,52 @@
         grid-template-columns: 1fr 1fr;
     }
 }
+
+/* ── Desktop: heading and actions on one line, three cards a row ── */
+.head {
+    display: contents;
+}
+
+@media (min-width: 1024px) {
+    .page {
+        gap: 30px;
+        padding-top: 0;
+    }
+
+    .head {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 24px;
+    }
+
+    .head .intro {
+        align-items: flex-start;
+        padding: 0;
+        text-align: left;
+    }
+
+    .head .intro h1 {
+        font-size: 36px;
+    }
+
+    .head .intro p {
+        font-size: 15px;
+    }
+
+    .actions {
+        display: flex;
+        flex-shrink: 0;
+        gap: 12px;
+    }
+
+    .head .actions > * {
+        width: auto;
+        padding-inline: 22px;
+    }
+
+    .list {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 20px;
+    }
+}

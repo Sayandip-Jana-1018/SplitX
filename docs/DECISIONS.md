@@ -5244,6 +5244,64 @@ shows them unfinished; a visible one finishes them within a second.
 
 **Checks:** 1,451 unit tests, the hardening checks, `tsc`, ESLint, knip and `db-schema --check`.
 
+### D-117 · Desktop gets its own layout: a top bar over a wide page; phones stay exactly as they are
+**2026-10-09** · ✅ done and tested; phones and tablets proven unchanged, screen by screen.
+
+The user, looking at the AWS site on a laptop: the desktop pages looked cut off and empty. Every page
+was the phone's 720 px column beside a 272 px sidebar, so a 1,536 px screen left about 250 px blank
+on each side, and the sidebar repeated what the header already had.
+
+**Desktop (1024 px and wider) has a top bar instead of the sidebar** (`src/app/(app)/AppTopBar.tsx`):
+- the brand, then Home, Groups, Activity, Settle up and Insights in one glass track, the current
+  page in the dock's soft accent pill;
+- then search (`Ctrl K`, or `⌘K` on a Mac), the assistant, a primary **Add expense**, theme,
+  notifications, and an account menu with Profile & settings, Contacts, Balance history and Sign
+  out (arrow keys, Home/End and Escape work; it closes on any navigation);
+- it narrows in steps: icons beside the labels from 1,440 px, the search field's label and
+  "Add expense" spelled out from 1,280 px, labels only below;
+- the account's email is no longer on screen all the time, only inside the open menu.
+
+**The page is one column of up to 1,280 px**, its edges the bar's edges, with a heading on each page
+that had none (the phone shows that title in its header). Each page uses the width:
+- Home: the balance beside four quick-action tiles, the groups in a grid, recent activity beside
+  Settle up and Explore;
+- a group: its card stays on the left while the tabs and their content take the rest (the overview
+  two to a row from 1,280 px);
+- Activity: the total, search and category filters stay on the left of the list;
+- Settle up: the money flow map gets a column of its own beside the totals and the transfers;
+- Insights: this month beside the trend, the categories beside who paid and the insights;
+- Settings: the profile and Sign out on the left, the settings two to a row;
+- Groups, History, Contacts and the balance journey likewise. The expense composer keeps a
+  760 px form.
+
+**Phones and tablets are untouched.** Every rule is inside `min-width: 1024px`, and the wrappers the
+desktop grids need are `display: contents` below it, so the boxes on a phone are the same boxes. To
+prove it, full-page screenshots of 11 pages on a phone (light), 3 in dark mode and 4 on a tablet were
+taken before the change and after it, and compared pixel by pixel. All were identical except two:
+"active 17h ago" had become "18h ago" between the shots, and the settle-up map. The map lays itself
+out by simulation and restarts it whenever its page renders again, so its settled shape depends on
+timing; its code is unchanged on phones.
+
+**Found on the way:**
+- **A GitHub profile photo showed as broken text in the settle-up map** (the user's report). The map
+  drew photos with `next/image`, whose optimiser admits only the hosts in `next.config` (Google,
+  Cloudinary, Supabase), so a photo from GitHub, the sign-in on AWS, was refused and its alt text
+  overflowed the circle. The map and the voice screen's avatars are now plain images that fall back
+  to initials, as `Avatar` always was; the name is on the label beneath, so the photo's alt text is
+  empty.
+- **The large map never measured its width.** Its canvas appears only after the first layout tick,
+  after the effect that measures it has run, so it kept its 360 px default and bunched everyone in
+  the middle. The full (desktop) map measures again once the canvas exists; the compact map keeps its
+  old behaviour.
+- **The tour pointed at the first element with its target,** which on desktop was the hidden dock. It
+  now uses the first one on screen: the top bar on desktop, the dock on a phone.
+- The notification panel opens under the bar, flush with the page's right edge.
+
+**Checks:** 1,462 unit tests (new: `isNavActive`, and that member photos never go through
+`next/image`), `tsc`, ESLint and knip; screenshots at 1,024, 1,280 and 1,536 px, light and dark; the
+account menu, search, notifications and assistant opened from the bar in the browser, with no console
+or server errors.
+
 ---
 
 ## Open problems

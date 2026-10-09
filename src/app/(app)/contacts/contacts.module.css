@@ -152,3 +152,37 @@
         color: var(--fg-primary);
     }
 }
+
+/* ── Desktop: filters and search on one line, contacts in two columns ── */
+.head {
+    display: contents;
+}
+
+@media (min-width: 1024px) {
+    .page {
+        gap: 22px;
+        padding-top: 0;
+    }
+
+    .head {
+        display: grid;
+        grid-template-columns: minmax(0, 440px) minmax(0, 1fr);
+        align-items: center;
+        gap: 18px;
+    }
+
+    .filterArea {
+        min-width: 0;
+    }
+
+    .sections {
+        display: block;
+        columns: 2;
+        column-gap: 24px;
+    }
+
+    .letterBlock {
+        break-inside: avoid;
+        margin-bottom: 20px;
+    }
+}

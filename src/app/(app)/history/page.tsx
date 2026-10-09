@@ -94,13 +94,14 @@ export default function HistoryPage() {
         <Stagger className={styles.page}>
             <StaggerItem>
                 <PageIntro
+                    className={styles.intro}
                     eyebrow="Balance journey"
                     title="Every balance has a story"
                     subtitle="Only your own balance changes. Pick a group to replay how it moved."
                 />
             </StaggerItem>
             <StaggerItem>
-                <ListGroup>
+                <ListGroup className={styles.list}>
                     {groups.map((group) => {
                         const preview = previews?.[group.id];
                         return (

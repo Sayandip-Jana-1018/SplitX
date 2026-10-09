@@ -106,8 +106,13 @@
   --header-height: 60px;
   --dock-height: 66px;
   --dock-clearance: calc(var(--dock-height) + 40px + env(safe-area-inset-bottom, 0px));
-  --sidebar-width: 272px;
   --touch-target: 44px;
+
+  /* ── Desktop (≥1024px): a top bar over one wide content column ── */
+  --desktop-max: 1280px;
+  --desktop-gutter: clamp(24px, 2.8vw, 40px);
+  --topbar-height: 68px;
+  --desktop-sticky-top: calc(var(--topbar-height) + 20px);
 
   /* ── Hero surface (deep accent "card") — readable in every theme ── */
   --hero-gradient:

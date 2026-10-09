@@ -1,7 +1,6 @@
 'use client';
 
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import Image from 'next/image';
 import type { PerformanceMode } from '@/hooks/usePerformanceMode';
 import { formatCurrency, getAvatarColor } from '@/lib/utils';
 
@@ -145,18 +144,26 @@ function buildEdgeLayouts(params: {
     return layouts;
 }
 
-function initNodes(members: string[], w: number, h: number, bounds: LayoutBounds): NodeState[] {
+/**
+ * The compact map (phones) starts everyone on a circle. The full map (desktop) has a wide
+ * canvas, so it starts them on an ellipse that fills it and lets the forces spread them
+ * further (see simulate), instead of bunching four people in the middle.
+ */
+function initNodes(members: string[], w: number, h: number, bounds: LayoutBounds, compact: boolean): NodeState[] {
     const usableW = Math.max(120, w - bounds.left - bounds.right);
     const usableH = Math.max(120, h - bounds.top - bounds.bottom);
     const cx = bounds.left + usableW / 2;
     const cy = bounds.top + usableH / 2;
     const r = Math.min(usableW, usableH) * (members.length <= 3 ? 0.24 : 0.3);
+    const share = members.length <= 3 ? 0.3 : 0.38;
+    const rx = compact ? r : usableW * share;
+    const ry = compact ? r : usableH * share;
 
     return members.map((name, i) => {
         const angle = (2 * Math.PI * i) / Math.max(members.length, 1) - Math.PI / 2;
         return {
-            x: cx + r * Math.cos(angle),
-            y: cy + r * Math.sin(angle),
+            x: cx + rx * Math.cos(angle),
+            y: cy + ry * Math.sin(angle),
             vx: 0,
             vy: 0,
             fx: null,
@@ -172,14 +179,15 @@ function simulate(
     w: number,
     h: number,
     bounds: LayoutBounds,
+    compact: boolean,
 ) {
     const usableW = Math.max(120, w - bounds.left - bounds.right);
     const usableH = Math.max(120, h - bounds.top - bounds.bottom);
     const cx = bounds.left + usableW / 2;
     const cy = bounds.top + usableH / 2;
-    const repulsion = 8400;
+    const repulsion = compact ? 8400 : 16000;
     const springK = 0.014;
-    const idealLen = Math.min(usableW, usableH) * 0.62;
+    const idealLen = (compact ? Math.min(usableW, usableH) : (usableW + usableH) / 2) * 0.62;
     const centerPull = 0.0022;
     const damping = 0.76;
 
@@ -292,6 +300,8 @@ export default function SettlementGraph({
     const [size, setSize] = useState({ w: 360, h: compact ? 380 : 500 });
     const [nodes, setNodes] = useState<NodeState[]>([]);
     const [dragIdx, setDragIdx] = useState<number | null>(null);
+    // Photos that could not load fall back to initials, as Avatar does.
+    const [failedImages, setFailedImages] = useState<ReadonlySet<string>>(() => new Set());
     const nodesRef = useRef<NodeState[]>([]);
     const animRef = useRef<number>(0);
     const dragIdxRef = useRef<number | null>(null);
@@ -328,6 +338,9 @@ export default function SettlementGraph({
         }),
         [bounds, compact, instanceId, members, nodes, settlements, size.h, size.w],
     );
+    // The canvas appears only after the first layout tick has placed everyone, so the full
+    // (desktop) map measures again then; the compact map keeps its first measurement.
+    const remeasure = !compact && nodes.length > 0;
     useEffect(() => {
         const el = outerRef.current;
         if (!el) return;
@@ -346,12 +359,12 @@ export default function SettlementGraph({
         });
         ro.observe(el);
         return () => ro.disconnect();
-    }, [compact]);
+    }, [compact, remeasure]);
 
     const initialNodes = useMemo(() => {
         if (members.length === 0) return [];
-        return initNodes(members, size.w, size.h, bounds);
-    }, [bounds, members, size.h, size.w]);
+        return initNodes(members, size.w, size.h, bounds, compact);
+    }, [bounds, compact, members, size.h, size.w]);
 
     useEffect(() => {
         if (initialNodes.length === 0) return;
@@ -367,7 +380,7 @@ export default function SettlementGraph({
 
         function step() {
             if (!running) return;
-            simulate(nodesRef.current, edges, size.w, size.h, bounds);
+            simulate(nodesRef.current, edges, size.w, size.h, bounds, compact);
             iterRef.current += 1;
             setNodes([...nodesRef.current]);
             if (dragIdxRef.current !== null || iterRef.current < maxIter) {
@@ -381,7 +394,7 @@ export default function SettlementGraph({
             running = false;
             cancelAnimationFrame(animRef.current);
         };
-    }, [bounds, edges, membersKey, size.h, size.w]);
+    }, [bounds, compact, edges, membersKey, size.h, size.w]);
 
     const handlePointerDown = useCallback((idx: number, e: React.PointerEvent) => {
         e.stopPropagation();
@@ -396,14 +409,14 @@ export default function SettlementGraph({
 
         cancelAnimationFrame(animRef.current);
         const loop = () => {
-            simulate(nodesRef.current, edges, size.w, size.h, bounds);
+            simulate(nodesRef.current, edges, size.w, size.h, bounds, compact);
             setNodes([...nodesRef.current]);
             if (dragIdxRef.current !== null) {
                 animRef.current = requestAnimationFrame(loop);
             }
         };
         animRef.current = requestAnimationFrame(loop);
-    }, [bounds, edges, size.h, size.w]);
+    }, [bounds, compact, edges, size.h, size.w]);
 
     const handlePointerMove = useCallback((idx: number, e: React.PointerEvent) => {
         if (dragIdxRef.current !== idx || !containerRef.current) return;
@@ -430,7 +443,7 @@ export default function SettlementGraph({
         iterRef.current = 0;
 
         const settle = () => {
-            simulate(nodesRef.current, edges, size.w, size.h, bounds);
+            simulate(nodesRef.current, edges, size.w, size.h, bounds, compact);
             iterRef.current += 1;
             setNodes([...nodesRef.current]);
             if (iterRef.current < 120) {
@@ -439,7 +452,7 @@ export default function SettlementGraph({
         };
 
         animRef.current = requestAnimationFrame(settle);
-    }, [bounds, edges, size.h, size.w]);
+    }, [bounds, compact, edges, size.h, size.w]);
 
     if (members.length === 0 || nodes.length === 0) {
         return (
@@ -836,7 +849,8 @@ export default function SettlementGraph({
                         .join('')
                         .toUpperCase()
                         .slice(0, 2);
-                    const image = memberImages[node.name] || null;
+                    const listed = memberImages[node.name] || null;
+                    const image = listed && !failedImages.has(listed) ? listed : null;
                     const firstName = node.name.split(' ')[0];
                     const isDragging = dragIdx === index;
 
@@ -902,13 +916,19 @@ export default function SettlementGraph({
                                 }}
                             >
                                 {image ? (
-                                    <Image
+                                    // A plain image, like Avatar: profile photos come from any sign-in
+                                    // provider (GitHub's among them), which Next's optimiser refuses.
+                                    // The name is on the label beneath, so the photo itself is decorative.
+                                    /* eslint-disable-next-line @next/next/no-img-element */
+                                    <img
                                         src={image}
-                                        alt={node.name}
+                                        alt=""
                                         width={68}
                                         height={68}
                                         style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                        referrerPolicy="no-referrer"
                                         draggable={false}
+                                        onError={() => setFailedImages((failed) => new Set(failed).add(image))}
                                     />
                                 ) : (
                                     <span

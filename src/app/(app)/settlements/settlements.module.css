@@ -342,3 +342,87 @@
         grid-template-columns: 1fr 1fr;
     }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   Desktop: the money flow map gets a column of its own; totals,
+   the transfers and their actions stay beside it
+   ═══════════════════════════════════════════════════════════════ */
+@media (min-width: 1024px) {
+    .page {
+        display: grid;
+        grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+        grid-template-rows: auto auto auto auto auto 1fr;
+        grid-template-areas:
+            "chips   chips"
+            "flow    summary"
+            "flow    tabs"
+            "flow    list"
+            "flow    footer"
+            "flow    .";
+        gap: 20px 32px;
+        align-items: start;
+        padding-top: 0;
+    }
+
+    /* No map (all groups, or nobody owes anybody): totals left, transfers right */
+    .page:not(:has(.flowArea)) {
+        grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
+        grid-template-rows: auto auto auto auto 1fr;
+        grid-template-areas:
+            "chips   chips"
+            "summary list"
+            "tabs    list"
+            "footer  list"
+            ".       list";
+    }
+
+    .chipsArea { grid-area: chips; min-width: 0; }
+    .summaryArea { grid-area: summary; min-width: 0; }
+    .tabsArea { grid-area: tabs; min-width: 0; }
+    .listArea { grid-area: list; min-width: 0; }
+    .footerArea { grid-area: footer; min-width: 0; }
+
+    .flowArea {
+        position: sticky;
+        top: var(--desktop-sticky-top);
+        grid-area: flow;
+        min-width: 0;
+    }
+
+    .chipsArea .chips {
+        margin: 0;
+    }
+
+    .chipsArea .chips > div {
+        flex-wrap: wrap;
+        padding: 0;
+        overflow: visible;
+        -webkit-mask-image: none;
+        mask-image: none;
+    }
+
+    .chipsArea .chips > div > :first-child {
+        margin-left: 0;
+    }
+
+    .flowCard {
+        border-radius: 28px;
+    }
+
+    .flowToggle {
+        padding: 18px 20px;
+    }
+
+    .flowBody {
+        gap: 14px;
+        padding: 0 16px 16px;
+    }
+
+    .list {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .page:not(:has(.flowArea)) .list {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}

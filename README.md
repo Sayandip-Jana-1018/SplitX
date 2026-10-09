@@ -65,7 +65,7 @@ Prisma on Neon Postgres, and NextAuth v5, and it is live on Vercel for real user
 - **On AWS EKS, on demo days,** behind an HTTPS edge (API Gateway). It is built that morning, and removed that evening.
 
 Every decision, what was rejected, and the measurement behind each claim is in
-**[docs/DECISIONS.md](docs/DECISIONS.md)**: 116 decisions, with the open problems at the end.
+**[docs/DECISIONS.md](docs/DECISIONS.md)**: 117 decisions, with the open problems at the end.
 
 ---
 
@@ -401,7 +401,7 @@ npm run dev
 ```
 
 **Tests:**
-- `npm test`: unit and property tests, 1,456 of them.
+- `npm test`: unit and property tests, 1,462 of them.
 - `npm run test:integration`: against a real Redis.
 - `npm run test:db`: against a real Postgres.
 - `npm run test:alerts`: the alert rules, with promtool.

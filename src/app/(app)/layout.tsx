@@ -32,12 +32,14 @@ import BrandMark from '@/components/ui/BrandMark';
 import OfflineIndicator from '@/components/ui/OfflineIndicator';
 import Ambient from '@/components/ui/Ambient';
 import { IconButton } from '@/components/ui/kit';
+import AppTopBar from './AppTopBar';
 import DbKeepAlive from '@/components/providers/DbKeepAlive';
 import { useDialogFocus } from '@/hooks/useDialogFocus';
 import { useHaptics } from '@/hooks/useHaptics';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { usePerformanceMode } from '@/hooks/usePerformanceMode';
+import { isNavActive } from '@/lib/navigation';
 import { UI_EVENTS } from '@/lib/uiEvents';
 import { cn } from '@/lib/utils';
 import styles from './app.module.css';
@@ -76,42 +78,90 @@ const DOCK_ITEMS: NavEntry[] = [
     { href: '/settlements', icon: ArrowRightLeft, label: 'Settle' },
 ];
 
+interface DesktopHeading {
+    title?: string;
+    subtitle?: string;
+    /** Label of the way back, shown above the title. */
+    backLabel?: string;
+}
+
 interface RouteMeta {
     title: string;
     back?: string;
     brand?: boolean;
     composer?: boolean;
+    /** Desktop has no header bar: the page's own heading. Null when the page brings one. */
+    heading?: DesktopHeading | null;
 }
 
 /** Header title + back behaviour for every route. `back: 'history'` = browser back. */
 function getRouteMeta(pathname: string): RouteMeta {
-    if (pathname === '/dashboard') return { title: 'Home', brand: true };
-    if (pathname === '/transactions/new') return { title: 'New expense', back: 'history', composer: true };
-    if (pathname === '/transactions/scan') return { title: 'Scan receipt', back: 'history', composer: true };
-    if (pathname === '/transactions/receipts') return { title: 'Receipts', back: '/transactions' };
-    if (pathname.startsWith('/transactions')) return { title: 'Activity' };
+    if (pathname === '/dashboard') return { title: 'Home', brand: true, heading: null };
+    if (pathname === '/transactions/new') {
+        return {
+            title: 'New expense',
+            back: 'history',
+            composer: true,
+            heading: { title: 'New expense', subtitle: 'Who paid, how much, and how to split it', backLabel: 'Back' },
+        };
+    }
+    if (pathname === '/transactions/scan') {
+        return {
+            title: 'Scan receipt',
+            back: 'history',
+            composer: true,
+            heading: { title: 'Scan a receipt', subtitle: 'SplitX reads the bill, then you split it item by item', backLabel: 'Back' },
+        };
+    }
+    if (pathname === '/transactions/receipts') {
+        return {
+            title: 'Receipts',
+            back: '/transactions',
+            heading: { title: 'Receipts', subtitle: 'Every bill scanned across your groups', backLabel: 'Activity' },
+        };
+    }
+    if (pathname.startsWith('/transactions')) {
+        return { title: 'Activity', heading: { title: 'Activity', subtitle: 'Every expense across your groups, newest first' } };
+    }
 
     const groupMatch = pathname.match(/^\/groups\/([^/]+)(?:\/(journey|receipts))?/);
     if (groupMatch) {
         const [, groupId, section] = groupMatch;
-        if (section === 'journey') return { title: 'Balance journey', back: `/groups/${groupId}` };
-        if (section === 'receipts') return { title: 'Receipts', back: `/groups/${groupId}` };
-        return { title: 'Group', back: '/groups' };
+        if (section === 'journey') {
+            return {
+                title: 'Balance journey',
+                back: `/groups/${groupId}`,
+                heading: { title: 'Balance journey', subtitle: 'Every change to your balance in this group, and why', backLabel: 'Group' },
+            };
+        }
+        if (section === 'receipts') {
+            return {
+                title: 'Receipts',
+                back: `/groups/${groupId}`,
+                heading: { title: 'Receipts', subtitle: 'Every scanned bill for this group', backLabel: 'Group' },
+            };
+        }
+        return { title: 'Group', back: '/groups', heading: { backLabel: 'All groups' } };
     }
 
-    if (pathname.startsWith('/groups')) return { title: 'Groups' };
-    if (pathname.startsWith('/settlements')) return { title: 'Settle up' };
-    if (pathname.startsWith('/analytics')) return { title: 'Insights' };
-    if (pathname.startsWith('/history')) return { title: 'History' };
-    if (pathname.startsWith('/contacts')) return { title: 'Contacts' };
-    if (pathname.startsWith('/settings')) return { title: 'Settings' };
-    if (pathname.startsWith('/admin')) return { title: 'System health', back: '/settings' };
-    return { title: 'SplitX' };
-}
-
-function isNavActive(href: string, pathname: string) {
-    if (href === '/transactions') return pathname === '/transactions' || pathname.startsWith('/transactions/receipts');
-    return pathname === href || pathname.startsWith(`${href}/`);
+    if (pathname.startsWith('/groups')) return { title: 'Groups', heading: null };
+    if (pathname.startsWith('/settlements')) {
+        return { title: 'Settle up', heading: { title: 'Settle up', subtitle: 'The fewest payments that square everyone up' } };
+    }
+    if (pathname.startsWith('/analytics')) {
+        return { title: 'Insights', heading: { title: 'Insights', subtitle: 'Where the money goes, group by group' } };
+    }
+    if (pathname.startsWith('/history')) return { title: 'History', heading: null };
+    if (pathname.startsWith('/contacts')) {
+        return { title: 'Contacts', heading: { title: 'Contacts', subtitle: 'The people you split with, and who is already on SplitX' } };
+    }
+    if (pathname.startsWith('/settings')) {
+        return { title: 'Settings', heading: { title: 'Settings', subtitle: 'Your profile, payments and preferences' } };
+    }
+    if (pathname.startsWith('/admin')) {
+        return { title: 'System health', back: '/settings', heading: { title: 'System health', backLabel: 'Settings' } };
+    }
+    return { title: 'SplitX', heading: null };
 }
 
 /** Header gains a frosted backdrop once content scrolls beneath it. */
@@ -252,13 +302,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <DbKeepAlive />
             {showChrome && tourReady && <OnboardingTour />}
 
-            {/* ── Desktop sidebar ── */}
-            {showChrome && (
-                <aside className={styles.sidebar} aria-label="Sidebar">
-                    <NavPanel pathname={pathname} user={user} variant="sidebar" onSearch={openSearchPalette} />
-                </aside>
-            )}
-
             {/* ── Mobile drawer ── */}
             <AnimatePresence>
                 {showChrome && drawerOpen && (
@@ -295,7 +338,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                         <NavPanel
                             pathname={pathname}
                             user={user}
-                            variant="drawer"
                             onSearch={openSearchPalette}
                             onClose={closeDrawer}
                         />
@@ -304,6 +346,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </AnimatePresence>
 
             <div className={styles.main}>
+                {showChrome && (
+                    <AppTopBar
+                        pathname={pathname}
+                        user={user}
+                        scrolled={scrolled}
+                        notifications={deferredReady && isDesktop ? <NotificationPanel /> : <span className={styles.headerPlaceholder} />}
+                        onSearch={openSearchPalette}
+                        onAssistant={() => setAssistantOpen(true)}
+                    />
+                )}
                 {showChrome && (
                     <header className={cn(styles.header, scrolled && styles.headerScrolled)}>
                         <div className={styles.headerInner}>
@@ -354,7 +406,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
                             <div className={styles.headerEnd}>
                                 <ThemeSelector size={38} />
-                                {deferredReady ? <NotificationPanel /> : <span className={styles.headerPlaceholder} />}
+                                {deferredReady && !isDesktop ? <NotificationPanel /> : <span className={styles.headerPlaceholder} />}
                             </div>
                         </div>
                     </header>
@@ -368,6 +420,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                         isPrintRoute && styles.printContent,
                     )}
                 >
+                    {showChrome && meta.heading && <PageHeading heading={meta.heading} onBack={goBack} />}
                     {showChrome && <ClipboardBanner />}
                     {children}
                 </main>
@@ -443,19 +496,36 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   Navigation panel — shared by the mobile drawer & desktop sidebar
+   Desktop page heading — the title the phone header shows, given room
+   ═══════════════════════════════════════════════════════════════ */
+
+function PageHeading({ heading, onBack }: { heading: DesktopHeading; onBack: () => void }) {
+    return (
+        <div className={styles.pageHeading}>
+            {heading.backLabel && (
+                <button type="button" className={styles.pageBack} onClick={onBack}>
+                    <ArrowLeft size={15} />
+                    {heading.backLabel}
+                </button>
+            )}
+            {heading.title && <h1 className={styles.pageTitle}>{heading.title}</h1>}
+            {heading.subtitle && <p className={styles.pageSubtitle}>{heading.subtitle}</p>}
+        </div>
+    );
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Navigation panel — the phone and tablet drawer
    ═══════════════════════════════════════════════════════════════ */
 
 function NavPanel({
     pathname,
     user,
-    variant,
     onSearch,
     onClose,
 }: {
     pathname: string;
     user: ReturnType<typeof useCurrentUser>['user'];
-    variant: 'drawer' | 'sidebar';
     onSearch: () => void;
     onClose?: () => void;
 }) {
@@ -465,9 +535,7 @@ function NavPanel({
                 <Link href="/dashboard" className={styles.navBrand} aria-label="SplitX home" onClick={onClose}>
                     <BrandMark size={32} />
                 </Link>
-                {variant === 'drawer' && (
-                    <IconButton icon={<X size={18} />} label="Close menu" onClick={onClose} variant="ghost" />
-                )}
+                <IconButton icon={<X size={18} />} label="Close menu" onClick={onClose} variant="ghost" />
             </div>
 
             <Link href="/settings" className={styles.profileCard} onClick={onClose}>
@@ -492,7 +560,7 @@ function NavPanel({
                         key={item.href}
                         item={item}
                         active={isNavActive(item.href, pathname)}
-                        layoutId={`${variant}-nav-active`}
+                        layoutId="drawer-nav-active"
                         onNavigate={onClose}
                     />
                 ))}
@@ -502,7 +570,7 @@ function NavPanel({
                         key={item.href}
                         item={item}
                         active={isNavActive(item.href, pathname)}
-                        layoutId={`${variant}-nav-active`}
+                        layoutId="drawer-nav-active"
                         onNavigate={onClose}
                     />
                 ))}

@@ -149,8 +149,8 @@ export default function AnalyticsPage() {
     return (
         <Stagger className={styles.page}>
             {groups.length > 1 && (
-                <StaggerItem>
-                    <ChipRow center>
+                <StaggerItem className={styles.chipsArea}>
+                    <ChipRow center className={styles.chips}>
                         {groups.map((group) => (
                             <Chip
                                 key={group.id}
@@ -166,7 +166,7 @@ export default function AnalyticsPage() {
             )}
 
             {/* ── This month ── */}
-            <StaggerItem>
+            <StaggerItem className={styles.heroArea}>
                 <section className={cn(styles.hero, switching && styles.heroBusy)} aria-busy={switching}>
                     <span className={styles.heroChip}>
                         <span aria-hidden="true">{groupEmoji}</span>
@@ -217,7 +217,7 @@ export default function AnalyticsPage() {
             ) : (
                 <>
                     {/* ── Trend ── */}
-                    <StaggerItem>
+                    <StaggerItem className={styles.trendArea}>
                         <Section title="Monthly trend" subtitle="How this group’s spending moves">
                             <div className={styles.card}>
                                 <MonthlyTrendChart data={trend} />
@@ -226,10 +226,10 @@ export default function AnalyticsPage() {
                     </StaggerItem>
 
                     {/* ── Categories ── */}
-                    <StaggerItem>
+                    <StaggerItem className={styles.categoriesArea}>
                         <Section title="Where it went" subtitle={`${monthName(analytics.currentMonth)} by category`}>
                             {categories.length > 0 ? (
-                                <div className={styles.card}>
+                                <div className={cn(styles.card, styles.categoriesCard)}>
                                     <div className={styles.donutWrap}>
                                         <CategoryDonut
                                             data={categories.map((item) => ({
@@ -277,61 +277,63 @@ export default function AnalyticsPage() {
                         </Section>
                     </StaggerItem>
 
-                    {/* ── Who paid ── */}
-                    {members.length > 0 && (
-                        <StaggerItem>
-                            <Section title="Who paid" subtitle="Money fronted this month">
-                                <div className={cn(styles.card, styles.list)}>
-                                    {members.map((member, index) => (
-                                        <div key={`${member.name}-${index}`} className={styles.row}>
-                                            <Avatar name={member.name} image={member.image} size="sm" />
-                                            <div className={styles.rowBody}>
-                                                <div className={styles.rowHead}>
-                                                    <span className={styles.rowName}>
-                                                        {member.name}
-                                                        {index === 0 && members.length > 1 && (
-                                                            <Crown size={13} className={styles.crown} aria-label="Top payer" />
-                                                        )}
-                                                    </span>
-                                                    <span className={styles.rowAmount}>{formatCurrency(member.amount)}</span>
+                    <div className={styles.asideCol}>
+                        {/* ── Who paid ── */}
+                        {members.length > 0 && (
+                            <StaggerItem className={styles.paidArea}>
+                                <Section title="Who paid" subtitle="Money fronted this month">
+                                    <div className={cn(styles.card, styles.list)}>
+                                        {members.map((member, index) => (
+                                            <div key={`${member.name}-${index}`} className={styles.row}>
+                                                <Avatar name={member.name} image={member.image} size="sm" />
+                                                <div className={styles.rowBody}>
+                                                    <div className={styles.rowHead}>
+                                                        <span className={styles.rowName}>
+                                                            {member.name}
+                                                            {index === 0 && members.length > 1 && (
+                                                                <Crown size={13} className={styles.crown} aria-label="Top payer" />
+                                                            )}
+                                                        </span>
+                                                        <span className={styles.rowAmount}>{formatCurrency(member.amount)}</span>
+                                                    </div>
+                                                    <div className={styles.bar}>
+                                                        <motion.span
+                                                            className={cn(styles.barFill, styles.barAccent)}
+                                                            initial={{ width: 0 }}
+                                                            animate={{ width: `${topPaid ? Math.max((member.amount / topPaid) * 100, 3) : 0}%` }}
+                                                            transition={barSpring}
+                                                        />
+                                                    </div>
                                                 </div>
-                                                <div className={styles.bar}>
-                                                    <motion.span
-                                                        className={cn(styles.barFill, styles.barAccent)}
-                                                        initial={{ width: 0 }}
-                                                        animate={{ width: `${topPaid ? Math.max((member.amount / topPaid) * 100, 3) : 0}%` }}
-                                                        transition={barSpring}
-                                                    />
-                                                </div>
+                                                <span className={styles.rowPct}>
+                                                    {paidTotal ? Math.round((member.amount / paidTotal) * 100) : 0}%
+                                                </span>
                                             </div>
-                                            <span className={styles.rowPct}>
-                                                {paidTotal ? Math.round((member.amount / paidTotal) * 100) : 0}%
-                                            </span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </Section>
-                        </StaggerItem>
-                    )}
+                                        ))}
+                                    </div>
+                                </Section>
+                            </StaggerItem>
+                        )}
 
-                    {/* ── Insights ── */}
-                    {analytics.insights.length > 0 && (
-                        <StaggerItem>
-                            <Section title="Insights">
-                                <div className={styles.insights}>
-                                    {analytics.insights.map((insight, index) => (
-                                        <Notice
-                                            key={`${insight.type}-${index}`}
-                                            tone={insight.severity}
-                                            icon={<InsightIcon severity={insight.severity} />}
-                                        >
-                                            {insight.message}
-                                        </Notice>
-                                    ))}
-                                </div>
-                            </Section>
-                        </StaggerItem>
-                    )}
+                        {/* ── Insights ── */}
+                        {analytics.insights.length > 0 && (
+                            <StaggerItem className={styles.insightsArea}>
+                                <Section title="Insights">
+                                    <div className={styles.insights}>
+                                        {analytics.insights.map((insight, index) => (
+                                            <Notice
+                                                key={`${insight.type}-${index}`}
+                                                tone={insight.severity}
+                                                icon={<InsightIcon severity={insight.severity} />}
+                                            >
+                                                {insight.message}
+                                            </Notice>
+                                        ))}
+                                    </div>
+                                </Section>
+                            </StaggerItem>
+                        )}
+                    </div>
                 </>
             )}
         </Stagger>

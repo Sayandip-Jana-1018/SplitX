@@ -186,24 +186,27 @@ function GroupsContent() {
     return (
         <>
             <Stagger className={styles.page}>
-                <StaggerItem>
-                    <PageIntro
-                        eyebrow="Shared spaces"
-                        title={groups.length ? 'Your groups' : 'Life is better shared'}
-                        subtitle={groups.length
-                            ? `${groups.length} group${groups.length === 1 ? '' : 's'} · ${formatCurrency(totalTracked)} tracked together`
-                            : 'Split trips, flats and everyday plans with the people you share them with.'}
-                    />
-                </StaggerItem>
+                <div className={styles.head}>
+                    <StaggerItem>
+                        <PageIntro
+                            className={styles.intro}
+                            eyebrow="Shared spaces"
+                            title={groups.length ? 'Your groups' : 'Life is better shared'}
+                            subtitle={groups.length
+                                ? `${groups.length} group${groups.length === 1 ? '' : 's'} · ${formatCurrency(totalTracked)} tracked together`
+                                : 'Split trips, flats and everyday plans with the people you share them with.'}
+                        />
+                    </StaggerItem>
 
-                <StaggerItem className={styles.actions}>
-                    <Button size="lg" fullWidth leftIcon={<Plus size={18} />} onClick={() => setSheet('create')}>
-                        New group
-                    </Button>
-                    <Button size="lg" fullWidth variant="secondary" leftIcon={<LogIn size={18} />} onClick={() => setSheet('join')}>
-                        Join
-                    </Button>
-                </StaggerItem>
+                    <StaggerItem className={styles.actions}>
+                        <Button size="lg" fullWidth leftIcon={<Plus size={18} />} onClick={() => setSheet('create')}>
+                            New group
+                        </Button>
+                        <Button size="lg" fullWidth variant="secondary" leftIcon={<LogIn size={18} />} onClick={() => setSheet('join')}>
+                            Join
+                        </Button>
+                    </StaggerItem>
+                </div>
 
                 {groups.length === 0 ? (
                     <StaggerItem>

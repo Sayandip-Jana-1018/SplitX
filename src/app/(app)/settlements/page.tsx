@@ -34,6 +34,7 @@ import UpiPaymentModal from '@/components/features/UpiPaymentModal';
 import { useToast } from '@/components/ui/Toast';
 import { useBalances, type GroupBalanceData } from '@/hooks/useBalances';
 import { useHaptics } from '@/hooks/useHaptics';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { usePerformanceMode } from '@/hooks/usePerformanceMode';
 import { isFeatureEnabled } from '@/lib/featureFlags';
 import { getNetworkErrorCopy, NetworkTaggedError } from '@/lib/networkErrors';
@@ -163,6 +164,7 @@ export default function SettlementsPage() {
     const { toast } = useToast();
     const haptics = useHaptics();
     const { mode } = usePerformanceMode();
+    const isDesktop = useMediaQuery('(min-width: 1024px)');
     const { data, error, isLoading, mutate, userId } = useBalances();
 
     const [scope, setScope] = useState<string | null>(null);
@@ -375,7 +377,7 @@ export default function SettlementsPage() {
     return (
         <>
             <Stagger className={styles.page}>
-                <StaggerItem>
+                <StaggerItem className={styles.summaryArea}>
                     <div className={styles.summary}>
                         <div className={cn(styles.summaryTile, youOwe > 0 && styles.summaryTileOwe)}>
                             <span className={styles.summaryHead}>
@@ -400,20 +402,20 @@ export default function SettlementsPage() {
                 </StaggerItem>
 
                 {groups.length > 0 && (
-                    <StaggerItem>
-                        <ChipRow center>
+                    <StaggerItem className={styles.chipsArea}>
+                        <ChipRow center className={styles.chips}>
                             {groups.map((group) => (
                                 <Chip
                                     key={group.groupId}
                                     active={activeScope === group.groupId}
-                                    onClick={() => { setScope(group.groupId); setFlowOpen(false); }}
+                                    onClick={() => { setScope(group.groupId); setFlowOpen(isDesktop); }}
                                     icon={<span>{group.groupEmoji}</span>}
                                 >
                                     {group.groupName}
                                 </Chip>
                             ))}
                             {groups.length > 1 && (
-                                <Chip active={isGlobal} onClick={() => { setScope('all'); setFlowOpen(false); }} icon={<Globe size={14} />}>
+                                <Chip active={isGlobal} onClick={() => { setScope('all'); setFlowOpen(isDesktop); }} icon={<Globe size={14} />}>
                                     All groups
                                 </Chip>
                             )}
@@ -422,7 +424,7 @@ export default function SettlementsPage() {
                 )}
 
                 {!isGlobal && activeGroup && graphSettlements.length > 0 && (
-                    <StaggerItem>
+                    <StaggerItem className={styles.flowArea}>
                         <section className={styles.flowCard}>
                             <button type="button" className={styles.flowToggle} onClick={() => setFlowOpen((open) => !open)} aria-expanded={flowOpen}>
                                 <IconTile><GitBranch size={18} /></IconTile>
@@ -452,7 +454,7 @@ export default function SettlementsPage() {
                                                 members={graphMembers}
                                                 settlements={graphSettlements}
                                                 memberImages={graphImages}
-                                                compact
+                                                compact={!isDesktop}
                                                 performanceMode={mode}
                                                 instanceId={activeGroup.groupId}
                                             />
@@ -464,7 +466,7 @@ export default function SettlementsPage() {
                     </StaggerItem>
                 )}
 
-                <StaggerItem>
+                <StaggerItem className={styles.tabsArea}>
                     <Segmented<'pending' | 'settled'>
                         ariaLabel="Settlement status"
                         value={tab}
@@ -476,7 +478,7 @@ export default function SettlementsPage() {
                     />
                 </StaggerItem>
 
-                <StaggerItem>
+                <StaggerItem className={styles.listArea}>
                     {visible.length === 0 ? (
                         tab === 'pending' ? (
                             <EmptyState
@@ -527,7 +529,7 @@ export default function SettlementsPage() {
                 </StaggerItem>
 
                 {!isGlobal && activeGroup && (
-                    <StaggerItem>
+                    <StaggerItem className={styles.footerArea}>
                         <div className={styles.footerActions}>
                             <button type="button" className={styles.footerAction} onClick={() => exportAsText(exportPayload())}>
                                 <span className={styles.footerIcon}><Download size={17} /></span>Export

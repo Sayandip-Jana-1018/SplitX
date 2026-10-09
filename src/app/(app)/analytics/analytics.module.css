@@ -249,3 +249,103 @@
         animation: none;
     }
 }
+
+/* ── Desktop column wrapper: invisible on phones and tablets ── */
+.asideCol {
+    display: contents;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Desktop: this month beside the trend, the categories beside who
+   paid and the insights
+   ═══════════════════════════════════════════════════════════════ */
+@media (min-width: 1024px) {
+    .page {
+        display: grid;
+        grid-template-columns: repeat(12, minmax(0, 1fr));
+        gap: 30px 24px;
+        align-items: start;
+        padding-top: 0;
+    }
+
+    .page > * {
+        grid-column: 1 / -1;
+        min-width: 0;
+    }
+
+    .heroArea {
+        grid-column: span 5;
+        align-self: stretch;
+    }
+
+    .trendArea {
+        grid-column: span 7;
+    }
+
+    .categoriesArea {
+        grid-column: span 7;
+    }
+
+    .asideCol {
+        display: flex;
+        flex-direction: column;
+        gap: 30px;
+        grid-column: span 5;
+    }
+
+    .asideCol:empty {
+        display: none;
+    }
+
+    .page:not(:has(.paidArea, .insightsArea)) .categoriesArea {
+        grid-column: 1 / -1;
+    }
+
+    .hero {
+        justify-content: center;
+        height: 100%;
+        padding: 28px 24px 24px;
+        border-radius: 30px;
+    }
+
+    .heroAmount {
+        font-size: 52px;
+    }
+
+    .card {
+        padding: 20px;
+        border-radius: 24px;
+    }
+
+    .categoriesCard {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        align-items: center;
+        gap: 32px;
+        padding: 24px 28px;
+    }
+
+    .categoriesCard .donutWrap {
+        padding: 0;
+    }
+
+    .insights {
+        gap: 12px;
+    }
+
+    .chipsArea .chips {
+        margin: 0;
+    }
+
+    .chipsArea .chips > div {
+        flex-wrap: wrap;
+        padding: 0;
+        overflow: visible;
+        -webkit-mask-image: none;
+        mask-image: none;
+    }
+
+    .chipsArea .chips > div > :first-child {
+        margin-left: 0;
+    }
+}

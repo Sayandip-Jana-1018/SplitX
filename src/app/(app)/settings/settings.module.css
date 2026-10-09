@@ -282,3 +282,60 @@
         border-color: color-mix(in srgb, var(--color-error) 28%, transparent);
     }
 }
+
+/* ── Desktop column wrapper: invisible on phones and tablets ── */
+.mainCol {
+    display: contents;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Desktop: the profile and sign out on the left; the settings two
+   to a row beside them, appearance across both
+   ═══════════════════════════════════════════════════════════════ */
+@media (min-width: 1024px) {
+    .page {
+        display: grid;
+        grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
+        grid-template-rows: auto auto 1fr auto;
+        grid-template-areas:
+            "profile main"
+            "out     main"
+            ".       main"
+            "footer  footer";
+        gap: 18px 28px;
+        align-items: start;
+        padding-top: 0;
+    }
+
+    .profileArea { grid-area: profile; min-width: 0; }
+    .signOutArea { grid-area: out; min-width: 0; }
+    .footerArea { grid-area: footer; min-width: 0; margin-top: 12px; }
+
+    .mainCol {
+        display: grid;
+        grid-area: main;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-areas:
+            "paid help"
+            "look look"
+            "data app";
+        gap: 30px 24px;
+        align-items: start;
+        min-width: 0;
+    }
+
+    .paidArea { grid-area: paid; min-width: 0; }
+    .helpArea { grid-area: help; min-width: 0; }
+    .lookArea { grid-area: look; min-width: 0; }
+    .dataArea { grid-area: data; min-width: 0; }
+    .appArea { grid-area: app; min-width: 0; }
+
+    .profile {
+        padding: 34px 22px 26px;
+        border-radius: 30px;
+    }
+
+    .footer {
+        margin-top: 0;
+    }
+}

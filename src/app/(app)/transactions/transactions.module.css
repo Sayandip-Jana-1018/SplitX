@@ -381,3 +381,53 @@
     .memberToggle:hover { border-color: var(--border-strong); }
     .sortButton:hover { border-color: var(--border-strong); color: var(--fg-primary); }
 }
+
+/* ── Desktop: summary, search and filters stay on the left of the list ── */
+.side {
+    display: contents;
+}
+
+@media (min-width: 1024px) {
+    .page {
+        display: grid;
+        grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
+        gap: 32px;
+        align-items: start;
+        padding-top: 0;
+    }
+
+    .side {
+        position: sticky;
+        top: var(--desktop-sticky-top);
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        min-width: 0;
+    }
+
+    .listArea {
+        min-width: 0;
+    }
+
+    .dayHead {
+        top: var(--topbar-height);
+    }
+
+    .summary {
+        padding: 26px 22px 22px;
+        border-radius: 28px;
+    }
+
+    .side .chips {
+        margin: 0;
+    }
+
+    .side .chips > div {
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 0;
+        overflow: visible;
+        -webkit-mask-image: none;
+        mask-image: none;
+    }
+}

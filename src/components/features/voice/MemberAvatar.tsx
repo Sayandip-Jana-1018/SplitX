@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import Image from 'next/image';
 
 /** Compact avatar for use within the voice overlay. */
 export function MemberAvatar({
@@ -19,11 +18,14 @@ export function MemberAvatar({
 
     if (image && !imgErr) {
         return (
-            <Image
+            // A plain image, like Avatar: photos come from any sign-in provider, which Next's optimiser refuses.
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
                 src={image}
                 alt={name}
                 width={size}
                 height={size}
+                referrerPolicy="no-referrer"
                 onError={() => setImgErr(true)}
                 style={{
                     width: size, height: size, borderRadius: size / 2,

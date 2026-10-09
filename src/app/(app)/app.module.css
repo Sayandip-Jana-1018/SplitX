@@ -1,6 +1,7 @@
 /* ═══════════════════════════════════════════════════════════════
-   App shell — header, content column, floating dock, drawer, sidebar
-   Mobile-first; tablet widens the column; desktop adds a sidebar.
+   App shell — header, content column, floating dock, drawer
+   Mobile-first; tablet widens the column; desktop swaps the header
+   and dock for a top bar (AppTopBar) over one wide column.
    ═══════════════════════════════════════════════════════════════ */
 
 .shell {
@@ -274,7 +275,7 @@
 }
 
 /* ══════════════════════════════════════════════
-   Drawer + sidebar
+   Drawer
    ══════════════════════════════════════════════ */
 .scrim {
     position: fixed;
@@ -302,19 +303,6 @@
     border-right: 1px solid var(--glass-border);
     border-radius: 0 30px 30px 0;
     box-shadow: var(--shadow-2xl), var(--glass-inset);
-}
-
-.sidebar {
-    position: fixed;
-    top: 0;
-    bottom: 0;
-    left: 0;
-    z-index: var(--z-fixed);
-    display: none;
-    flex-direction: column;
-    width: var(--sidebar-width);
-    background: var(--drawer-surface);
-    border-right: 1px solid var(--border-default);
 }
 
 .nav {
@@ -532,28 +520,88 @@
 }
 
 /* ══════════════════════════════════════════════
-   Desktop — persistent sidebar, no dock
+   Desktop page heading (the phone header's title, given room)
+   ══════════════════════════════════════════════ */
+.pageHeading {
+    display: none;
+}
+
+/* ══════════════════════════════════════════════
+   Desktop — top bar, one wide column, no dock
    ══════════════════════════════════════════════ */
 @media (min-width: 1024px) {
-    .main {
-        margin-left: var(--sidebar-width);
-    }
-
-    .sidebar {
-        display: flex;
-    }
-
+    .header,
     .dock,
     .mobileOnly {
         display: none !important;
     }
 
     .content {
-        padding-bottom: 72px;
+        max-width: calc(var(--desktop-max) + 2 * var(--desktop-gutter));
+        padding: 30px var(--desktop-gutter) 88px;
     }
 
-    .printShell .main {
-        margin-left: 0;
+    /* Forms read best at a comfortable measure */
+    .contentComposer {
+        max-width: calc(760px + 2 * var(--desktop-gutter));
+        padding-bottom: 88px;
+    }
+
+    .printContent {
+        max-width: none;
+        padding: 0;
+    }
+
+    .pageHeading {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 6px;
+        margin-bottom: 28px;
+    }
+
+    .pageBack {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 34px;
+        margin-bottom: 6px;
+        padding: 0 14px 0 11px;
+        border-radius: var(--radius-full);
+        background: var(--glass-bg);
+        -webkit-backdrop-filter: blur(14px) saturate(var(--glass-saturate));
+        backdrop-filter: blur(14px) saturate(var(--glass-saturate));
+        border: 1px solid var(--glass-border);
+        box-shadow: var(--shadow-xs), var(--glass-inset);
+        color: var(--fg-secondary);
+        font-size: 13px;
+        font-weight: 600;
+        transition:
+            border-color var(--duration-fast) var(--ease-out),
+            color var(--duration-fast) var(--ease-out);
+    }
+
+    .pageBack:hover {
+        border-color: var(--border-strong);
+        color: var(--fg-primary);
+    }
+
+    .pageHeading:has(.pageBack:only-child) {
+        margin-bottom: 20px;
+    }
+
+    .pageTitle {
+        font-size: 34px;
+        font-weight: 800;
+        line-height: 1.1;
+        letter-spacing: -0.035em;
+        color: var(--fg-primary);
+    }
+
+    .pageSubtitle {
+        font-size: 15px;
+        line-height: 1.5;
+        color: var(--fg-tertiary);
     }
 }
 

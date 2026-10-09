@@ -300,3 +300,75 @@
 @media (hover: hover) and (pointer: fine) {
     .shareOption:hover { border-color: var(--border-strong); color: var(--fg-primary); }
 }
+
+.pageSingle {
+    padding-top: 6px;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Desktop: the group's card stays on the left while the tabs and
+   their content take the rest; the overview sits two to a row
+   ═══════════════════════════════════════════════════════════════ */
+@media (min-width: 1024px) {
+    .page {
+        display: grid;
+        grid-template-columns: minmax(300px, 340px) minmax(0, 1fr);
+        grid-template-rows: auto 1fr;
+        gap: 22px 32px;
+        align-items: start;
+        padding-top: 0;
+    }
+
+    .heroArea {
+        position: sticky;
+        top: var(--desktop-sticky-top);
+        grid-column: 1;
+        grid-row: 1 / span 2;
+        min-width: 0;
+    }
+
+    .tabsArea {
+        grid-column: 2;
+        grid-row: 1;
+        min-width: 0;
+    }
+
+    .contentArea {
+        grid-column: 2;
+        grid-row: 2;
+        min-width: 0;
+    }
+
+    .hero {
+        padding: 30px 22px 22px;
+        border-radius: 30px;
+    }
+
+    .pageSingle {
+        max-width: 640px;
+        margin: 24px auto 0;
+    }
+}
+
+/* Wide enough for the overview two to a row */
+@media (min-width: 1280px) {
+    .page {
+        grid-template-columns: minmax(330px, 380px) minmax(0, 1fr);
+    }
+
+    .overview {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 26px 22px;
+        align-items: start;
+    }
+
+    .overview > .spanAll {
+        grid-column: 1 / -1;
+    }
+
+    /* Section headings of one height, so cards side by side start on one line */
+    .overview > section > :first-child {
+        min-height: 42px;
+    }
+}

@@ -307,36 +307,38 @@ export default function ContactsPage() {
                     </StaggerItem>
                 ) : (
                     <>
-                        <StaggerItem>
-                            <Segmented<Filter>
-                                ariaLabel="Filter contacts"
-                                value={filter}
-                                onChange={setFilter}
-                                options={[
-                                    { value: 'all', label: 'All', count: contacts.length },
-                                    { value: 'onApp', label: 'On SplitX', count: onAppCount },
-                                    { value: 'invite', label: 'To invite', count: inviteCount },
-                                ]}
-                            />
-                        </StaggerItem>
-
-                        <StaggerItem>
-                            <div className={styles.toolbar}>
-                                <Input
-                                    aria-label="Search contacts"
-                                    placeholder="Search name, email or phone"
-                                    value={query}
-                                    onChange={(event) => setQuery(event.target.value)}
-                                    leftIcon={<Search size={17} />}
-                                    rightSlot={query ? (
-                                        <button type="button" className={styles.clearButton} onClick={() => setQuery('')} aria-label="Clear search">
-                                            <X size={14} />
-                                        </button>
-                                    ) : undefined}
+                        <div className={styles.head}>
+                            <StaggerItem className={styles.filterArea}>
+                                <Segmented<Filter>
+                                    ariaLabel="Filter contacts"
+                                    value={filter}
+                                    onChange={setFilter}
+                                    options={[
+                                        { value: 'all', label: 'All', count: contacts.length },
+                                        { value: 'onApp', label: 'On SplitX', count: onAppCount },
+                                        { value: 'invite', label: 'To invite', count: inviteCount },
+                                    ]}
                                 />
-                                <IconButton icon={<UserPlus size={19} />} label="Add contact" variant="solid" size="lg" onClick={() => setAddOpen(true)} />
-                            </div>
-                        </StaggerItem>
+                            </StaggerItem>
+
+                            <StaggerItem>
+                                <div className={styles.toolbar}>
+                                    <Input
+                                        aria-label="Search contacts"
+                                        placeholder="Search name, email or phone"
+                                        value={query}
+                                        onChange={(event) => setQuery(event.target.value)}
+                                        leftIcon={<Search size={17} />}
+                                        rightSlot={query ? (
+                                            <button type="button" className={styles.clearButton} onClick={() => setQuery('')} aria-label="Clear search">
+                                                <X size={14} />
+                                            </button>
+                                        ) : undefined}
+                                    />
+                                    <IconButton icon={<UserPlus size={19} />} label="Add contact" variant="solid" size="lg" onClick={() => setAddOpen(true)} />
+                                </div>
+                            </StaggerItem>
+                        </div>
 
                         {inviteCount > 0 && filter === 'all' && !query && (
                             <StaggerItem>

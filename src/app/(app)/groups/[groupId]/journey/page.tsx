@@ -155,9 +155,13 @@ export default function GroupJourneyPage() {
     if (isLoading && !firstPage) {
         return (
             <div className={styles.page}>
-                <Skeleton variant="rectangular" height={250} radius={28} />
-                <Skeleton variant="rectangular" height={44} radius="var(--radius-full)" />
-                <ListSkeleton rows={4} />
+                <div className={styles.side}>
+                    <Skeleton variant="rectangular" height={250} radius={28} />
+                    <Skeleton variant="rectangular" height={44} radius="var(--radius-full)" />
+                </div>
+                <div className={styles.main}>
+                    <ListSkeleton rows={4} />
+                </div>
             </div>
         );
     }
@@ -192,175 +196,180 @@ export default function GroupJourneyPage() {
 
     return (
         <Stagger className={styles.page}>
-            {/* ── Snapshot ── */}
-            <StaggerItem>
-                <section className={styles.hero}>
-                    <span className={styles.heroChip}>
-                        <span aria-hidden="true">{firstPage.group.emoji}</span>
-                        <span className={styles.heroChipText}>{firstPage.group.name}</span>
-                    </span>
-                    <span className={styles.heroLabel}>
-                        {balance > 0 ? 'You get back' : balance < 0 ? 'You owe' : 'Your balance'}
-                    </span>
-                    <span className={cn(styles.heroAmount, balance > 0 && styles.positive, balance < 0 && styles.negative)}>
-                        {balance === 0 ? 'All settled' : formatCurrency(Math.abs(balance))}
-                    </span>
-                    <p className={styles.heroRoute}>{firstPage.currentRouteSummary}</p>
-                    <div className={styles.heroMeta}>
-                        <Tag tone="accent" icon={<History size={11} />}>
-                            {weekCount} {weekCount === 1 ? 'change' : 'changes'} this week
-                        </Tag>
-                    </div>
-                    {exportEnabled && (
-                        <div className={styles.heroActions}>
-                            <Button size="sm" variant="secondary" leftIcon={<Download size={14} />} onClick={exportCsv}>
-                                Export CSV
-                            </Button>
-                            <Button
-                                size="sm"
-                                variant="ghost"
-                                leftIcon={<Printer size={14} />}
-                                onClick={() => router.push(`/groups/${groupId}/journey/print`)}
-                            >
-                                Print
-                            </Button>
-                        </div>
-                    )}
-                </section>
-            </StaggerItem>
-
-            {/* ── Filters ── */}
-            <StaggerItem>
-                <div className={styles.filters}>
-                    <Segmented<FilterKey>
-                        ariaLabel="Filter changes"
-                        size="sm"
-                        value={activeFilter}
-                        onChange={changeFilter}
-                        options={FILTER_OPTIONS}
-                    />
-                    <ChipRow center>
-                        {DATE_RANGES.map((range) => (
-                            <Chip key={range.key} active={dateRange === range.key} onClick={() => changeRange(range.key)}>
-                                {range.label}
-                            </Chip>
-                        ))}
-                    </ChipRow>
-                </div>
-            </StaggerItem>
-
-            {/* ── Timeline ── */}
-            <StaggerItem>
-                {entries.length === 0 ? (
-                    <EmptyState
-                        compact
-                        icon={<GitBranch size={22} />}
-                        title="No changes here"
-                        description="Nothing matches this filter yet — try a wider date range."
-                    />
-                ) : (
-                    <ol className={styles.timeline}>
-                        {entries.map((entry, index) => {
-                            const meta = EVENT_META[entry.eventType] ?? EVENT_META.expense;
-                            const open = openId === entry.id;
-                            const routeChanged = entry.beforeRouteSummary !== entry.afterRouteSummary;
-                            return (
-                                <li key={entry.id} className={styles.entry}>
-                                    <div className={styles.rail} aria-hidden="true">
-                                        <span className={cn(styles.dot, index === 0 && styles.dotLatest)} />
-                                        {index < entries.length - 1 && <span className={styles.line} />}
-                                    </div>
-                                    <div className={cn(styles.card, open && styles.cardOpen)}>
-                                        <button
-                                            type="button"
-                                            className={styles.cardHead}
-                                            onClick={() => setExpanded(open ? null : entry.id)}
-                                            aria-expanded={open}
-                                        >
-                                            <IconTile tone={meta.tone} size={38}><meta.Icon size={17} /></IconTile>
-                                            <span className={styles.cardText}>
-                                                <span className={styles.cardTitle}>{entry.sourceLabel}</span>
-                                                <span className={styles.cardSub}>
-                                                    {index === 0 && <Tag tone="accent">Latest</Tag>}
-                                                    {meta.label} · {formatDate(entry.createdAt)}
-                                                </span>
-                                            </span>
-                                            <span className={styles.cardRight}>
-                                                <Amount value={entry.delta} tone="auto" signed />
-                                                <ChevronDown size={16} className={cn(styles.chevron, open && styles.chevronOpen)} />
-                                            </span>
-                                        </button>
-
-                                        <AnimatePresence initial={false}>
-                                            {open && (
-                                                <motion.div
-                                                    key="details"
-                                                    className={styles.cardBodyWrap}
-                                                    initial={{ height: 0, opacity: 0 }}
-                                                    animate={{ height: 'auto', opacity: 1 }}
-                                                    exit={{ height: 0, opacity: 0 }}
-                                                    transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
-                                                >
-                                                    <div className={styles.cardBody}>
-                                                        <p className={styles.explanation}>{entry.explanation}</p>
-                                                        <div className={styles.steps}>
-                                                            <div className={styles.step}>
-                                                                <span className={styles.stepLabel}>Was</span>
-                                                                <span className={styles.stepValue}>{signed(entry.beforeBalance)}</span>
-                                                            </div>
-                                                            <div className={cn(styles.step, entry.delta > 0 && styles.stepUp, entry.delta < 0 && styles.stepDown)}>
-                                                                <span className={styles.stepLabel}>Change</span>
-                                                                <span className={styles.stepValue}>{signed(entry.delta)}</span>
-                                                            </div>
-                                                            <div className={styles.step}>
-                                                                <span className={styles.stepLabel}>Now</span>
-                                                                <span className={styles.stepValue}>{signed(entry.afterBalance)}</span>
-                                                            </div>
-                                                        </div>
-                                                        {routeChanged && (
-                                                            <Notice tone="info" icon={<GitBranch size={16} />} title="Who you settle with changed">
-                                                                <span className={styles.routeLine}>Before: {entry.beforeRouteSummary}</span>
-                                                                <span className={styles.routeLine}>Now: {entry.afterRouteSummary}</span>
-                                                            </Notice>
-                                                        )}
-                                                        {entry.counterparties.length > 0 && (
-                                                            <div className={styles.people}>
-                                                                {entry.counterparties.map((name, personIndex) => (
-                                                                    <Tag key={`${name}-${personIndex}`}>{name}</Tag>
-                                                                ))}
-                                                            </div>
-                                                        )}
-                                                        <Button
-                                                            size="sm"
-                                                            variant="secondary"
-                                                            fullWidth
-                                                            onClick={() => router.push(entry.eventType === 'settlement'
-                                                                ? '/settlements'
-                                                                : `/transactions?focus=${entry.sourceId}`)}
-                                                        >
-                                                            {entry.eventType === 'settlement' ? 'Open Settle up' : 'Open expense'}
-                                                        </Button>
-                                                    </div>
-                                                </motion.div>
-                                            )}
-                                        </AnimatePresence>
-                                    </div>
-                                </li>
-                            );
-                        })}
-                    </ol>
-                )}
-            </StaggerItem>
-
-            {hasMore && (
+            <div className={styles.side}>
+                {/* ── Snapshot ── */}
                 <StaggerItem>
-                    <div className={styles.loadMore}>
-                        <Button variant="secondary" loading={isLoadingMore} onClick={() => void setSize(size + 1)}>
-                            Load older changes
-                        </Button>
+                    <section className={styles.hero}>
+                        <span className={styles.heroChip}>
+                            <span aria-hidden="true">{firstPage.group.emoji}</span>
+                            <span className={styles.heroChipText}>{firstPage.group.name}</span>
+                        </span>
+                        <span className={styles.heroLabel}>
+                            {balance > 0 ? 'You get back' : balance < 0 ? 'You owe' : 'Your balance'}
+                        </span>
+                        <span className={cn(styles.heroAmount, balance > 0 && styles.positive, balance < 0 && styles.negative)}>
+                            {balance === 0 ? 'All settled' : formatCurrency(Math.abs(balance))}
+                        </span>
+                        <p className={styles.heroRoute}>{firstPage.currentRouteSummary}</p>
+                        <div className={styles.heroMeta}>
+                            <Tag tone="accent" icon={<History size={11} />}>
+                                {weekCount} {weekCount === 1 ? 'change' : 'changes'} this week
+                            </Tag>
+                        </div>
+                        {exportEnabled && (
+                            <div className={styles.heroActions}>
+                                <Button size="sm" variant="secondary" leftIcon={<Download size={14} />} onClick={exportCsv}>
+                                    Export CSV
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    leftIcon={<Printer size={14} />}
+                                    onClick={() => router.push(`/groups/${groupId}/journey/print`)}
+                                >
+                                    Print
+                                </Button>
+                            </div>
+                        )}
+                    </section>
+                </StaggerItem>
+
+                {/* ── Filters ── */}
+                <StaggerItem>
+                    <div className={styles.filters}>
+                        <Segmented<FilterKey>
+                            ariaLabel="Filter changes"
+                            size="sm"
+                            value={activeFilter}
+                            onChange={changeFilter}
+                            options={FILTER_OPTIONS}
+                        />
+                        <ChipRow center className={styles.ranges}>
+                            {DATE_RANGES.map((range) => (
+                                <Chip key={range.key} active={dateRange === range.key} onClick={() => changeRange(range.key)}>
+                                    {range.label}
+                                </Chip>
+                            ))}
+                        </ChipRow>
                     </div>
                 </StaggerItem>
-            )}
+
+            </div>
+
+            <div className={styles.main}>
+                {/* ── Timeline ── */}
+                <StaggerItem>
+                    {entries.length === 0 ? (
+                        <EmptyState
+                            compact
+                            icon={<GitBranch size={22} />}
+                            title="No changes here"
+                            description="Nothing matches this filter yet — try a wider date range."
+                        />
+                    ) : (
+                        <ol className={styles.timeline}>
+                            {entries.map((entry, index) => {
+                                const meta = EVENT_META[entry.eventType] ?? EVENT_META.expense;
+                                const open = openId === entry.id;
+                                const routeChanged = entry.beforeRouteSummary !== entry.afterRouteSummary;
+                                return (
+                                    <li key={entry.id} className={styles.entry}>
+                                        <div className={styles.rail} aria-hidden="true">
+                                            <span className={cn(styles.dot, index === 0 && styles.dotLatest)} />
+                                            {index < entries.length - 1 && <span className={styles.line} />}
+                                        </div>
+                                        <div className={cn(styles.card, open && styles.cardOpen)}>
+                                            <button
+                                                type="button"
+                                                className={styles.cardHead}
+                                                onClick={() => setExpanded(open ? null : entry.id)}
+                                                aria-expanded={open}
+                                            >
+                                                <IconTile tone={meta.tone} size={38}><meta.Icon size={17} /></IconTile>
+                                                <span className={styles.cardText}>
+                                                    <span className={styles.cardTitle}>{entry.sourceLabel}</span>
+                                                    <span className={styles.cardSub}>
+                                                        {index === 0 && <Tag tone="accent">Latest</Tag>}
+                                                        {meta.label} · {formatDate(entry.createdAt)}
+                                                    </span>
+                                                </span>
+                                                <span className={styles.cardRight}>
+                                                    <Amount value={entry.delta} tone="auto" signed />
+                                                    <ChevronDown size={16} className={cn(styles.chevron, open && styles.chevronOpen)} />
+                                                </span>
+                                            </button>
+
+                                            <AnimatePresence initial={false}>
+                                                {open && (
+                                                    <motion.div
+                                                        key="details"
+                                                        className={styles.cardBodyWrap}
+                                                        initial={{ height: 0, opacity: 0 }}
+                                                        animate={{ height: 'auto', opacity: 1 }}
+                                                        exit={{ height: 0, opacity: 0 }}
+                                                        transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+                                                    >
+                                                        <div className={styles.cardBody}>
+                                                            <p className={styles.explanation}>{entry.explanation}</p>
+                                                            <div className={styles.steps}>
+                                                                <div className={styles.step}>
+                                                                    <span className={styles.stepLabel}>Was</span>
+                                                                    <span className={styles.stepValue}>{signed(entry.beforeBalance)}</span>
+                                                                </div>
+                                                                <div className={cn(styles.step, entry.delta > 0 && styles.stepUp, entry.delta < 0 && styles.stepDown)}>
+                                                                    <span className={styles.stepLabel}>Change</span>
+                                                                    <span className={styles.stepValue}>{signed(entry.delta)}</span>
+                                                                </div>
+                                                                <div className={styles.step}>
+                                                                    <span className={styles.stepLabel}>Now</span>
+                                                                    <span className={styles.stepValue}>{signed(entry.afterBalance)}</span>
+                                                                </div>
+                                                            </div>
+                                                            {routeChanged && (
+                                                                <Notice tone="info" icon={<GitBranch size={16} />} title="Who you settle with changed">
+                                                                    <span className={styles.routeLine}>Before: {entry.beforeRouteSummary}</span>
+                                                                    <span className={styles.routeLine}>Now: {entry.afterRouteSummary}</span>
+                                                                </Notice>
+                                                            )}
+                                                            {entry.counterparties.length > 0 && (
+                                                                <div className={styles.people}>
+                                                                    {entry.counterparties.map((name, personIndex) => (
+                                                                        <Tag key={`${name}-${personIndex}`}>{name}</Tag>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+                                                            <Button
+                                                                size="sm"
+                                                                variant="secondary"
+                                                                fullWidth
+                                                                onClick={() => router.push(entry.eventType === 'settlement'
+                                                                    ? '/settlements'
+                                                                    : `/transactions?focus=${entry.sourceId}`)}
+                                                            >
+                                                                {entry.eventType === 'settlement' ? 'Open Settle up' : 'Open expense'}
+                                                            </Button>
+                                                        </div>
+                                                    </motion.div>
+                                                )}
+                                            </AnimatePresence>
+                                        </div>
+                                    </li>
+                                );
+                            })}
+                        </ol>
+                    )}
+                </StaggerItem>
+
+                {hasMore && (
+                    <StaggerItem>
+                        <div className={styles.loadMore}>
+                            <Button variant="secondary" loading={isLoadingMore} onClick={() => void setSize(size + 1)}>
+                                Load older changes
+                            </Button>
+                        </div>
+                    </StaggerItem>
+                )}
+            </div>
         </Stagger>
     );
 }

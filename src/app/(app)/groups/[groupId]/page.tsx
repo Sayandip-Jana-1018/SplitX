@@ -222,9 +222,9 @@ export default function GroupDetailPage() {
     if (groupQuery.isLoading && group === undefined) {
         return (
             <div className={styles.page}>
-                <Skeleton variant="rectangular" height={330} radius={28} />
-                <Skeleton variant="rectangular" height={46} radius="var(--radius-full)" />
-                <ListSkeleton rows={3} />
+                <div className={styles.heroArea}><Skeleton variant="rectangular" height={330} radius={28} /></div>
+                <div className={styles.tabsArea}><Skeleton variant="rectangular" height={46} radius="var(--radius-full)" /></div>
+                <div className={styles.contentArea}><ListSkeleton rows={3} /></div>
             </div>
         );
     }
@@ -236,7 +236,7 @@ export default function GroupDetailPage() {
 
     if (!group) {
         return (
-            <div className={styles.page}>
+            <div className={styles.pageSingle}>
                 <EmptyState
                     icon={<Users size={26} />}
                     title="Group not found"
@@ -425,7 +425,7 @@ export default function GroupDetailPage() {
         <>
             <Stagger className={styles.page}>
                 {/* ── Hero ── */}
-                <StaggerItem>
+                <StaggerItem className={styles.heroArea}>
                     <section className={styles.hero}>
                         <div className={styles.heroActions}>
                             <IconButton icon={<Share2 size={16} />} label="Invite people" size="sm" onClick={() => setSheet('invite')} />
@@ -481,7 +481,7 @@ export default function GroupDetailPage() {
                     </section>
                 </StaggerItem>
 
-                <StaggerItem>
+                <StaggerItem className={styles.tabsArea}>
                     <Segmented<Tab>
                         ariaLabel="Group sections"
                         value={tab}
@@ -495,11 +495,11 @@ export default function GroupDetailPage() {
                     />
                 </StaggerItem>
 
-                <StaggerItem>
+                <StaggerItem className={styles.contentArea}>
                     <AnimatePresence mode="wait" initial={false}>
                         <motion.div
                             key={tab}
-                            className={styles.tabContent}
+                            className={cn(styles.tabContent, tab === 'overview' && styles.overview)}
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: -6 }}
@@ -508,7 +508,7 @@ export default function GroupDetailPage() {
                             {tab === 'overview' && (
                                 <>
                                     {journey && isFeatureEnabled('balanceJourney') && (
-                                        <ListGroup>
+                                        <ListGroup className={styles.spanAll}>
                                             <ListRow
                                                 href={`/groups/${group.id}/journey`}
                                                 leading={<IconTile><GitBranch size={18} /></IconTile>}

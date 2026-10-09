@@ -1,0 +1,394 @@
+/* ═══════════════════════════════════════════════════════════════
+   Desktop top bar (≥1024px). Its content lines up with the page
+   column below it; phones and tablets never show it.
+   ═══════════════════════════════════════════════════════════════ */
+
+.bar {
+    display: none;
+}
+
+@media (min-width: 1024px) {
+    .bar {
+        position: sticky;
+        top: 0;
+        z-index: var(--z-sticky);
+        display: block;
+        border-bottom: 1px solid transparent;
+        transition:
+            background-color var(--duration-normal) var(--ease-out),
+            border-color var(--duration-normal) var(--ease-out),
+            box-shadow var(--duration-normal) var(--ease-out);
+    }
+
+    /* Frosted once the page scrolls beneath it */
+    .barScrolled {
+        background: var(--glass-bg);
+        -webkit-backdrop-filter: saturate(var(--glass-saturate)) blur(var(--glass-blur));
+        backdrop-filter: saturate(var(--glass-saturate)) blur(var(--glass-blur));
+        border-bottom-color: var(--border-subtle);
+        box-shadow: 0 14px 34px -26px rgba(15, 23, 42, 0.4), var(--glass-inset);
+    }
+
+    .inner {
+        display: flex;
+        align-items: center;
+        gap: 22px;
+        width: 100%;
+        max-width: calc(var(--desktop-max) + 2 * var(--desktop-gutter));
+        height: var(--topbar-height);
+        margin: 0 auto;
+        padding: 0 var(--desktop-gutter);
+    }
+
+    .brand {
+        display: inline-flex;
+        flex-shrink: 0;
+        border-radius: 12px;
+        text-decoration: none;
+    }
+
+    /* ── Destinations: one glass track, the current page in a soft accent pill ── */
+    .nav {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        min-width: 0;
+        padding: 4px;
+        border-radius: var(--radius-full);
+        background: var(--glass-bg);
+        -webkit-backdrop-filter: blur(14px) saturate(var(--glass-saturate));
+        backdrop-filter: blur(14px) saturate(var(--glass-saturate));
+        border: 1px solid var(--glass-border);
+        box-shadow: var(--shadow-xs), var(--glass-inset);
+    }
+
+    .link {
+        position: relative;
+        z-index: 0;
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        height: 36px;
+        padding: 0 15px;
+        border-radius: var(--radius-full);
+        color: var(--fg-secondary);
+        font-size: 14px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        white-space: nowrap;
+        text-decoration: none;
+        transition: color var(--duration-fast) var(--ease-out);
+    }
+
+    .link:hover {
+        color: var(--fg-primary);
+    }
+
+    .linkActive,
+    .linkActive:hover {
+        color: var(--accent-strong);
+    }
+
+    .linkPill {
+        position: absolute;
+        inset: 0;
+        z-index: -1;
+        border-radius: inherit;
+        background: var(--accent-soft);
+        box-shadow: inset 0 0 0 1px rgba(var(--accent-500-rgb), 0.16);
+    }
+
+    .linkIcon {
+        display: none;
+        flex-shrink: 0;
+    }
+
+    /* ── Utilities ── */
+    .actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-left: auto;
+    }
+
+    .search {
+        display: inline-flex;
+        flex-shrink: 0;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        width: 40px;
+        height: 40px;
+        border-radius: var(--radius-full);
+        background: var(--glass-bg);
+        -webkit-backdrop-filter: blur(14px) saturate(var(--glass-saturate));
+        backdrop-filter: blur(14px) saturate(var(--glass-saturate));
+        border: 1px solid var(--glass-border);
+        box-shadow: var(--shadow-xs), var(--glass-inset);
+        color: var(--fg-secondary);
+        font-size: 13.5px;
+        font-weight: 500;
+        transition:
+            border-color var(--duration-fast) var(--ease-out),
+            color var(--duration-fast) var(--ease-out);
+    }
+
+    .search:hover {
+        border-color: var(--border-strong);
+        color: var(--fg-primary);
+    }
+
+    .searchLabel,
+    .kbd {
+        display: none;
+    }
+
+    .kbd {
+        align-items: center;
+        height: 24px;
+        padding: 0 7px;
+        border-radius: 8px;
+        border: 1px solid var(--border-default);
+        background: var(--surface-card);
+        color: var(--fg-tertiary);
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 500;
+        white-space: nowrap;
+    }
+
+    .sparkle {
+        display: grid;
+        place-items: center;
+    }
+
+    .add {
+        display: inline-flex;
+        flex-shrink: 0;
+        align-items: center;
+        gap: 7px;
+        height: 40px;
+        padding: 0 17px 0 13px;
+        border-radius: var(--radius-full);
+        background: var(--accent-gradient);
+        color: var(--fg-on-accent);
+        font-size: 14px;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+        white-space: nowrap;
+        text-decoration: none;
+        box-shadow:
+            0 1px 0 rgba(255, 255, 255, 0.25) inset,
+            0 10px 22px -10px rgba(var(--accent-500-rgb), 0.85);
+        transition:
+            transform var(--duration-fast) var(--ease-out),
+            box-shadow var(--duration-normal) var(--ease-out);
+    }
+
+    .add:hover {
+        transform: translateY(-1px);
+        box-shadow:
+            0 1px 0 rgba(255, 255, 255, 0.25) inset,
+            0 16px 30px -12px rgba(var(--accent-500-rgb), 0.95);
+    }
+
+    .add:active {
+        transform: scale(0.97);
+    }
+
+    .addLong {
+        display: none;
+    }
+
+    .divider {
+        flex-shrink: 0;
+        width: 1px;
+        height: 24px;
+        margin: 0 4px;
+        background: var(--border-default);
+    }
+
+    /* ── Account menu ── */
+    .account {
+        position: relative;
+        flex-shrink: 0;
+    }
+
+    .accountButton {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        height: 40px;
+        padding: 3px 9px 3px 3px;
+        border-radius: var(--radius-full);
+        background: var(--glass-bg);
+        -webkit-backdrop-filter: blur(14px) saturate(var(--glass-saturate));
+        backdrop-filter: blur(14px) saturate(var(--glass-saturate));
+        border: 1px solid var(--glass-border);
+        box-shadow: var(--shadow-xs), var(--glass-inset);
+        color: var(--fg-tertiary);
+        transition:
+            border-color var(--duration-fast) var(--ease-out),
+            color var(--duration-fast) var(--ease-out);
+    }
+
+    .accountButton:hover,
+    .accountButtonOpen {
+        border-color: var(--border-strong);
+        color: var(--fg-primary);
+    }
+
+    .accountChevron {
+        transition: transform var(--duration-normal) var(--ease-out);
+    }
+
+    .accountButtonOpen .accountChevron {
+        transform: rotate(180deg);
+    }
+
+    .menu {
+        position: absolute;
+        top: calc(100% + 10px);
+        right: 0;
+        z-index: var(--z-popover);
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        width: 292px;
+        padding: 8px;
+        border-radius: 22px;
+        background: var(--surface-popover);
+        border: 1px solid var(--border-default);
+        box-shadow: var(--shadow-2xl);
+        transform-origin: top right;
+    }
+
+    .menuHead {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 6px;
+        padding: 10px 10px 14px;
+        border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .menuWho {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+    }
+
+    .menuName {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 15px;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+        color: var(--fg-primary);
+    }
+
+    .menuEmail {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 12.5px;
+        color: var(--fg-tertiary);
+    }
+
+    .menuItem {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        width: 100%;
+        min-height: 44px;
+        padding: 0 10px;
+        border-radius: 14px;
+        color: var(--fg-secondary);
+        font-size: 14px;
+        font-weight: 600;
+        text-align: left;
+        text-decoration: none;
+        outline: none;
+        transition:
+            background-color var(--duration-fast) var(--ease-out),
+            color var(--duration-fast) var(--ease-out);
+    }
+
+    .menuItem:hover,
+    .menuItem:focus-visible {
+        background: var(--bg-tertiary);
+        color: var(--fg-primary);
+    }
+
+    .menuItemActive {
+        color: var(--accent-strong);
+    }
+
+    .menuIcon {
+        display: grid;
+        flex-shrink: 0;
+        place-items: center;
+        width: 32px;
+        height: 32px;
+        border-radius: 10px;
+        background: var(--bg-tertiary);
+        color: inherit;
+    }
+
+    .menuItemActive .menuIcon {
+        background: var(--accent-soft);
+    }
+
+    .menuSeparator {
+        height: 1px;
+        margin: 6px 6px;
+        background: var(--border-subtle);
+    }
+
+    .menuDanger,
+    .menuDanger:hover,
+    .menuDanger:focus-visible {
+        color: var(--color-error);
+    }
+
+    .menuDanger .menuIcon {
+        background: var(--color-error-bg);
+    }
+}
+
+/* Room for the search field's label and the full "Add expense" */
+@media (min-width: 1280px) {
+    .search {
+        justify-content: flex-start;
+        width: 214px;
+        padding: 0 7px 0 15px;
+        color: var(--fg-muted);
+    }
+
+    .searchLabel {
+        display: block;
+        flex: 1;
+        text-align: left;
+    }
+
+    .kbd {
+        display: inline-flex;
+    }
+
+    .addLong {
+        display: inline;
+    }
+
+    .addShort {
+        display: none;
+    }
+}
+
+/* …and for an icon beside each destination */
+@media (min-width: 1440px) {
+    .linkIcon {
+        display: block;
+    }
+}

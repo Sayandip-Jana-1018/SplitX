@@ -243,7 +243,7 @@ export default function SettingsPage() {
         <>
             <Stagger className={styles.page}>
                 {/* ── Profile ── */}
-                <StaggerItem>
+                <StaggerItem className={styles.profileArea}>
                     <section className={styles.profile}>
                         {loading && !user ? (
                             <div className={styles.profileSkeleton} aria-hidden="true">
@@ -298,132 +298,135 @@ export default function SettingsPage() {
                     </section>
                 </StaggerItem>
 
-                {/* ── Getting paid ── */}
-                <StaggerItem>
-                    <Section title="Getting paid" subtitle="Friends use these to pay you back">
-                        <ListGroup>
-                            <ListRow
-                                onClick={openProfile}
-                                leading={<IconTile tone={user?.upiId ? 'success' : 'warning'}><Wallet size={18} /></IconTile>}
-                                title="UPI ID"
-                                subtitle={user?.upiId || 'Add yours to get paid in one tap'}
-                                trailing={user?.upiId ? undefined : <Tag tone="warning">Add</Tag>}
-                                chevron
-                            />
-                            <ListRow
-                                onClick={openProfile}
-                                leading={<IconTile tone="neutral"><Smartphone size={18} /></IconTile>}
-                                title="Phone"
-                                subtitle={user?.phone || 'Not added'}
-                                chevron
-                            />
-                        </ListGroup>
-                    </Section>
-                </StaggerItem>
+                <div className={styles.mainCol}>
+                    {/* ── Getting paid ── */}
+                    <StaggerItem className={styles.paidArea}>
+                        <Section title="Getting paid" subtitle="Friends use these to pay you back">
+                            <ListGroup>
+                                <ListRow
+                                    onClick={openProfile}
+                                    leading={<IconTile tone={user?.upiId ? 'success' : 'warning'}><Wallet size={18} /></IconTile>}
+                                    title="UPI ID"
+                                    subtitle={user?.upiId || 'Add yours to get paid in one tap'}
+                                    trailing={user?.upiId ? undefined : <Tag tone="warning">Add</Tag>}
+                                    chevron
+                                />
+                                <ListRow
+                                    onClick={openProfile}
+                                    leading={<IconTile tone="neutral"><Smartphone size={18} /></IconTile>}
+                                    title="Phone"
+                                    subtitle={user?.phone || 'Not added'}
+                                    chevron
+                                />
+                            </ListGroup>
+                        </Section>
+                    </StaggerItem>
 
-                {/* ── Appearance ── */}
-                <StaggerItem>
-                    <Section title="Appearance">
-                        <div className={styles.panel}>
-                            <div className={styles.panelBlock}>
-                                <span className={styles.panelLabel}>Mode</span>
-                                <ThemeModeSwitch />
+                    {/* ── Appearance ── */}
+                    <StaggerItem className={styles.lookArea}>
+                        <Section title="Appearance">
+                            <div className={styles.panel}>
+                                <div className={styles.panelBlock}>
+                                    <span className={styles.panelLabel}>Mode</span>
+                                    <ThemeModeSwitch />
+                                </div>
+                                <div className={styles.panelDivider} />
+                                <div className={styles.panelBlock}>
+                                    <span className={styles.panelLabel}>Accent colour</span>
+                                    <PalettePicker value={palette} onChange={setPalette} />
+                                </div>
                             </div>
-                            <div className={styles.panelDivider} />
-                            <div className={styles.panelBlock}>
-                                <span className={styles.panelLabel}>Accent colour</span>
-                                <PalettePicker value={palette} onChange={setPalette} />
-                            </div>
-                        </div>
-                    </Section>
-                </StaggerItem>
+                        </Section>
+                    </StaggerItem>
 
-                {/* ── Help ── */}
-                <StaggerItem>
-                    <Section title="Help">
-                        <ListGroup>
-                            <ListRow
-                                onClick={openAssistant}
-                                leading={<IconTile><Sparkles size={18} /></IconTile>}
-                                title="Ask SplitX AI"
-                                subtitle="Balances, groups, spending — just ask"
-                                chevron
-                            />
-                            <ListRow
-                                onClick={replayTour}
-                                leading={<IconTile tone="neutral"><Compass size={18} /></IconTile>}
-                                title="Replay the tour"
-                                subtitle="A quick walkthrough of the app"
-                                chevron
-                            />
-                        </ListGroup>
-                    </Section>
-                </StaggerItem>
+                    {/* ── Help ── */}
+                    <StaggerItem className={styles.helpArea}>
+                        <Section title="Help">
+                            <ListGroup>
+                                <ListRow
+                                    onClick={openAssistant}
+                                    leading={<IconTile><Sparkles size={18} /></IconTile>}
+                                    title="Ask SplitX AI"
+                                    subtitle="Balances, groups, spending — just ask"
+                                    chevron
+                                />
+                                <ListRow
+                                    onClick={replayTour}
+                                    leading={<IconTile tone="neutral"><Compass size={18} /></IconTile>}
+                                    title="Replay the tour"
+                                    subtitle="A quick walkthrough of the app"
+                                    chevron
+                                />
+                            </ListGroup>
+                        </Section>
+                    </StaggerItem>
 
-                {/* ── Data ── */}
-                <StaggerItem>
-                    <Section title="Your data">
-                        <ListGroup>
-                            <ListRow
-                                onClick={exporting ? undefined : exportData}
-                                leading={<IconTile tone="neutral"><Download size={18} /></IconTile>}
-                                title="Export my data"
-                                subtitle="Download everything as a JSON file"
-                                trailing={exporting ? <Spinner size={16} /> : undefined}
-                                chevron={!exporting}
-                            />
-                            <ListRow
-                                onClick={() => setSheet('sessions')}
-                                leading={<IconTile tone="neutral"><LogOut size={18} /></IconTile>}
-                                title="Sign out of all devices"
-                                subtitle="Ends every session, on this device too"
-                                chevron
-                            />
-                            <ListRow
-                                onClick={() => {
-                                    setConfirmText('');
-                                    setSheet('delete');
-                                }}
-                                leading={<IconTile tone="danger"><Trash2 size={18} /></IconTile>}
-                                title="Delete account"
-                                subtitle="Erase your details and leave every group"
-                                tone="danger"
-                                chevron
-                            />
-                        </ListGroup>
-                    </Section>
-                </StaggerItem>
+                    {/* ── Data ── */}
+                    <StaggerItem className={styles.dataArea}>
+                        <Section title="Your data">
+                            <ListGroup>
+                                <ListRow
+                                    onClick={exporting ? undefined : exportData}
+                                    leading={<IconTile tone="neutral"><Download size={18} /></IconTile>}
+                                    title="Export my data"
+                                    subtitle="Download everything as a JSON file"
+                                    trailing={exporting ? <Spinner size={16} /> : undefined}
+                                    chevron={!exporting}
+                                />
+                                <ListRow
+                                    onClick={() => setSheet('sessions')}
+                                    leading={<IconTile tone="neutral"><LogOut size={18} /></IconTile>}
+                                    title="Sign out of all devices"
+                                    subtitle="Ends every session, on this device too"
+                                    chevron
+                                />
+                                <ListRow
+                                    onClick={() => {
+                                        setConfirmText('');
+                                        setSheet('delete');
+                                    }}
+                                    leading={<IconTile tone="danger"><Trash2 size={18} /></IconTile>}
+                                    title="Delete account"
+                                    subtitle="Erase your details and leave every group"
+                                    tone="danger"
+                                    chevron
+                                />
+                            </ListGroup>
+                        </Section>
+                    </StaggerItem>
 
-                {/* ── App ── */}
-                <StaggerItem>
-                    <Section title="App">
-                        <ListGroup>
-                            <ListRow
-                                onClick={isInstalled ? undefined : installApp}
-                                leading={<IconTile tone="neutral"><MonitorSmartphone size={18} /></IconTile>}
-                                title={isInstalled ? 'Installed' : 'Install SplitX'}
-                                subtitle={isInstalled
-                                    ? 'Running as an app on this device'
-                                    : installPrompt ? 'Add it to your home screen in one tap' : 'Works offline, opens instantly'}
-                                trailing={isInstalled ? <Tag tone="success">Installed</Tag> : undefined}
-                                chevron={!isInstalled}
-                            />
-                            <ListRow
-                                leading={<IconTile tone="neutral"><Info size={18} /></IconTile>}
-                                title="Version"
-                                trailing={<span className={styles.version}>{APP_VERSION}</span>}
-                            />
-                        </ListGroup>
-                    </Section>
-                </StaggerItem>
+                    {/* ── App ── */}
+                    <StaggerItem className={styles.appArea}>
+                        <Section title="App">
+                            <ListGroup>
+                                <ListRow
+                                    onClick={isInstalled ? undefined : installApp}
+                                    leading={<IconTile tone="neutral"><MonitorSmartphone size={18} /></IconTile>}
+                                    title={isInstalled ? 'Installed' : 'Install SplitX'}
+                                    subtitle={isInstalled
+                                        ? 'Running as an app on this device'
+                                        : installPrompt ? 'Add it to your home screen in one tap' : 'Works offline, opens instantly'}
+                                    trailing={isInstalled ? <Tag tone="success">Installed</Tag> : undefined}
+                                    chevron={!isInstalled}
+                                />
+                                <ListRow
+                                    leading={<IconTile tone="neutral"><Info size={18} /></IconTile>}
+                                    title="Version"
+                                    trailing={<span className={styles.version}>{APP_VERSION}</span>}
+                                />
+                            </ListGroup>
+                        </Section>
+                    </StaggerItem>
 
-                <StaggerItem>
+                </div>
+
+                <StaggerItem className={styles.signOutArea}>
                     <motion.button type="button" whileTap={{ scale: 0.98 }} className={styles.signOut} onClick={handleSignOut}>
                         <LogOut size={17} />
                         Sign out
                     </motion.button>
                 </StaggerItem>
-                <StaggerItem>
+                <StaggerItem className={styles.footerArea}>
                     <p className={styles.footer}>SplitX {APP_VERSION} · Split fairly, settle instantly</p>
                 </StaggerItem>
             </Stagger>
