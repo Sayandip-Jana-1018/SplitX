@@ -3666,6 +3666,19 @@ from `.env` through `npm run aws:secrets`, and Kind's `k8s:up` now copies the sa
 - ops-api's reads through Pod Identity;
 - the lab's load reaching CloudFront from the NAT address.
 
+**Addendum (2026-10-09): two more findings in the k6 binary, accepted the same way.** The release of
+`78ba8f2` was refused: Go 1.27.2, published that day, fixes two high findings in Go 1.27.1, which k6
+2.3.0 is built with. k6 2.3.0 is still the newest release; only unreleased `master` builds are newer.
+- **CVE-2026-78667:** net/http, a denial of service through crafted Range headers sent to a Go
+  HTTP server that serves content by range.
+- **CVE-2026-97031:** crypto/tls, a denial of service through repeated ECH outer extension
+  references in a ClientHello, which a TLS server parses.
+- **Why neither applies:** both are in server code. The lab runs k6 as a client only (`k6 run`),
+  against SplitX's own edge, and only ops-api can reach the lab.
+- **What was accepted:** both, in `ops/.trivyignore.yaml`, for `usr/local/bin/k6` alone, each with
+  its reason and the same expiry, 2026-10-24. The app's image had no finding and still has no
+  exceptions.
+
 ### D-098 · /ops says only what its sources say, and reads down the middle of a phone
 **2026-09-24** · ✅ written, unit-tested (1,264 → 1,280 tests) and checked at 390 px in both themes,
 with and without a cluster

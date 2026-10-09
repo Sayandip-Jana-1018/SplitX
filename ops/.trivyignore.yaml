@@ -19,3 +19,25 @@ vulnerabilities:
       accepts connections from ops-api only. Dependabot watches ops/ for a
       k6 release with the fix.
     expired_at: 2026-10-24
+  - id: CVE-2026-78667
+    paths:
+      - usr/local/bin/k6
+    statement: >-
+      Go net/http denial of service through crafted HTTP Range headers, sent
+      to a Go HTTP server that serves content by range. k6 2.3.0, the newest
+      release, is built with Go 1.27.1; the fix is in Go 1.27.2 (published
+      2026-10-09), and no k6 built with it exists yet. The traffic lab runs
+      k6 as an HTTP client only (`k6 run`, ops/lab/server.mjs), and its one
+      script requests SplitX's own edge, so no Go server of k6's answers a
+      Range request; the lab accepts connections from ops-api only.
+    expired_at: 2026-10-24
+  - id: CVE-2026-97031
+    paths:
+      - usr/local/bin/k6
+    statement: >-
+      Go crypto/tls denial of service through repeated ECH outer extension
+      references in a ClientHello, which a TLS server parses. Fixed in Go
+      1.27.2 (published 2026-10-09); k6 2.3.0 is built with Go 1.27.1 and no
+      newer k6 exists yet. The lab's k6 is a TLS client of SplitX's own edge
+      and runs no TLS server, so it never parses a ClientHello.
+    expired_at: 2026-10-24
