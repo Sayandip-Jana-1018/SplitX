@@ -3689,6 +3689,17 @@ from `.env` through `npm run aws:secrets`, and Kind's `k8s:up` now copies the sa
   its reason and the same expiry, 2026-10-24. The app's image had no finding and still has no
   exceptions.
 
+**Addendum (2026-10-10): one more, which reaches clients too.** The release of `fa49adc` was refused
+for CVE-2026-78669 (GO-2026-6611), in Go 1.27.1's net/http and in x/net 0.58.0, both in k6 2.3.0. A
+malicious HTTP/2 peer that opens many streams and then sends many small SETTINGS frames makes the
+other side spend excessive CPU, a client as well as a server. k6 2.3.0 is still the newest release.
+- **Why it is accepted:** k6 is a client here, but its one peer is `TARGET_URL`, SplitX's own edge,
+  set in the lab's ConfigMap when the platform is installed. A run can choose only its rate and its
+  length, so no other server ever answers k6. The most such a peer could do is use CPU in one run,
+  which ends within 180 s, and only ops-api can start one.
+- **What was accepted:** this finding alone, for `usr/local/bin/k6`, with the same expiry,
+  2026-10-24. The app's image still has no finding and no exceptions.
+
 ### D-098 · /ops says only what its sources say, and reads down the middle of a phone
 **2026-09-24** · ✅ written, unit-tested (1,264 → 1,280 tests) and checked at 390 px in both themes,
 with and without a cluster

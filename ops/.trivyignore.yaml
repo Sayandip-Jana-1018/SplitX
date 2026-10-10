@@ -41,3 +41,18 @@ vulnerabilities:
       newer k6 exists yet. The lab's k6 is a TLS client of SplitX's own edge
       and runs no TLS server, so it never parses a ClientHello.
     expired_at: 2026-10-24
+  - id: CVE-2026-78669
+    paths:
+      - usr/local/bin/k6
+    statement: >-
+      Go net/http and golang.org/x/net/http2 (GO-2026-6611): a malicious
+      HTTP/2 peer that opens many streams and then sends many small SETTINGS
+      frames makes the other side spend excessive CPU, a client as well as a
+      server. Fixed in Go 1.27.2 and x/net 0.60.0 (published 2026-10-08); k6
+      2.3.0, the newest release, is built with Go 1.27.1 and x/net 0.58.0.
+      The lab's k6 has one peer, TARGET_URL, SplitX's own edge, set in the
+      lab's ConfigMap when the platform is installed; a run can choose only
+      its rate and length (ops/lab/limits.mjs), so no other server ever
+      answers k6. The most such a peer could do is use CPU in one run, which
+      ends within 180 s; the lab accepts connections from ops-api only.
+    expired_at: 2026-10-24
