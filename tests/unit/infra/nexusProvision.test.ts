@@ -2,13 +2,16 @@ import { spawn } from 'node:child_process';
 import { createServer, type IncomingMessage, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { storeOnce } from '../../../jenkins/evidence.mjs';
 
 /*
  * nexus/provision.mjs sets up every fresh Nexus (D-096). It runs against a
  * small stand-in for Nexus' REST API here: the requests it makes are the
  * ones the real API documents, and a second run must change nothing but
  * Jenkins' password. The stand-in's repository checks each request the way
- * Nexus 3.96.3 does, by its HTTP method (D-100), and allows each path once.
+ * Nexus 3.96.3 does, by its HTTP method (D-100), and allows each path once,
+ * refusing a second PUT with 409, as that Nexus did on AWS. Jenkins' archive
+ * step (jenkins/evidence.mjs) stores into the same stand-in.
  */
 
 const ADMIN = 'admin-secret';
@@ -25,6 +28,8 @@ interface FakeNexus {
     users: Map<string, Record<string, unknown> & { password?: string }>;
     /** What the repository splitx-evidence holds, by path. */
     assets: Map<string, string>;
+    /** The answer to a PUT of a path it holds already. */
+    refusal: number;
     /** Privileges this Nexus leaves out of any role it saves: a role that can't do something. */
     withheld: string[];
     requests: string[];
@@ -60,7 +65,7 @@ function repositoryRequest(method: string, path: string, auth: string | undefine
     if (!privileges) return 401;
     if (!privileges.includes('*') && !privileges.includes('nx-repository-view-raw-splitx-evidence-' + ACTION[method])) return 403;
     if (method === 'PUT') {
-        if (nexus.assets.has(path)) return 400;
+        if (nexus.assets.has(path)) return nexus.refusal;
         nexus.assets.set(path, text);
         return 201;
     }
@@ -69,7 +74,7 @@ function repositoryRequest(method: string, path: string, auth: string | undefine
 }
 
 beforeEach(async () => {
-    nexus = { eula: false, anonymous: true, repositories: new Map(), roles: new Map(), users: new Map(), assets: new Map(), withheld: [], requests: [], eulaAccepts: [] };
+    nexus = { eula: false, anonymous: true, repositories: new Map(), roles: new Map(), users: new Map(), assets: new Map(), refusal: 409, withheld: [], requests: [], eulaAccepts: [] };
     server = createServer(async (req, res) => {
         const url = new URL(req.url ?? '/', 'http://nexus');
         const path = url.pathname.replace('/service/rest', '');
@@ -247,5 +252,31 @@ describe('setting up a fresh Nexus', () => {
         const { code, output } = await provision({ NEXUS_JENKINS_PASSWORD: '' });
         expect(code).toBe(1);
         expect(output).toContain('NEXUS_JENKINS_PASSWORD is not set');
+    });
+});
+
+describe('Jenkins\' archive step, storing evidence with the account provisioning made', () => {
+    const PATH = 'e66a699d1164/6975252393/vuln.json';
+    const file = () => base + '/repository/splitx-evidence/' + PATH;
+
+    it('stores each file once, and a rebuild that finds it there counts it stored', async () => {
+        expect((await provision()).code).toBe(0);
+        const jenkins = basic('jenkins', JENKINS);
+
+        expect(await storeOnce(file(), jenkins, '{"first":true}')).toBe('stored');
+        // Jenkins build 3 on AWS: Nexus 3.96.3 refused the rebuild's PUT with 409.
+        expect(await storeOnce(file(), jenkins, '{"first":false}')).toBe('already stored');
+        // What this step was first written for.
+        nexus.refusal = 400;
+        expect(await storeOnce(file(), jenkins, '{"first":false}')).toBe('already stored');
+        expect(nexus.assets.get(PATH)).toBe('{"first":true}');
+    });
+
+    it('fails, naming the file, when Nexus refuses for any other reason', async () => {
+        expect((await provision({ NEXUS_OPS_PASSWORD: OPS })).code).toBe(0);
+
+        await expect(storeOnce(file(), basic('jenkins', 'wrong'), '{}')).rejects.toThrow('Nexus answered 401 to storing vuln.json');
+        await expect(storeOnce(file(), basic('ops', OPS), '{}')).rejects.toThrow('Nexus answered 403 to storing vuln.json');
+        expect(nexus.assets.size).toBe(0);
     });
 });

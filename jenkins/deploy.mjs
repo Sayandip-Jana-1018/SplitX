@@ -28,6 +28,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { request as httpRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
+import { storeOnce } from './evidence.mjs';
 
 const REPOSITORY = 'Sayandip-Jana-1018/SplitX';
 const IMAGE_REPOSITORY = 'ghcr.io/sayandip-jana-1018/splitx';
@@ -295,19 +296,10 @@ function verifiedPredicate(type) {
     return statements.at(-1).predicate;
 }
 
-async function nexusPut(path, body) {
+function nexusPut(path, body) {
     const url = env.DEPLOY_NEXUS_URL + '/repository/' + EVIDENCE_REPOSITORY + '/' + path;
     const authorization = 'Basic ' + Buffer.from(env.NEXUS_USER + ':' + env.NEXUS_PASSWORD).toString('base64');
-    const res = await fetch(url, { method: 'PUT', headers: { authorization, 'content-type': 'application/json' }, body, signal: AbortSignal.timeout(60_000) });
-    // The repository never overwrites (write policy "allow once"): a second
-    // attempt for the same deployment finds its evidence already there.
-    if (res.status === 400) {
-        const existing = await fetch(url, { method: 'HEAD', headers: { authorization }, signal: AbortSignal.timeout(30_000) });
-        if (existing.ok) return 'already stored';
-    }
-    // The file's name is enough: the reason goes into the GitHub status, which is short.
-    if (!res.ok) throw new Error('Nexus answered ' + res.status + ' to storing ' + path.split('/').pop());
-    return 'stored';
+    return storeOnce(url, authorization, body);
 }
 
 async function stepArchive() {

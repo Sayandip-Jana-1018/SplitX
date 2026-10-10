@@ -3,6 +3,7 @@ import { NOT_CONNECTED, type ClusterReadings, type Traffic } from '@/lib/ops/clu
 import type { CodeScanning, Delivery, Pipeline } from '@/lib/ops/github';
 import { preflight, preflightHeadline, type PreflightInput, type PreflightItem } from '@/lib/ops/preflight';
 import type { Reading } from '@/lib/ops/reading';
+import { summarisePods } from '../../../ops/api/summaries.mjs';
 
 /*
  * The pre-flight list on /ops (plan Phase 9): a verdict per tool on readings
@@ -55,7 +56,8 @@ const scanning = (overrides: Partial<CodeScanning> = {}): CodeScanning => ({
 });
 
 const node = (name: string, zone: string | null, ready = true) => ({ name, zone, instanceType: 'm7i-flex.large', ready, cpuPercent: 20, memoryPercent: 40, since: at });
-const pod = (name: string, digest = DIGEST, ready = true) => ({ name, node: 'a', zone: 'ap-south-1a', phase: 'Running', ready, restarts: 0, digest, since: at });
+// A pod's digest as ops-api names it: sha256: and its first 12 hex digits (summarisePods).
+const pod = (name: string, digest = DIGEST.slice(0, 19), ready = true) => ({ name, node: 'a', zone: 'ap-south-1a', phase: 'Running', ready, restarts: 0, digest, since: at });
 
 function readings(target = 'eks', overrides: Partial<ClusterReadings> = {}): ClusterReadings {
     return {
@@ -210,6 +212,28 @@ describe('the platform\'s items', () => {
     it('stays green after the rollback rehearsal: the deployment says failure, but its image runs', () => {
         const rehearsed = delivery({ state: 'failure', description: 'Rolled back: the release never became ready' });
         expect(one('running', { deliveries: ok([rehearsed]) }).readiness).toBe('go');
+    });
+
+    it('knows the release by the digest ops-api names, which keeps 12 of its 64 hex digits', () => {
+        // Pods as Kubernetes lists them, summarised by ops-api itself, so the two can't disagree
+        // on a digest's form again: on AWS, /ops called the running release missing (D-104).
+        const listed = (name: string, digest: string) => ({
+            metadata: { name },
+            spec: { nodeName: 'a' },
+            status: {
+                phase: 'Running',
+                startTime: at,
+                conditions: [{ type: 'Ready', status: 'True' }],
+                containerStatuses: [{ name: 'splitx', restartCount: 0, imageID: 'ghcr.io/sayandip-jana-1018/splitx@' + digest }],
+            },
+        });
+        const pods = summarisePods({ items: [listed('splitx-1', DIGEST), listed('splitx-2', DIGEST)] });
+        expect(pods).toMatchObject([{ digest: DIGEST.slice(0, 19) }, { digest: DIGEST.slice(0, 19) }]);
+        expect(one('running', withCluster({ workloads: ok(pods) })).readiness).toBe('go');
+        expect(one('running', withCluster({ workloads: ok(summarisePods({ items: [listed('splitx-1', OLD_DIGEST)] })) })).readiness).toBe('fix');
+        // The whole digest still counts; a part too short to tell releases apart does not.
+        expect(one('running', withCluster({ workloads: ok([pod('splitx-1', DIGEST)]) })).readiness).toBe('go');
+        expect(one('running', withCluster({ workloads: ok([pod('splitx-1', 'sha256:dddd')]) })).readiness).toBe('fix');
     });
 
     it('names a release that isn\'t running, and waits while Jenkins deploys', () => {

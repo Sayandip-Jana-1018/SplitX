@@ -3532,6 +3532,16 @@ touches the licence; and that no password is ever printed.
 - `cosign verify-attestation`'s output format for the release job's attestations (both the plain
   envelope and the bundle form are parsed).
 
+**Addendum (2026-10-10): a rebuild finds its evidence stored, and says so.** Jenkins build 3 on AWS
+rebuilt build 1's deployment, so the Archive step stored to paths that already held its evidence.
+Nexus 3.96.3 refused those PUTs with 409, not the 400 the step was written for, and the step
+reported "Nexus answered 409" although the evidence was complete.
+- **The fix:** 409 is treated like 400. As before, a HEAD then checks that the file is there, and
+  only then does the step say "already stored".
+- **Tested:** the storing moved to `jenkins/evidence.mjs`, so a unit test runs it against the Nexus
+  stand-in of provisioning's tests, with the account provisioning makes. The stand-in now refuses
+  a second PUT with 409, as the real Nexus did.
+
 ---
 
 ## Phase 13 — The control room's cluster half
@@ -4457,6 +4467,15 @@ Terraform phase with ECR and IRSA, and listed features that later decisions chan
   checked.** It names each stack CloudFormation hasn't checked for drift. The item stays green, as
   the stacks panel's "drift not checked yet" does: a stack that was never checked is complete, only
   unexamined. Both stacks have been checked since (D-105).
+
+**Addendum (2026-10-10): "The newest release is what runs" reads digests the way ops-api names
+them.** On AWS the item was red although every pod ran the release. ops-api names a pod's digest
+by `sha256:` and its first 12 hex digits, as `/ops` shows it; the item compared that with the
+deployment's whole digest.
+- **The fix:** a pod runs the release when the release's digest begins with the pod's, and the
+  pod's has at least 12 hex digits.
+- **Why the tests missed it:** they built pods with whole digests. They now also take ops-api's own
+  summary of a Kubernetes pod list (`summarisePods`), so the two can't disagree unnoticed again.
 
 ---
 

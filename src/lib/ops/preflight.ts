@@ -147,6 +147,9 @@ function newestFor(deliveries: PreflightInput['deliveries'], environment: string
 }
 
 const digestOf = (image: string | null) => (image?.includes('@') ? image.slice(image.indexOf('@') + 1) : null);
+// ops-api names each pod's digest by its first 12 hex digits (sha256:0123456789ab), so a pod
+// runs the release when the release's full digest begins with that.
+const runsDigest = (wanted: string, digest: string | null) => digest !== null && /^sha256:[0-9a-f]{12,64}$/.test(digest) && wanted.startsWith(digest);
 
 function running(cluster: ClusterReadings, delivery: Delivery | undefined, environment: string): PreflightItem {
     const title = 'The newest release is what runs';
@@ -157,7 +160,7 @@ function running(cluster: ClusterReadings, delivery: Delivery | undefined, envir
     }
     const wanted = digestOf(delivery.image);
     const digests = [...new Set(cluster.workloads.data.filter((pod) => pod.ready).map((pod) => pod.digest))];
-    if (wanted && digests.length === 1 && digests[0] === wanted) {
+    if (wanted && digests.length === 1 && runsDigest(wanted, digests[0])) {
         return item('running', title, 'go', `${short(delivery.sha)}, by digest, on every ready pod.`);
     }
     const said = delivery.description ? `: "${delivery.description}"` : '';
