@@ -178,3 +178,11 @@
     --fg-on-accent: var(--on-accent);
     --accent-fill: var(--accent-500);
 }
+
+/* The gold of the logo's rim and rupee: the logo's own, the same in every palette. */
+:root {
+    --coin-1: #fff6d6;
+    --coin-2: #ffd978;
+    --coin-3: #e0a02c;
+    --coin-4: #ffe6a3;
+}

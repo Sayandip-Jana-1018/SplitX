@@ -7,36 +7,33 @@
 }
 
 .mark {
-    position: relative;
-    display: grid;
-    place-items: center;
     flex-shrink: 0;
-    overflow: hidden;
-    background: var(--accent-gradient);
-    color: var(--fg-on-accent);
-    box-shadow:
-        0 1px 0 rgba(255, 255, 255, 0.35) inset,
-        0 6px 16px -6px rgba(var(--accent-500-rgb), 0.65);
+    filter: drop-shadow(0 3px 6px rgba(var(--accent-500-rgb), 0.5));
 }
 
-.mark::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.3), transparent 55%);
-    pointer-events: none;
+/* The gold of the rim and the rupee is the logo's own, whatever the palette. */
+.coin1 { stop-color: var(--coin-1); }
+.coin2 { stop-color: var(--coin-2); }
+.coin3 { stop-color: var(--coin-3); }
+.coin4 { stop-color: var(--coin-4); }
+
+.liquid1 { stop-color: oklch(0.72 calc(0.17 * var(--c)) var(--h)); }
+.liquid2 { stop-color: oklch(0.4 calc(0.2 * var(--c)) var(--h)); }
+
+.face {
+    fill: oklch(0.26 calc(0.13 * var(--c)) var(--h));
 }
 
-.mark > svg {
-    position: relative;
-    z-index: 1;
+.surface {
+    stroke: var(--coin-4);
 }
 
 .word {
-    font-weight: 800;
-    letter-spacing: -0.04em;
+    font-weight: 700;
+    letter-spacing: -0.035em;
     line-height: 1;
     white-space: nowrap;
+    text-shadow: var(--ink-on-wall-shadow);
 }
 
 .x {
