@@ -5388,6 +5388,58 @@ reason, since "the demo's deadline" no longer applies.
 new digest (`sha256:2dd4756e…`). Our pin is by digest and still resolves, so nothing here changes
 without a decision. What the re-push changed was not read: this network's TLS kept failing that check.
 
+### D-119 · The glass engine: one canvas that scrolls with the page
+**2026-11-03** · ✅ written, tested and measured on the laptop. ⚠️ Not yet on any real phone, which is
+what Phase 1 of `docs/web/LIQUID_GLASS_OVERHAUL.md` is waiting for. Only `/glass-lab` uses it so far.
+
+**The problem.** A browser scrolls a page on its own thread, ahead of anything a page draws. Glass
+drawn on a canvas fixed to the screen therefore trails its own text during a flick, and the rim shakes.
+
+**The decision: the canvas is part of the page.** It scrolls with the cards, on the same thread, so a
+rim can't drift from its text whatever the lag. It is taller than the screen by up to 260 px each way,
+so a fast flick can't outrun it, and each frame moves it back over the screen. A wall as tall as the page
+clips it, because otherwise the taller canvas would lengthen the page and the page could scroll for ever.
+
+**What can't ride on that canvas uses CSS glass** (`data-glass-mode="css"`, `floats` on `<Glass>`):
+- anything fixed to the screen, such as the dock, the top bar and sheets;
+- anything in a scroller of its own, such as Home's sideways group cards.
+
+A canvas beneath the page also can't cover text scrolling under a dock, while `backdrop-filter` can, with
+a real blur. This replaces the plan's first idea, a canvas per card, and its idea of shader glass on fixed things.
+
+**How it draws.** The liquid goes to a small texture (a quarter to a half of the page's CSS pixels) and is
+halved twice more for frost. The screen and the glass only read those textures, and each surface is
+its own rectangle, so most of the screen is one texture read per pixel.
+
+**The governor** (`src/lib/glass/governor.ts`, pure and unit tested) moves between five levels by frame
+time, remembers the level per device, and stops after two raises that failed. It asks for Calm when even
+the lowest level can't keep up. If a drop changes nothing and the typical frame is itself slow, it accepts
+that as the device's limit, such as battery saver. Draws average about 60 a second on any screen.
+
+**Measured on the Intel UHD, phone-sized at 412×915 @2.625, a 2.1 MP canvas:**
+
+| Level | Canvas | One frame on the GPU |
+|---|---|---|
+| full | 824×2562 | 2.2 ms |
+| high | 721×2242 | 2.0 ms |
+| balanced | 618×1922 | 1.4 ms |
+| light | 515×1601 | 1.4 ms |
+| low | 412×1281 | 0.8 ms |
+
+- The old shader measured 13.7 ms at 2.5 MP, timed differently: one draw with the wait taken off, against
+  a run of eight here. The comparison is rough, but the gap is far larger than the difference in method.
+- At every level but low (30 by design) it held about 62 draws a second, at rest and scrolling.
+- Overloaded on purpose with a 23 MP canvas, it tried a higher level, found it too slow, stepped back and
+  returned to 62. That run found a real bug: the frame cap hides any gain in the typical frame, so a drop
+  that helped was read as one that hadn't, and the governor wrongly accepted 55 fps as the device's limit.
+- Dropping the GPU connection on purpose: the canvas hides, CSS glass takes over in the same moment, and
+  the shader returns by itself with no errors on the page. After three losses it stays on CSS.
+- Size: 11.2 KB of compressed JavaScript and 0.9 KB of CSS against a limit of 15 KB, with no new libraries.
+
+**Not proven:** anything on a phone. The laptop has plenty to spare, and a phone's GPU is what decides this.
+No rim drift holds by how it is built, but only a finger on a phone can show it. `/glass-lab` can switch
+between this, the old fixed canvas and all-CSS glass, so that test can compare them directly.
+
 ---
 
 ## Open problems

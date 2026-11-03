@@ -1,0 +1,91 @@
+/*
+ * Liquid Glass: what the page draws itself. The engine (src/lib/glass/engine.ts)
+ * paints the liquid and most glass on a canvas beneath the page; everything here
+ * works without it, so losing the GPU costs some beauty and nothing else.
+ */
+
+[data-glass-wall] {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    overflow: hidden;
+    pointer-events: none;
+    background: linear-gradient(180deg, var(--glass-wall-a), var(--glass-wall-b));
+}
+
+/* The canvas scrolls with the page, so the wall is as tall as the page and clips it. */
+[data-glass-wall='page'] {
+    position: absolute;
+    inset: 0;
+}
+
+[data-glass-wall] canvas {
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    opacity: 0;
+    transition: opacity 240ms ease;
+}
+
+[data-glass-wall] canvas[data-painted] {
+    opacity: 1;
+}
+
+/* CSS glass: the engine's stand-in, and the real thing for whatever floats over a scrolling page. */
+[data-glass] {
+    --glass-fill: color-mix(in oklab, var(--glass-wall-a, #15121f) 58%, transparent);
+    --glass-rim: rgb(255 255 255 / 0.2);
+    background: var(--glass-fill);
+    border: 1px solid transparent;
+    box-shadow:
+        inset 0 1px 0 var(--glass-rim),
+        inset 0 0 0 1px rgb(255 255 255 / 0.05),
+        0 10px 28px rgb(0 0 0 / 0.22);
+    -webkit-backdrop-filter: blur(22px) saturate(170%);
+    backdrop-filter: blur(22px) saturate(170%);
+}
+
+[data-theme='light'] [data-glass] {
+    --glass-fill: rgb(255 255 255 / 0.42);
+    --glass-rim: rgb(255 255 255 / 0.85);
+}
+
+[data-glass='accent'],
+[data-theme='light'] [data-glass='accent'] {
+    --glass-fill: color-mix(in oklab, var(--glass-accent, #7c3aed) 82%, transparent);
+    --glass-rim: rgb(255 255 255 / 0.32);
+}
+
+/* The engine has drawn its first frame: the shader takes over from CSS, without a gap. */
+html[data-gl='on'] [data-glass]:not([data-glass-mode='css']) {
+    background: transparent;
+    box-shadow: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+}
+
+/* Calm: a still picture, and glass that costs nothing. Nothing re-blurs. */
+html[data-glass-calm] [data-glass] {
+    --glass-fill: color-mix(in oklab, var(--glass-wall-a, #15121f) 84%, transparent);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+}
+
+html[data-glass-calm][data-theme='light'] [data-glass] {
+    --glass-fill: rgb(255 255 255 / 0.72);
+}
+
+html[data-glass-calm] [data-glass='accent'],
+html[data-glass-calm][data-theme='light'] [data-glass='accent'] {
+    --glass-fill: var(--glass-accent, #7c3aed);
+}
+
+/* A page on glass: the wall must show through the page's own background. */
+html.glass-page {
+    background: var(--bg-primary);
+}
+
+html.glass-page body {
+    background: transparent;
+}

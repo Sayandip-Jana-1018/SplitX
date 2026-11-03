@@ -1,0 +1,357 @@
+.page {
+    min-height: 100dvh;
+    color: var(--fg-primary);
+    text-align: center;
+}
+
+.main {
+    width: min(100%, 560px);
+    margin: 0 auto;
+    padding: 84px 16px 132px;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 18px;
+}
+
+.quiet {
+    color: var(--fg-secondary);
+    font-size: 13px;
+}
+
+.hello {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.name {
+    font-size: 30px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+}
+
+.heading {
+    margin-top: 12px;
+    font-size: 18px;
+    font-weight: 750;
+}
+
+.money {
+    font-weight: 750;
+}
+
+/* The fixed bar and panel */
+.bar {
+    position: fixed;
+    top: max(12px, env(safe-area-inset-top));
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 30;
+    border-radius: 999px;
+    white-space: nowrap;
+}
+
+.hud {
+    padding: 10px 16px;
+    min-height: 44px;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+}
+
+.panel {
+    position: fixed;
+    top: calc(max(12px, env(safe-area-inset-top)) + 54px);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 29;
+    width: min(calc(100vw - 24px), 460px);
+    max-height: calc(100dvh - 180px);
+    overflow-y: auto;
+    padding: 14px;
+    border-radius: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.panelTitle {
+    margin-top: 4px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--fg-secondary);
+}
+
+.options {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 6px;
+}
+
+.option {
+    min-height: 36px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid rgb(128 128 128 / 0.35);
+    background: none;
+    color: inherit;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: capitalize;
+    cursor: pointer;
+}
+
+.option[aria-pressed='true'] {
+    background: var(--glass-accent);
+    border-color: transparent;
+    color: #fff;
+}
+
+.option:disabled {
+    opacity: 0.5;
+}
+
+.swatches {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 6px;
+}
+
+.swatch {
+    aspect-ratio: 1;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    cursor: pointer;
+}
+
+.swatch[aria-pressed='true'] {
+    border-color: var(--fg-primary);
+}
+
+.results {
+    width: 100%;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    border-collapse: collapse;
+}
+
+.results th,
+.results td {
+    padding: 3px 4px;
+}
+
+.facts {
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--fg-secondary);
+    overflow-wrap: anywhere;
+}
+
+/* Home's content */
+.hero {
+    padding: 22px 16px 16px;
+    border-radius: 28px;
+    color: #fff;
+}
+
+.hero p {
+    color: #fff;
+}
+
+.heroLabel {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    opacity: 0.85;
+}
+
+.heroValue {
+    margin-top: 6px;
+    font-size: clamp(34px, 11vw, 44px);
+    font-weight: 800;
+    letter-spacing: -0.03em;
+}
+
+.heroNote {
+    margin-top: 2px;
+    font-size: 13px;
+    opacity: 0.85;
+}
+
+.heroTiles {
+    margin-top: 16px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.tile {
+    padding: 12px 8px;
+    border-radius: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 13px;
+}
+
+.tile strong {
+    font-size: 17px;
+}
+
+.actions {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+}
+
+.action {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+}
+
+.round {
+    width: 58px;
+    height: 58px;
+    border-radius: 50%;
+    color: inherit;
+    font: inherit;
+    font-weight: 750;
+    cursor: pointer;
+}
+
+.round[data-glass='accent'] {
+    color: #fff;
+}
+
+.actionLabel {
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.carousel {
+    display: flex;
+    gap: 12px;
+    margin: -32px -16px;
+    padding: 36px 16px 48px;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+}
+
+.groupCard {
+    flex: 0 0 min(62vw, 220px);
+    padding: 18px 12px;
+    border-radius: 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    scroll-snap-align: center;
+}
+
+.list {
+    padding: 6px 14px;
+    border-radius: 24px;
+}
+
+.row {
+    display: grid;
+    grid-template-columns: 42px 1fr auto;
+    gap: 12px;
+    align-items: center;
+    padding: 12px 0;
+    text-align: start;
+}
+
+.row + .row {
+    border-top: 1px solid rgb(128 128 128 / 0.16);
+}
+
+.avatar {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: var(--glass-accent);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 750;
+}
+
+.rowText,
+.rowEnd {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.rowEnd {
+    align-items: flex-end;
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.gridCard {
+    padding: 34px 10px;
+    border-radius: 22px;
+}
+
+/* The dock floats over the page, so it is CSS glass with a real blur of what passes beneath. */
+.dock {
+    position: fixed;
+    bottom: max(12px, env(safe-area-inset-bottom));
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 20;
+    width: min(calc(100vw - 24px), 440px);
+    padding: 6px;
+    border-radius: 999px;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    align-items: center;
+    justify-items: center;
+}
+
+.dockItem {
+    min-height: 48px;
+    width: 100%;
+    border: 0;
+    border-radius: 999px;
+    background: none;
+    color: var(--fg-secondary);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 650;
+    cursor: pointer;
+}
+
+.dockItem[aria-current='page'] {
+    color: var(--fg-primary);
+}
+
+.dockAdd {
+    width: 54px;
+    height: 54px;
+    border-radius: 50%;
+    color: #fff;
+    font: inherit;
+    font-size: 24px;
+    font-weight: 500;
+    cursor: pointer;
+}
