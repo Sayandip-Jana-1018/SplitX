@@ -2,6 +2,14 @@
 export const GLASS_STYLE_IDS = ['liquid', 'frosted', 'crystal', 'tinted', 'pearl'] as const;
 export type GlassStyleId = (typeof GLASS_STYLE_IDS)[number];
 
+export const GLASS_LABELS: Record<GlassStyleId, { name: string; hint: string }> = {
+    liquid: { name: 'Liquid', hint: 'Clear, and bends the light behind it' },
+    frosted: { name: 'Frosted', hint: 'Soft and misty, like a cold window' },
+    crystal: { name: 'Crystal', hint: 'Almost clear, with bright edges' },
+    tinted: { name: 'Tinted', hint: 'Filled with your colour' },
+    pearl: { name: 'Pearl', hint: 'Calm and nearly solid' },
+};
+
 /** How heavy one surface is on the page; `data-glass` holds this. */
 export const GLASS_KINDS = ['clear', 'thin', 'reg', 'thick', 'accent'] as const;
 export type GlassKind = (typeof GLASS_KINDS)[number];

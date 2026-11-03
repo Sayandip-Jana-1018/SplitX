@@ -6,7 +6,7 @@ import { motion, type Variants } from 'framer-motion';
 import { ChevronRight } from 'lucide-react';
 import { cn, formatCurrency } from '@/lib/utils';
 import { useThemeContext } from '@/components/providers/ThemeProvider';
-import { GLASS_STYLE_IDS, type GlassKind, type GlassStyleId } from '@/lib/glass/styles';
+import { GLASS_LABELS, GLASS_STYLE_IDS, type GlassKind } from '@/lib/glass/styles';
 import styles from './kit.module.css';
 
 const ICON_BUTTON_GLASS: Partial<Record<IconButtonVariant, GlassKind>> = {
@@ -551,14 +551,6 @@ export function StaggerItem({ children, className, style }: { children: ReactNod
    Glass picker: each choice is made of the material it names
    ══════════════════════════════════════════ */
 
-const GLASS_NAMES: Record<GlassStyleId, { name: string; hint: string }> = {
-    liquid: { name: 'Liquid', hint: 'Bends the light' },
-    frosted: { name: 'Frosted', hint: 'Soft and misty' },
-    crystal: { name: 'Crystal', hint: 'Almost clear' },
-    tinted: { name: 'Tinted', hint: 'Full of colour' },
-    pearl: { name: 'Pearl', hint: 'Calm and solid' },
-};
-
 export function GlassPicker({ className }: { className?: string }) {
     const { glass, setGlass } = useThemeContext();
     return (
@@ -575,8 +567,7 @@ export function GlassPicker({ className }: { className?: string }) {
                     whileTap={{ scale: 0.93 }}
                     onClick={() => setGlass(id)}
                 >
-                    {GLASS_NAMES[id].name}
-                    <span className={styles.glassPickHint}>{GLASS_NAMES[id].hint}</span>
+                    {GLASS_LABELS[id].name}
                 </motion.button>
             ))}
         </div>

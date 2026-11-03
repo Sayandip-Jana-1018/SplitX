@@ -2,50 +2,34 @@
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Check, Monitor, Moon, Sun } from 'lucide-react';
+import { GLASS_LABELS } from '@/lib/glass/styles';
+import { Monitor, Moon, Sun } from 'lucide-react';
 import { useThemeContext, COLOR_PALETTES } from '@/components/providers/ThemeProvider';
 import type { PaletteId, ThemePreference } from '@/components/providers/ThemeProvider';
 import { GlassPicker, Segmented } from '@/components/ui/kit';
 import Modal from '@/components/ui/Modal';
-import { cn } from '@/lib/utils';
 import styles from './theme.module.css';
 
-/** Grid of accent swatches. */
-function PalettePicker({ value, onChange, className }: { value: PaletteId; onChange: (id: PaletteId) => void; className?: string }) {
+/** Four even rows of colour, each a little drop of it. */
+function PalettePicker({ value, onChange }: { value: PaletteId; onChange: (id: PaletteId) => void }) {
     return (
-        <div className={cn(styles.paletteGrid, className)} role="radiogroup" aria-label="Accent colour">
-            {COLOR_PALETTES.map((palette) => {
-                const active = palette.id === value;
-                return (
-                    <button
-                        key={palette.id}
-                        type="button"
-                        role="radio"
-                        aria-checked={active}
-                        className={styles.paletteItem}
-                        onClick={() => onChange(palette.id)}
-                    >
-                        <span
-                            className={styles.swatch}
-                            style={{
-                                background: `conic-gradient(from 210deg, ${palette.swatches[0]}, ${palette.swatches[1]}, ${palette.swatches[2]}, ${palette.swatches[0]})`,
-                            }}
-                        >
-                            {active && (
-                                <motion.span
-                                    className={styles.swatchCheck}
-                                    initial={{ scale: 0.4, opacity: 0 }}
-                                    animate={{ scale: 1, opacity: 1 }}
-                                    transition={{ type: 'spring', stiffness: 520, damping: 24 }}
-                                >
-                                    <Check size={13} strokeWidth={3} />
-                                </motion.span>
-                            )}
-                        </span>
-                        <span className={styles.swatchName}>{palette.name}</span>
-                    </button>
-                );
-            })}
+        <div className={styles.paletteGrid} role="radiogroup" aria-label="Colour">
+            {COLOR_PALETTES.map((palette) => (
+                <button
+                    key={palette.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={palette.id === value}
+                    className={styles.paletteItem}
+                    onClick={() => onChange(palette.id)}
+                >
+                    <span
+                        className={styles.swatch}
+                        style={{ background: `radial-gradient(circle at 34% 28%, ${palette.swatches[0]}, ${palette.swatches[1]} 52%, ${palette.swatches[2]})` }}
+                    />
+                    <span className={styles.swatchName}>{palette.name}</span>
+                </button>
+            ))}
         </div>
     );
 }
@@ -70,35 +54,46 @@ function ThemeModeSwitch({ size = 'md' }: { size?: 'sm' | 'md' }) {
 
 /** Everything about how SplitX looks, in Settings and behind the appearance button alike. */
 export function AppearanceControls() {
-    const { palette, setPalette, motion, setMotion } = useThemeContext();
+    const { palette, setPalette, glass, motion: motionChoice, setMotion } = useThemeContext();
+    const current = COLOR_PALETTES.find((entry) => entry.id === palette) ?? COLOR_PALETTES[0];
+    const calm = motionChoice === 'calm';
     return (
         <div className={styles.stack}>
-            <div>
-                <div className={styles.stackLabel}>Kind of glass</div>
-                <GlassPicker />
-            </div>
-            <div>
-                <div className={styles.stackLabel}>Colour</div>
-                <PalettePicker value={palette} onChange={setPalette} />
-            </div>
-            <div>
-                <div className={styles.stackLabel}>Mode</div>
-                <ThemeModeSwitch />
-            </div>
-            <div>
-                <div className={styles.stackLabel}>Motion</div>
-                <Segmented
-                    ariaLabel="Motion"
-                    value={motion}
-                    onChange={setMotion}
-                    options={[
-                        { value: 'full', label: 'Full' },
-                        { value: 'calm', label: 'Calm' },
-                    ]}
-                />
-                <p className={styles.stackHint}>
-                    {motion === 'calm' ? 'A still picture of the liquid, and less for your battery to do.' : 'The liquid keeps floating behind the glass.'}
-                </p>
+            <div className={styles.controls}>
+                <div className={styles.preview} aria-hidden="true">
+                    <i data-drop className={styles.previewDrop} />
+                    <span className={styles.previewName}>{current.name}</span>
+                    <span className={styles.previewGlass}>{GLASS_LABELS[glass].name} glass</span>
+                </div>
+
+                <div className={styles.modeArea}>
+                    <ThemeModeSwitch />
+                </div>
+
+                <section className={styles.glassArea}>
+                    <h4 className={styles.stackLabel}>Kind of glass</h4>
+                    <GlassPicker />
+                    <p className={styles.stackHint}>{GLASS_LABELS[glass].hint}</p>
+                </section>
+
+                <section className={styles.colourArea}>
+                    <h4 className={styles.stackLabel}>Your colour</h4>
+                    <div className={styles.paletteCard} data-glass="reg">
+                        <PalettePicker value={palette} onChange={setPalette} />
+                    </div>
+                </section>
+
+                <label className={styles.calmRow}>
+                    <span className={styles.calmText}>Calm motion</span>
+                    <button
+                        type="button"
+                        role="switch"
+                        aria-checked={calm}
+                        aria-label="Calm motion"
+                        className={styles.toggle}
+                        onClick={() => setMotion(calm ? 'full' : 'calm')}
+                    />
+                </label>
             </div>
         </div>
     );
@@ -108,7 +103,7 @@ export function AppearanceControls() {
  * One tap opens everything about how SplitX looks.
  * The button itself previews the palette you're on.
  */
-export default function ThemeSelector({ size = 40 }: { size?: number }) {
+export default function ThemeSelector({ size = 44 }: { size?: number }) {
     const { theme, palette } = useThemeContext();
     const [open, setOpen] = useState(false);
     const current = COLOR_PALETTES.find((entry) => entry.id === palette) ?? COLOR_PALETTES[0];
@@ -141,7 +136,7 @@ export default function ThemeSelector({ size = 40 }: { size?: number }) {
                 onClose={() => setOpen(false)}
                 title="Appearance"
                 description="Make SplitX feel like yours."
-                size="small"
+                size="wide"
             >
                 <AppearanceControls />
             </Modal>

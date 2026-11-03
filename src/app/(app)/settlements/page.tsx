@@ -481,12 +481,11 @@ export default function SettlementsPage() {
                 <StaggerItem className={styles.listArea}>
                     {visible.length === 0 ? (
                         tab === 'pending' ? (
-                            <EmptyState
-                                compact
-                                icon={<CheckCheck size={22} />}
-                                title="All settled up"
-                                description={isGlobal ? 'Nobody owes anybody across your groups.' : 'Everyone in this group is square. Enjoy it.'}
-                            />
+                            <div className={styles.allSettled}>
+                                <i data-drop className={styles.allSettledDrop} />
+                                <h2 className={styles.allSettledTitle}>All settled up</h2>
+                                <p className={styles.allSettledText}>{isGlobal ? 'Nobody owes anybody across your groups.' : 'Everyone in this group is square. Enjoy it.'}</p>
+                            </div>
                         ) : (
                             <EmptyState
                                 compact

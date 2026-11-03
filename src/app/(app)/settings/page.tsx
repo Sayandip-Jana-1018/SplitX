@@ -323,11 +323,7 @@ export default function SettingsPage() {
                     {/* ── Appearance ── */}
                     <StaggerItem className={styles.lookArea}>
                         <Section title="Appearance">
-                            <div className={styles.panel} data-glass="reg">
-                                <div className={styles.panelBlock}>
-                                    <AppearanceControls />
-                                </div>
-                            </div>
+                            <AppearanceControls />
                         </Section>
                     </StaggerItem>
 

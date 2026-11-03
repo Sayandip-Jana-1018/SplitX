@@ -295,7 +295,7 @@ html[data-glass-calm] .glass-strong {
 
 /* ── Page transition (template.tsx) ── */
 .page-transition {
-    animation: pageIn var(--duration-slow) var(--ease-out) both;
+    animation: pageIn 520ms var(--soft) both;
 }
 
 .workspace-page {

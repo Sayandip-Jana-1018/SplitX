@@ -3,10 +3,10 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <meta name="theme-color" content="#0a0a0e">
+    <meta name="theme-color" content="#0f0a1f">
     <title>Offline · SplitX</title>
     <style>
-        :root { color-scheme: dark; }
+        :root { color-scheme: dark; --h: 293; --c: 1; }
         * { box-sizing: border-box; }
         body {
             margin: 0;
@@ -14,40 +14,54 @@
             display: grid;
             place-items: center;
             padding: 24px 16px;
-            background: #0a0a0e;
-            color: #ececf1;
+            background-color: #0f0a1f;
+            background-color: oklch(0.13 calc(0.04 * var(--c)) var(--h));
+            background-image:
+                radial-gradient(70% 42% at 18% 12%, oklch(0.56 calc(0.2 * var(--c)) var(--h)), transparent 72%),
+                radial-gradient(62% 40% at 88% 34%, oklch(0.44 calc(0.18 * var(--c)) var(--h)), transparent 70%),
+                radial-gradient(80% 46% at 34% 96%, oklch(0.34 calc(0.15 * var(--c)) var(--h)), transparent 72%);
+            color: #ffffff;
             font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
             text-align: center;
         }
-        main { max-width: 360px; }
-        .mark {
-            width: 56px;
-            height: 56px;
-            margin: 0 auto 20px;
-            border-radius: 16px;
-            display: grid;
-            place-items: center;
-            background: linear-gradient(135deg, #7c5cff, #b36bff);
-            font-weight: 700;
-            font-size: 24px;
+        main {
+            max-width: 360px;
+            padding: 28px 22px;
+            border-radius: 32px;
+            background: oklch(0.24 calc(0.05 * var(--c)) var(--h) / 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.34);
+            box-shadow: 0 14px 40px rgba(0, 0, 0, 0.36), inset 0 1px 1px rgba(255, 255, 255, 0.28);
+            -webkit-backdrop-filter: blur(24px) saturate(190%);
+            backdrop-filter: blur(24px) saturate(190%);
         }
-        h1 { margin: 0 0 8px; font-size: 22px; }
-        p { margin: 0 0 24px; color: #a5a6b4; }
+        h1 { margin: 0 0 8px; font-size: 26px; font-weight: 600; letter-spacing: -0.02em; }
+        p { margin: 0 0 22px; color: rgba(255, 255, 255, 0.8); }
         button {
+            min-height: 54px;
+            padding: 0 28px;
             border: 0;
-            border-radius: 12px;
-            padding: 12px 20px;
+            border-radius: 27px;
             font: inherit;
             font-weight: 600;
-            color: #fff;
-            background: #7c5cff;
+            color: #ffffff;
+            background: oklch(0.54 calc(0.2 * var(--c)) var(--h));
             cursor: pointer;
         }
     </style>
+    <script>
+        // The colour you chose, when the browser can still say what it was.
+        try {
+            var hues = { 'amethyst-haze': [293, 1], 'cosmic-night': [277, 1], 'bold-tech': [258, 1], 'sky-blue': [237, 0.9], 'ocean-breeze': [212, 0.85], perpetuity: [182, 0.8], 'emerald-glow': [160, 0.85], 'lime-fusion': [128, 0.95], 'amber-minimal': [72, 0.9], 'solar-dusk': [45, 1], 'cherry-blossom': [17, 1], 'quantum-rose': [354, 1], cyberpunk: [322, 1], 'copper-glow': [50, 0.62], 'merlot-night': [8, 0.78], 'graphite-mono': [265, 0.16] };
+            var hue = hues[localStorage.getItem('SplitX-palette')];
+            if (hue) {
+                document.documentElement.style.setProperty('--h', hue[0]);
+                document.documentElement.style.setProperty('--c', hue[1]);
+            }
+        } catch (e) { /* the default colour will do */ }
+    </script>
 </head>
 <body>
     <main>
-        <div class="mark" aria-hidden="true">S</div>
         <h1>You're offline</h1>
         <p>SplitX needs a connection to show balances, so it never shows you numbers that might be out of date.</p>
         <button type="button" onclick="location.reload()">Try again</button>

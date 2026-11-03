@@ -34,6 +34,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
                 <div className={cn(styles.inputContainer, isFloating && styles.floatingContainer)}>
                     {leftIcon && <span className={styles.leftIcon}>{leftIcon}</span>}
                     <input
+                        data-glass="thin"
                         ref={ref}
                         className={cn(
                             styles.input,

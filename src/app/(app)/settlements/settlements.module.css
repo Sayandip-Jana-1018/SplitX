@@ -420,3 +420,41 @@
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 }
+
+/* ── All settled: the drop, clear, with nothing owed in it ── */
+.allSettled {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 260px;
+    padding: 0 16px;
+    text-align: center;
+}
+
+.allSettledDrop {
+    position: absolute;
+    left: calc(50% - 120px);
+    top: 10px;
+    width: 240px;
+    height: 240px;
+    animation: float 7s ease-in-out infinite;
+}
+
+.allSettledTitle {
+    position: relative;
+    font-size: clamp(1.75rem, 8vw, 2.25rem);
+    font-weight: 600;
+    letter-spacing: -0.03em;
+}
+
+.allSettledText {
+    position: relative;
+    max-width: 16rem;
+    font-size: 14px;
+    line-height: 1.4;
+    color: var(--fg-secondary);
+    text-shadow: var(--ink-on-wall-shadow);
+}

@@ -166,18 +166,15 @@ export default function GroupChat({ groupId, currentUserId, members, balances, o
     const debtors = members.filter(m => (balances[m.userId] || 0) < 0 && m.userId !== currentUserId);
 
     return (
-        <div style={{
+        <div data-glass="reg" style={{
             display: 'flex',
             flexDirection: 'column',
             height: 'calc(100vh - 320px)',
             minHeight: 340,
             maxHeight: 560,
-            borderRadius: 20,
+            borderRadius: 28,
             overflow: 'hidden',
             position: 'relative',
-            background: 'var(--surface-primary)',
-            border: '1px solid var(--border-glass, var(--border-primary))',
-            boxShadow: '0 8px 32px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.04)',
         }}>
 
             {/* ── Messages Area ── */}
@@ -625,11 +622,11 @@ export default function GroupChat({ groupId, currentUserId, members, balances, o
                 <div style={{
                     flex: 1,
                     position: 'relative',
-                    borderRadius: 14,
-                    background: 'var(--surface-secondary)',
+                    borderRadius: 22,
+                    background: 'var(--surface-input)',
                     border: inputFocused
-                        ? '1.5px solid var(--accent-400)'
-                        : '1px solid var(--border-primary)',
+                        ? '1.5px solid var(--accent-strong)'
+                        : '1px solid var(--border-subtle)',
                     transition: 'border-color 0.2s, box-shadow 0.2s',
                     boxShadow: inputFocused ? '0 0 0 3px rgba(var(--accent-500-rgb), 0.08)' : 'none',
                     overflow: 'hidden',

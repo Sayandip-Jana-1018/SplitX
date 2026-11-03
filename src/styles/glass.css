@@ -100,20 +100,45 @@ body {
 }
 
 /* In a floating sheet the engine can't draw the picker's samples, so CSS shows each material's idea. */
+[data-glass][data-glass-sample='liquid'] {
+    background:
+        radial-gradient(circle at 28% 22%, rgba(255, 255, 255, 0.4), transparent 44%),
+        radial-gradient(circle at 76% 84%, rgba(var(--accent-500-rgb), 0.6), transparent 62%),
+        rgba(255, 255, 255, 0.08);
+}
+
 [data-glass][data-glass-sample='frosted'] {
-    background: var(--glass-bg-strong);
+    background: linear-gradient(165deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0.12));
 }
 
 [data-glass][data-glass-sample='crystal'] {
-    background: rgba(255, 255, 255, 0.06);
+    background: radial-gradient(circle at 26% 20%, rgba(255, 255, 255, 0.5), transparent 26%), rgba(255, 255, 255, 0.03);
 }
 
 [data-glass][data-glass-sample='tinted'] {
-    background: var(--glass-tinted);
+    background: oklch(0.5 calc(0.18 * var(--c)) var(--h) / 0.85);
 }
 
 [data-glass][data-glass-sample='pearl'] {
-    background: var(--glass-pearl);
+    background: linear-gradient(165deg, var(--glass-pearl), oklch(0.4 calc(0.05 * var(--c)) var(--h) / 0.85));
+}
+
+[data-theme='light'] [data-glass][data-glass-sample='tinted'] {
+    background: oklch(0.82 calc(0.11 * var(--c)) var(--h) / 0.9);
+}
+
+[data-theme='light'] [data-glass][data-glass-sample='pearl'] {
+    background: linear-gradient(165deg, #ffffff, rgba(255, 255, 255, 0.8));
+}
+
+/* A hero drop inside a floating sheet is CSS too, since the canvas is beneath the sheet. */
+[data-glass-mode='css'] [data-drop] {
+    background:
+        radial-gradient(circle at 30% 24%, rgba(255, 255, 255, 0.42), transparent 42%),
+        radial-gradient(circle at 72% 80%, rgba(var(--accent-500-rgb), 0.55), transparent 62%),
+        rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--glass-rim);
+    box-shadow: inset 0 2px 6px rgba(255, 255, 255, 0.25), 0 10px 26px rgba(0, 0, 0, 0.22);
 }
 
 /* Accent is the one surface every kind of glass keeps, and it is what the words on it are set against. */
@@ -158,6 +183,21 @@ html[data-glass-calm][data-theme='light'] [data-glass='accent'] {
     background: var(--accent-500);
 }
 
+html[data-motion='calm'] *,
+html[data-motion='calm'] *::before,
+html[data-motion='calm'] *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+}
+
+/* A liquid moment: the page steps back so the drops have the screen. */
+html[data-moment] :is(#workspace, header, nav) {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 240ms ease;
+}
+
 /* Markers for the shader's hero moments: a soft stand-in until it takes over. */
 [data-drop] {
     border-radius: 50%;
@@ -174,7 +214,7 @@ html[data-glass-calm][data-theme='light'] [data-glass='accent'] {
     filter: blur(6px);
 }
 
-html[data-gl='on'] [data-drop],
+html[data-gl='on'] [data-drop]:not([data-glass-mode='css'] *),
 html[data-gl='on'] [data-petals] {
     background: none;
     border-color: transparent;

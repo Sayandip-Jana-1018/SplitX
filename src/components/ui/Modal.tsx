@@ -14,7 +14,7 @@ interface ModalProps {
     onClose: () => void;
     title?: string;
     description?: string;
-    size?: 'small' | 'medium' | 'large' | 'full';
+    size?: 'small' | 'medium' | 'large' | 'wide' | 'full';
     children: React.ReactNode;
     footer?: React.ReactNode;
     showCloseButton?: boolean;

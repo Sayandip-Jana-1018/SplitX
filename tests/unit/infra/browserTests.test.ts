@@ -77,6 +77,7 @@ describe('the suite', () => {
             '05-members.spec.ts',
             '06-shared-device.spec.ts',
             '07-receipt.spec.ts',
+            '08-appearance.spec.ts',
         ]);
     });
 });

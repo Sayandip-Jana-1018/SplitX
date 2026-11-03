@@ -30,6 +30,7 @@
 .logo {
     display: inline-flex;
     align-items: center;
+    min-height: 44px;
     border-radius: 12px;
 }
 

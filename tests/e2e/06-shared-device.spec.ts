@@ -34,7 +34,7 @@ test('signing out leaves no session, and no copy of the account in the browser\'
         const entries = await Promise.all(names.map(async (name) => ({ name, urls: (await (await caches.open(name)).keys()).map((request) => new URL(request.url).pathname) })));
         return entries;
     });
-    expect(left.map((cache) => cache.name)).toEqual(['splitx-offline-v1']);
+    expect(left.map((cache) => cache.name)).toEqual(['splitx-offline-v2']);
     expect(left[0].urls).toEqual(['/offline.html']);
 
     // No session: the account's pages send the next person to sign in.

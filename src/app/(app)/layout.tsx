@@ -393,7 +393,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                             </div>
 
                             <div className={styles.headerEnd}>
-                                <ThemeSelector size={38} />
+                                <ThemeSelector size={44} />
                                 {deferredReady && !isDesktop ? <NotificationPanel /> : <span className={styles.headerPlaceholder} />}
                             </div>
                         </div>
@@ -401,6 +401,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 )}
 
                 <main
+                    data-fade
                     id="workspace"
                     className={cn(
                         styles.content,

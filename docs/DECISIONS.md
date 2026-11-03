@@ -5440,6 +5440,52 @@ that as the device's limit, such as battery saver. Draws average about 60 a seco
 No rim drift holds by how it is built, but only a finger on a phone can show it. `/glass-lab` can switch
 between this, the old fixed canvas and all-CSS glass, so that test can compare them directly.
 
+### D-120 · Liquid Glass across the whole app
+**2026-11-03** · ✅ written and tested on the laptop, on `feat/liquid-glass`. ⚠️ Not yet on a real phone,
+and not on the live site. The user asked for all the code first and the phone test last.
+
+**What now holds on every page:**
+- **One colour.** Each palette is one hue (`--h`, `--c`, `--fill-l`), and every colour derives from it,
+  including the 50 to 950 scale pages already used. Saved palettes, old ids included, keep working.
+  Money is told apart by brightness and its sign. Red stays only for errors and for what can't be undone.
+  Categories in the donut use different depths of the same colour.
+- **One font.** Plus Jakarta Sans ships with the app. Its ₹ is in the Latin Extended subset, so that is a second
+  family the browser fetches only when needed. Geist is gone. JetBrains Mono stays for `/ops`.
+- **Settings.** Kind of glass, colour, mode and Calm are in `useTheme` and the first-paint script, so there
+  is no flash. The sheet follows the canvas's Theme board: a live drop, five even choices, 4×4 colours.
+- **The kit, frame and pages** are glass on one centre axis. Rows are picture, centred words, amount.
+- **The landing page** is rebuilt around the bloom. The copy is unchanged, including its stats and quotes.
+  About 3,200 lines became about 900.
+- **The moments.** Saving an expense plays the liquid split, and all settled shows a clear drop. Calm and
+  Reduced Motion skip the split straight to the next screen.
+
+**Decisions made along the way:**
+- The engine finds what can't ride on its canvas by looking, not by being told: anything fixed, sticky or inside
+  a box that clips or scrolls goes to CSS glass, so a surface in a sheet is never drawn beneath the sheet.
+- Tinted glass tints with its own depth of the colour, not the fill. Over bright liquid, words on the fill failed
+  contrast. The test that found this now checks 16 colours × 2 modes × 5 kinds of glass × 5 weights.
+- Some fills moved a little from the canvas (for example Amethyst from L 0.58 to 0.54) so text on them passes 4.5:1.
+- Nothing idles any more: the looping sparkles, bells, halos and auroras are gone, on battery's account. Motion
+  comes from the liquid and from what you touch.
+- Hard-coded colours are gone from the screens, and `tests/unit/glass/tokens.test.ts` stops new ones.
+  Paper, email, the no-CSS error page, Google's mark, QR codes and `/ops` may still name colours.
+
+**Found by testing, and fixed:**
+- Sign-out kept only the old offline cache's name, so the new one was deleted. The e2e suite caught it.
+- At every desktop width the wide search button sat over "Settle up" and "Insights". The bar was laid out as equal
+  sides around the middle. Checked now at 1,024, 1,100, 1,280, 1,440 and 1,920 px.
+- The governor bug in D-119.
+
+**Google and GitHub sign-in are unchanged.** They appear only when the server has their keys. The local test server
+blanks every production key, so they looked missing there. `e2e-local.mjs preview` now gives it made-up ids so
+the buttons show; they can't sign anyone in locally.
+
+**Before this reaches `main`:** remove `/glass-lab` and `src/lib/glass/runtime.ts`, and run the phone test (D-119).
+The release gate's k6 renewal (D-118) is proven only by that push. Local e2e runs on browser build 1228 through
+`handoff/tools/playwright-local.config.ts`, because Playwright 1.63 asks for 1243; CI installs the exact one.
+
+**Not proven:** anything on a real phone or an iPhone, battery use, and Sonar, which only runs in CI.
+
 ---
 
 ## Open problems

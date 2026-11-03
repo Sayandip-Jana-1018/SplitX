@@ -64,7 +64,7 @@ describe('public/sw.js', () => {
         await worker.dispatch('install');
         await worker.dispatch('activate');
 
-        expect([...worker.stores.keys()]).toEqual(['splitx-offline-v1']);
+        expect([...worker.stores.keys()]).toEqual(['splitx-offline-v2']);
         expect(worker.self.skipWaiting).toHaveBeenCalled();
         expect(worker.self.clients.claim).toHaveBeenCalled();
     });

@@ -18,14 +18,14 @@
 
     .inner {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+        grid-template-columns: auto minmax(0, 1fr) auto;
         align-items: center;
-        gap: 18px;
+        gap: 14px;
         width: 100%;
         max-width: var(--desktop-max);
         height: var(--topbar-height);
         margin: 0 auto;
-        padding: 0 14px 0 20px;
+        padding: 0 12px 0 18px;
         border-radius: 34px;
     }
 
@@ -41,6 +41,7 @@
     .nav {
         display: flex;
         align-items: center;
+        justify-self: center;
         gap: 2px;
         min-width: 0;
     }
@@ -52,7 +53,7 @@
         align-items: center;
         gap: 7px;
         height: 44px;
-        padding: 0 16px;
+        padding: 0 13px;
         border-radius: 22px;
         color: var(--fg-secondary);
         font-size: 14px;
@@ -318,23 +319,6 @@
 
 /* Room for the search field's label and the full "Add expense" */
 @media (min-width: 1280px) {
-    .search {
-        justify-content: flex-start;
-        width: 214px;
-        padding: 0 7px 0 15px;
-        color: var(--fg-muted);
-    }
-
-    .searchLabel {
-        display: block;
-        flex: 1;
-        text-align: left;
-    }
-
-    .kbd {
-        display: inline-flex;
-    }
-
     .addLong {
         display: inline;
     }

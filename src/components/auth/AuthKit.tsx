@@ -168,8 +168,9 @@ export function SocialSignIn({ callbackUrl }: { callbackUrl: string }) {
     return (
         <motion.div
             className={styles.socialWrap}
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
+            data-fade
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
             transition={{ duration: 0.25 }}
         >
             <div className={styles.social}>
@@ -178,6 +179,7 @@ export function SocialSignIn({ callbackUrl }: { callbackUrl: string }) {
                         key={provider.id}
                         type="button"
                         className={styles.socialButton}
+                        data-glass="thin"
                         disabled={pending !== null}
                         onClick={() => {
                             setPending(provider.id);

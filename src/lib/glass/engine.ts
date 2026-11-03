@@ -635,7 +635,7 @@ class Engine implements GlassEngine {
         }
         this.byEl = next;
         this.surfaces = list;
-        this.dropEls = Array.from(document.querySelectorAll('[data-drop]')).slice(0, MAX_DROPS);
+        this.dropEls = Array.from(document.querySelectorAll('[data-drop]')).filter((el) => !el.closest('[data-glass-mode="css"]')).slice(0, MAX_DROPS);
         this.bloomEl = document.querySelector('[data-petals]');
         this.needsDraw = true;
     }

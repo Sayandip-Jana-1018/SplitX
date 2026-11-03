@@ -67,6 +67,9 @@ function InsightIcon({ severity }: { severity: 'info' | 'warning' | 'success' })
     return <Sparkles size={16} />;
 }
 
+/** From the strongest slice outward, so neighbours in the donut stay apart. */
+const DEPTHS = [500, 300, 700, 200, 600, 400, 800];
+
 export default function AnalyticsPage() {
     const [groupId, setGroupId] = useState<string | null>(null);
     const key = groupId ? `/api/analytics?groupId=${encodeURIComponent(groupId)}` : '/api/analytics';
@@ -91,9 +94,9 @@ export default function AnalyticsPage() {
     );
 
     const categories = useMemo(
-        () => (analytics?.categoryBreakdown ?? []).map((item) => {
+        () => (analytics?.categoryBreakdown ?? []).map((item, index) => {
             const config = getCategoryConfig(item.category);
-            return { ...item, label: item.label || config.label, color: config.color };
+            return { ...item, label: item.label || config.label, color: `var(--accent-${DEPTHS[index % DEPTHS.length]})` };
         }),
         [analytics]
     );

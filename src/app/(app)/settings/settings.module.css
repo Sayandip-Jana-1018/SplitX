@@ -79,6 +79,13 @@
     transition: transform 160ms ease;
 }
 
+/* Its visible size is small; the place to tap isn't. */
+.cameraButton::before {
+    content: '';
+    position: absolute;
+    inset: -6px;
+}
+
 .cameraButton:active {
     transform: scale(0.9);
 }

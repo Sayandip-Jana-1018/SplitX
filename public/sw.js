@@ -12,7 +12,7 @@
  * deletes every cache it left behind.
  */
 
-const OFFLINE_CACHE = 'splitx-offline-v1';
+const OFFLINE_CACHE = 'splitx-offline-v2';
 const OFFLINE_URL = '/offline.html';
 
 self.addEventListener('install', (event) => {

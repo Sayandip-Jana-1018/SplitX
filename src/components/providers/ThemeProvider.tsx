@@ -24,7 +24,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
     return (
         <ThemeContext.Provider value={themeValues}>
-            <MotionConfig reducedMotion="user" transition={{ type: 'spring', stiffness: 380, damping: 34 }}>
+            <MotionConfig reducedMotion={themeValues.motion === 'calm' ? 'always' : 'user'} transition={{ type: 'spring', stiffness: 380, damping: 34 }}>
                 {children}
             </MotionConfig>
         </ThemeContext.Provider>

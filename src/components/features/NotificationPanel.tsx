@@ -223,15 +223,7 @@ export default function NotificationPanel() {
     return (
         <>
             <IconButton
-                icon={(
-                    <motion.span
-                        style={{ display: 'grid', placeItems: 'center', transformOrigin: '50% 15%' }}
-                        animate={{ rotate: [0, -14, 12, -9, 6, -3, 0] }}
-                        transition={{ duration: 1.2, repeat: Infinity, repeatDelay: unreadCount > 0 ? 2.6 : 6, ease: 'easeInOut' }}
-                    >
-                        {unreadCount > 0 ? <BellRing size={18} /> : <Bell size={18} />}
-                    </motion.span>
-                )}
+                icon={unreadCount > 0 ? <BellRing size={18} /> : <Bell size={18} />}
                 label="Notifications"
                 badge={unreadCount > 0 ? unreadCount : undefined}
                 onClick={openPanel}

@@ -14,7 +14,7 @@ export async function signOutAndForget(callbackUrl = '/login') {
     try {
         if (typeof caches !== 'undefined') {
             const names = await caches.keys();
-            await Promise.all(names.filter((name) => name !== 'splitx-offline-v1').map((name) => caches.delete(name)));
+            await Promise.all(names.filter((name) => name !== 'splitx-offline-v2').map((name) => caches.delete(name)));
         }
     } catch {
         // A browser without Cache Storage (or with it blocked) has nothing to clear.

@@ -133,15 +133,7 @@ export default function AppTopBar({
                         <kbd className={styles.kbd}>{shortcut}</kbd>
                     </button>
                     <IconButton
-                        icon={(
-                            <motion.span
-                                className={styles.sparkle}
-                                animate={{ scale: [1, 1.16, 1], rotate: [0, 8, -6, 0] }}
-                                transition={{ duration: 3.2, repeat: Infinity, repeatDelay: 2.4, ease: 'easeInOut' }}
-                            >
-                                <Sparkles size={18} />
-                            </motion.span>
-                        )}
+                        icon={<Sparkles size={18} />}
                         label="Ask SplitX AI"
                         onClick={onAssistant}
                         tour="ai"
@@ -152,7 +144,7 @@ export default function AppTopBar({
                         <span className={styles.addShort}>Add</span>
                     </Link>
                     <span className={styles.divider} aria-hidden="true" />
-                    <ThemeSelector size={40} />
+                    <ThemeSelector size={44} />
                     {notifications}
                     <AccountMenu user={user} pathname={pathname} />
                 </div>

@@ -37,7 +37,6 @@
     height: 300px;
     border-radius: 50%;
     background: radial-gradient(closest-side, rgba(255, 255, 255, 0.16), transparent);
-    animation: drift 14s ease-in-out infinite alternate;
     pointer-events: none;
 }
 

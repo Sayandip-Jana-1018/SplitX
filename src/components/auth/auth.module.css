@@ -29,7 +29,6 @@
     border-radius: 50%;
     background: radial-gradient(closest-side, rgba(var(--accent-500-rgb), 0.24), transparent 72%);
     transform: translateX(-50%);
-    animation: driftA 16s ease-in-out infinite alternate;
 }
 
 .glowB {
@@ -40,7 +39,6 @@
     aspect-ratio: 1;
     border-radius: 50%;
     background: radial-gradient(closest-side, color-mix(in oklab, var(--accent-300) 32%, transparent), transparent 72%);
-    animation: driftB 20s ease-in-out infinite alternate;
 }
 
 .gridLines {
@@ -140,6 +138,13 @@
     margin-top: -4px;
 }
 
+.textLink,
+.footer a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+}
+
 .textLink {
     font-size: 13px;
     font-weight: 600;
@@ -167,8 +172,7 @@
 .socialWrap {
     display: flex;
     flex-direction: column;
-    gap: 22px;
-    overflow: hidden;
+    gap: 18px;
 }
 
 .social {
@@ -182,14 +186,12 @@
     align-items: center;
     justify-content: center;
     gap: 8px;
-    height: 50px;
-    border-radius: 16px;
-    background: var(--surface-input);
-    border: 1px solid var(--border-default);
+    height: 52px;
+    border-radius: 26px;
     color: var(--fg-primary);
-    font-size: 14px;
-    font-weight: 650;
-    transition: border-color 180ms ease, background-color 180ms ease, transform 150ms ease;
+    font-size: 14.5px;
+    font-weight: 600;
+    transition: transform 500ms var(--spring);
 }
 
 .socialButton:only-child {
@@ -197,7 +199,7 @@
 }
 
 .socialButton:active {
-    transform: scale(0.98);
+    transform: scale(0.95);
 }
 
 .socialButton:disabled {
@@ -226,8 +228,8 @@
 .eye {
     display: grid;
     place-items: center;
-    width: 36px;
-    height: 36px;
+    width: 44px;
+    height: 44px;
     border-radius: 10px;
     color: var(--fg-tertiary);
     transition: color 150ms ease, background-color 150ms ease;

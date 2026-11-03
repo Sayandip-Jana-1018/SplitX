@@ -19,6 +19,7 @@ import {
     Users,
 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { LiquidMoment } from '@/components/glass/LiquidMoment';
 import Button from '@/components/ui/Button';
 import Modal from '@/components/ui/Modal';
 import Avatar from '@/components/ui/Avatar';
@@ -101,6 +102,8 @@ function QuickAddContent() {
     const [payerId, setPayerId] = useState('');
     const [sheet, setSheet] = useState<'group' | 'category' | 'payer' | 'method' | null>(null);
     const [saving, setSaving] = useState(false);
+    const [splitMoment, setSplitMoment] = useState<{ value: string; title: string; parts: number } | null>(null);
+    const goToActivity = useCallback(() => router.push('/transactions'), [router]);
     // A second tap can land before React re-renders the button as busy.
     const saveInFlight = useRef(false);
     // The key the last save of this expense was sent with (lib/idempotency.ts).
@@ -728,7 +731,7 @@ function QuickAddContent() {
                         },
                     },
                 } : undefined);
-                router.push('/transactions');
+                setSplitMoment({ value: formatCurrency(totalPaise), title: `${effectiveTitle} is split`, parts: Math.max(selectedMemberIds.length, customPlan?.splits.length ?? 0) });
             } else {
                 const err = await res.json().catch(() => ({}));
                 toast(err.error || 'Could not add this expense', 'error');
@@ -797,6 +800,8 @@ function QuickAddContent() {
     }
 
     return (
+        <>
+            {splitMoment && <LiquidMoment {...splitMoment} onDone={goToActivity} />}
         <div className={styles.composer}>
             {/* ── Group ── */}
             <div className={styles.groupRow}>
@@ -1252,6 +1257,7 @@ function QuickAddContent() {
                 </div>
             </Modal>
         </div>
+        </>
     );
 }
 

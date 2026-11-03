@@ -83,7 +83,6 @@ const shell: React.CSSProperties = {
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
-    background: 'var(--bg-primary, #0a0a0e)',
     color: 'var(--fg-primary, #f4f5f8)',
 };
 
@@ -97,7 +96,7 @@ const card: React.CSSProperties = {
     padding: '32px 24px 26px',
     borderRadius: 28,
     textAlign: 'center',
-    background: 'var(--surface-card, #121318)',
+    background: 'var(--glass-bg, #121318)',
     border: '1px solid var(--border-default, rgba(255,255,255,0.08))',
     boxShadow: 'var(--shadow-lg, 0 18px 44px rgba(0,0,0,0.55))',
 };

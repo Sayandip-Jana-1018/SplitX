@@ -1,6 +1,6 @@
 # SplitX web: the Liquid Glass overhaul
 
-**Status:** written 3 November 2026. Phases 0 and 1 are under way on the `feat/liquid-glass` branch. Your live site is untouched.
+**Status:** 3 November 2026. Phases 0 to 8 are built and tested on the laptop, on the `feat/liquid-glass` branch. Your live site is untouched. What's left is Phase 9: your phone, then going live. Details are in `docs/DECISIONS.md`, D-120.
 **The look we are building:** [SplitX Liquid Glass canvas](https://claude.ai/artifact/XSFNfEYYXmoVufit1w6w9B).
 **The phone app** ([roadmap](../mobile/ROADMAP.md)) is paused until this ships.
 
@@ -205,7 +205,7 @@ Everything else depends on this, which is why it comes first.
 ### Phase 3: component kit
 
 - Rebuild `kit.tsx` (17 components), `Button`, `Input`, `Modal`, `Toast`, `Avatar`, `Skeleton`, `EmptyState`, `ErrorState`, `Icons`, `BrandMark`.
-- Add `Toggle`, `GlassPicker`, `Row3`, `Keypad`, `Orb`.
+- Add `GlassPicker`, and centred three-part rows in `ListRow`. (`Keypad` and `Orb` were dropped: the expense page keeps its own keypad, and Home uses the drop.)
 - A development-only page shows them all, in every theme, mode and glass kind.
 - **Finished when:** contrast passes for 16 colours × 2 modes × 5 glass kinds, checked automatically on the worst case of liquid behind the text. Every touch target is at least 44 px.
 
