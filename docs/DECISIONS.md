@@ -5461,7 +5461,7 @@ and not on the live site. The user asked for all the code first and the phone te
 - **The logo.** A coin of liquid glass: a gold milled rim, a ₹, and liquid split through its face. It replaces a
   stock forking-arrow icon in the app and an old red flame on installed phones. Gold is the one colour outside
   the palette, and it belongs to the logo alone: in the app the coin's face and liquid take the chosen palette,
-  while the rim and ₹ stay gold. \`handoff/tools/make-icons.mjs\` draws every icon, and the coin sits inside the
+  while the rim and ₹ stay gold. `handoff/tools/make-icons.mjs` draws every icon, and the coin sits inside the
   maskable safe zone. On Android, Chrome updates an installed app's icon by itself once it sees the new manifest.
 
 **Decisions made along the way:**
