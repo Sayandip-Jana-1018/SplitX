@@ -110,7 +110,7 @@
 }
 
 .option[aria-pressed='true'] {
-    background: var(--glass-accent);
+    background: var(--accent-500);
     border-color: transparent;
     color: #fff;
 }
@@ -282,7 +282,7 @@
     border-radius: 50%;
     display: grid;
     place-items: center;
-    background: var(--glass-accent);
+    background: var(--accent-500);
     color: #fff;
     font-size: 13px;
     font-weight: 750;

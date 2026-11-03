@@ -31,7 +31,7 @@ const GROUPS = [
 const MORE = ['Balance journey', 'Spending insights', 'Ask SplitX AI', 'Receipts', 'Contacts', 'History'];
 const NAV = ['Home', 'Groups', '+', 'Activity', 'Settle'];
 const MODES: { id: GlassCanvasMode; label: string }[] = [
-    { id: 'locked', label: 'Moves with page' },
+    { id: 'locked', label: 'Glass moves with page' },
     { id: 'fixed', label: 'Fixed (old way)' },
     { id: 'css', label: 'All CSS' },
 ];
@@ -55,11 +55,11 @@ function scrollThrough(seconds: number): Promise<void> {
         const step = (now: number) => {
             const p = (now - start) / (seconds * 1000);
             if (p >= 1) {
-                window.scrollTo(0, 0);
+                window.scrollTo({ top: 0, behavior: 'instant' });
                 resolve();
                 return;
             }
-            window.scrollTo(0, reach * (0.5 - 0.5 * Math.cos(p * 2 * Math.PI * 2)));
+            window.scrollTo({ top: reach * (0.5 - 0.5 * Math.cos(p * 2 * Math.PI * 2)), behavior: 'instant' });
             requestAnimationFrame(step);
         };
         requestAnimationFrame(step);

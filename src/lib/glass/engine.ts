@@ -1,20 +1,24 @@
 import { frameIsDue, Governor, LOWEST_LEVEL, nextFrameDue, QUALITY } from '@/lib/glass/governor';
 import { glassPalette, type GlassMode, type GlassPalette } from '@/lib/glass/palette';
-import { BLIT_FS, DOWN_FS, DROPS_FS, FULL_VS, GLASS_FS, LIQUID_FS, QUAD_VS } from '@/lib/glass/shaders';
+import { BLOOM_FS, DOWN_FS, DROPS_FS, FULL_VS, GLASS_FS, LIQUID_FS, QUAD_VS } from '@/lib/glass/shaders';
 import { surfaceLook, type SurfaceLook } from '@/lib/glass/styles';
 
 /**
- * The glass engine: one canvas beneath the page, drawing the floating liquid and,
- * under every element marked `data-glass`, real refracted glass. The page stays
- * ordinary markup; the engine reads where each element is.
+ * The glass engine: two canvases beneath the page. The page stays ordinary markup;
+ * the engine reads where each element marked `data-glass` is.
  *
- * `locked`, the default, is what makes scrolling work. The browser scrolls a page
- * on its own thread, ahead of anything drawn here, so glass on a canvas fixed to
- * the screen trails its own text while you flick. So the canvas is part of the
- * page: it scrolls with the cards, on the same thread, and the engine moves it
- * back into view each frame. It is taller than the screen so a fast flick cannot
- * outrun it. A surface fixed to the screen, or inside a scroller of its own, cannot
- * ride on this canvas: the engine notices and marks it `data-glass-mode="css"`, and glass.css draws it.
+ * The wall is the floating liquid. It is fixed to the screen and only ever floats,
+ * so scrolling can't disturb it.
+ *
+ * The glass is everything that scrolls: a transparent canvas drawing real refracted
+ * glass under each surface. A browser scrolls a page on its own thread, ahead of anything
+ * drawn here, so glass on a fixed canvas would trail its own text during a flick. This
+ * canvas is part of the page instead: it scrolls with the cards, on the same thread, and
+ * the engine moves it back into view each frame. It is taller than the screen so a fast
+ * flick cannot outrun it. A surface fixed to the screen, or inside a scroller of its own,
+ * cannot ride on it: the engine notices and marks it `data-glass-mode="css"`, and glass.css draws it.
+ *
+ * (One canvas doing both, an earlier design, made the liquid twitch as the page scrolled.)
  *
  * Anything can go wrong with a GPU, so nothing depends on it. Until the first frame
  * and after a lost context, `data-gl` is off and glass.css draws every surface.
@@ -87,6 +91,8 @@ const GLASS_SELECTOR = '[data-glass]:not([data-glass-mode="css"])';
 const BLOB_SIZES = [0.36, 0.27, 0.21, 0.31, 0.17, 0.24, 0.19];
 const MAX_SURFACES = 40;
 const MAX_DROPS = 10;
+/** The wall has no glass to pay for, so it can afford a sharper picture of the liquid than the glass reads. */
+const WALL_SHARPNESS = 1.5;
 const SHADOW_MARGIN = 44;
 const OVERSCAN_SHARE = 0.2;
 const OVERSCAN_MIN = 120;
@@ -104,11 +110,11 @@ const FRAME_RING = 180;
 const LEVEL_KEY = 'SplitX-glass-level';
 
 const uniformNames = {
-    liquid: ['uView', 'uL', 'uOver', 'uT', 'uGloss', 'uBloomA', 'uTouchA', 'uA0', 'uA1', 'uC1', 'uC2', 'uA0p', 'uA1p', 'uC1p', 'uC2p', 'uGlow', 'uRip', 'uTouch', 'uBloom', 'uBl'],
+    liquid: ['uView', 'uL', 'uOver', 'uT', 'uGloss', 'uTouchA', 'uA0', 'uA1', 'uC1', 'uC2', 'uA0p', 'uA1p', 'uC1p', 'uC2p', 'uGlow', 'uRip', 'uTouch', 'uBl'],
     down: ['uTex', 'uTexel'],
-    blit: ['uTex'],
     glass: ['uQuad', 'uCanvas', 'uSharp', 'uSoft', 'uL', 'uT', 'uShadow', 'uLight', 'uTintK', 'uDisperseOn', 'uUnder', 'uTint', 'uAcc', 'uRimC', 'uR', 'uS', 'uG'],
     drops: ['uQuad', 'uCanvas', 'uSharp', 'uL', 'uLight', 'uRimC', 'uD', 'uDN'],
+    bloom: ['uQuad', 'uCanvas', 'uT', 'uBloomA', 'uC1', 'uC2', 'uGlow', 'uBloom'],
 };
 
 function readLevel(): number | null {
@@ -132,6 +138,10 @@ function saveLevel(level: number) {
 
 class Engine implements GlassEngine {
     private wall: HTMLDivElement;
+    private wallCanvas: HTMLCanvasElement;
+    private wallGl: WebGLRenderingContext | null = null;
+    private wallProgram: Program | null = null;
+    private layer: HTMLDivElement;
     private canvas: HTMLCanvasElement;
     private gl: WebGLRenderingContext | null = null;
     private supported = true;
@@ -158,13 +168,12 @@ class Engine implements GlassEngine {
     private painted = false;
     private lastSignature = NaN;
     private needsDraw = true;
-    private t0 = performance.now() - Math.random() * 600_000;
+    /** Each load starts somewhere new in the liquid's slow drift. */
+    private t0 = performance.now() - Date.now() % 600_000;
 
     private cssW = 0;
     private cssH = 0;
     private viewH = 0;
-    private maxViewH = 0;
-    private lastWidth = 0;
     private over = 0;
     private dpr = 1;
     private appliedY = NaN;
@@ -210,24 +219,31 @@ class Engine implements GlassEngine {
     constructor() {
         this.governor = new Governor(readLevel() ?? (navigator.maxTouchPoints > 0 ? 2 : 1));
 
-        // The wall is as tall as the page and clips, so the taller canvas can never lengthen it.
         this.wall = document.createElement('div');
         this.wall.setAttribute('data-glass-wall', '');
         this.wall.setAttribute('aria-hidden', 'true');
+        this.wallCanvas = document.createElement('canvas');
+        this.wall.appendChild(this.wallCanvas);
+        // The glass's layer is as tall as the page and clips, so the taller canvas can never lengthen it.
+        this.layer = document.createElement('div');
+        this.layer.setAttribute('data-glass-layer', '');
+        this.layer.setAttribute('aria-hidden', 'true');
         this.canvas = document.createElement('canvas');
-        this.wall.appendChild(this.canvas);
+        this.layer.appendChild(this.canvas);
         if (getComputedStyle(document.body).position === 'static') {
             this.bodyWasStatic = true;
             document.body.style.position = 'relative';
         }
-        document.body.prepend(this.wall);
+        document.body.prepend(this.wall, this.layer);
 
         this.readTheme();
         this.pal = glassPalette(this.paletteId, this.themeMode);
         this.prevPal = this.pal;
 
-        this.canvas.addEventListener('webglcontextlost', this.onLost);
-        this.canvas.addEventListener('webglcontextrestored', this.onRestored);
+        for (const canvas of [this.wallCanvas, this.canvas]) {
+            canvas.addEventListener('webglcontextlost', this.onLost);
+            canvas.addEventListener('webglcontextrestored', this.onRestored);
+        }
         this.pageObserver = new MutationObserver(this.onPageChange);
         this.pageObserver.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-glass', 'data-glass-mode', 'data-drop', 'data-petals'] });
         this.themeObserver = new MutationObserver(this.onThemeChange);
@@ -258,41 +274,41 @@ class Engine implements GlassEngine {
 
     private setUpGl(): boolean {
         // A software renderer is worse than CSS glass, so it counts as no WebGL at all.
-        const gl = this.gl ?? this.canvas.getContext('webgl', {
-            alpha: false,
-            antialias: false,
-            depth: false,
-            stencil: false,
-            powerPreference: 'low-power',
-            failIfMajorPerformanceCaveat: true,
-        });
-        if (!gl) return false;
+        const options = { antialias: false, depth: false, stencil: false, powerPreference: 'low-power', failIfMajorPerformanceCaveat: true } as const;
+        const gl = this.gl ?? this.canvas.getContext('webgl', { ...options, alpha: true, premultipliedAlpha: true });
+        const wallGl = this.wallGl ?? this.wallCanvas.getContext('webgl', { ...options, alpha: false });
+        if (!gl || !wallGl) return false;
         this.gl = gl;
+        this.wallGl = wallGl;
         const debug = gl.getExtension('WEBGL_debug_renderer_info');
         if (debug) this.gpu = String(gl.getParameter(debug.UNMASKED_RENDERER_WEBGL));
 
-        const liquid = this.link(FULL_VS, LIQUID_FS, uniformNames.liquid);
-        const down = this.link(FULL_VS, DOWN_FS, uniformNames.down);
-        const blit = this.link(FULL_VS, BLIT_FS, uniformNames.blit);
-        const glass = this.link(QUAD_VS, GLASS_FS, uniformNames.glass);
-        const drops = this.link(QUAD_VS, DROPS_FS, uniformNames.drops);
-        if (!liquid || !down || !blit || !glass || !drops) return false;
-        this.programs = { liquid, down, blit, glass, drops };
+        const liquid = this.link(gl, FULL_VS, LIQUID_FS, uniformNames.liquid);
+        const down = this.link(gl, FULL_VS, DOWN_FS, uniformNames.down);
+        const glass = this.link(gl, QUAD_VS, GLASS_FS, uniformNames.glass);
+        const drops = this.link(gl, QUAD_VS, DROPS_FS, uniformNames.drops);
+        const bloom = this.link(gl, QUAD_VS, BLOOM_FS, uniformNames.bloom);
+        const wall = this.link(wallGl, FULL_VS, LIQUID_FS, uniformNames.liquid);
+        if (!liquid || !down || !glass || !drops || !bloom || !wall) return false;
+        this.programs = { liquid, down, glass, drops, bloom };
+        this.wallProgram = wall;
 
         // One buffer: a triangle over the whole target, then a unit rectangle.
-        gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3, 0, 0, 1, 0, 0, 1, 1, 1]), gl.STATIC_DRAW);
-        gl.enableVertexAttribArray(0);
-        gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+        for (const context of [gl, wallGl]) {
+            context.bindBuffer(context.ARRAY_BUFFER, context.createBuffer());
+            context.bufferData(context.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3, 0, 0, 1, 0, 0, 1, 1, 1]), context.STATIC_DRAW);
+            context.enableVertexAttribArray(0);
+            context.vertexAttribPointer(0, 2, context.FLOAT, false, 0, 0);
+        }
         gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+        gl.clearColor(0, 0, 0, 0);
         this.sharp = this.half = this.soft = null;
         this.cssW = 0;
         this.ready = true;
         return true;
     }
 
-    private link(vsSource: string, fsSource: string, names: string[]): Program | null {
-        const gl = this.gl!;
+    private link(gl: WebGLRenderingContext, vsSource: string, fsSource: string, names: string[]): Program | null {
         const compile = (type: number, source: string) => {
             const shader = gl.createShader(type);
             if (!shader) return null;
@@ -346,8 +362,9 @@ class Engine implements GlassEngine {
     private onLost = (event: Event) => {
         event.preventDefault();
         this.stop();
+        // Both canvases can go at once, and that is one loss.
+        if (this.ready) this.losses++;
         this.ready = false;
-        this.losses++;
         if (this.losses >= GIVE_UP_AFTER_LOSSES) this.gaveUp = true;
         this.applyMode();
     };
@@ -440,10 +457,11 @@ class Engine implements GlassEngine {
     private applyMode() {
         const html = document.documentElement;
         const scrolls = this.canvasScrolls();
-        this.wall.setAttribute('data-glass-wall', scrolls ? 'page' : 'screen');
+        this.layer.setAttribute('data-glass-layer', scrolls ? 'page' : 'screen');
         this.canvas.style.transform = '';
         this.appliedY = NaN;
-        this.canvas.style.visibility = this.ready && !this.gaveUp ? '' : 'hidden';
+        this.canvas.style.visibility = this.drawsSurfaces() ? '' : 'hidden';
+        this.wallCanvas.style.visibility = this.ready && !this.gaveUp ? '' : 'hidden';
         if (this.drawsSurfaces() && this.painted) html.setAttribute('data-gl', 'on');
         else html.removeAttribute('data-gl');
         if (this.canAnimate()) html.removeAttribute('data-glass-calm');
@@ -548,6 +566,7 @@ class Engine implements GlassEngine {
         if (this.painted) return;
         this.painted = true;
         this.canvas.setAttribute('data-painted', '');
+        this.wallCanvas.setAttribute('data-painted', '');
         // CSS glass steps aside only once the canvas has faded in, so there is never a moment with no glass at all.
         window.setTimeout(() => {
             if (this.drawsSurfaces() && this.painted) document.documentElement.setAttribute('data-gl', 'on');
@@ -556,16 +575,10 @@ class Engine implements GlassEngine {
 
     private fit() {
         const quality = QUALITY[this.level];
-        const width = document.documentElement.clientWidth || window.innerWidth;
-        const height = window.innerHeight;
-        // A phone's address bar changes the height while scrolling. Keep the tallest seen,
-        // or the canvas would be reallocated, and hitch, during the scroll it should survive.
-        if (width !== this.lastWidth) {
-            this.lastWidth = width;
-            this.maxViewH = 0;
-        }
-        this.maxViewH = Math.max(this.maxViewH, height);
-        this.viewH = this.maxViewH;
+        const width = this.wall.clientWidth || document.documentElement.clientWidth || window.innerWidth;
+        // The wall is as tall as the screen with the phone's address bar hidden, so it never
+        // changes size, or stretches the liquid, as that bar comes and goes during a scroll.
+        this.viewH = this.wall.clientHeight || window.innerHeight;
         const over = this.canvasScrolls() ? Math.max(OVERSCAN_MIN, Math.min(OVERSCAN_MAX, Math.round(this.viewH * OVERSCAN_SHARE))) : 0;
         const cssH = this.viewH + over * 2;
         const dpr = Math.min(window.devicePixelRatio || 1, quality.dpr);
@@ -584,6 +597,14 @@ class Engine implements GlassEngine {
         this.cssH = cssH;
         this.over = over;
         this.dpr = bw / width;
+        const wallScale = Math.min(1, quality.liquid * WALL_SHARPNESS);
+        const wallW = Math.max(2, Math.round(width * wallScale));
+        const wallH = Math.max(2, Math.round(this.viewH * wallScale));
+        if (this.wallCanvas.width !== wallW || this.wallCanvas.height !== wallH) {
+            this.wallCanvas.width = wallW;
+            this.wallCanvas.height = wallH;
+            this.needsDraw = true;
+        }
         const sw = Math.max(2, Math.round(width * quality.liquid));
         const sh = Math.max(2, Math.round(cssH * quality.liquid));
         this.sharp = this.makeTarget(this.sharp, sw, sh);
@@ -726,8 +747,8 @@ class Engine implements GlassEngine {
         this.bloomAlpha = 0;
         if (this.bloomEl) {
             const box = this.bloomEl.getBoundingClientRect();
-            if (box.width > 0) {
-                this.bloom = [box.left + box.width / 2, box.top + box.height / 2, Math.max(box.width / 340, 0.01)];
+            if (box.width > 0 && box.bottom > -this.over && box.top < this.viewH + this.over) {
+                this.bloom = [box.left + box.width / 2, box.top + box.height / 2 + this.over, Math.max(box.width / 340, 0.01)];
                 this.bloomAlpha = fadeOf(this.bloomEl, getComputedStyle(this.bloomEl));
             }
         }
@@ -749,7 +770,6 @@ class Engine implements GlassEngine {
     }
 
     private drawLiquid(now: number) {
-        const gl = this.gl!;
         const { liquid, down } = this.programs!;
         const t = (now - this.t0) / 1000;
         const w = this.cssW;
@@ -762,33 +782,6 @@ class Engine implements GlassEngine {
         const len = Math.hypot(lx, ly) || 1;
         this.light[0] += (lx / len - this.light[0]) * 0.1;
         this.light[1] += (ly / len - this.light[1]) * 0.1;
-
-        const sharp = this.sharp!;
-        gl.disable(gl.BLEND);
-        gl.useProgram(liquid.prog);
-        gl.bindFramebuffer(gl.FRAMEBUFFER, sharp.fbo);
-        gl.viewport(0, 0, sharp.w, sharp.h);
-        const u = liquid.u;
-        const pal = this.pal;
-        const prev = this.prevPal;
-        gl.uniform2f(u.uView, w, h);
-        gl.uniform2f(u.uL, this.light[0], this.light[1]);
-        gl.uniform1f(u.uOver, this.over);
-        gl.uniform1f(u.uT, t);
-        // The masses grow with the screen and so would their highlight: a glint on a phone is a white band on a laptop.
-        gl.uniform1f(u.uGloss, Math.max(0.35, Math.min(0.7, 300 / Math.min(w, h))));
-        gl.uniform3fv(u.uA0, pal.a0);
-        gl.uniform3fv(u.uA1, pal.a1);
-        gl.uniform3fv(u.uC1, pal.c1);
-        gl.uniform3fv(u.uC2, pal.c2);
-        gl.uniform3fv(u.uA0p, prev.a0);
-        gl.uniform3fv(u.uA1p, prev.a1);
-        gl.uniform3fv(u.uC1p, prev.c1);
-        gl.uniform3fv(u.uC2p, prev.c2);
-        gl.uniform3fv(u.uGlow, pal.glow);
-        gl.uniform3fv(u.uBl, this.blobs);
-        gl.uniform3f(u.uBloom, this.bloom[0], this.bloom[1], this.bloom[2]);
-        gl.uniform1f(u.uBloomA, this.bloomAlpha);
 
         let ripX = 0;
         let ripY = 0;
@@ -803,7 +796,6 @@ class Engine implements GlassEngine {
                 ripZ = (1 - (1 - p) ** 3) * this.rip.reach;
             }
         }
-        gl.uniform3f(u.uRip, ripX, ripY, ripZ);
         let touchX = 0;
         let touchY = 0;
         let touchZ = 0;
@@ -819,9 +811,47 @@ class Engine implements GlassEngine {
                 touchA = 1 - p;
             }
         }
-        gl.uniform3f(u.uTouch, touchX, touchY, touchZ);
-        gl.uniform1f(u.uTouchA, touchA);
-        gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+        const pal = this.pal;
+        const prev = this.prevPal;
+        const paint = (gl: WebGLRenderingContext, program: Program, over: number) => {
+            const u = program.u;
+            gl.useProgram(program.prog);
+            gl.uniform2f(u.uView, w, h);
+            gl.uniform2f(u.uL, this.light[0], this.light[1]);
+            gl.uniform1f(u.uOver, over);
+            gl.uniform1f(u.uT, t);
+            // The masses grow with the screen and so would their highlight: a glint on a phone is a white band on a laptop.
+            gl.uniform1f(u.uGloss, Math.max(0.35, Math.min(0.7, 300 / Math.min(w, h))));
+            gl.uniform3fv(u.uA0, pal.a0);
+            gl.uniform3fv(u.uA1, pal.a1);
+            gl.uniform3fv(u.uC1, pal.c1);
+            gl.uniform3fv(u.uC2, pal.c2);
+            gl.uniform3fv(u.uA0p, prev.a0);
+            gl.uniform3fv(u.uA1p, prev.a1);
+            gl.uniform3fv(u.uC1p, prev.c1);
+            gl.uniform3fv(u.uC2p, prev.c2);
+            gl.uniform3fv(u.uGlow, pal.glow);
+            gl.uniform3fv(u.uBl, this.blobs);
+            gl.uniform3f(u.uRip, ripX, ripY, ripZ);
+            gl.uniform3f(u.uTouch, touchX, touchY, touchZ);
+            gl.uniform1f(u.uTouchA, touchA);
+            gl.drawArrays(gl.TRIANGLES, 0, 3);
+        };
+
+        // The wall, on its own canvas: it never moves, so scrolling can't disturb it.
+        const wallGl = this.wallGl!;
+        wallGl.viewport(0, 0, this.wallCanvas.width, this.wallCanvas.height);
+        paint(wallGl, this.wallProgram!, 0);
+        if (!this.drawsSurfaces()) return;
+
+        // The same picture again for the glass to bend, reaching as far as its taller canvas does.
+        const gl = this.gl!;
+        const sharp = this.sharp!;
+        gl.disable(gl.BLEND);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, sharp.fbo);
+        gl.viewport(0, 0, sharp.w, sharp.h);
+        paint(gl, liquid, this.over);
 
         // Halved twice: the blur frosted glass reads.
         gl.useProgram(down.prog);
@@ -840,21 +870,31 @@ class Engine implements GlassEngine {
 
     private drawScreen(withSurfaces: boolean) {
         const gl = this.gl!;
-        const { blit, glass, drops } = this.programs!;
+        const { glass, drops, bloom } = this.programs!;
         const sharp = this.sharp!;
         const soft = this.soft!;
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
         gl.viewport(0, 0, this.canvas.width, this.canvas.height);
-        gl.disable(gl.BLEND);
-        gl.useProgram(blit.prog);
-        gl.activeTexture(gl.TEXTURE0);
-        gl.bindTexture(gl.TEXTURE_2D, sharp.tex);
-        gl.uniform1i(blit.u.uTex, 0);
-        gl.drawArrays(gl.TRIANGLES, 0, 3);
+        gl.clear(gl.COLOR_BUFFER_BIT);
         if (!withSurfaces) return;
 
         gl.enable(gl.BLEND);
         const pal = this.pal;
+        const now = (performance.now() - this.t0) / 1000;
+        if (this.bloomAlpha > 0.001) {
+            const u = bloom.u;
+            const reach = 184 * this.bloom[2];
+            gl.useProgram(bloom.prog);
+            gl.uniform2f(u.uCanvas, this.cssW, this.cssH);
+            gl.uniform1f(u.uT, now);
+            gl.uniform1f(u.uBloomA, this.bloomAlpha);
+            gl.uniform3fv(u.uC1, pal.c1);
+            gl.uniform3fv(u.uC2, pal.c2);
+            gl.uniform3fv(u.uGlow, pal.glow);
+            gl.uniform3f(u.uBloom, this.bloom[0], this.bloom[1], this.bloom[2]);
+            gl.uniform4f(u.uQuad, this.bloom[0] - reach, this.bloom[1] - reach, reach * 2, reach * 2);
+            gl.drawArrays(gl.TRIANGLE_STRIP, 3, 4);
+        }
         if (this.dropCount > 0) {
             const u = drops.u;
             gl.useProgram(drops.prog);
@@ -874,11 +914,12 @@ class Engine implements GlassEngine {
         gl.activeTexture(gl.TEXTURE1);
         gl.bindTexture(gl.TEXTURE_2D, soft.tex);
         gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, sharp.tex);
         gl.uniform1i(u.uSharp, 0);
         gl.uniform1i(u.uSoft, 1);
         gl.uniform2f(u.uCanvas, this.cssW, this.cssH);
         gl.uniform2f(u.uL, this.light[0], this.light[1]);
-        gl.uniform1f(u.uT, (performance.now() - this.t0) / 1000);
+        gl.uniform1f(u.uT, now);
         gl.uniform1f(u.uShadow, pal.shadow);
         gl.uniform1f(u.uLight, pal.light);
         gl.uniform1f(u.uTintK, pal.tintK);
@@ -954,7 +995,7 @@ class Engine implements GlassEngine {
         const waiting = timed(() => {
             gl.bindFramebuffer(gl.FRAMEBUFFER, null);
             gl.viewport(0, 0, 1, 1);
-            gl.useProgram(this.programs!.blit.prog);
+            gl.useProgram(this.programs!.down.prog);
             gl.drawArrays(gl.TRIANGLES, 0, 3);
         });
         const now = performance.now();
@@ -965,10 +1006,10 @@ class Engine implements GlassEngine {
     }
 
     simulateLostContext(): boolean {
-        const lose = this.gl?.getExtension('WEBGL_lose_context');
-        if (!lose) return false;
-        lose.loseContext();
-        window.setTimeout(() => lose.restoreContext(), 1500);
+        const contexts = [this.gl, this.wallGl].map((gl) => gl?.getExtension('WEBGL_lose_context'));
+        if (contexts.some((lose) => !lose)) return false;
+        contexts.forEach((lose) => lose?.loseContext());
+        window.setTimeout(() => contexts.forEach((lose) => lose?.restoreContext()), 1500);
         return true;
     }
 
@@ -978,8 +1019,10 @@ class Engine implements GlassEngine {
         this.pageObserver.disconnect();
         this.themeObserver.disconnect();
         this.reducedMotion.removeEventListener('change', this.onMotionPreference);
-        this.canvas.removeEventListener('webglcontextlost', this.onLost);
-        this.canvas.removeEventListener('webglcontextrestored', this.onRestored);
+        for (const canvas of [this.wallCanvas, this.canvas]) {
+            canvas.removeEventListener('webglcontextlost', this.onLost);
+            canvas.removeEventListener('webglcontextrestored', this.onRestored);
+        }
         window.removeEventListener('pointerdown', this.onPointerDown);
         window.removeEventListener('pointermove', this.onPointerMove);
         window.removeEventListener('resize', this.onResize);
@@ -988,7 +1031,9 @@ class Engine implements GlassEngine {
         document.documentElement.removeAttribute('data-gl');
         document.documentElement.removeAttribute('data-glass-calm');
         this.gl?.getExtension('WEBGL_lose_context')?.loseContext();
+        this.wallGl?.getExtension('WEBGL_lose_context')?.loseContext();
         this.wall.remove();
+        this.layer.remove();
         if (this.bodyWasStatic) document.body.style.position = '';
     }
 }

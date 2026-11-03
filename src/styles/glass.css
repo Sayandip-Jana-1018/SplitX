@@ -18,7 +18,30 @@ body {
     background: transparent;
 }
 
+/*
+ * The liquid: fixed to the screen, and as tall as the screen with the phone's address
+ * bar hidden, so nothing about a scroll can move it or stretch it.
+ */
 [data-glass-wall] {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 100vh;
+    height: 100lvh;
+    z-index: -1;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+[data-glass-wall] canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+/* The glass: scrolls with the page, so its layer is as tall as the page and clips it. */
+[data-glass-layer] {
     position: fixed;
     inset: 0;
     z-index: -1;
@@ -26,21 +49,25 @@ body {
     pointer-events: none;
 }
 
-/* The canvas scrolls with the page, so the wall is as tall as the page and clips it. */
-[data-glass-wall='page'] {
+[data-glass-layer='page'] {
     position: absolute;
 }
 
-[data-glass-wall] canvas {
+[data-glass-layer] canvas {
     display: block;
     position: absolute;
     top: 0;
     left: 0;
+}
+
+[data-glass-wall] canvas,
+[data-glass-layer] canvas {
     opacity: 0;
     transition: opacity 240ms ease;
 }
 
-[data-glass-wall] canvas[data-painted] {
+[data-glass-wall] canvas[data-painted],
+[data-glass-layer] canvas[data-painted] {
     opacity: 1;
 }
 
@@ -227,7 +254,8 @@ html[data-gl='on'] [data-petals] {
         background: #ffffff;
     }
 
-    [data-glass-wall] {
+    [data-glass-wall],
+    [data-glass-layer] {
         display: none;
     }
 

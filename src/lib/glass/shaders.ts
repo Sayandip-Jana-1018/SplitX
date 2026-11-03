@@ -1,9 +1,10 @@
 /**
- * The shaders. One picture of the liquid is drawn at low resolution and blurred
- * again for frost; the screen and every glass surface only read from those two
- * textures, so a glass pixel no longer recomputes the liquid up to six times.
+ * The shaders. The liquid is drawn at low resolution, once for the wall and once, with
+ * a blur for frost, for the glass to read, so a glass pixel never recomputes the liquid.
  * Positions are CSS pixels, y down, unless they say otherwise.
  */
+
+const DITHER = '(fract(sin(dot(gl_FragCoord.xy,vec2(12.9898,78.233)))*43758.5453)-.5)/255.';
 
 /** A triangle over the whole target. */
 export const FULL_VS = 'attribute vec2 a;varying vec2 vUv;void main(){vUv=a*.5+.5;gl_Position=vec4(a,0.,1.);}';
@@ -18,8 +19,8 @@ void main(){vP=uQuad.xy+a*uQuad.zw;gl_Position=vec4(vP.x/uCanvas.x*2.-1.,1.-vP.y
  * theme ripple and the touch ripple bend it here, and glass inherits them by reading it.
  */
 export const LIQUID_FS = `precision highp float;
-uniform vec2 uView,uL;uniform float uOver,uT,uGloss,uBloomA,uTouchA;
-uniform vec3 uA0,uA1,uC1,uC2,uA0p,uA1p,uC1p,uC2p,uGlow,uRip,uTouch,uBloom;uniform vec3 uBl[7];
+uniform vec2 uView,uL;uniform float uOver,uT,uGloss,uTouchA;
+uniform vec3 uA0,uA1,uC1,uC2,uA0p,uA1p,uC1p,uC2p,uGlow,uRip,uTouch;uniform vec3 uBl[7];
 varying vec2 vUv;
 vec3 gA0,gA1,gC1,gC2;
 void pick(vec2 p){
@@ -50,48 +51,17 @@ vec3 wall(vec2 p){
   }
   return c;
 }
-vec4 petal(vec2 p,float ang,float L,float W,vec3 c1,vec3 c2){
-  float ca=cos(ang),sa=sin(ang);
-  vec2 q=vec2(ca*p.x+sa*p.y,-sa*p.x+ca*p.y);
-  float y=-q.y/L;float ky=clamp(y,0.,1.);
-  float w=W*sqrt(max(sin(ky*3.14159),0.))*(.72+.5*ky);
-  float sd=abs(q.x)-w;
-  float ins=smoothstep(-1.2,1.2,y*L)*smoothstep(-1.2,1.2,(1.-y)*L);
-  float al=smoothstep(1.2,-1.2,sd)*ins;
-  float edge=exp(-abs(sd)/3.5)*ins;
-  vec3 col=mix(c1,c2,smoothstep(0.,1.,ky));
-  col+=uGlow*edge*.75;
-  col+=uGlow*.3*exp(-abs(q.x+w*.42)/5.)*smoothstep(.12,.7,ky)*(1.-ky);
-  return vec4(col,al*(.5+.36*ky));
-}
 void main(){
   vec2 p=vec2(vUv.x,1.-vUv.y)*(uView+vec2(0.,2.*uOver))-vec2(0.,uOver);
   pick(p);
   if(uRip.z>=0.){float rd=length(p-uRip.xy);float rg=exp(-pow((rd-uRip.z)/34.,2.));p+=normalize(p-uRip.xy+1e-3)*rg*20.;}
   if(uTouchA>0.){float rd=length(p-uTouch.xy);float rg=exp(-pow((rd-uTouch.z)/22.,2.));p+=normalize(p-uTouch.xy+1e-3)*rg*13.*uTouchA;}
-  vec3 c=wall(p);
-  if(uBloomA>.001){
-    vec2 b=(p-uBloom.xy)/uBloom.z;float r=uT*.05;
-    for(int i=0;i<7;i++){
-      float fi=float(i);float ang=r+fi*.8976+.2;
-      float L=(148.+22.*sin(fi*2.4))*(1.+.025*sin(uT*.6+fi));float W=54.+10.*cos(fi*1.7);
-      vec4 pe=petal(b,ang,L,W,gC2,mix(gC1,uGlow,.1+.1*sin(fi)));
-      c=mix(c,pe.rgb,pe.a*uBloomA);
-    }
-    c+=gC1*.5*exp(-length(b)/26.)*uBloomA;
-  }
-  gl_FragColor=vec4(c,1.);
+  gl_FragColor=vec4(wall(p)+${DITHER},1.);
 }`;
 
 /** Halves a texture with four reads. Run twice, it gives frosted glass its blur for almost nothing. */
 export const DOWN_FS = `precision highp float;uniform sampler2D uTex;uniform vec2 uTexel;varying vec2 vUv;
 void main(){vec2 t=uTexel;gl_FragColor=(texture2D(uTex,vUv+t*vec2(-1.,-1.))+texture2D(uTex,vUv+t*vec2(1.,-1.))+texture2D(uTex,vUv+t*vec2(-1.,1.))+texture2D(uTex,vUv+t*vec2(1.,1.)))*.25;}`;
-
-const DITHER = '(fract(sin(dot(gl_FragCoord.xy,vec2(12.9898,78.233)))*43758.5453)-.5)/255.';
-
-/** The liquid on the screen: one read per pixel, which is why most of the screen costs nothing. */
-export const BLIT_FS = `precision highp float;uniform sampler2D uTex;varying vec2 vUv;
-void main(){gl_FragColor=vec4(texture2D(uTex,vUv).rgb+${DITHER},1.);}`;
 
 /**
  * One surface and its shadow. Light bends hardest at the rim and the rim ripples
@@ -151,6 +121,46 @@ void main(){
   c+=uRimC*sheen(q)+${DITHER};
   float cv=smoothstep(.75,-.75,sd)*uS.w;
   gl_FragColor=vec4(c*cv,cv+(1.-cv)*shadow);
+}`;
+
+/**
+ * The bloom's petals. Their edges are one or two pixels wide, which the low-resolution
+ * liquid can't hold, so they are drawn at the screen's own resolution, over it. Half of
+ * the petals are out of reach of any one pixel, so most of the loop skips straight on.
+ */
+export const BLOOM_FS = `precision highp float;
+uniform float uT,uBloomA;uniform vec3 uC1,uC2,uGlow,uBloom;
+varying vec2 vP;
+void main(){
+  vec2 b=(vP-uBloom.xy)/uBloom.z;
+  float far=length(b);
+  if(far>184.){gl_FragColor=vec4(0.);return;}
+  vec3 col=vec3(0.);float alpha=0.;
+  float r=uT*.05;float aa=clamp(1.1/uBloom.z,.5,1.6);
+  for(int i=0;i<7;i++){
+    float fi=float(i);float ang=r+fi*.8976+.2;
+    float L=(148.+22.*sin(fi*2.4))*(1.+.025*sin(uT*.6+fi));
+    float ca=cos(ang),sa=sin(ang);
+    vec2 q=vec2(ca*b.x+sa*b.y,-sa*b.x+ca*b.y);
+    float y=-q.y/L;
+    if(y<-.02||y>1.02)continue;
+    float W=54.+10.*cos(fi*1.7);
+    float ky=clamp(y,0.,1.);
+    float w=W*sqrt(max(sin(ky*3.14159),0.))*(.72+.5*ky);
+    float sd=abs(q.x)-w;
+    float ins=smoothstep(-aa,aa,y*L)*smoothstep(-aa,aa,(1.-y)*L);
+    float al=smoothstep(aa,-aa,sd)*ins;
+    if(al<.002)continue;
+    float edge=exp(-abs(sd)/3.5)*ins;
+    vec3 pc=mix(uC2,mix(uC1,uGlow,.1+.1*sin(fi)),smoothstep(0.,1.,ky));
+    pc+=uGlow*edge*.8;
+    pc+=uGlow*.3*exp(-abs(q.x+w*.42)/5.)*smoothstep(.12,.7,ky)*(1.-ky);
+    float a=al*(.58+.32*ky);
+    col=pc*a+col*(1.-a);
+    alpha=a+alpha*(1.-a);
+  }
+  col+=uC1*.5*exp(-far/26.);
+  gl_FragColor=vec4((col+${DITHER}*alpha)*uBloomA,alpha*uBloomA);
 }`;
 
 /** Hero droplets: clear drops that pool together, drawn only over the box they occupy. */
