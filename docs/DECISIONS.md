@@ -5363,6 +5363,31 @@ Phones and tablets: 11 pages on a phone, 5 in dark mode and 6 on a tablet were s
 committed code and again with the change, and all 22 are identical pixel for pixel. A scan of 11
 pages at 1,024, 1,100, 1,280 and 1,440 px finds no text cut off.
 
+### D-118 · The four k6 acceptances, renewed to 2026-12-15 after they lapsed
+**2026-11-03** · ✅ written and tested locally. ⚠️ Only the release job on `main` runs the scan gate, so
+the next push to `main` is what proves it.
+
+D-097's four accepted k6 advisories expired on 2026-10-24, on purpose: the date was the demo's
+deadline, and from it the release gate would refuse the ops image. The demo is over and the AWS
+account is gone, but the gate still runs on every push to `main`, so `main` could not release until
+this was looked at again, and the Liquid Glass work has to reach `main` eventually.
+
+**What was checked:** `grafana/k6`'s tags and Docker Hub's tag list. 2.3.0 is still the newest release.
+k6's default branch has moved (`golang:1.27.3`, x/net 0.61.0, grpc still 1.84.0), so a release will
+probably clear three of the four, and not yet the grpc one.
+
+**Why renew instead of swapping the binary:** the reasoning in each statement still holds, because the
+lab's k6 is still an HTTP client of one peer, reachable only from ops-api. Building k6 from an
+unreleased commit would replace a known, reasoned risk with an unknown one.
+
+**The date is mid-December**, not the end of the Liquid Glass work: long enough for that work, short
+enough that someone looks again. The test's bound moved with it and its comment now gives this
+reason, since "the demo's deadline" no longer applies.
+
+**One thing noticed, and left alone:** Docker Hub shows the `2.3.0` tag re-pushed on 2026-10-24 with a
+new digest (`sha256:2dd4756e…`). Our pin is by digest and still resolves, so nothing here changes
+without a decision. What the re-push changed was not read: this network's TLS kept failing that check.
+
 ---
 
 ## Open problems

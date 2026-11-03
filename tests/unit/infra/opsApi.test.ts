@@ -331,8 +331,8 @@ describe('the files that deploy ops-api and the lab', () => {
             expect(entry, id + ': a statement').toMatch(/\n {4}statement: >-\n {6}\S/);
             const expires = entry.match(/\n {4}expired_at: (\d{4}-\d{2}-\d{2})/)?.[1];
             expect(expires, id + ': an expiry').toBeDefined();
-            // No acceptance outlives the AWS account's Free plan, the demo's deadline (D-095).
-            expect(expires! <= '2026-10-31', id + ': expires by the end of October').toBe(true);
+            // No acceptance runs on unchecked: this date moves only with a fresh look at k6's releases (D-118).
+            expect(expires! <= '2026-12-15', id + ': expires by mid-December').toBe(true);
         }
     });
 

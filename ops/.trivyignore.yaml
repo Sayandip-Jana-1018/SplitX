@@ -5,6 +5,7 @@
 #   covers, says why it cannot be exploited here, and expires; on that date
 #   the gate refuses the image again unless a fixed release has replaced it.
 #   tests/unit/infra/opsApi.test.ts refuses an entry without all four.
+#   Checked again on 2026-11-03 (D-118): 2.3.0 is still k6's newest release.
 # ═══════════════════════════════════════════════════════════════
 vulnerabilities:
   - id: CVE-2026-84445
@@ -18,7 +19,7 @@ vulnerabilities:
       to SplitX's own edge, so the vulnerable code never runs; the lab also
       accepts connections from ops-api only. Dependabot watches ops/ for a
       k6 release with the fix.
-    expired_at: 2026-10-24
+    expired_at: 2026-12-15
   - id: CVE-2026-78667
     paths:
       - usr/local/bin/k6
@@ -30,7 +31,7 @@ vulnerabilities:
       k6 as an HTTP client only (`k6 run`, ops/lab/server.mjs), and its one
       script requests SplitX's own edge, so no Go server of k6's answers a
       Range request; the lab accepts connections from ops-api only.
-    expired_at: 2026-10-24
+    expired_at: 2026-12-15
   - id: CVE-2026-97031
     paths:
       - usr/local/bin/k6
@@ -40,7 +41,7 @@ vulnerabilities:
       1.27.2 (published 2026-10-09); k6 2.3.0 is built with Go 1.27.1 and no
       newer k6 exists yet. The lab's k6 is a TLS client of SplitX's own edge
       and runs no TLS server, so it never parses a ClientHello.
-    expired_at: 2026-10-24
+    expired_at: 2026-12-15
   - id: CVE-2026-78669
     paths:
       - usr/local/bin/k6
@@ -55,4 +56,4 @@ vulnerabilities:
       its rate and length (ops/lab/limits.mjs), so no other server ever
       answers k6. The most such a peer could do is use CPU in one run, which
       ends within 180 s; the lab accepts connections from ops-api only.
-    expired_at: 2026-10-24
+    expired_at: 2026-12-15
