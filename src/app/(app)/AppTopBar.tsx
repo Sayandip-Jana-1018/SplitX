@@ -87,7 +87,7 @@ export default function AppTopBar({
 
     return (
         <header className={cn(styles.bar, scrolled && styles.barScrolled)}>
-            <div className={styles.inner}>
+            <div className={styles.inner} data-glass="thin" data-glass-mode="css">
                 <Link href="/dashboard" className={styles.brand} aria-label="SplitX home">
                     <BrandMark size={30} />
                 </Link>
@@ -108,6 +108,7 @@ export default function AppTopBar({
                                     <motion.span
                                         layoutId="topbar-active"
                                         className={styles.linkPill}
+                                        data-glass="clear"
                                         transition={{ type: 'spring', stiffness: 520, damping: 40 }}
                                     />
                                 )}
@@ -145,7 +146,7 @@ export default function AppTopBar({
                         onClick={onAssistant}
                         tour="ai"
                     />
-                    <Link href="/transactions/new" className={styles.add} data-tour="/transactions/new">
+                    <Link href="/transactions/new" className={styles.add} data-tour="/transactions/new" data-glass="accent">
                         <Plus size={18} strokeWidth={2.6} aria-hidden="true" />
                         <span className={styles.addLong}>Add expense</span>
                         <span className={styles.addShort}>Add</span>

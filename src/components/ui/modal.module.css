@@ -12,8 +12,6 @@
     padding: 24px;
     overflow-y: auto;
     background: var(--scrim);
-    -webkit-backdrop-filter: blur(6px);
-    backdrop-filter: blur(6px);
 }
 
 .overlaySheet {
@@ -23,9 +21,7 @@
 }
 
 .overlayLight {
-    background: rgba(8, 10, 16, 0.18);
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
+    background: transparent;
 }
 
 .modal {
@@ -36,11 +32,8 @@
     max-height: min(86dvh, 820px);
     overflow: hidden;
     outline: none;
-    background: var(--surface-popover);
-    border: 1px solid var(--border-default);
     border-radius: var(--radius-3xl);
-    box-shadow: var(--shadow-2xl);
-    text-align: left;
+    text-align: center;
 }
 
 .small { max-width: 420px; }
@@ -52,7 +45,7 @@
     max-width: none;
     max-height: 92dvh;
     border-bottom: none;
-    border-radius: 28px 28px 0 0;
+    border-radius: 32px 32px 0 0;
     padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
@@ -105,18 +98,17 @@
     display: grid;
     place-items: center;
     justify-self: end;
-    width: 36px;
-    height: 36px;
+    width: 40px;
+    height: 40px;
     border-radius: 50%;
-    background: var(--bg-tertiary);
-    color: var(--fg-secondary);
+    background: var(--surface-secondary);
+    color: var(--fg-primary);
     transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
 }
 
 @media (hover: hover) and (pointer: fine) {
     .closeBtn:hover {
-        color: var(--fg-primary);
-        background: var(--border-default);
+        background: var(--accent-soft);
     }
 }
 

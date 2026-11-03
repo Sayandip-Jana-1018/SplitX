@@ -200,7 +200,7 @@ function TransactionsContent() {
             <Stagger className={styles.page}>
                 <div className={styles.side}>
                     <StaggerItem>
-                        <section className={styles.summary}>
+                        <section className={styles.summary} data-glass="reg">
                             <span className={styles.summaryLabel}>{isFiltering ? 'Matching expenses' : 'Total spent'}</span>
                             <span className={styles.summaryValue}>{formatCurrency(totalSpent)}</span>
                             <span className={styles.summaryMeta}>
@@ -224,7 +224,7 @@ function TransactionsContent() {
                                 <label className={styles.search}>
                                     <Search size={17} className={styles.searchIcon} />
                                     <input
-                                        className={styles.searchInput}
+                                        className={styles.searchInput} data-glass="thin"
                                         placeholder="Search expenses, people, groups"
                                         value={search}
                                         onChange={(event) => setSearch(event.target.value)}
@@ -239,7 +239,7 @@ function TransactionsContent() {
                                 </label>
                                 <button
                                     type="button"
-                                    className={cn(styles.sortButton, sortBy === 'amount' && styles.sortButtonActive)}
+                                    className={cn(styles.sortButton, sortBy === 'amount' && styles.sortButtonActive)} data-glass="thin"
                                     onClick={() => setSortBy(sortBy === 'time' ? 'amount' : 'time')}
                                     aria-label={sortBy === 'time' ? 'Sort by highest amount' : 'Sort by most recent'}
                                 >
@@ -570,7 +570,7 @@ function ExpenseSheetBody({
                                 <button
                                     key={person.id}
                                     type="button"
-                                    className={cn(styles.memberToggle, on && styles.memberToggleOn)}
+                                    className={cn(styles.memberToggle, on && styles.memberToggleOn)} data-glass="thin"
                                     onClick={() => {
                                         const next = new Set(splitAmong);
                                         if (next.has(person.id)) {

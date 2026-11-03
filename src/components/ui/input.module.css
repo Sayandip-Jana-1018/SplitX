@@ -7,11 +7,10 @@
     flex-direction: column;
     gap: 7px;
     min-width: 0;
-    text-align: left;
+    text-align: center;
 }
 
 .label {
-    padding-left: 2px;
     font-size: 13px;
     font-weight: 600;
     color: var(--fg-secondary);
@@ -26,20 +25,16 @@
 .input {
     width: 100%;
     min-width: 0;
-    height: 52px;
-    padding: 0 16px;
+    height: 58px;
+    padding: 0 20px;
     font-size: 16px;
     font-weight: 500;
     color: var(--fg-primary);
-    background: var(--surface-input);
-    border: 1px solid var(--border-default);
-    border-radius: var(--radius-lg);
-    outline: none;
-    text-align: left;
-    transition:
-        border-color var(--duration-fast) var(--ease-out),
-        box-shadow var(--duration-normal) var(--ease-out),
-        background-color var(--duration-fast) var(--ease-out);
+    border-radius: 29px;
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+    text-align: center;
+    transition: outline-color var(--duration-fast) var(--ease-out);
 }
 
 .input::placeholder {
@@ -47,27 +42,20 @@
     font-weight: 400;
 }
 
-.input:hover:not(:focus) {
-    border-color: var(--border-strong);
-}
-
 .input:focus {
-    background: var(--surface-card);
-    border-color: var(--accent-500);
-    box-shadow: 0 0 0 4px rgba(var(--accent-500-rgb), 0.14);
+    outline-color: var(--accent-strong);
 }
 
 .inputLarge {
-    height: 58px;
+    height: 62px;
+    border-radius: 31px;
     font-size: 17px;
 }
 
-.hasLeftIcon {
-    padding-left: 46px;
-}
-
+/* An icon on one side reserves the same room on the other, so the words stay on the centre line. */
+.hasLeftIcon,
 .hasRightIcon {
-    padding-right: 48px;
+    padding-inline: 50px;
 }
 
 .leftIcon,
@@ -83,13 +71,13 @@
     transition: color var(--duration-fast) var(--ease-out);
 }
 
-.leftIcon { left: 16px; }
-.rightIcon { right: 16px; }
+.leftIcon { left: 20px; }
+.rightIcon { right: 20px; }
 
 .rightSlot {
     position: absolute;
     top: 50%;
-    right: 6px;
+    right: 8px;
     z-index: 1;
     display: flex;
     align-items: center;
@@ -102,20 +90,17 @@
 }
 
 .error .input {
-    border-color: var(--color-error) !important;
-    box-shadow: 0 0 0 4px rgba(var(--danger-rgb), 0.12) !important;
+    outline-color: var(--color-error);
 }
 
 .errorText {
-    padding-left: 2px;
-    font-size: 12px;
+    font-size: 12.5px;
     font-weight: 500;
     color: var(--color-error);
 }
 
 .hintText {
-    padding-left: 2px;
-    font-size: 12px;
+    font-size: 12.5px;
     color: var(--fg-tertiary);
 }
 
@@ -136,14 +121,16 @@
 .floatingLabel {
     position: absolute;
     top: 50%;
-    left: 16px;
+    left: 0;
+    right: 0;
     z-index: 2;
+    text-align: center;
     font-size: 14px;
     font-weight: 500;
     color: var(--fg-muted);
     pointer-events: none;
     transform: translateY(-50%);
-    transform-origin: left center;
+    transform-origin: center;
     transition:
         top var(--duration-normal) var(--ease-out),
         font-size var(--duration-normal) var(--ease-out),
@@ -157,10 +144,6 @@
     font-size: 11px;
     font-weight: 600;
     color: var(--accent-strong);
-}
-
-.floatingLabelWithIcon {
-    left: 46px;
 }
 
 .floatingInputActive {

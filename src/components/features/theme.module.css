@@ -1,7 +1,13 @@
 .paletteGrid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 14px 6px;
+}
+
+@media (min-width: 480px) {
+    .paletteGrid {
+        grid-template-columns: repeat(8, minmax(0, 1fr));
+    }
 }
 
 .paletteItem {
@@ -43,7 +49,7 @@
     height: 22px;
     border-radius: 50%;
     background: rgba(255, 255, 255, 0.96);
-    color: #0d0f14;
+    color: oklch(0.2 calc(0.05 * var(--c)) var(--h));
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
 }
 
@@ -70,13 +76,21 @@
     gap: 20px;
 }
 
+.stackHint {
+    margin-top: 8px;
+    font-size: 12.5px;
+    line-height: 1.4;
+    text-align: center;
+    color: var(--fg-tertiary);
+}
+
 .stackLabel {
     font-size: 11px;
-    font-weight: 700;
+    font-weight: 600;
     letter-spacing: var(--tracking-wide);
     text-transform: uppercase;
     text-align: center;
-    color: var(--fg-muted);
+    color: var(--fg-secondary);
     margin-bottom: 10px;
 }
 

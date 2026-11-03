@@ -19,24 +19,18 @@
 .summaryTile {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
     min-width: 0;
-    padding: 16px;
-    border-radius: 22px;
-    border: 1px solid var(--border-default);
-    background: var(--surface-card);
-    box-shadow: var(--shadow-card);
+    padding: 16px 10px;
+    border-radius: 26px;
+    text-align: center;
 }
 
-.summaryTileOwe {
-    background: linear-gradient(165deg, var(--color-error-bg) 0%, var(--surface-card) 72%);
-}
-
-.summaryTileOwed {
-    background: linear-gradient(165deg, var(--color-success-bg) 0%, var(--surface-card) 72%);
-}
 
 .summaryHead {
+    justify-content: center;
     display: flex;
     align-items: center;
     gap: 8px;
@@ -182,7 +176,7 @@
     font-variant-numeric: tabular-nums;
 }
 
-.amountOut { color: var(--color-error); }
+.amountOut { color: var(--money-out); }
 .amountIn { color: var(--color-success); }
 .amountNeutral { color: var(--fg-primary); }
 
@@ -222,7 +216,7 @@
     gap: 12px;
     width: 100%;
     padding: 14px 16px;
-    text-align: left;
+    text-align: center;
 }
 
 .flowText {

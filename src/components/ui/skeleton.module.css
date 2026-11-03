@@ -36,8 +36,10 @@
 }
 
 .hero {
-    height: 208px;
-    border-radius: var(--radius-3xl);
+    width: 224px;
+    height: 224px;
+    margin-inline: auto;
+    border-radius: 50%;
 }
 
 .quick {

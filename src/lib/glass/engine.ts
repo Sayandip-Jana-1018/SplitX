@@ -14,7 +14,7 @@ import { surfaceLook, type SurfaceLook } from '@/lib/glass/styles';
  * page: it scrolls with the cards, on the same thread, and the engine moves it
  * back into view each frame. It is taller than the screen so a fast flick cannot
  * outrun it. A surface fixed to the screen, or inside a scroller of its own, cannot
- * ride on this canvas: mark it `data-glass-mode="css"` and glass.css draws it.
+ * ride on this canvas: the engine notices and marks it `data-glass-mode="css"`, and glass.css draws it.
  *
  * Anything can go wrong with a GPU, so nothing depends on it. Until the first frame
  * and after a lost context, `data-gl` is off and glass.css draws every surface.
@@ -45,7 +45,6 @@ export interface GlassStats {
 
 export interface GlassEngine {
     setMode(mode: GlassCanvasMode): void;
-    setMotion(motion: GlassMotion): void;
     /** Holds one quality level, or gives the choice back to the governor with null. */
     setLevel(level: number | null): void;
     stats(): GlassStats;
@@ -97,6 +96,7 @@ const VISIBLE_MARGIN_PX = OVERSCAN_MAX + 80;
 /** After the page changes, opacities and radii are read every frame for this long. */
 const STYLE_HOT_MS = 1400;
 const STYLE_EVERY_FRAMES = 20;
+const CANVAS_FADE_MS = 240;
 const RIPPLE_MS = 1100;
 const TOUCH_MS = 850;
 const GIVE_UP_AFTER_LOSSES = 3;
@@ -158,7 +158,7 @@ class Engine implements GlassEngine {
     private painted = false;
     private lastSignature = NaN;
     private needsDraw = true;
-    private t0 = performance.now();
+    private t0 = performance.now() - Math.random() * 600_000;
 
     private cssW = 0;
     private cssH = 0;
@@ -191,6 +191,8 @@ class Engine implements GlassEngine {
     private dropEls: Element[] = [];
     private bloomEl: Element | null = null;
     private surfacesDirty = true;
+    /** Surfaces already checked for whether they can ride on the canvas. */
+    private riders = new WeakSet<Element>();
     private styleHotUntil = 0;
     private drawnSurfaces = 0;
 
@@ -229,7 +231,7 @@ class Engine implements GlassEngine {
         this.pageObserver = new MutationObserver(this.onPageChange);
         this.pageObserver.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-glass', 'data-glass-mode', 'data-drop', 'data-petals'] });
         this.themeObserver = new MutationObserver(this.onThemeChange);
-        this.themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'data-palette', 'data-glass-style'] });
+        this.themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'data-palette', 'data-glass-style', 'data-motion'] });
         this.reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
         this.reducedMotion.addEventListener('change', this.onMotionPreference);
         window.addEventListener('pointerdown', this.onPointerDown, { passive: true });
@@ -368,8 +370,9 @@ class Engine implements GlassEngine {
         const old = this.pal;
         const oldPaint = `${this.paletteId} ${this.themeMode}`;
         this.readTheme();
-        for (const surface of this.surfaces) surface.look = surfaceLook(surface.el.getAttribute('data-glass'), this.styleId);
+        for (const surface of this.surfaces) surface.look = this.lookOf(surface.el);
         this.needsDraw = true;
+        this.setMotion(document.documentElement.getAttribute('data-motion') === 'calm' ? 'calm' : 'full');
         // A new kind of glass only changes the glass; a new colour or mode plays the ripple.
         if (oldPaint === `${this.paletteId} ${this.themeMode}`) return;
         this.pal = glassPalette(this.paletteId, this.themeMode);
@@ -379,7 +382,6 @@ class Engine implements GlassEngine {
         const reach = Math.max(...[[0, 0], [w, 0], [0, h], [w, h]].map(([x, y]) => Math.hypot(x - from[0], y - from[1])));
         this.prevPal = old;
         if (this.canAnimate()) this.rip = { x: from[0], y: from[1], t0: performance.now(), reach: reach + 90 };
-        this.paintWall();
         if (!this.raf) this.drawStill();
     };
 
@@ -446,18 +448,8 @@ class Engine implements GlassEngine {
         else html.removeAttribute('data-gl');
         if (this.canAnimate()) html.removeAttribute('data-glass-calm');
         else html.setAttribute('data-glass-calm', '');
-        this.paintWall();
         this.needsDraw = true;
         this.cssW = 0;
-    }
-
-    /** The colours behind the canvas, seen before the first frame and whenever the GPU is gone. */
-    private paintWall() {
-        const css = ([r, g, b]: number[]) => `rgb(${Math.round(r * 255)} ${Math.round(g * 255)} ${Math.round(b * 255)})`;
-        const html = document.documentElement.style;
-        html.setProperty('--glass-wall-a', css(this.pal.a0));
-        html.setProperty('--glass-wall-b', css(this.pal.a1));
-        html.setProperty('--glass-accent', css(this.pal.acc));
     }
 
     setMode(mode: GlassCanvasMode) {
@@ -467,7 +459,7 @@ class Engine implements GlassEngine {
         if (!this.raf) this.start();
     }
 
-    setMotion(motion: GlassMotion) {
+    private setMotion(motion: GlassMotion) {
         if (motion === this.motion) return;
         this.motion = motion;
         this.applyMode();
@@ -555,9 +547,11 @@ class Engine implements GlassEngine {
     private markPainted() {
         if (this.painted) return;
         this.painted = true;
-        // Only now does CSS glass step aside, so there is never a frame with no glass at all.
         this.canvas.setAttribute('data-painted', '');
-        if (this.drawsSurfaces()) document.documentElement.setAttribute('data-gl', 'on');
+        // CSS glass steps aside only once the canvas has faded in, so there is never a moment with no glass at all.
+        window.setTimeout(() => {
+            if (this.drawsSurfaces() && this.painted) document.documentElement.setAttribute('data-gl', 'on');
+        }, CANVAS_FADE_MS);
     }
 
     private fit() {
@@ -614,11 +608,12 @@ class Engine implements GlassEngine {
         const next = new Map<Element, Surface>();
         const list: Surface[] = [];
         for (const el of found) {
+            if (!this.canRide(el)) continue;
             const known = this.byEl.get(el);
             const surface: Surface = known ?? {
                 el,
                 parent: null,
-                look: surfaceLook(el.getAttribute('data-glass'), this.styleId),
+                look: this.lookOf(el),
                 radius: 0,
                 fade: 1,
                 visible: !this.visibleObserver,
@@ -628,7 +623,7 @@ class Engine implements GlassEngine {
                 h: 0,
                 scaleSeen: 1,
             };
-            if (known) surface.look = surfaceLook(el.getAttribute('data-glass'), this.styleId);
+            if (known) surface.look = this.lookOf(el);
             else this.visibleObserver?.observe(el);
             next.set(el, surface);
             list.push(surface);
@@ -643,6 +638,27 @@ class Engine implements GlassEngine {
         this.dropEls = Array.from(document.querySelectorAll('[data-drop]')).slice(0, MAX_DROPS);
         this.bloomEl = document.querySelector('[data-petals]');
         this.needsDraw = true;
+    }
+
+    private lookOf(el: Element): SurfaceLook {
+        return surfaceLook(el.getAttribute('data-glass'), el.getAttribute('data-glass-sample') ?? this.styleId);
+    }
+
+    /**
+     * Only what moves with the page can be drawn on the page's canvas. Anything fixed, sticky
+     * or inside a box that clips or scrolls goes to CSS glass, which the browser moves itself.
+     */
+    private canRide(el: Element): boolean {
+        if (this.riders.has(el)) return true;
+        let rides = !el.closest('[data-glass-mode="css"]');
+        for (let node: Element | null = el; rides && node && node !== document.body; node = node.parentElement) {
+            const style = getComputedStyle(node);
+            if (style.position === 'fixed' || style.position === 'sticky') rides = false;
+            if (node !== el && (style.overflowX !== 'visible' || style.overflowY !== 'visible')) rides = false;
+        }
+        if (rides) this.riders.add(el);
+        else el.setAttribute('data-glass-mode', 'css');
+        return rides;
     }
 
     private readStyle(surface: Surface, width: number, height: number) {
@@ -692,7 +708,7 @@ class Engine implements GlassEngine {
         for (const el of this.dropEls) {
             const box = el.getBoundingClientRect();
             if (box.width < 1) continue;
-            const r = (box.width / 2) * fadeOf(el as HTMLElement, getComputedStyle(el));
+            const r = (box.width / 2) * fadeOf(el, getComputedStyle(el));
             const x = box.left + box.width / 2;
             const y = box.top + box.height / 2 + this.over;
             this.dropData[count * 3] = x;
@@ -712,7 +728,7 @@ class Engine implements GlassEngine {
             const box = this.bloomEl.getBoundingClientRect();
             if (box.width > 0) {
                 this.bloom = [box.left + box.width / 2, box.top + box.height / 2, Math.max(box.width / 340, 0.01)];
-                this.bloomAlpha = fadeOf(this.bloomEl as HTMLElement, getComputedStyle(this.bloomEl));
+                this.bloomAlpha = fadeOf(this.bloomEl, getComputedStyle(this.bloomEl));
             }
         }
     }
@@ -760,7 +776,7 @@ class Engine implements GlassEngine {
         gl.uniform1f(u.uOver, this.over);
         gl.uniform1f(u.uT, t);
         // The masses grow with the screen and so would their highlight: a glint on a phone is a white band on a laptop.
-        gl.uniform1f(u.uGloss, Math.max(0.4, Math.min(1, 420 / Math.min(w, h))));
+        gl.uniform1f(u.uGloss, Math.max(0.35, Math.min(0.7, 300 / Math.min(w, h))));
         gl.uniform3fv(u.uA0, pal.a0);
         gl.uniform3fv(u.uA1, pal.a1);
         gl.uniform3fv(u.uC1, pal.c1);
@@ -867,7 +883,6 @@ class Engine implements GlassEngine {
         gl.uniform1f(u.uLight, pal.light);
         gl.uniform1f(u.uTintK, pal.tintK);
         gl.uniform1f(u.uDisperseOn, QUALITY[this.level].disperse ? 1 : 0);
-        gl.uniform3fv(u.uTint, pal.tint);
         gl.uniform3fv(u.uAcc, pal.acc);
         gl.uniform3fv(u.uRimC, pal.rim);
         let drawn = 0;
@@ -880,6 +895,7 @@ class Engine implements GlassEngine {
             gl.uniform4f(u.uS, s.radius, look.frost, look.tint, s.fade);
             gl.uniform4f(u.uG, look.refract, look.disperse, look.rim, look.wobble);
             gl.uniform1f(u.uUnder, s.parent ? s.parent.look.tint : 0);
+            gl.uniform3fv(u.uTint, look.colored ? pal.tinted : pal.tint);
             gl.drawArrays(gl.TRIANGLE_STRIP, 3, 4);
         }
     }
@@ -971,19 +987,19 @@ class Engine implements GlassEngine {
         document.removeEventListener('visibilitychange', this.onVisibility);
         document.documentElement.removeAttribute('data-gl');
         document.documentElement.removeAttribute('data-glass-calm');
-        for (const name of ['--glass-wall-a', '--glass-wall-b', '--glass-accent']) document.documentElement.style.removeProperty(name);
         this.gl?.getExtension('WEBGL_lose_context')?.loseContext();
         this.wall.remove();
         if (this.bodyWasStatic) document.body.style.position = '';
     }
 }
 
-/** The surface's own opacity, and that of any wrapper animating it in with `data-fade`. */
-function fadeOf(el: HTMLElement | Element, style: CSSStyleDeclaration): number {
+/** The surface's own opacity, and that of every wrapper animating it in with `data-fade`. */
+function fadeOf(el: Element, style: CSSStyleDeclaration): number {
     let alpha = parseFloat(style.opacity);
     if (Number.isNaN(alpha)) alpha = 1;
-    const wrapper = el.parentElement?.closest('[data-fade]');
-    if (wrapper) alpha *= parseFloat(getComputedStyle(wrapper).opacity) || 0;
+    for (let wrapper = el.parentElement?.closest('[data-fade]'); wrapper; wrapper = wrapper.parentElement?.closest('[data-fade]')) {
+        alpha *= parseFloat(getComputedStyle(wrapper).opacity) || 0;
+    }
     return alpha;
 }
 

@@ -229,7 +229,7 @@ function GroupsContent() {
                                     animate={{ opacity: 1, y: 0 }}
                                     transition={{ delay: Math.min(index * 0.05, 0.3), type: 'spring', stiffness: 340, damping: 30 }}
                                 >
-                                    <Link href={`/groups/${group.id}`} className={styles.card}>
+                                    <Link href={`/groups/${group.id}`} className={styles.card} data-glass="reg">
                                         <div className={styles.cardBody}>
                                             <div className={styles.cardTop}>
                                                 <span className={styles.emoji}>{group.emoji}</span>

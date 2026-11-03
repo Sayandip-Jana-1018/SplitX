@@ -1,139 +1,131 @@
-/* ═══════════════════════════════════════════════════════════════
-   Dark theme — deep ink canvas, layered graphite surfaces,
-   accent-tinted just enough to feel bespoke.
+/* ═══════════════════════════════════════
+   Dark mode: deep colour behind clear glass. Every colour is one hue at
+   some depth (themes/accents.css). Surfaces let the liquid show through,
+   so nothing here may be opaque unless it has to be read over a moving
+   page, such as a popover.
    Applied when <html data-theme="dark">
-   ═══════════════════════════════════════════════════════════════ */
+   ═══════════════════════════════════════ */
 
 [data-theme="dark"] {
     color-scheme: dark;
 
     /* ── Canvas & surfaces ── */
-    --bg-primary: color-mix(in oklab, var(--accent-500) 3%, #09090d);
-    --bg-secondary: #111217;
-    --bg-tertiary: color-mix(in oklab, var(--accent-500) 5%, #1a1b22);
-    --bg-elevated: #1a1b22;
-    --bg-sunken: #060609;
-    --bg-muted: #16171d;
-    --bg-overlay: rgba(0, 0, 0, 0.66);
-    --scrim: rgba(0, 0, 0, 0.56);
-    --voice-overlay: rgba(9, 9, 13, 0.94);
+    --bg-primary: oklch(0.13 calc(0.04 * var(--c)) var(--h));
+    --bg-secondary: oklch(0.19 calc(0.05 * var(--c)) var(--h) / 0.62);
+    --bg-tertiary: oklch(0.26 calc(0.06 * var(--c)) var(--h) / 0.6);
+    --bg-elevated: oklch(0.22 calc(0.05 * var(--c)) var(--h) / 0.82);
+    --bg-sunken: oklch(0.1 calc(0.03 * var(--c)) var(--h) / 0.5);
+    --bg-muted: oklch(0.24 calc(0.05 * var(--c)) var(--h) / 0.46);
+    --bg-overlay: oklch(0.08 calc(0.03 * var(--c)) var(--h) / 0.62);
+    --scrim: oklch(0.08 calc(0.03 * var(--c)) var(--h) / 0.5);
+    --voice-overlay: oklch(0.12 calc(0.04 * var(--c)) var(--h) / 0.92);
 
-    --surface-card: color-mix(in oklab, var(--accent-500) 3%, #121318);
-    --surface-card-hover: #181920;
-    --surface-panel: #121318;
-    --surface-popover: #1a1b23;
-    --surface-input: #17181f;
-    --surface-input-hover: #1d1e26;
-    --surface-sunken: var(--bg-sunken);
+    --surface-card: oklch(0.24 calc(0.05 * var(--c)) var(--h) / 0.46);
+    --surface-card-hover: oklch(0.29 calc(0.06 * var(--c)) var(--h) / 0.52);
+    --surface-panel: oklch(0.2 calc(0.05 * var(--c)) var(--h) / 0.72);
+    --surface-popover: oklch(0.2 calc(0.05 * var(--c)) var(--h) / 0.94);
+    --surface-input: rgba(255, 255, 255, 0.09);
+    --surface-input-hover: rgba(255, 255, 255, 0.13);
+    --surface-sunken: oklch(0.1 calc(0.03 * var(--c)) var(--h) / 0.35);
     --surface-primary: var(--surface-card);
-    --surface-secondary: #1c1d25;
-    --surface-elevated: #1a1b23;
+    --surface-secondary: rgba(255, 255, 255, 0.08);
+    --surface-elevated: oklch(0.22 calc(0.05 * var(--c)) var(--h) / 0.82);
     --bg-surface: var(--surface-card);
 
-    --bg-glass: var(--surface-card);
-    --bg-glass-strong: #1a1b22;
-    --bg-glass-subtle: rgba(18, 19, 24, 0.72);
-
     /* Chrome */
-    --header-surface: color-mix(in srgb, var(--bg-primary) 76%, transparent);
-    --dock-surface: rgba(24, 25, 32, 0.84);
-    --drawer-surface: #101116;
+    --header-surface: oklch(0.13 calc(0.04 * var(--c)) var(--h) / 0.42);
+    --dock-surface: oklch(0.2 calc(0.05 * var(--c)) var(--h) / 0.62);
+    --drawer-surface: oklch(0.16 calc(0.05 * var(--c)) var(--h) / 0.92);
     --nav-surface: var(--dock-surface);
 
     /* ── Text ── */
-    --fg-primary: #f3f4f7;
-    --fg-secondary: #c3c6d1;
-    --fg-tertiary: #9599a8;
-    --fg-muted: #6f7384;
-    --fg-inverse: #0b0b0f;
-    --fg-primary-rgb: 243, 244, 247;
+    --fg-primary: #ffffff;
+    --fg-secondary: rgba(255, 255, 255, 0.8);
+    --fg-tertiary: rgba(255, 255, 255, 0.66);
+    --fg-muted: rgba(255, 255, 255, 0.58);
+    --fg-inverse: oklch(0.15 calc(0.05 * var(--c)) var(--h));
+    --fg-primary-rgb: 255, 255, 255;
 
     /* ── Borders ── */
-    --border-default: rgba(255, 255, 255, 0.08);
-    --border-subtle: rgba(255, 255, 255, 0.05);
-    --border-strong: rgba(255, 255, 255, 0.14);
-    --border-glass: rgba(255, 255, 255, 0.07);
+    --border-default: rgba(255, 255, 255, 0.14);
+    --border-subtle: rgba(255, 255, 255, 0.09);
+    --border-strong: rgba(255, 255, 255, 0.24);
     --border-primary: var(--border-default);
     --border-secondary: var(--border-default);
     --border-tertiary: var(--border-subtle);
-    --border-focus: var(--accent-400);
+    --border-focus: var(--accent-strong);
 
     /* ── Accent semantics ── */
     --accent: var(--accent-500);
-    --accent-strong: var(--accent-400);
-    --accent-soft: rgba(var(--accent-500-rgb), 0.16);
-    --accent-softer: rgba(var(--accent-500-rgb), 0.09);
-    --accent-ring: rgba(var(--accent-500-rgb), 0.4);
+    --accent-strong: oklch(0.82 calc(0.13 * var(--c)) var(--h));
+    --accent-soft: rgba(var(--accent-500-rgb), 0.24);
+    --accent-softer: rgba(var(--accent-500-rgb), 0.14);
+    --accent-ring: rgba(var(--accent-500-rgb), 0.5);
 
-    /* ── Status ── */
-    --color-success: #34d399;
-    --color-success-solid: #10b981;
-    --color-success-bg: rgba(16, 185, 129, 0.12);
-    --color-success-border: rgba(16, 185, 129, 0.26);
-    --success-rgb: 16, 185, 129;
-    --color-error: #fb7185;
+    /* ── Status: one colour, told apart by brightness and words. Red is kept for errors and for what can't be undone. ── */
+    --color-success: oklch(0.92 calc(0.09 * var(--c)) var(--h));
+    --color-success-solid: var(--accent-500);
+    --color-success-bg: var(--accent-soft);
+    --color-success-border: rgba(var(--accent-500-rgb), 0.4);
+    --success-rgb: var(--accent-500-rgb);
+    --color-error: #ff8fa3;
     --color-error-solid: #f43f5e;
-    --color-error-bg: rgba(244, 63, 94, 0.12);
-    --color-error-border: rgba(244, 63, 94, 0.28);
+    --color-error-bg: rgba(244, 63, 94, 0.16);
+    --color-error-border: rgba(244, 63, 94, 0.4);
     --danger-rgb: 244, 63, 94;
-    --color-warning: #fbbf24;
-    --color-warning-solid: #f59e0b;
-    --color-warning-bg: rgba(245, 158, 11, 0.12);
-    --color-warning-border: rgba(245, 158, 11, 0.28);
-    --color-info: #60a5fa;
-    --color-info-bg: rgba(59, 130, 246, 0.12);
-    --color-info-border: rgba(59, 130, 246, 0.28);
-    --money-in: var(--color-success);
-    --money-out: var(--color-error);
+    --color-warning: oklch(0.88 calc(0.11 * var(--c)) var(--h));
+    --color-warning-solid: var(--accent-500);
+    --color-warning-bg: var(--accent-soft);
+    --color-warning-border: rgba(var(--accent-500-rgb), 0.4);
+    --color-info: var(--accent-strong);
+    --color-info-bg: var(--accent-softer);
+    --color-info-border: rgba(var(--accent-500-rgb), 0.32);
+    --money-in: oklch(0.92 calc(0.09 * var(--c)) var(--h));
+    --money-out: rgba(255, 255, 255, 0.82);
 
     /* ── Scrollbar / skeleton ── */
     --scrollbar-bg: transparent;
-    --scrollbar-thumb: rgba(255, 255, 255, 0.12);
-    --scrollbar-thumb-hover: rgba(255, 255, 255, 0.22);
-    --skeleton-base: #16171d;
-    --skeleton-shine: #20212a;
+    --scrollbar-thumb: rgba(255, 255, 255, 0.16);
+    --scrollbar-thumb-hover: rgba(255, 255, 255, 0.28);
+    --skeleton-base: rgba(255, 255, 255, 0.08);
+    --skeleton-shine: rgba(255, 255, 255, 0.16);
 
     /* ── Elevation ── */
-    --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.5);
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.3);
-    --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.4), 0 10px 26px rgba(0, 0, 0, 0.45);
-    --shadow-lg: 0 4px 8px rgba(0, 0, 0, 0.4), 0 18px 44px rgba(0, 0, 0, 0.55);
-    --shadow-xl: 0 8px 16px rgba(0, 0, 0, 0.45), 0 28px 70px rgba(0, 0, 0, 0.6);
-    --shadow-2xl: 0 32px 90px rgba(0, 0, 0, 0.7);
-    --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.035) inset, 0 10px 28px -14px rgba(0, 0, 0, 0.7);
-    --shadow-card-hover: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 20px 44px -16px rgba(0, 0, 0, 0.8);
+    --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.26), 0 2px 8px rgba(0, 0, 0, 0.2);
+    --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.24), 0 10px 26px rgba(0, 0, 0, 0.3);
+    --shadow-lg: 0 4px 8px rgba(0, 0, 0, 0.26), 0 18px 44px rgba(0, 0, 0, 0.36);
+    --shadow-xl: 0 8px 16px rgba(0, 0, 0, 0.3), 0 28px 70px rgba(0, 0, 0, 0.42);
+    --shadow-2xl: 0 32px 90px rgba(0, 0, 0, 0.5);
+    --shadow-card: 0 14px 40px rgba(0, 0, 0, 0.26);
+    --shadow-card-hover: 0 18px 46px rgba(0, 0, 0, 0.32);
     --shadow-glow: 0 8px 26px -6px rgba(var(--accent-500-rgb), 0.55);
     --shadow-glow-lg: 0 16px 44px -8px rgba(var(--accent-500-rgb), 0.6);
     --shadow-glow-sm: 0 4px 16px -4px rgba(var(--accent-500-rgb), 0.5);
-    --shadow-dock: 0 1px 0 rgba(255, 255, 255, 0.06) inset, 0 16px 40px -10px rgba(0, 0, 0, 0.8), 0 2px 8px rgba(0, 0, 0, 0.4);
-}
+    --shadow-dock: 0 14px 40px rgba(0, 0, 0, 0.36);
 
-/* ── Liquid glass ── */
-[data-theme="dark"] {
-    --glass-bg: linear-gradient(152deg, rgba(38, 40, 52, 0.78) 0%, rgba(18, 19, 26, 0.62) 52%, rgba(28, 30, 40, 0.72) 100%);
-    --glass-bg-strong: linear-gradient(152deg, rgba(42, 44, 58, 0.92), rgba(20, 21, 29, 0.86));
-    --glass-border: rgba(255, 255, 255, 0.14);
+    /* ── Liquid glass ── */
+    --glass-bg: oklch(0.24 calc(0.05 * var(--c)) var(--h) / 0.46);
+    --glass-bg-strong: oklch(0.22 calc(0.05 * var(--c)) var(--h) / 0.72);
+    --glass-pearl: oklch(0.3 calc(0.05 * var(--c)) var(--h) / 0.85);
+    --glass-tinted: oklch(0.38 calc(0.14 * var(--c)) var(--h) / 0.68);
+    --glass-rim: rgba(255, 255, 255, 0.34);
+    --glass-border: rgba(255, 255, 255, 0.22);
+    --border-glass: var(--glass-border);
     --glass-sheen: rgba(255, 255, 255, 0.16);
-    --glass-tint: color-mix(in oklab, var(--accent-400) 10%, transparent);
-    --glass-shadow:
-        0 26px 52px -26px rgba(0, 0, 0, 0.85),
-        0 6px 16px -10px rgba(0, 0, 0, 0.55);
-    --glass-inset:
-        inset 0 1px 0 rgba(255, 255, 255, 0.12),
-        inset 0 -1px 0 rgba(0, 0, 0, 0.35);
-}
-
-/* ── Inner edge light that gives flat surfaces depth without a blur ── */
-[data-theme="dark"] {
-    --surface-inset:
-        inset 0 1px 0 rgba(255, 255, 255, 0.07),
-        inset 0 -1px 0 rgba(0, 0, 0, 0.35);
-}
-
-/* Legacy aliases point at the liquid material so older surfaces inherit it */
-[data-theme="dark"] {
+    --glass-tint: rgba(var(--accent-500-rgb), 0.12);
+    --glass-shadow: 0 14px 40px rgba(0, 0, 0, 0.36);
+    --glass-inset: inset 0 1px 1px rgba(255, 255, 255, 0.28);
+    --surface-inset: inset 0 1px 1px rgba(255, 255, 255, 0.14);
     --bg-glass: var(--glass-bg);
     --bg-glass-strong: var(--glass-bg-strong);
     --bg-glass-subtle: var(--glass-bg);
-    --border-glass: var(--glass-border);
+
+    /* Words sitting straight on the liquid, whatever passes behind them */
+    --ink-on-wall-shadow: 0 1px 14px oklch(0.13 calc(0.04 * var(--c)) var(--h) / 0.55);
+
+    /* The wall before the shader's first frame, and whenever there is no shader */
+    --wall-1: oklch(0.56 calc(0.2 * var(--c)) var(--h));
+    --wall-2: oklch(0.44 calc(0.18 * var(--c)) var(--h));
+    --wall-3: oklch(0.34 calc(0.15 * var(--c)) var(--h));
 }

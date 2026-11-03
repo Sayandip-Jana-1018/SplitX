@@ -288,7 +288,7 @@ export default function GroupChat({ groupId, currentUserId, members, balances, o
                                             alignItems: 'center',
                                             gap: 6,
                                             background: msg.settlement
-                                                ? 'rgba(16, 185, 129, 0.08)'
+                                                ? 'rgba(var(--accent-500-rgb), 0.08)'
                                                 : 'var(--surface-secondary)',
                                             borderRadius: 20,
                                             padding: '6px 14px',
@@ -298,7 +298,7 @@ export default function GroupChat({ groupId, currentUserId, members, balances, o
                                                 ? 'var(--color-success)'
                                                 : 'var(--fg-tertiary)',
                                             border: msg.settlement
-                                                ? '1px solid rgba(16, 185, 129, 0.2)'
+                                                ? '1px solid rgba(var(--accent-500-rgb), 0.2)'
                                                 : '1px solid var(--border-primary)',
                                         }}>
                                             {msg.type === 'expense_added' ? (
@@ -321,22 +321,22 @@ export default function GroupChat({ groupId, currentUserId, members, balances, o
                                             margin: '8px 0',
                                             borderRadius: 16,
                                             overflow: 'hidden',
-                                            border: '1px solid rgba(251,191,36,0.2)',
+                                            border: '1px solid rgba(var(--accent-500-rgb), 0.2)',
                                         }}
                                     >
                                         {/* Reminder header strip */}
                                         <div style={{
-                                            background: 'linear-gradient(135deg, rgba(251,191,36,0.12), rgba(245,158,11,0.06))',
+                                            background: 'linear-gradient(135deg, rgba(var(--accent-500-rgb), 0.12), rgba(var(--accent-500-rgb), 0.06))',
                                             padding: '10px 14px',
                                             display: 'flex', alignItems: 'center', gap: 8,
                                         }}>
                                             <div style={{
                                                 width: 28, height: 28, borderRadius: 8,
-                                                background: 'rgba(251,191,36,0.15)',
+                                                background: 'rgba(var(--accent-500-rgb), 0.15)',
                                                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                                                 flexShrink: 0,
                                             }}>
-                                                <Bell size={14} style={{ color: '#f59e0b' }} />
+                                                <Bell size={14} style={{ color: 'var(--accent-strong)' }} />
                                             </div>
                                             <div style={{ flex: 1 }}>
                                                 <div style={{
@@ -371,7 +371,7 @@ export default function GroupChat({ groupId, currentUserId, members, balances, o
                                                     style={{
                                                         padding: '8px 18px',
                                                         background: 'linear-gradient(135deg, var(--accent-500), var(--accent-600))',
-                                                        color: '#fff',
+                                                        color: 'var(--on-accent)',
                                                         border: 'none',
                                                         borderRadius: 10,
                                                         fontSize: 12,
@@ -443,7 +443,7 @@ export default function GroupChat({ groupId, currentUserId, members, balances, o
                                                 background: isOwn
                                                     ? 'linear-gradient(135deg, var(--accent-500), var(--accent-600))'
                                                     : 'var(--surface-secondary)',
-                                                color: isOwn ? '#fff' : 'var(--fg-primary)',
+                                                color: isOwn ? 'var(--on-accent)' : 'var(--fg-primary)',
                                                 padding: '10px 14px',
                                                 borderRadius: isOwn
                                                     ? (isLastInGroup ? '18px 18px 4px 18px' : '18px 4px 4px 18px')
@@ -504,7 +504,7 @@ export default function GroupChat({ groupId, currentUserId, members, balances, o
                                 <div style={{
                                     display: 'flex', alignItems: 'center', gap: 6,
                                 }}>
-                                    <Bell size={13} style={{ color: '#f59e0b' }} />
+                                    <Bell size={13} style={{ color: 'var(--accent-strong)' }} />
                                     <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--fg-primary)' }}>
                                         Send Reminder
                                     </span>
@@ -555,9 +555,9 @@ export default function GroupChat({ groupId, currentUserId, members, balances, o
                                             <Avatar name={m.user.name || '?'} image={m.user.image} size="xs" />
                                             <span style={{ flex: 1, fontWeight: 600 }}>{m.user.name}</span>
                                             <span style={{
-                                                color: 'var(--color-error, #ef4444)',
+                                                color: 'var(--color-error)',
                                                 fontWeight: 700, fontSize: 12,
-                                                background: 'rgba(239,68,68,0.08)',
+                                                background: 'rgba(var(--danger-rgb), 0.08)',
                                                 padding: '3px 8px',
                                                 borderRadius: 8,
                                             }}>
@@ -568,11 +568,11 @@ export default function GroupChat({ groupId, currentUserId, members, balances, o
                                             ) : (
                                                 <div style={{
                                                     width: 28, height: 28, borderRadius: 8,
-                                                    background: 'rgba(251,191,36,0.1)',
+                                                    background: 'rgba(var(--accent-500-rgb), 0.1)',
                                                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                                                     flexShrink: 0,
                                                 }}>
-                                                    <Bell size={13} style={{ color: '#f59e0b' }} />
+                                                    <Bell size={13} style={{ color: 'var(--accent-strong)' }} />
                                                 </div>
                                             )}
                                         </motion.button>
@@ -599,9 +599,9 @@ export default function GroupChat({ groupId, currentUserId, members, balances, o
                     onClick={() => setShowReminder(!showReminder)}
                     style={{
                         background: showReminder
-                            ? 'linear-gradient(135deg, #f59e0b, #d97706)'
+                            ? 'var(--accent-gradient)'
                             : 'var(--surface-secondary)',
-                        color: showReminder ? '#fff' : 'var(--fg-secondary)',
+                        color: showReminder ? 'var(--on-accent)' : 'var(--fg-secondary)',
                         border: showReminder ? 'none' : '1px solid var(--border-primary)',
                         borderRadius: 12,
                         padding: '8px 12px',
@@ -614,7 +614,7 @@ export default function GroupChat({ groupId, currentUserId, members, balances, o
                         whiteSpace: 'nowrap',
                         flexShrink: 0,
                         transition: 'all 0.2s ease',
-                        boxShadow: showReminder ? '0 3px 10px rgba(245,158,11,0.3)' : 'none',
+                        boxShadow: showReminder ? '0 3px 10px rgba(var(--accent-500-rgb), 0.3)' : 'none',
                     }}
                 >
                     <Bell size={13} />
@@ -665,7 +665,7 @@ export default function GroupChat({ groupId, currentUserId, members, balances, o
                         background: input.trim()
                             ? 'linear-gradient(135deg, var(--accent-500), var(--accent-600))'
                             : 'var(--surface-secondary)',
-                        color: input.trim() ? '#fff' : 'var(--fg-tertiary)',
+                        color: input.trim() ? 'var(--on-accent)' : 'var(--fg-tertiary)',
                         border: input.trim() ? 'none' : '1px solid var(--border-primary)',
                         borderRadius: 12,
                         width: 40,

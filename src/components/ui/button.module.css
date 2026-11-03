@@ -40,34 +40,19 @@
 }
 
 /* ── Sizes ── */
-.sm { height: 36px; padding: 0 14px; font-size: 13px; gap: 6px; }
-.md { height: 44px; padding: 0 18px; font-size: 14px; }
-.lg { height: 52px; padding: 0 22px; font-size: 15px; }
-.xl { height: 58px; padding: 0 26px; font-size: 16px; }
+.sm { height: 44px; padding: 0 14px; font-size: 13.5px; gap: 6px; }
+.md { height: 48px; padding: 0 16px; font-size: 14px; }
+.lg { height: 54px; padding: 0 26px; font-size: 16px; }
+.xl { height: 60px; padding: 0 30px; font-size: 17px; }
 
-/* ── Variants ── */
-.primary {
-    background: var(--accent-gradient);
-    color: var(--fg-on-accent);
-    box-shadow:
-        0 1px 0 rgba(255, 255, 255, 0.22) inset,
-        0 8px 20px -8px rgba(var(--accent-500-rgb), 0.65);
-}
-
-.primary::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    z-index: -1;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0) 55%);
-    pointer-events: none;
+/* ── Variants: primary, secondary and success are glass, so the engine paints them ── */
+.primary,
+.success {
+    color: var(--on-accent);
 }
 
 .secondary {
-    background: var(--surface-card);
     color: var(--fg-primary);
-    border-color: var(--border-default);
-    box-shadow: var(--shadow-xs);
 }
 
 .ghost {
@@ -78,7 +63,7 @@
 .outline {
     background: transparent;
     color: var(--accent-strong);
-    border-color: rgba(var(--accent-500-rgb), 0.35);
+    border-color: rgba(var(--accent-500-rgb), 0.5);
 }
 
 .soft {
@@ -86,26 +71,18 @@
     color: var(--accent-strong);
 }
 
+/* Red stays for what can't be undone. */
 .danger {
-    background: linear-gradient(135deg, #f43f5e, #e11d48);
-    color: #fff;
-    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.18) inset, 0 8px 20px -8px rgba(225, 29, 72, 0.6);
-}
-
-.success {
-    background: linear-gradient(135deg, #10b981, #059669);
-    color: #fff;
-    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.18) inset, 0 8px 20px -8px rgba(5, 150, 105, 0.55);
+    background: var(--color-error-solid);
+    color: #ffffff;
+    box-shadow: 0 8px 20px -8px rgba(var(--danger-rgb), 0.6);
 }
 
 @media (hover: hover) and (pointer: fine) {
-    .primary:hover { filter: brightness(1.05); box-shadow: 0 1px 0 rgba(255, 255, 255, 0.22) inset, 0 12px 28px -10px rgba(var(--accent-500-rgb), 0.75); }
-    .secondary:hover { border-color: var(--border-strong); background: var(--surface-card-hover); }
-    .ghost:hover { background: var(--bg-tertiary); color: var(--fg-primary); }
-    .outline:hover { background: var(--accent-softer); border-color: rgba(var(--accent-500-rgb), 0.55); }
-    .soft:hover { background: rgba(var(--accent-500-rgb), 0.18); }
-    .danger:hover,
-    .success:hover { filter: brightness(1.05); }
+    .ghost:hover { background: var(--accent-softer); color: var(--fg-primary); }
+    .outline:hover { background: var(--accent-softer); }
+    .soft:hover { background: rgba(var(--accent-500-rgb), 0.3); }
+    .danger:hover { filter: brightness(1.06); }
 }
 
 /* ── States ── */
@@ -122,7 +99,7 @@
 }
 
 .button:focus-visible {
-    outline: 2px solid var(--accent-500);
+    outline: 2px solid var(--accent-strong);
     outline-offset: 3px;
 }
 

@@ -73,6 +73,8 @@ export default function Modal({
                         aria-label={title ? undefined : 'Dialog'}
                         tabIndex={-1}
                         data-focus-dialog
+                        data-glass="thick"
+                        data-glass-mode="css"
                         className={cn(styles.modal, styles[size], isSheet && styles.sheet)}
                         initial={isSheet ? { y: '100%' } : { opacity: 0, scale: 0.96, y: 12 }}
                         animate={isSheet ? { y: 0 } : { opacity: 1, scale: 1, y: 0 }}

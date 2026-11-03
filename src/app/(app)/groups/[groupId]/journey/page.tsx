@@ -199,7 +199,7 @@ export default function GroupJourneyPage() {
             <div className={styles.side}>
                 {/* ── Snapshot ── */}
                 <StaggerItem>
-                    <section className={styles.hero}>
+                    <section className={styles.hero} data-glass="reg">
                         <span className={styles.heroChip}>
                             <span aria-hidden="true">{firstPage.group.emoji}</span>
                             <span className={styles.heroChipText}>{firstPage.group.name}</span>
@@ -278,7 +278,7 @@ export default function GroupJourneyPage() {
                                             <span className={cn(styles.dot, index === 0 && styles.dotLatest)} />
                                             {index < entries.length - 1 && <span className={styles.line} />}
                                         </div>
-                                        <div className={cn(styles.card, open && styles.cardOpen)}>
+                                        <div className={cn(styles.card, open && styles.cardOpen)} data-glass="reg">
                                             <button
                                                 type="button"
                                                 className={styles.cardHead}

@@ -5,13 +5,13 @@ import { motion } from 'framer-motion';
 import { Check, Monitor, Moon, Sun } from 'lucide-react';
 import { useThemeContext, COLOR_PALETTES } from '@/components/providers/ThemeProvider';
 import type { PaletteId, ThemePreference } from '@/components/providers/ThemeProvider';
-import { Segmented } from '@/components/ui/kit';
+import { GlassPicker, Segmented } from '@/components/ui/kit';
 import Modal from '@/components/ui/Modal';
 import { cn } from '@/lib/utils';
 import styles from './theme.module.css';
 
 /** Grid of accent swatches. */
-export function PalettePicker({ value, onChange, className }: { value: PaletteId; onChange: (id: PaletteId) => void; className?: string }) {
+function PalettePicker({ value, onChange, className }: { value: PaletteId; onChange: (id: PaletteId) => void; className?: string }) {
     return (
         <div className={cn(styles.paletteGrid, className)} role="radiogroup" aria-label="Accent colour">
             {COLOR_PALETTES.map((palette) => {
@@ -28,7 +28,7 @@ export function PalettePicker({ value, onChange, className }: { value: PaletteId
                         <span
                             className={styles.swatch}
                             style={{
-                                background: `conic-gradient(from 210deg, ${palette.swatches[0]}, ${palette.accent500}, ${palette.swatches[2]}, ${palette.swatches[0]})`,
+                                background: `conic-gradient(from 210deg, ${palette.swatches[0]}, ${palette.swatches[1]}, ${palette.swatches[2]}, ${palette.swatches[0]})`,
                             }}
                         >
                             {active && (
@@ -51,7 +51,7 @@ export function PalettePicker({ value, onChange, className }: { value: PaletteId
 }
 
 /** Light / Dark / Auto segmented switch bound to the theme store. */
-export function ThemeModeSwitch({ size = 'md' }: { size?: 'sm' | 'md' }) {
+function ThemeModeSwitch({ size = 'md' }: { size?: 'sm' | 'md' }) {
     const { preference, setTheme } = useThemeContext();
     return (
         <Segmented<ThemePreference>
@@ -68,12 +68,48 @@ export function ThemeModeSwitch({ size = 'md' }: { size?: 'sm' | 'md' }) {
     );
 }
 
+/** Everything about how SplitX looks, in Settings and behind the appearance button alike. */
+export function AppearanceControls() {
+    const { palette, setPalette, motion, setMotion } = useThemeContext();
+    return (
+        <div className={styles.stack}>
+            <div>
+                <div className={styles.stackLabel}>Kind of glass</div>
+                <GlassPicker />
+            </div>
+            <div>
+                <div className={styles.stackLabel}>Colour</div>
+                <PalettePicker value={palette} onChange={setPalette} />
+            </div>
+            <div>
+                <div className={styles.stackLabel}>Mode</div>
+                <ThemeModeSwitch />
+            </div>
+            <div>
+                <div className={styles.stackLabel}>Motion</div>
+                <Segmented
+                    ariaLabel="Motion"
+                    value={motion}
+                    onChange={setMotion}
+                    options={[
+                        { value: 'full', label: 'Full' },
+                        { value: 'calm', label: 'Calm' },
+                    ]}
+                />
+                <p className={styles.stackHint}>
+                    {motion === 'calm' ? 'A still picture of the liquid, and less for your battery to do.' : 'The liquid keeps floating behind the glass.'}
+                </p>
+            </div>
+        </div>
+    );
+}
+
 /**
- * One tap opens everything about how SplitX looks: mode + accent.
+ * One tap opens everything about how SplitX looks.
  * The button itself previews the palette you're on.
  */
 export default function ThemeSelector({ size = 40 }: { size?: number }) {
-    const { theme, palette, setPalette } = useThemeContext();
+    const { theme, palette } = useThemeContext();
     const [open, setOpen] = useState(false);
     const current = COLOR_PALETTES.find((entry) => entry.id === palette) ?? COLOR_PALETTES[0];
 
@@ -85,24 +121,19 @@ export default function ThemeSelector({ size = 40 }: { size?: number }) {
                 style={{ width: size, height: size }}
                 onClick={() => setOpen(true)}
                 whileTap={{ scale: 0.9 }}
-                aria-label="Appearance — theme and accent colour"
+                data-glass="thin"
+                aria-label="Appearance — glass, colour and mode"
                 title="Appearance"
             >
-                <motion.span
+                <span
                     className={styles.appearanceDisc}
                     style={{
-                        background: `conic-gradient(from 210deg, ${current.swatches[0]}, ${current.accent500}, ${current.swatches[2]}, ${current.swatches[0]})`,
+                        background: `conic-gradient(from 210deg, ${current.swatches[0]}, ${current.swatches[1]}, ${current.swatches[2]}, ${current.swatches[0]})`,
                     }}
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 16, repeat: Infinity, ease: 'linear' }}
                 />
-                <motion.span
-                    className={styles.appearanceGlyph}
-                    animate={{ scale: [1, 1.12, 1] }}
-                    transition={{ duration: 3.4, repeat: Infinity, ease: 'easeInOut' }}
-                >
+                <span className={styles.appearanceGlyph}>
                     {theme === 'dark' ? <Moon size={12} strokeWidth={2.6} /> : <Sun size={12} strokeWidth={2.6} />}
-                </motion.span>
+                </span>
             </motion.button>
 
             <Modal
@@ -112,16 +143,7 @@ export default function ThemeSelector({ size = 40 }: { size?: number }) {
                 description="Make SplitX feel like yours."
                 size="small"
             >
-                <div className={styles.stack}>
-                    <div>
-                        <div className={styles.stackLabel}>Mode</div>
-                        <ThemeModeSwitch />
-                    </div>
-                    <div>
-                        <div className={styles.stackLabel}>Accent colour</div>
-                        <PalettePicker value={palette} onChange={setPalette} />
-                    </div>
-                </div>
+                <AppearanceControls />
             </Modal>
         </>
     );

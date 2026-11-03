@@ -34,29 +34,29 @@ function iconConfig(Icon: IconType, label: string, color: string, size = 20): Ic
 
 // ── Payment methods (brand colours) ──
 const PAYMENT_ICONS: Record<string, IconConfig> = {
-    cash: iconConfig(BsCashCoin, 'Cash', '#16a34a', 18),
-    gpay: iconConfig(SiGooglepay, 'Google Pay', '#4285F4'),
-    phonepe: iconConfig(SiPhonepe, 'PhonePe', '#5F259F', 18),
-    paytm: iconConfig(SiPaytm, 'Paytm', '#00BAF2', 18),
-    upi_other: iconConfig(BsPhone, 'Other UPI', '#f97316', 18),
-    upi: iconConfig(BsPhone, 'UPI', '#f97316', 18),
-    card: iconConfig(BsCreditCard2Back, 'Card', '#8b5cf6', 18),
+    cash: iconConfig(BsCashCoin, 'Cash', 'var(--accent-strong)', 18),
+    gpay: iconConfig(SiGooglepay, 'Google Pay', 'var(--accent-strong)'),
+    phonepe: iconConfig(SiPhonepe, 'PhonePe', 'var(--accent-strong)', 18),
+    paytm: iconConfig(SiPaytm, 'Paytm', 'var(--accent-strong)', 18),
+    upi_other: iconConfig(BsPhone, 'Other UPI', 'var(--accent-strong)', 18),
+    upi: iconConfig(BsPhone, 'UPI', 'var(--accent-strong)', 18),
+    card: iconConfig(BsCreditCard2Back, 'Card', 'var(--accent-strong)', 18),
 };
 
 // ── Categories ──
 const CATEGORY_ICONS: Record<string, IconConfig> = {
-    general: iconConfig(MdCategory, 'General', '#6366f1'),
-    food: iconConfig(MdFastfood, 'Food & Drinks', '#ef4444'),
-    groceries: iconConfig(MdLocalGroceryStore, 'Groceries', '#16a34a'),
-    transport: iconConfig(MdDirectionsCar, 'Transport', '#3b82f6'),
-    fuel: iconConfig(MdLocalGasStation, 'Fuel', '#f97316'),
-    stay: iconConfig(MdHotel, 'Stay', '#8b5cf6'),
-    shopping: iconConfig(MdShoppingBag, 'Shopping', '#ec4899'),
-    tickets: iconConfig(MdConfirmationNumber, 'Tickets & Entry', '#f59e0b'),
-    entertainment: iconConfig(MdSportsEsports, 'Entertainment', '#06b6d4'),
-    bills: iconConfig(MdReceiptLong, 'Bills', '#0ea5e9'),
-    medical: iconConfig(MdLocalHospital, 'Medical', '#10b981'),
-    other: iconConfig(MdMoreHoriz, 'Other', '#78716c'),
+    general: iconConfig(MdCategory, 'General', 'var(--accent-strong)'),
+    food: iconConfig(MdFastfood, 'Food & Drinks', 'var(--accent-strong)'),
+    groceries: iconConfig(MdLocalGroceryStore, 'Groceries', 'var(--accent-strong)'),
+    transport: iconConfig(MdDirectionsCar, 'Transport', 'var(--accent-strong)'),
+    fuel: iconConfig(MdLocalGasStation, 'Fuel', 'var(--accent-strong)'),
+    stay: iconConfig(MdHotel, 'Stay', 'var(--accent-strong)'),
+    shopping: iconConfig(MdShoppingBag, 'Shopping', 'var(--accent-strong)'),
+    tickets: iconConfig(MdConfirmationNumber, 'Tickets & Entry', 'var(--accent-strong)'),
+    entertainment: iconConfig(MdSportsEsports, 'Entertainment', 'var(--accent-strong)'),
+    bills: iconConfig(MdReceiptLong, 'Bills', 'var(--accent-strong)'),
+    medical: iconConfig(MdLocalHospital, 'Medical', 'var(--accent-strong)'),
+    other: iconConfig(MdMoreHoriz, 'Other', 'var(--accent-strong)'),
 };
 
 const CATEGORY_ALIASES: Record<string, string> = {

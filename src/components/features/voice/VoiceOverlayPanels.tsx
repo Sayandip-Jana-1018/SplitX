@@ -77,11 +77,11 @@ export function ListeningPanel({ finalText, interimText, onDone }: ListeningPane
                     style={{
                         position: 'absolute', inset: 15,
                         borderRadius: '50%',
-                        background: 'linear-gradient(135deg, var(--accent-500, #8b5cf6), var(--accent-600, #6d28d9))',
+                        background: 'linear-gradient(135deg, var(--accent-500), var(--accent-600))',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                     }}
                 >
-                    <Mic size={36} color="#fff" strokeWidth={2} />
+                    <Mic size={36} color="var(--on-accent)" strokeWidth={2} />
                 </motion.div>
             </div>
 
@@ -91,7 +91,7 @@ export function ListeningPanel({ finalText, interimText, onDone }: ListeningPane
                     animate={{ opacity: [0.4, 1, 0.4] }}
                     transition={{ duration: 2.5, repeat: Infinity }}
                     style={{
-                        color: 'var(--accent-400, #a78bfa)', fontSize: 13,
+                        color: 'var(--accent-400)', fontSize: 13,
                         fontWeight: 700, letterSpacing: '0.15em',
                         textTransform: 'uppercase',
                         marginBottom: 6,
@@ -118,7 +118,7 @@ export function ListeningPanel({ finalText, interimText, onDone }: ListeningPane
                         }}
                         style={{
                             width: 3, borderRadius: 2,
-                            background: 'linear-gradient(180deg, var(--accent-400, #a78bfa), var(--accent-600, #7c3aed))',
+                            background: 'linear-gradient(180deg, var(--accent-400), var(--accent-600))',
                             opacity: 0.6 + Math.sin(i * 0.5) * 0.3,
                         }}
                     />
@@ -221,7 +221,7 @@ export function ProcessingPanel({ transcript }: ProcessingPanelProps) {
                 style={{
                     width: 56, height: 56, borderRadius: 28,
                     border: '3px solid var(--border-default)',
-                    borderTopColor: 'var(--accent-500, #8b5cf6)',
+                    borderTopColor: 'var(--accent-500)',
                 }}
             />
             <div style={{ textAlign: 'center' }}>
@@ -282,13 +282,13 @@ export function ResultPanel({ result, members, onRetry, onAccept }: ResultPanelP
                     transition={{ type: 'spring', damping: 12, stiffness: 200, delay: 0.1 }}
                     style={{
                         width: 52, height: 52, borderRadius: 26,
-                        background: 'linear-gradient(135deg, var(--color-success, #22c55e), #15803d)',
+                        background: 'var(--accent-gradient)',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        boxShadow: '0 0 30px rgba(34, 197, 94, 0.25)',
+                        boxShadow: '0 0 30px rgba(var(--accent-500-rgb), 0.25)',
                         margin: '0 auto 18px',
                     }}
                 >
-                    <Check size={26} color="#fff" strokeWidth={3} />
+                    <Check size={26} color="var(--on-accent)" strokeWidth={3} />
                 </motion.div>
 
                 {/* Amount */}
@@ -304,7 +304,7 @@ export function ResultPanel({ result, members, onRetry, onAccept }: ResultPanelP
                     }}>Amount</p>
                     <p style={{
                         fontSize: 36, fontWeight: 800, letterSpacing: '-0.02em',
-                        background: 'linear-gradient(135deg, var(--accent-400, #a78bfa), var(--accent-600, #7c3aed))',
+                        background: 'linear-gradient(135deg, var(--accent-400), var(--accent-600))',
                         WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
                         backgroundClip: 'text',
                     }}>
@@ -351,13 +351,13 @@ export function ResultPanel({ result, members, onRetry, onAccept }: ResultPanelP
                         padding: '5px 16px', borderRadius: 20,
                         background: result.splitType === 'equal'
                             ? 'rgba(var(--accent-500-rgb, 139, 92, 246), 0.12)'
-                            : 'rgba(249, 115, 22, 0.12)',
+                            : 'rgba(var(--accent-500-rgb), 0.12)',
                         border: `1px solid ${result.splitType === 'equal'
                             ? 'rgba(var(--accent-500-rgb, 139, 92, 246), 0.25)'
-                            : 'rgba(249, 115, 22, 0.25)'}`,
+                            : 'rgba(var(--accent-500-rgb), 0.25)'}`,
                         color: result.splitType === 'equal'
-                            ? 'var(--accent-500, #8b5cf6)'
-                            : '#f97316',
+                            ? 'var(--accent-500)'
+                            : 'var(--accent-strong)',
                         fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
                         letterSpacing: '0.08em',
                     }}>
@@ -432,14 +432,14 @@ export function ResultPanel({ result, members, onRetry, onAccept }: ResultPanelP
                                 </span>
                                 {m.amount && m.amount > 0 && (
                                     <span style={{
-                                        color: 'var(--accent-500, #8b5cf6)', fontSize: 15, fontWeight: 700,
+                                        color: 'var(--accent-500)', fontSize: 15, fontWeight: 700,
                                         fontFeatureSettings: "'tnum'",
                                     }}>
                                         {formatCurrency(toPaise(m.amount))}
                                     </span>
                                 )}
                                 {m.confidence < 0.6 && (
-                                    <span style={{ fontSize: 10, color: 'var(--color-warning, #eab308)', fontWeight: 600, flexShrink: 0 }}>
+                                    <span style={{ fontSize: 10, color: 'var(--color-warning)', fontWeight: 600, flexShrink: 0 }}>
                                         ⚠ Verify
                                     </span>
                                 )}
@@ -460,8 +460,8 @@ export function ResultPanel({ result, members, onRetry, onAccept }: ResultPanelP
                             <div key={i} style={{
                                 display: 'flex', alignItems: 'center', gap: 8,
                                 padding: '8px 12px', borderRadius: 10,
-                                background: 'var(--color-warning-bg, rgba(234, 179, 8, 0.08))',
-                                border: '1px solid var(--color-warning-border, rgba(234, 179, 8, 0.15))',
+                                background: 'var(--color-warning-bg)',
+                                border: '1px solid var(--color-warning-border)',
                             }}>
                                 <AlertCircle size={13} style={{ color: 'var(--color-warning)', flexShrink: 0 }} />
                                 <p style={{ color: 'var(--color-warning)', fontSize: 11, fontWeight: 500, lineHeight: 1.4 }}>{w}</p>
@@ -479,8 +479,8 @@ export function ResultPanel({ result, members, onRetry, onAccept }: ResultPanelP
                         style={{
                             display: 'flex', alignItems: 'center', gap: 8,
                             padding: '8px 14px', borderRadius: 12,
-                            background: 'var(--color-warning-bg, rgba(234, 179, 8, 0.06))',
-                            border: '1px solid var(--color-warning-border, rgba(234, 179, 8, 0.12))',
+                            background: 'var(--color-warning-bg)',
+                            border: '1px solid var(--color-warning-border)',
                             marginTop: 12,
                         }}
                     >
@@ -518,9 +518,9 @@ export function ResultPanel({ result, members, onRetry, onAccept }: ResultPanelP
                     whileTap={{ scale: 0.95 }}
                     style={{
                         flex: 2, padding: '15px 20px', borderRadius: 50,
-                        background: 'linear-gradient(135deg, var(--accent-500, #8b5cf6), var(--accent-600, #6d28d9))',
+                        background: 'linear-gradient(135deg, var(--accent-500), var(--accent-600))',
                         border: 'none',
-                        color: '#fff', fontSize: 15, fontWeight: 700,
+                        color: 'var(--on-accent)', fontSize: 15, fontWeight: 700,
                         cursor: 'pointer',
                         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                         boxShadow: 'var(--shadow-glow)',
@@ -571,12 +571,12 @@ export function ErrorPanel({ message, onRetry, onClose }: ErrorPanelProps) {
                 transition={{ type: 'spring', damping: 12 }}
                 style={{
                     width: 60, height: 60, borderRadius: 30,
-                    background: 'var(--color-error-bg, rgba(239, 68, 68, 0.1))',
-                    border: '2px solid var(--color-error-border, rgba(239, 68, 68, 0.2))',
+                    background: 'var(--color-error-bg)',
+                    border: '2px solid var(--color-error-border)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}
             >
-                <AlertCircle size={30} color="var(--color-error, #ef4444)" />
+                <AlertCircle size={30} color="var(--color-error)" />
             </motion.div>
 
             <p style={{
@@ -592,9 +592,9 @@ export function ErrorPanel({ message, onRetry, onClose }: ErrorPanelProps) {
                     whileTap={{ scale: 0.95 }}
                     style={{
                         padding: '13px 30px', borderRadius: 50,
-                        background: 'linear-gradient(135deg, var(--accent-500, #8b5cf6), var(--accent-600, #6d28d9))',
+                        background: 'linear-gradient(135deg, var(--accent-500), var(--accent-600))',
                         border: 'none',
-                        color: '#fff', fontSize: 14, fontWeight: 600,
+                        color: 'var(--on-accent)', fontSize: 14, fontWeight: 600,
                         cursor: 'pointer',
                         display: 'flex', alignItems: 'center', gap: 6,
                         boxShadow: 'var(--shadow-glow)',

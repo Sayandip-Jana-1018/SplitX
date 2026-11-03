@@ -19,6 +19,8 @@ export interface GlassPalette {
     glow: Rgb;
     tint: Rgb;
     tintK: number;
+    /** What Tinted glass tints with: deep enough, or pale enough, for the page's words. */
+    tinted: Rgb;
     acc: Rgb;
     rim: Rgb;
     shadow: number;
@@ -28,20 +30,20 @@ export interface GlassPalette {
 export const DEFAULT_GLASS_PALETTE: PaletteId = 'amethyst-haze';
 
 export const GLASS_THEMES: Record<PaletteId, GlassTheme> = {
-    'amethyst-haze': { h: 293, c: 1, l: 0.58 },
-    'cosmic-night': { h: 277, c: 1, l: 0.58 },
-    'bold-tech': { h: 258, c: 1, l: 0.58 },
-    'sky-blue': { h: 237, c: 0.9, l: 0.74 },
-    'ocean-breeze': { h: 212, c: 0.85, l: 0.76 },
-    perpetuity: { h: 182, c: 0.8, l: 0.76 },
-    'emerald-glow': { h: 160, c: 0.85, l: 0.76 },
+    'amethyst-haze': { h: 293, c: 1, l: 0.54 },
+    'cosmic-night': { h: 277, c: 1, l: 0.54 },
+    'bold-tech': { h: 258, c: 1, l: 0.53 },
+    'sky-blue': { h: 237, c: 0.9, l: 0.77 },
+    'ocean-breeze': { h: 212, c: 0.85, l: 0.79 },
+    perpetuity: { h: 182, c: 0.8, l: 0.79 },
+    'emerald-glow': { h: 160, c: 0.85, l: 0.79 },
     'lime-fusion': { h: 128, c: 0.95, l: 0.82 },
     'amber-minimal': { h: 72, c: 0.9, l: 0.82 },
     'solar-dusk': { h: 45, c: 1, l: 0.7 },
-    'cherry-blossom': { h: 17, c: 1, l: 0.58 },
-    'quantum-rose': { h: 354, c: 1, l: 0.58 },
-    cyberpunk: { h: 322, c: 1, l: 0.58 },
-    'copper-glow': { h: 50, c: 0.62, l: 0.56 },
+    'cherry-blossom': { h: 17, c: 1, l: 0.54 },
+    'quantum-rose': { h: 354, c: 1, l: 0.54 },
+    cyberpunk: { h: 322, c: 1, l: 0.53 },
+    'copper-glow': { h: 50, c: 0.62, l: 0.52 },
     'merlot-night': { h: 8, c: 0.78, l: 0.5 },
     'graphite-mono': { h: 265, c: 0.16, l: 0.46 },
 };
@@ -81,6 +83,7 @@ export function glassPalette(id: string | null | undefined, mode: GlassMode): Gl
             glow: [1, 1, 1],
             tint: [1, 1, 1],
             tintK: 1.1,
+            tinted: oklchToSrgb(0.86, 0.09 * c, h),
             acc,
             rim: [1, 1, 1],
             shadow: 0.2,
@@ -95,6 +98,7 @@ export function glassPalette(id: string | null | undefined, mode: GlassMode): Gl
         glow: oklchToSrgb(0.96, 0.035 * c, h),
         tint: oklchToSrgb(0.2, 0.055 * c, h),
         tintK: 1,
+        tinted: oklchToSrgb(0.38, 0.14 * c, h),
         acc,
         rim: [1, 1, 1],
         shadow: 0.42,

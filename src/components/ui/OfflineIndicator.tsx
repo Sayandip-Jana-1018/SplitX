@@ -9,8 +9,8 @@ type StatusTone = 'offline' | 'online' | 'restricted';
 
 const TONE_STYLES: Record<StatusTone, { bg: string; fg: string }> = {
     offline: { bg: 'var(--fg-primary)', fg: 'var(--fg-inverse)' },
-    online: { bg: 'linear-gradient(135deg, #10b981, #059669)', fg: '#fff' },
-    restricted: { bg: 'linear-gradient(135deg, #f59e0b, #d97706)', fg: '#fff' },
+    online: { bg: 'var(--accent-gradient)', fg: 'var(--on-accent)' },
+    restricted: { bg: 'var(--accent-gradient)', fg: 'var(--on-accent)' },
 };
 
 function StatusPill({ tone, icon, children }: { tone: StatusTone; icon: React.ReactNode; children: React.ReactNode }) {

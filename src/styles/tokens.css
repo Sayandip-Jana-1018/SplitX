@@ -31,15 +31,15 @@
   --radius-xs: 6px;
   --radius-sm: 8px;
   --radius-md: 10px;
-  --radius-lg: 14px;
-  --radius-xl: 18px;
-  --radius-2xl: 22px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-2xl: 24px;
   --radius-3xl: 28px;
   --radius-full: 9999px;
   --surface-radius: var(--radius-2xl);
 
   /* ── Typography ── */
-  --font-sans: var(--font-geist), 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-sans: var(--font-jakarta), var(--font-jakarta-ext), system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-display: var(--font-sans);
   --font-editorial: var(--font-sans);
   --font-mono: var(--font-jetbrains-mono), ui-monospace, 'SF Mono', Menlo, monospace;
@@ -77,6 +77,8 @@
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --spring: linear(0, 0.009, 0.035 2.1%, 0.141, 0.281 6.7%, 0.723 12.9%, 0.938 16.7%, 1.017, 1.077, 1.121, 1.149 24.3%, 1.159, 1.163, 1.161, 1.154 29.9%, 1.129 32.8%, 1.051 39.6%, 1.017 43.1%, 0.991, 0.977 51%, 0.974 53.8%, 0.975 57.1%, 0.997 69.8%, 1.003 76.9%, 1.004 83.8%, 1);
+  --soft: cubic-bezier(0.22, 0.8, 0.24, 1);
   --ease-emphasized: cubic-bezier(0.2, 0, 0, 1);
   --duration-instant: 90ms;
   --duration-fast: 160ms;
@@ -115,20 +117,14 @@
   --desktop-sticky-top: calc(var(--topbar-height) + 20px);
 
   /* ── Hero surface (deep accent "card") — readable in every theme ── */
-  --hero-gradient:
-    radial-gradient(120% 90% at 100% 0%, rgba(255, 255, 255, 0.16) 0%, transparent 45%),
-    radial-gradient(90% 80% at 0% 100%, color-mix(in oklab, var(--accent-400) 55%, transparent) 0%, transparent 62%),
-    linear-gradient(150deg, var(--accent-600) 0%, var(--accent-800) 58%, var(--accent-950) 100%);
+  --hero-gradient: linear-gradient(150deg, var(--accent-400) -30%, var(--accent-500) 40%, var(--accent-600) 100%);
   --surface-hero: var(--hero-gradient);
-  --hero-text: #ffffff;
-  --hero-muted: rgba(255, 255, 255, 0.74);
-  --hero-subtle: rgba(255, 255, 255, 0.12);
-  --hero-border: rgba(255, 255, 255, 0.16);
-  --hero-accent: var(--accent-200);
-  --shadow-hero:
-    0 1px 0 rgba(255, 255, 255, 0.12) inset,
-    0 22px 44px -22px color-mix(in srgb, var(--accent-700) 70%, transparent),
-    0 10px 20px -12px rgba(0, 0, 0, 0.25);
+  --hero-text: var(--on-accent);
+  --hero-muted: color-mix(in oklab, var(--on-accent) 78%, transparent);
+  --hero-subtle: color-mix(in oklab, var(--on-accent) 14%, transparent);
+  --hero-border: color-mix(in oklab, var(--on-accent) 20%, transparent);
+  --hero-accent: var(--on-accent);
+  --shadow-hero: 0 22px 44px -22px rgba(var(--accent-500-rgb), 0.7), 0 10px 20px -12px rgba(0, 0, 0, 0.2);
 
   --accent-gradient: linear-gradient(135deg, var(--accent-500) 0%, var(--accent-600) 100%);
 }
@@ -142,9 +138,4 @@
   --glass-blur-strong: 30px;
   --glass-saturate: 1.7;
   --glass-radius: 26px;
-
-  /* Ambient motion timings for floating décor */
-  --float-slow: 26s;
-  --float-medium: 18s;
-  --float-fast: 12s;
 }

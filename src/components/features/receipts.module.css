@@ -38,7 +38,7 @@
     background: var(--skeleton-base);
     border: 1px solid var(--border-default);
     box-shadow: var(--shadow-card);
-    text-align: left;
+    text-align: center;
 }
 
 .tileImage {
@@ -221,7 +221,7 @@
     height: 46px;
     border-radius: 999px;
     background: #fff;
-    color: #0d0f14;
+    color: #000000;
     font-size: 14.5px;
     font-weight: 700;
 }

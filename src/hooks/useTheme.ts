@@ -1,8 +1,11 @@
 'use client';
 
 import { useCallback, useSyncExternalStore } from 'react';
+import { GLASS_THEMES, glassPalette } from '@/lib/glass/palette';
+import { GLASS_STYLE_IDS, type GlassStyleId } from '@/lib/glass/styles';
 
 export type ThemePreference = 'light' | 'dark' | 'system';
+export type MotionPreference = 'full' | 'calm';
 export type ResolvedTheme = 'light' | 'dark';
 
 export type PaletteId =
@@ -14,36 +17,44 @@ export type PaletteId =
 export interface ColorPalette {
     id: PaletteId;
     name: string;
-    accent400: string;
-    accent500: string;
-    accent600: string;
-    accent500rgb: string;
+    /** Three depths of the palette's one hue, for its swatch. */
     swatches: string[];
 }
 
 const THEME_STORAGE_KEY = 'SplitX-theme';
 const PALETTE_STORAGE_KEY = 'SplitX-palette';
+const GLASS_STORAGE_KEY = 'SplitX-glass';
+const MOTION_STORAGE_KEY = 'SplitX-motion';
 const DEFAULT_PALETTE: PaletteId = 'amethyst-haze';
 
-/** Curated palette set. Full colour scales live in styles/themes/accents.css. */
-export const COLOR_PALETTES: ColorPalette[] = [
-    { id: 'amethyst-haze', name: 'Amethyst', accent400: '#a78bfa', accent500: '#8b5cf6', accent600: '#7c3aed', accent500rgb: '139, 92, 246', swatches: ['#c4b5fd', '#8b5cf6', '#6d28d9'] },
-    { id: 'cosmic-night', name: 'Indigo', accent400: '#818cf8', accent500: '#6366f1', accent600: '#4f46e5', accent500rgb: '99, 102, 241', swatches: ['#a5b4fc', '#6366f1', '#4338ca'] },
-    { id: 'bold-tech', name: 'Cobalt', accent400: '#60a5fa', accent500: '#3b82f6', accent600: '#2563eb', accent500rgb: '59, 130, 246', swatches: ['#93c5fd', '#3b82f6', '#1d4ed8'] },
-    { id: 'sky-blue', name: 'Sky', accent400: '#38bdf8', accent500: '#0ea5e9', accent600: '#0284c7', accent500rgb: '14, 165, 233', swatches: ['#7dd3fc', '#0ea5e9', '#0369a1'] },
-    { id: 'ocean-breeze', name: 'Lagoon', accent400: '#22d3ee', accent500: '#06b6d4', accent600: '#0891b2', accent500rgb: '6, 182, 212', swatches: ['#67e8f9', '#06b6d4', '#0e7490'] },
-    { id: 'perpetuity', name: 'Teal', accent400: '#2dd4bf', accent500: '#14b8a6', accent600: '#0d9488', accent500rgb: '20, 184, 166', swatches: ['#5eead4', '#14b8a6', '#0f766e'] },
-    { id: 'emerald-glow', name: 'Emerald', accent400: '#34d399', accent500: '#10b981', accent600: '#059669', accent500rgb: '16, 185, 129', swatches: ['#6ee7b7', '#10b981', '#047857'] },
-    { id: 'lime-fusion', name: 'Lime', accent400: '#a3e635', accent500: '#84cc16', accent600: '#65a30d', accent500rgb: '132, 204, 22', swatches: ['#bef264', '#84cc16', '#4d7c0f'] },
-    { id: 'amber-minimal', name: 'Amber', accent400: '#fbbf24', accent500: '#f59e0b', accent600: '#d97706', accent500rgb: '245, 158, 11', swatches: ['#fcd34d', '#f59e0b', '#b45309'] },
-    { id: 'solar-dusk', name: 'Sunset', accent400: '#fb923c', accent500: '#f97316', accent600: '#ea580c', accent500rgb: '249, 115, 22', swatches: ['#fdba74', '#f97316', '#c2410c'] },
-    { id: 'cherry-blossom', name: 'Rose', accent400: '#fb7185', accent500: '#f43f5e', accent600: '#e11d48', accent500rgb: '244, 63, 94', swatches: ['#fda4af', '#f43f5e', '#be123c'] },
-    { id: 'quantum-rose', name: 'Blush', accent400: '#f472b6', accent500: '#ec4899', accent600: '#db2777', accent500rgb: '236, 72, 153', swatches: ['#f9a8d4', '#ec4899', '#be185d'] },
-    { id: 'cyberpunk', name: 'Orchid', accent400: '#e879f9', accent500: '#d946ef', accent600: '#c026d3', accent500rgb: '217, 70, 239', swatches: ['#f0abfc', '#d946ef', '#a21caf'] },
-    { id: 'copper-glow', name: 'Copper', accent400: '#d6824f', accent500: '#c06835', accent600: '#a2522a', accent500rgb: '192, 104, 53', swatches: ['#e4a578', '#c06835', '#833f24'] },
-    { id: 'merlot-night', name: 'Merlot', accent400: '#dc6188', accent500: '#c23a67', accent600: '#a62851', accent500rgb: '194, 58, 103', swatches: ['#ec97b0', '#c23a67', '#8a1e42'] },
-    { id: 'graphite-mono', name: 'Graphite', accent400: '#8b95a7', accent500: '#66718a', accent600: '#515a70', accent500rgb: '102, 113, 138', swatches: ['#b6bdca', '#66718a', '#43495b'] },
-];
+const PALETTE_NAMES: Record<PaletteId, string> = {
+    'amethyst-haze': 'Amethyst',
+    'cosmic-night': 'Indigo',
+    'bold-tech': 'Cobalt',
+    'sky-blue': 'Sky',
+    'ocean-breeze': 'Lagoon',
+    perpetuity: 'Teal',
+    'emerald-glow': 'Emerald',
+    'lime-fusion': 'Lime',
+    'amber-minimal': 'Amber',
+    'solar-dusk': 'Sunset',
+    'cherry-blossom': 'Rose',
+    'quantum-rose': 'Blush',
+    cyberpunk: 'Orchid',
+    'copper-glow': 'Copper',
+    'merlot-night': 'Merlot',
+    'graphite-mono': 'Graphite',
+};
+
+/** The palettes on offer. The colours themselves come from one hue each (lib/glass/palette.ts). */
+export const COLOR_PALETTES: ColorPalette[] = (Object.keys(PALETTE_NAMES) as PaletteId[]).map((id) => {
+    const { h, c, l } = GLASS_THEMES[id];
+    return {
+        id,
+        name: PALETTE_NAMES[id],
+        swatches: [`oklch(0.8 ${0.13 * c} ${h})`, `oklch(${l} ${0.2 * c} ${h})`, `oklch(0.5 ${0.2 * c} ${h})`],
+    };
+});
 
 const LEGACY_PALETTES: Record<string, PaletteId> = {
     'pastel-dreams': 'amethyst-haze',
@@ -53,15 +64,14 @@ const LEGACY_PALETTES: Record<string, PaletteId> = {
     'warm-coral': 'cherry-blossom',
 };
 
-const THEME_COLORS: Record<ResolvedTheme, string> = {
-    light: '#f4f5f8',
-    dark: '#0a0a0e',
-};
-
 function normalizePalette(value: string | null): PaletteId {
     if (!value) return DEFAULT_PALETTE;
     if (COLOR_PALETTES.some((palette) => palette.id === value)) return value as PaletteId;
     return LEGACY_PALETTES[value] ?? DEFAULT_PALETTE;
+}
+
+function normalizeGlass(value: string | null): GlassStyleId {
+    return (GLASS_STYLE_IDS as readonly string[]).includes(value ?? '') ? (value as GlassStyleId) : 'liquid';
 }
 
 function normalizePreference(value: string | null): ThemePreference {
@@ -76,24 +86,30 @@ function normalizePreference(value: string | null): ThemePreference {
 interface ThemeState {
     preference: ThemePreference;
     palette: PaletteId;
+    glass: GlassStyleId;
+    motion: MotionPreference;
     systemDark: boolean;
 }
 
-const SERVER_STATE: ThemeState = { preference: 'system', palette: DEFAULT_PALETTE, systemDark: true };
+const SERVER_STATE: ThemeState = { preference: 'system', palette: DEFAULT_PALETTE, glass: 'liquid', motion: 'full', systemDark: true };
 const listeners = new Set<() => void>();
 let current: ThemeState | null = null;
 
 function readState(): ThemeState {
     let preference: ThemePreference = 'system';
     let palette: PaletteId = DEFAULT_PALETTE;
+    let glass: GlassStyleId = 'liquid';
+    let motion: MotionPreference = 'full';
     try {
         preference = normalizePreference(localStorage.getItem(THEME_STORAGE_KEY));
         palette = normalizePalette(localStorage.getItem(PALETTE_STORAGE_KEY));
+        glass = normalizeGlass(localStorage.getItem(GLASS_STORAGE_KEY));
+        motion = localStorage.getItem(MOTION_STORAGE_KEY) === 'calm' ? 'calm' : 'full';
     } catch {
         // storage unavailable (private mode) — fall back to defaults
     }
     const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    return { preference, palette, systemDark };
+    return { preference, palette, glass, motion, systemDark };
 }
 
 function resolveTheme(state: ThemeState): ResolvedTheme {
@@ -106,6 +122,8 @@ function applyToDocument(state: ThemeState) {
     const resolved = resolveTheme(state);
     root.setAttribute('data-theme', resolved);
     root.setAttribute('data-palette', state.palette);
+    root.setAttribute('data-glass-style', state.glass);
+    root.setAttribute('data-motion', state.motion);
     root.style.colorScheme = resolved;
 
     // Clean up inline overrides written by older builds
@@ -113,8 +131,10 @@ function applyToDocument(state: ThemeState) {
         root.style.removeProperty(prop);
     }
 
+    // The phone's status bar follows the page's deepest colour.
+    const [r, g, b] = glassPalette(state.palette, resolved).a0.map((x) => Math.round(x * 255));
     document.querySelectorAll('meta[name="theme-color"]').forEach((meta) => {
-        meta.setAttribute('content', THEME_COLORS[resolved]);
+        meta.setAttribute('content', `rgb(${r}, ${g}, ${b})`);
     });
 
     document.cookie = `theme=${resolved};path=/;max-age=31536000;samesite=lax`;
@@ -139,6 +159,8 @@ function update(partial: Partial<ThemeState>) {
     try {
         localStorage.setItem(THEME_STORAGE_KEY, current.preference);
         localStorage.setItem(PALETTE_STORAGE_KEY, current.palette);
+        localStorage.setItem(GLASS_STORAGE_KEY, current.glass);
+        localStorage.setItem(MOTION_STORAGE_KEY, current.motion);
     } catch {
         // ignore
     }
@@ -155,7 +177,7 @@ function subscribe(listener: () => void) {
         emit();
     };
     const onStorage = (event: StorageEvent) => {
-        if (event.key !== THEME_STORAGE_KEY && event.key !== PALETTE_STORAGE_KEY) return;
+        if (event.key === null || ![THEME_STORAGE_KEY, PALETTE_STORAGE_KEY, GLASS_STORAGE_KEY, MOTION_STORAGE_KEY].includes(event.key)) return;
         current = readState();
         applyToDocument(current);
         emit();
@@ -181,14 +203,20 @@ export function useTheme() {
         update({ preference: resolveTheme(getSnapshot()) === 'dark' ? 'light' : 'dark' });
     }, []);
     const setPalette = useCallback((palette: PaletteId) => update({ palette }), []);
+    const setGlass = useCallback((glass: GlassStyleId) => update({ glass }), []);
+    const setMotion = useCallback((motion: MotionPreference) => update({ motion }), []);
 
     return {
         theme,
         preference: state.preference,
         palette: state.palette,
+        glass: state.glass,
+        motion: state.motion,
         mounted,
         setTheme,
         toggleTheme,
         setPalette,
+        setGlass,
+        setMotion,
     };
 }

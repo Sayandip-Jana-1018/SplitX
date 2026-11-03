@@ -79,7 +79,7 @@
 }
 
 .negative {
-    color: var(--color-error);
+    color: var(--money-out);
 }
 
 .heroRoute {
@@ -179,7 +179,7 @@
     gap: 12px;
     width: 100%;
     padding: 13px 14px;
-    text-align: left;
+    text-align: center;
 }
 
 .cardText {
@@ -280,7 +280,7 @@
 }
 
 .stepDown .stepValue {
-    color: var(--color-error);
+    color: var(--money-out);
 }
 
 .routeLine {

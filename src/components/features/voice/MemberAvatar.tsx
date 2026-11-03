@@ -40,9 +40,9 @@ export function MemberAvatar({
     return (
         <div style={{
             width: size, height: size, borderRadius: size / 2,
-            background: `hsl(${hue}, 60%, 50%)`,
+            background: `oklch(${[0.38, 0.44, 0.5, 0.56][hue % 4]} calc(0.15 * var(--c)) var(--h))`,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: '#fff', fontSize: size * 0.4, fontWeight: 700,
+            color: '#ffffff', fontSize: size * 0.4, fontWeight: 700,
             flexShrink: 0,
             border: '2px solid rgba(255,255,255,0.08)',
         }}>

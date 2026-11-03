@@ -204,7 +204,7 @@ function SearchPalette({ onClose }: { onClose: () => void }) {
                 role="dialog"
                 aria-modal="true"
                 aria-label="Search"
-                className={styles.palette}
+                className={styles.palette} data-glass="thick" data-glass-mode="css"
                 initial={{ opacity: 0, y: -14, scale: 0.98 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -10, scale: 0.98 }}

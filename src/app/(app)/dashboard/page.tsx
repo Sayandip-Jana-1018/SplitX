@@ -3,7 +3,6 @@
 import { useMemo, useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import useSWR from 'swr';
-import { motion } from 'framer-motion';
 import {
     ArrowDownLeft,
     ArrowRightLeft,
@@ -163,14 +162,12 @@ export default function DashboardPage() {
                                             key={action.href}
                                             href={action.href}
                                             className={styles.quickItem}
+                                            data-glass={action.primary ? 'accent' : 'thin'}
                                             onClick={() => haptics.light()}
                                         >
-                                            <motion.span
-                                                className={cn(styles.quickIcon, action.primary && styles.quickIconPrimary)}
-                                                whileTap={{ scale: 0.9 }}
-                                            >
+                                            <span className={cn(styles.quickIcon, action.primary && styles.quickIconPrimary)}>
                                                 <Icon size={22} strokeWidth={action.primary ? 2.5 : 2} />
-                                            </motion.span>
+                                            </span>
                                             <span className={styles.quickText}>
                                                 <span className={styles.quickLabel}>{action.label}</span>
                                                 <span className={styles.quickHint}>{action.hint}</span>
@@ -185,12 +182,11 @@ export default function DashboardPage() {
                     <StaggerItem>
                         <Section title="Your groups" action={groups.length ? { label: 'See all', href: '/groups' } : undefined}>
                             {groups.length > 0 ? (
-                                <div className={styles.rail}>
-                                    <div className={styles.railInner}>
-                                        {groups.map((group) => {
+                                <div className={styles.groupGrid}>
+                                        {groups.slice(0, 3).map((group) => {
                                             const net = balances.byGroup[group.id]?.net ?? 0;
                                             return (
-                                                <Link key={group.id} href={`/groups/${group.id}`} className={styles.groupCard}>
+                                                <Link key={group.id} href={`/groups/${group.id}`} className={styles.groupCard} data-glass="reg">
                                                     <span className={styles.groupEmoji}>{group.emoji}</span>
                                                     <span className={styles.groupName}>{group.name}</span>
                                                     <span className={styles.groupMeta}>
@@ -202,23 +198,16 @@ export default function DashboardPage() {
                                                             max={3}
                                                             size="xs"
                                                         />
-                                                        {net === 0 ? (
-                                                            <Tag>Settled</Tag>
-                                                        ) : (
-                                                            <Tag tone={net > 0 ? 'success' : 'danger'}>
-                                                                {net > 0 ? '+' : '−'}{formatCurrency(Math.abs(net))}
-                                                            </Tag>
-                                                        )}
+                                                        {net === 0 ? <Tag>Settled</Tag> : <Amount value={net} signed tone="auto" />}
                                                     </span>
                                                 </Link>
                                             );
                                         })}
-                                        <Link href="/groups?create=1" className={cn(styles.groupCard, styles.groupCardNew)}>
+                                        <Link href="/groups?create=1" className={cn(styles.groupCard, styles.groupCardNew)} data-glass="reg">
                                             <span className={styles.newIcon}><Plus size={20} /></span>
                                             <span className={styles.groupName}>New group</span>
                                             <span className={styles.groupMeta}>Trips, flats, anything</span>
                                         </Link>
-                                    </div>
                                 </div>
                             ) : (
                                 <EmptyState
@@ -259,7 +248,7 @@ export default function DashboardPage() {
                                         })}
                                     </ListGroup>
                                 ) : (
-                                    <div className={styles.settledCard}>
+                                    <div className={styles.settledCard} data-glass="reg">
                                         <span className={styles.settledIcon}><CheckCheck size={20} /></span>
                                         <div>
                                             <p className={styles.settledTitle}>You&apos;re all settled up</p>
@@ -361,52 +350,46 @@ function BalanceCard({
 }) {
     const animatedAmount = useAnimatedNumber(Math.abs(net), 1000, (value) => formatCurrency(value));
     const status = net > 0
-        ? { label: 'You’re owed overall', icon: <ArrowDownLeft size={15} /> }
+        ? { label: 'You are owed', note: 'Across your groups', icon: <ArrowDownLeft size={14} /> }
         : net < 0
-            ? { label: 'You owe overall', icon: <ArrowUpRight size={15} /> }
-            : { label: 'All settled up', icon: <CheckCheck size={15} /> };
+            ? { label: 'You owe', note: 'Across your groups', icon: <ArrowUpRight size={14} /> }
+            : { label: 'Your balance', note: 'All settled up', icon: <CheckCheck size={14} /> };
 
     return (
         <section className={styles.hero} data-tour="balance" aria-label="Net balance">
-            <span className={styles.heroAurora} aria-hidden="true" />
-            <span className={styles.heroSheen} aria-hidden="true" />
-
-            <div className={styles.heroTop}>
-                <span className={styles.heroLabel}>
-                    <span className={styles.heroDot} />Net balance
-                </span>
+            <div className={styles.heroDrop}>
+                <i data-drop className={cn(styles.drop, styles.dropBig)} />
+                <i data-drop className={cn(styles.drop, styles.dropLeft)} />
+                <i data-drop className={cn(styles.drop, styles.dropRight)} />
+                <span className={styles.heroLabel}>{status.label}</span>
+                <div className={styles.heroAmount}>
+                    {net !== 0 && <span className={styles.heroSign}>{net > 0 ? '+' : '−'}</span>}
+                    {animatedAmount}
+                </div>
+                <div className={styles.heroStatus}>
+                    {status.icon}
+                    {status.note}
+                </div>
                 <button
                     type="button"
                     className={styles.heroRefresh}
                     onClick={onRefresh}
                     disabled={refreshing}
                     aria-label="Refresh balances"
+                    data-glass="clear"
                 >
-                    <RefreshCw size={15} className={refreshing ? 'spin' : undefined} />
+                    <RefreshCw size={16} className={refreshing ? 'spin' : undefined} />
                 </button>
             </div>
 
-            <div className={styles.heroAmount}>
-                {net !== 0 && <span className={styles.heroSign}>{net > 0 ? '+' : '−'}</span>}
-                {animatedAmount}
-            </div>
-            <div className={styles.heroStatus}>
-                {status.icon}
-                {status.label}
-            </div>
-
             <div className={styles.heroTiles}>
-                <Link href="/settlements" className={styles.heroTile}>
-                    <span className={styles.heroTileLabel}>
-                        <span className={cn(styles.heroTileIcon, styles.heroTileOut)}><ArrowUpRight size={13} /></span>You owe
-                    </span>
-                    <span className={styles.heroTileValue}>{formatCurrency(youOwe)}</span>
+                <Link href="/settlements" className={styles.heroTile} data-glass="thin">
+                    <span className={styles.heroTileLabel}>Owed to you</span>
+                    <span className={cn(styles.heroTileValue, styles.heroTileIn)}>{owedToYou > 0 && '+'}{formatCurrency(owedToYou)}</span>
                 </Link>
-                <Link href="/settlements" className={styles.heroTile}>
-                    <span className={styles.heroTileLabel}>
-                        <span className={cn(styles.heroTileIcon, styles.heroTileIn)}><ArrowDownLeft size={13} /></span>Owed to you
-                    </span>
-                    <span className={styles.heroTileValue}>{formatCurrency(owedToYou)}</span>
+                <Link href="/settlements" className={styles.heroTile} data-glass="thin">
+                    <span className={styles.heroTileLabel}>You owe</span>
+                    <span className={cn(styles.heroTileValue, styles.heroTileOut)}>{youOwe > 0 && '−'}{formatCurrency(youOwe)}</span>
                 </Link>
             </div>
         </section>

@@ -1,21 +1,34 @@
 import type { Metadata, Viewport } from 'next';
 import localFont from 'next/font/local';
 import './globals.css';
+import { GlassRoot } from '@/components/glass/GlassRoot';
 import { ThemeProvider } from '@/components/providers/ThemeProvider';
 import { ToastProvider } from '@/components/ui/Toast';
 import AuthProvider from '@/components/providers/AuthProvider';
 import ServiceWorker from '@/components/providers/ServiceWorker';
 
 /*
- * Both fonts ship with the app (./fonts, OFL-1.1, Fontsource 5.3.0's Latin
- * subsets of the variable fonts), so a build never waits on Google Fonts: a
- * download that failed there once failed a release with it.
+ * The fonts ship with the app (./fonts, OFL-1.1, Fontsource's subsets of the
+ * variable fonts), so a build never waits on Google Fonts: a download that failed
+ * there once failed a release with it. Plus Jakarta Sans keeps its ₹ in the Latin
+ * Extended subset, so that is a second family the browser fetches only when a page
+ * shows one. A metric-matched fallback in between would answer for the ₹ first.
  */
-const geist = localFont({
-  src: './fonts/geist-latin-wght-normal.woff2',
-  variable: '--font-geist',
-  weight: '100 900',
+const jakarta = localFont({
+  src: './fonts/plus-jakarta-sans-latin-wght-normal.woff2',
+  variable: '--font-jakarta',
+  weight: '200 800',
   display: 'swap',
+  adjustFontFallback: false,
+});
+
+const jakartaExtended = localFont({
+  src: './fonts/plus-jakarta-sans-latin-ext-wght-normal.woff2',
+  variable: '--font-jakarta-ext',
+  weight: '200 800',
+  display: 'swap',
+  preload: false,
+  adjustFontFallback: false,
 });
 
 const jetBrainsMono = localFont({
@@ -28,10 +41,10 @@ const jetBrainsMono = localFont({
 });
 
 /**
- * Runs before first paint: resolves the saved theme (light / dark / system)
- * and palette so the UI never flashes the wrong colours.
+ * Runs before first paint: resolves the saved theme (light / dark / system),
+ * palette, kind of glass and motion, so the UI never flashes the wrong ones.
  */
-const THEME_BOOTSTRAP = `(function(){try{var d=document.documentElement,s=window.localStorage,t=s.getItem('SplitX-theme')||'system',p=s.getItem('SplitX-palette')||'amethyst-haze';if(t!=='light'&&t!=='dark'){t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}d.setAttribute('data-theme',t);d.setAttribute('data-palette',p);d.style.colorScheme=t}catch(e){}})();`;
+const THEME_BOOTSTRAP = `(function(){try{var d=document.documentElement,s=window.localStorage,t=s.getItem('SplitX-theme')||'system',p=s.getItem('SplitX-palette')||'amethyst-haze',g=s.getItem('SplitX-glass')||'liquid',m=s.getItem('SplitX-motion')==='calm'?'calm':'full';if(t!=='light'&&t!=='dark'){t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}d.setAttribute('data-theme',t);d.setAttribute('data-palette',p);d.setAttribute('data-glass-style',g);d.setAttribute('data-motion',m);d.style.colorScheme=t}catch(e){}})();`;
 
 export const metadata: Metadata = {
   title: {
@@ -86,7 +99,9 @@ export default function RootLayout({
       lang="en"
       data-theme="dark"
       data-palette="amethyst-haze"
-      className={`${geist.variable} ${jetBrainsMono.variable}`}
+      data-glass-style="liquid"
+      data-motion="full"
+      className={`${jakarta.variable} ${jakartaExtended.variable} ${jetBrainsMono.variable}`}
       suppressHydrationWarning
     >
       <head>
@@ -95,6 +110,7 @@ export default function RootLayout({
       <body>
         <AuthProvider>
           <ThemeProvider>
+            <GlassRoot />
             <ToastProvider>
               {children}
             </ToastProvider>

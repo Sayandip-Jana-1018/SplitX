@@ -379,13 +379,13 @@ export default function SettlementsPage() {
             <Stagger className={styles.page}>
                 <StaggerItem className={styles.summaryArea}>
                     <div className={styles.summary}>
-                        <div className={cn(styles.summaryTile, youOwe > 0 && styles.summaryTileOwe)}>
+                        <div className={cn(styles.summaryTile, youOwe > 0 && styles.summaryTileOwe)} data-glass="thin">
                             <span className={styles.summaryHead}>
                                 <span className={cn(styles.summaryIcon, styles.iconOwe)}><ArrowUpRight size={15} /></span>You owe
                             </span>
                             <span className={styles.summaryValue}>{formatCurrency(youOwe)}</span>
                         </div>
-                        <div className={cn(styles.summaryTile, owedToYou > 0 && styles.summaryTileOwed)}>
+                        <div className={cn(styles.summaryTile, owedToYou > 0 && styles.summaryTileOwed)} data-glass="thin">
                             <span className={styles.summaryHead}>
                                 <span className={cn(styles.summaryIcon, styles.iconOwed)}><ArrowDownLeft size={15} /></span>Owed to you
                             </span>
@@ -425,7 +425,7 @@ export default function SettlementsPage() {
 
                 {!isGlobal && activeGroup && graphSettlements.length > 0 && (
                     <StaggerItem className={styles.flowArea}>
-                        <section className={styles.flowCard}>
+                        <section className={styles.flowCard} data-glass="reg">
                             <button type="button" className={styles.flowToggle} onClick={() => setFlowOpen((open) => !open)} aria-expanded={flowOpen}>
                                 <IconTile><GitBranch size={18} /></IconTile>
                                 <span className={styles.flowText}>
@@ -531,18 +531,18 @@ export default function SettlementsPage() {
                 {!isGlobal && activeGroup && (
                     <StaggerItem className={styles.footerArea}>
                         <div className={styles.footerActions}>
-                            <button type="button" className={styles.footerAction} onClick={() => exportAsText(exportPayload())}>
+                            <button type="button" className={styles.footerAction} data-glass="thin" onClick={() => exportAsText(exportPayload())}>
                                 <span className={styles.footerIcon}><Download size={17} /></span>Export
                             </button>
-                            <button type="button" className={styles.footerAction} onClick={() => shareSettlement(exportPayload())}>
+                            <button type="button" className={styles.footerAction} data-glass="thin" onClick={() => shareSettlement(exportPayload())}>
                                 <span className={styles.footerIcon}><Share2 size={17} /></span>Share
                             </button>
                             {isFeatureEnabled('balanceJourney') ? (
-                                <button type="button" className={styles.footerAction} onClick={() => router.push(`/groups/${activeGroup.groupId}/journey`)}>
+                                <button type="button" className={styles.footerAction} data-glass="thin" onClick={() => router.push(`/groups/${activeGroup.groupId}/journey`)}>
                                     <span className={styles.footerIcon}><GitBranch size={17} /></span>Why?
                                 </button>
                             ) : (
-                                <button type="button" className={styles.footerAction} onClick={() => router.push(`/groups/${activeGroup.groupId}`)}>
+                                <button type="button" className={styles.footerAction} data-glass="thin" onClick={() => router.push(`/groups/${activeGroup.groupId}`)}>
                                     <span className={styles.footerIcon}><Users size={17} /></span>Group
                                 </button>
                             )}
@@ -708,7 +708,7 @@ function TransferCard({
     }
 
     return (
-        <article className={cn(styles.transfer, isSettled && styles.transferSettled)}>
+        <article className={cn(styles.transfer, isSettled && styles.transferSettled)} data-glass="reg">
             <div className={styles.transferTop}>
                 <span className={styles.pair}>
                     <Avatar name={item.from.name} image={item.from.image} size="md" />

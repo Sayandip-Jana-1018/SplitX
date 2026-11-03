@@ -175,7 +175,7 @@ export default function AIChatPanel({
                         role="dialog"
                         aria-modal="true"
                         aria-label="SplitX AI assistant"
-                        className={cn(styles.panel, isSheet ? styles.panelSheet : styles.panelFloating)}
+                        className={cn(styles.panel, isSheet ? styles.panelSheet : styles.panelFloating)} data-glass="thick" data-glass-mode="css"
                         initial={isSheet ? { y: '100%' } : { opacity: 0, y: 24, scale: 0.97 }}
                         animate={isSheet ? { y: 0 } : { opacity: 1, y: 0, scale: 1 }}
                         exit={isSheet ? { y: '100%' } : { opacity: 0, y: 16, scale: 0.98 }}
@@ -233,7 +233,7 @@ export default function AIChatPanel({
                                             <motion.button
                                                 key={suggestion.label}
                                                 type="button"
-                                                className={styles.suggestion}
+                                                className={styles.suggestion} data-glass="thin"
                                                 onClick={() => sendMessage(suggestion.query)}
                                                 initial={{ opacity: 0, y: 8 }}
                                                 animate={{ opacity: 1, y: 0 }}
@@ -312,7 +312,7 @@ export default function AIChatPanel({
                         >
                             <input
                                 ref={inputRef}
-                                className={styles.input}
+                                className={styles.input} data-glass="thin"
                                 value={input}
                                 onChange={(event) => setInput(event.target.value)}
                                 placeholder="Ask anything about your money…"

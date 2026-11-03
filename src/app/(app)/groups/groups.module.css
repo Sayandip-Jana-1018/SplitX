@@ -147,8 +147,7 @@
 }
 
 .stripDanger {
-    color: var(--color-error);
-    background: var(--color-error-bg) !important;
+    color: var(--money-out);
 }
 
 .stripLabel {
@@ -227,8 +226,8 @@
     width: 64px;
     height: 64px;
     border-radius: 22px;
-    background: linear-gradient(135deg, #10b981, #059669);
-    color: #fff;
+    background: var(--accent-gradient);
+    color: var(--on-accent);
     box-shadow: 0 12px 26px -10px rgba(5, 150, 105, 0.6);
 }
 
@@ -328,7 +327,7 @@
     .head .intro {
         align-items: flex-start;
         padding: 0;
-        text-align: left;
+        text-align: center;
     }
 
     .head .intro h1 {

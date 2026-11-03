@@ -103,7 +103,7 @@
 }
 
 .statNegative {
-    background: var(--color-error-bg);
+    background: var(--surface-secondary);
 }
 
 .statLabel {
@@ -131,7 +131,7 @@
 }
 
 .statNegative .statValue {
-    color: var(--color-error);
+    color: var(--money-out);
 }
 
 .heroButtons {

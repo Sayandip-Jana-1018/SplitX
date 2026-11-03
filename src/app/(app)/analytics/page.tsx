@@ -219,7 +219,7 @@ export default function AnalyticsPage() {
                     {/* ── Trend ── */}
                     <StaggerItem className={styles.trendArea}>
                         <Section title="Monthly trend" subtitle="How this group’s spending moves">
-                            <div className={styles.card}>
+                            <div className={styles.card} data-glass="reg">
                                 <MonthlyTrendChart data={trend} />
                             </div>
                         </Section>
@@ -229,7 +229,7 @@ export default function AnalyticsPage() {
                     <StaggerItem className={styles.categoriesArea}>
                         <Section title="Where it went" subtitle={`${monthName(analytics.currentMonth)} by category`}>
                             {categories.length > 0 ? (
-                                <div className={cn(styles.card, styles.categoriesCard)}>
+                                <div className={cn(styles.card, styles.categoriesCard)} data-glass="reg">
                                     <div className={styles.donutWrap}>
                                         <CategoryDonut
                                             data={categories.map((item) => ({
@@ -282,7 +282,7 @@ export default function AnalyticsPage() {
                         {members.length > 0 && (
                             <StaggerItem className={styles.paidArea}>
                                 <Section title="Who paid" subtitle="Money fronted this month">
-                                    <div className={cn(styles.card, styles.list)}>
+                                    <div className={cn(styles.card, styles.list)} data-glass="reg">
                                         {members.map((member, index) => (
                                             <div key={`${member.name}-${index}`} className={styles.row}>
                                                 <Avatar name={member.name} image={member.image} size="sm" />

@@ -739,21 +739,21 @@ export default function GroupDetailPage() {
                             <div className={styles.shareGrid}>
                                 <button
                                     type="button"
-                                    className={styles.shareOption}
+                                    className={styles.shareOption} data-glass="thin"
                                     onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(`Join "${group.name}" on SplitX to split expenses: ${inviteLink}`)}`, '_blank')}
                                 >
                                     <span className={styles.shareIcon}><MessageCircle size={18} /></span>WhatsApp
                                 </button>
                                 <button
                                     type="button"
-                                    className={styles.shareOption}
+                                    className={styles.shareOption} data-glass="thin"
                                     onClick={() => window.open(`sms:?body=${encodeURIComponent(`Join "${group.name}" on SplitX: ${inviteLink}`)}`, '_blank')}
                                 >
                                     <span className={styles.shareIcon}><MessageSquare size={18} /></span>SMS
                                 </button>
                                 <button
                                     type="button"
-                                    className={styles.shareOption}
+                                    className={styles.shareOption} data-glass="thin"
                                     onClick={() => window.open(`mailto:?subject=${encodeURIComponent(`Join ${group.name} on SplitX`)}&body=${encodeURIComponent(`Split expenses with us in "${group.name}".\n\n${inviteLink}`)}`, '_blank')}
                                 >
                                     <span className={styles.shareIcon}><Mail size={18} /></span>Email

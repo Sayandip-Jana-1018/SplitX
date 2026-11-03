@@ -26,8 +26,7 @@ import { Input } from '@/components/ui/Input';
 import Modal from '@/components/ui/Modal';
 import { IconTile, ListGroup, ListRow, Section, Spinner, Stagger, StaggerItem, Tag } from '@/components/ui/kit';
 import { useToast } from '@/components/ui/Toast';
-import { PalettePicker, ThemeModeSwitch } from '@/components/features/ThemeSelector';
-import { useThemeContext } from '@/components/providers/ThemeProvider';
+import { AppearanceControls } from '@/components/features/ThemeSelector';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { openAssistant, startTour } from '@/lib/uiEvents';
@@ -50,7 +49,6 @@ function errorMessage(data: unknown, fallback: string) {
 
 export default function SettingsPage() {
     const router = useRouter();
-    const { palette, setPalette } = useThemeContext();
     const { user, loading, refresh } = useCurrentUser();
     const { toast } = useToast();
     const standalone = useMediaQuery('(display-mode: standalone)', false);
@@ -244,7 +242,7 @@ export default function SettingsPage() {
             <Stagger className={styles.page}>
                 {/* ── Profile ── */}
                 <StaggerItem className={styles.profileArea}>
-                    <section className={styles.profile}>
+                    <section className={styles.profile} data-glass="reg">
                         {loading && !user ? (
                             <div className={styles.profileSkeleton} aria-hidden="true">
                                 <span className={styles.skeletonCircle} />
@@ -325,15 +323,9 @@ export default function SettingsPage() {
                     {/* ── Appearance ── */}
                     <StaggerItem className={styles.lookArea}>
                         <Section title="Appearance">
-                            <div className={styles.panel}>
+                            <div className={styles.panel} data-glass="reg">
                                 <div className={styles.panelBlock}>
-                                    <span className={styles.panelLabel}>Mode</span>
-                                    <ThemeModeSwitch />
-                                </div>
-                                <div className={styles.panelDivider} />
-                                <div className={styles.panelBlock}>
-                                    <span className={styles.panelLabel}>Accent colour</span>
-                                    <PalettePicker value={palette} onChange={setPalette} className={styles.palette} />
+                                    <AppearanceControls />
                                 </div>
                             </div>
                         </Section>
@@ -421,7 +413,7 @@ export default function SettingsPage() {
                 </div>
 
                 <StaggerItem className={styles.signOutArea}>
-                    <motion.button type="button" whileTap={{ scale: 0.98 }} className={styles.signOut} onClick={handleSignOut}>
+                    <motion.button type="button" whileTap={{ scale: 0.98 }} className={styles.signOut} data-glass="thin" onClick={handleSignOut}>
                         <LogOut size={17} />
                         Sign out
                     </motion.button>

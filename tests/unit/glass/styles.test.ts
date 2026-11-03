@@ -9,7 +9,7 @@ describe('what a surface looks like', () => {
                 expect(look.frost, `${style} ${kind}`).toBeGreaterThanOrEqual(0);
                 expect(look.frost, `${style} ${kind}`).toBeLessThanOrEqual(1);
                 expect(Math.abs(look.tint), `${style} ${kind}`).toBeLessThanOrEqual(1);
-                for (const value of Object.values(look)) expect(Number.isFinite(value)).toBe(true);
+                for (const value of Object.values(look)) if (typeof value === 'number') expect(Number.isFinite(value)).toBe(true);
             }
         }
     });
@@ -24,9 +24,10 @@ describe('what a surface looks like', () => {
     });
 
     it('colours everything but clear glass when the style is tinted', () => {
-        expect(surfaceLook('reg', 'tinted').tint).toBeLessThan(0);
-        expect(surfaceLook('thick', 'tinted').tint).toBeGreaterThanOrEqual(-0.72);
-        expect(surfaceLook('clear', 'tinted').tint).toBeGreaterThan(0);
+        expect(surfaceLook('reg', 'tinted').colored).toBe(true);
+        expect(surfaceLook('thick', 'tinted').tint).toBeLessThanOrEqual(0.72);
+        expect(surfaceLook('clear', 'tinted').colored).toBe(false);
+        expect(surfaceLook('accent', 'tinted').colored).toBe(false);
     });
 
     it('treats what it does not recognise as regular liquid glass', () => {

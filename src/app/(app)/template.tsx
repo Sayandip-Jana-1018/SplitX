@@ -10,7 +10,7 @@ import { usePathname } from 'next/navigation';
 export default function AppTemplate({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
     return (
-        <div className={pathname.endsWith('/print') ? 'print-document' : 'page-transition workspace-page'} data-page={pathname.split('/')[1]} suppressHydrationWarning>
+        <div data-fade className={pathname.endsWith('/print') ? 'print-document' : 'page-transition workspace-page'} data-page={pathname.split('/')[1]} suppressHydrationWarning>
             {children}
         </div>
     );

@@ -1,12 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Glass } from '@/components/glass/Glass';
-import { GlassRoot } from '@/components/glass/GlassRoot';
 import { COLOR_PALETTES, useThemeContext } from '@/components/providers/ThemeProvider';
-import type { GlassCanvasMode, GlassEngine, GlassStats } from '@/lib/glass/engine';
+import type { GlassCanvasMode, GlassStats } from '@/lib/glass/engine';
 import { QUALITY } from '@/lib/glass/governor';
-import { GLASS_STYLE_IDS, type GlassStyleId } from '@/lib/glass/styles';
+import { getGlassEngine } from '@/lib/glass/runtime';
+import { GLASS_STYLE_IDS } from '@/lib/glass/styles';
 import styles from './lab.module.css';
 
 const OWES_YOU = [
@@ -67,42 +67,33 @@ function scrollThrough(seconds: number): Promise<void> {
 }
 
 export default function GlassLab() {
-    const engine = useRef<GlassEngine | null>(null);
-    const { theme, palette, setTheme, setPalette } = useThemeContext();
+    const { theme, palette, glass, motion, setTheme, setPalette, setGlass, setMotion } = useThemeContext();
     const [stats, setStats] = useState<GlassStats | null>(null);
     const [open, setOpen] = useState(false);
     const [mode, setMode] = useState<GlassCanvasMode>('locked');
-    const [glass, setGlass] = useState<GlassStyleId>('liquid');
     const [level, setLevel] = useState<number | null>(null);
     const [bench, setBench] = useState<BenchResult[] | null>(null);
     const [benching, setBenching] = useState(false);
     const [cost, setCost] = useState<{ liquidMs: number; screenMs: number } | null>(null);
 
     useEffect(() => {
-        const html = document.documentElement;
-        html.classList.add('glass-page');
         const poll = window.setInterval(() => {
-            if (engine.current) setStats(engine.current.stats());
+            const engine = getGlassEngine();
+            if (engine) setStats(engine.stats());
         }, 500);
-        return () => {
-            window.clearInterval(poll);
-            html.classList.remove('glass-page');
-            html.removeAttribute('data-glass-style');
-        };
+        return () => window.clearInterval(poll);
     }, []);
 
+    const ready = stats !== null;
     useEffect(() => {
-        document.documentElement.setAttribute('data-glass-style', glass);
-    }, [glass]);
+        if (ready) getGlassEngine()?.setMode(mode);
+    }, [mode, ready]);
     useEffect(() => {
-        engine.current?.setMode(mode);
-    }, [mode]);
-    useEffect(() => {
-        engine.current?.setLevel(level);
-    }, [level]);
+        if (ready) getGlassEngine()?.setLevel(level);
+    }, [level, ready]);
 
     const runBench = useCallback(async () => {
-        const lab = engine.current;
+        const lab = getGlassEngine();
         if (!lab) return;
         setOpen(false);
         setBenching(true);
@@ -123,8 +114,6 @@ export default function GlassLab() {
 
     return (
         <div className={styles.page}>
-            <GlassRoot engineRef={engine} />
-
             <Glass as="header" kind="thin" floats className={styles.bar}>
                 <button type="button" className={styles.hud} onClick={() => setOpen((v) => !v)} aria-expanded={open}>
                     {stats ? `${Math.round(stats.fps)} fps · p95 ${stats.p95Ms.toFixed(0)} ms · ${stats.motion === 'calm' ? 'calm' : stats.levelName}` : 'Starting…'}
@@ -148,7 +137,7 @@ export default function GlassLab() {
                     <p className={styles.panelTitle}>Colour</p>
                     <div className={styles.swatches}>
                         {COLOR_PALETTES.map((p) => (
-                            <button key={p.id} type="button" aria-label={p.name} aria-pressed={palette === p.id} className={styles.swatch} style={{ background: p.accent500 }} onClick={() => setPalette(p.id)} />
+                            <button key={p.id} type="button" aria-label={p.name} aria-pressed={palette === p.id} className={styles.swatch} style={{ background: p.swatches[1] }} onClick={() => setPalette(p.id)} />
                         ))}
                     </div>
                     <div className={styles.options}>
@@ -164,8 +153,8 @@ export default function GlassLab() {
                     </div>
                     <div className={styles.options}>
                         <button type="button" className={styles.option} disabled={benching} onClick={runBench}>Run speed test</button>
-                        <button type="button" className={styles.option} onClick={() => engine.current?.simulateLostContext()}>Lose the GPU</button>
-                        <button type="button" className={styles.option} onClick={() => engine.current?.setMotion(stats?.motion === 'calm' ? 'full' : 'calm')}>{stats?.motion === 'calm' ? 'Motion on' : 'Calm'}</button>
+                        <button type="button" className={styles.option} onClick={() => getGlassEngine()?.simulateLostContext()}>Lose the GPU</button>
+                        <button type="button" className={styles.option} onClick={() => setMotion(motion === 'calm' ? 'full' : 'calm')}>{motion === 'calm' ? 'Motion on' : 'Calm'}</button>
                     </div>
                     {bench && (
                         <table className={styles.results}>

@@ -800,7 +800,7 @@ function QuickAddContent() {
         <div className={styles.composer}>
             {/* ── Group ── */}
             <div className={styles.groupRow}>
-                <button type="button" className={styles.groupChip} onClick={() => setSheet('group')} aria-label="Change group">
+                <button type="button" className={styles.groupChip} data-glass="thin" onClick={() => setSheet('group')} aria-label="Change group">
                     <span className={styles.groupEmoji}>{selectedGroup?.emoji || '👥'}</span>
                     <span className={styles.groupChipName}>{selectedGroup?.name || 'Select group'}</span>
                     <ChevronDown size={15} />
@@ -824,7 +824,7 @@ function QuickAddContent() {
             )}
 
             {/* ── Amount ── */}
-            <section className={styles.amountCard} aria-label="Amount">
+            <section className={styles.amountCard} data-glass="reg" aria-label="Amount">
                 <span className={styles.amountLabel}>Amount</span>
                 <div className={styles.amountRow}>
                     <span className={styles.currency}>₹</span>
@@ -876,7 +876,7 @@ function QuickAddContent() {
             </section>
 
             {/* ── Title ── */}
-            <label className={styles.titleField}>
+            <label className={styles.titleField} data-glass="thin">
                 <CategoryTile category={category} size={40} />
                 <input
                     className={styles.titleInput}
@@ -891,21 +891,21 @@ function QuickAddContent() {
 
             {/* ── Pickers ── */}
             <div className={styles.pickers}>
-                <button type="button" className={styles.picker} onClick={() => setSheet('category')}>
+                <button type="button" className={styles.picker} data-glass="thin" onClick={() => setSheet('category')}>
                     <span className={styles.pickerLabel}>Category <ChevronDown size={12} /></span>
                     <span className={styles.pickerValue}>
                         <categoryConfig.Icon size={16} style={{ color: categoryConfig.color, flexShrink: 0 }} />
                         <span className={styles.pickerText}>{categoryLabel}</span>
                     </span>
                 </button>
-                <button type="button" className={styles.picker} onClick={() => setSheet('payer')}>
+                <button type="button" className={styles.picker} data-glass="thin" onClick={() => setSheet('payer')}>
                     <span className={styles.pickerLabel}>Paid by <ChevronDown size={12} /></span>
                     <span className={styles.pickerValue}>
                         {payerMember && <Avatar name={payerMember.name} image={payerMember.image} size="xs" />}
                         <span className={styles.pickerText}>{payerName}</span>
                     </span>
                 </button>
-                <button type="button" className={styles.picker} onClick={() => setSheet('method')}>
+                <button type="button" className={styles.picker} data-glass="thin" onClick={() => setSheet('method')}>
                     <span className={styles.pickerLabel}>Method <ChevronDown size={12} /></span>
                     <span className={styles.pickerValue}>
                         <PaymentIcon method={method} size={15} />
@@ -927,7 +927,7 @@ function QuickAddContent() {
 
             {/* ── Split ── */}
             {members.length > 1 && (
-                <section className={styles.card} aria-label="Split">
+                <section className={styles.card} data-glass="reg" aria-label="Split">
                     <div className={styles.cardHead}>
                         <span className={styles.cardTitle}>Split between</span>
                         <div className={styles.segWrap}>
@@ -954,7 +954,7 @@ function QuickAddContent() {
                                     type="button"
                                     whileTap={{ scale: 0.95 }}
                                     onClick={() => toggleMember(member.id)}
-                                    className={cn(styles.member, on ? styles.memberOn : styles.memberOff)}
+                                    className={cn(styles.member, on ? styles.memberOn : styles.memberOff)} data-glass="thin"
                                     aria-pressed={on}
                                 >
                                     <span className={styles.memberAvatar}>
@@ -995,7 +995,7 @@ function QuickAddContent() {
                                                 {member.id === currentUser?.id ? 'You' : member.name.split(' ')[0]}
                                                 {isRemainder && <span className={styles.customHint}>Gets the remainder</span>}
                                             </span>
-                                            <label className={cn(styles.customInputWrap, isRemainder && styles.customInputLocked)}>
+                                            <label className={cn(styles.customInputWrap, isRemainder && styles.customInputLocked)} data-glass="thin">
                                                 ₹<input
                                                     className={styles.customInput}
                                                     type="number"
@@ -1040,7 +1040,7 @@ function QuickAddContent() {
 
             {/* ── Impact preview ── */}
             {impactPreview.length > 0 && (
-                <section className={styles.card} aria-label="Balance impact">
+                <section className={styles.card} data-glass="reg" aria-label="Balance impact">
                     <div className={styles.cardHead}>
                         <span className={styles.cardTitle}>How balances change</span>
                         <TrendingUp size={16} style={{ color: 'var(--accent-strong)' }} />
@@ -1070,7 +1070,7 @@ function QuickAddContent() {
                     A matching expense was added recently. Tap Add again only if this is a real second charge.
                     <div className={styles.duplicateList}>
                         {duplicateCandidates.map((transaction) => (
-                            <div key={transaction.id} className={styles.duplicateItem}>
+                            <div key={transaction.id} className={styles.duplicateItem} data-glass="thin">
                                 <strong>{transaction.title} · {formatCurrency(transaction.amount)}</strong>
                                 {' — '}paid by {transaction.payer.name || 'someone'}, {new Date(transaction.createdAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}
                             </div>
@@ -1090,7 +1090,7 @@ function QuickAddContent() {
                             (key === '+' || key === '-') && styles.keyOp,
                             key === 'del' && styles.keyDel,
                             key === '=' && styles.keyEq,
-                        )}
+                        )} data-glass="clear"
                         whileTap={{ scale: 0.92 }}
                         onClick={() => {
                             if (key === '00') {
@@ -1139,7 +1139,7 @@ function QuickAddContent() {
                         <button
                             key={group.id}
                             type="button"
-                            className={cn(styles.option, selectedGroupId === group.id && styles.optionActive)}
+                            className={cn(styles.option, selectedGroupId === group.id && styles.optionActive)} data-glass="thin"
                             onClick={() => { setSelectedGroupId(group.id); setSheet(null); }}
                         >
                             <span className={styles.optionIcon}>{group.emoji}</span>
@@ -1159,7 +1159,7 @@ function QuickAddContent() {
             >
                 {isCustomCategory ? (
                     <div className={styles.sheetStack}>
-                        <label className={styles.titleField}>
+                        <label className={styles.titleField} data-glass="thin">
                             <span style={{ display: 'grid', placeItems: 'center', width: 40, height: 40, borderRadius: 13, background: 'var(--bg-tertiary)' }}>
                                 <PencilLine size={18} />
                             </span>
@@ -1195,7 +1195,7 @@ function QuickAddContent() {
                             <motion.button
                                 key={key}
                                 type="button"
-                                className={cn(styles.categoryItem, category === key && styles.categoryItemActive)}
+                                className={cn(styles.categoryItem, category === key && styles.categoryItemActive)} data-glass="thin"
                                 whileTap={{ scale: 0.94 }}
                                 onClick={() => {
                                     setCategory(key);
@@ -1221,7 +1221,7 @@ function QuickAddContent() {
                         <button
                             key={member.id}
                             type="button"
-                            className={cn(styles.option, payerId === member.id && styles.optionActive)}
+                            className={cn(styles.option, payerId === member.id && styles.optionActive)} data-glass="thin"
                             onClick={() => { setPayerId(member.id); setSheet(null); }}
                         >
                             <Avatar name={member.name} image={member.image} size="md" />
@@ -1241,7 +1241,7 @@ function QuickAddContent() {
                         <button
                             key={key}
                             type="button"
-                            className={cn(styles.option, method === key && styles.optionActive)}
+                            className={cn(styles.option, method === key && styles.optionActive)} data-glass="thin"
                             onClick={() => { setMethod(key); setSheet(null); }}
                         >
                             <span className={styles.optionIcon}><PaymentIcon method={key} size={20} /></span>

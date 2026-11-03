@@ -159,11 +159,10 @@
 .hero {
     padding: 22px 16px 16px;
     border-radius: 28px;
-    color: #fff;
 }
 
 .hero p {
-    color: #fff;
+    color: var(--on-accent);
 }
 
 .heroLabel {

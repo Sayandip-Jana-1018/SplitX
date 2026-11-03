@@ -113,6 +113,8 @@ function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }
             dragConstraints={{ top: 0, bottom: 0, left: 0, right: 0 }}
             dragElastic={0.5}
             onDragEnd={handleDragEnd}
+            data-glass="thick"
+            data-glass-mode="css"
             style={{
                 pointerEvents: 'auto',
                 width: '100%',
@@ -120,10 +122,7 @@ function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }
                 alignItems: 'center',
                 gap: 12,
                 padding: '10px 10px 10px 12px',
-                borderRadius: 18,
-                background: 'var(--surface-popover)',
-                border: '1px solid var(--border-default)',
-                boxShadow: 'var(--shadow-lg)',
+                borderRadius: 26,
                 touchAction: 'none',
             }}
         >
@@ -141,7 +140,7 @@ function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }
             >
                 {ICONS[toast.type]}
             </span>
-            <span style={{ flex: 1, minWidth: 0, fontSize: 13.5, lineHeight: 1.4, fontWeight: 600, color: 'var(--fg-primary)' }}>
+            <span style={{ flex: 1, minWidth: 0, textAlign: 'center', fontSize: 13.5, lineHeight: 1.4, fontWeight: 600, color: 'var(--fg-primary)' }}>
                 {toast.message}
             </span>
             {toast.action && (
@@ -167,8 +166,8 @@ function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }
                 onClick={onDismiss}
                 aria-label="Dismiss"
                 style={{
-                    width: 28,
-                    height: 28,
+                    width: 32,
+                    height: 32,
                     borderRadius: '50%',
                     display: 'grid',
                     placeItems: 'center',

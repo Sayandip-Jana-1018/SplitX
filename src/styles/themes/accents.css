@@ -1,292 +1,180 @@
-/* ═══════════════════════════════════════════════════════════════
-   Accent palettes — full 50→950 scale per palette.
-   Applied via <html data-palette="…"> (set before first paint).
-   Legacy palette ids are mapped onto the curated set so saved
-   preferences keep working.
-   ═══════════════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════
+   One hue per palette: every colour in the app derives from --h, how vivid
+   it runs (--c) and how light a filled button is (--fill-l), so one choice
+   retints everything. The hues are the engine's (src/lib/glass/palette.ts);
+   tests/unit/glass/tokens.test.ts keeps the two in step.
+   Applied via <html data-palette="…">, set before first paint. Old palette
+   ids stay here so saved choices keep working.
+   ═══════════════════════════════════════ */
 
-/* ── Amethyst (default · violet) ── */
+@property --h { syntax: '<number>'; inherits: true; initial-value: 293; }
+@property --c { syntax: '<number>'; inherits: true; initial-value: 1; }
+@property --fill-l { syntax: '<number>'; inherits: true; initial-value: 0.58; }
+
+/* Amethyst */
 :root,
 [data-palette="amethyst-haze"],
 [data-palette="pastel-dreams"],
 [data-palette="lavender-mist"] {
-    --accent-50: #f5f3ff;
-    --accent-100: #ede9fe;
-    --accent-200: #ddd6fe;
-    --accent-300: #c4b5fd;
-    --accent-400: #a78bfa;
-    --accent-500: #8b5cf6;
-    --accent-600: #7c3aed;
-    --accent-700: #6d28d9;
-    --accent-800: #5b21b6;
-    --accent-900: #4c1d95;
-    --accent-950: #2e1065;
-    --accent-500-rgb: 139, 92, 246;
-    --fg-on-accent: #ffffff;
+    --h: 293;
+    --c: 1;
+    --fill-l: 0.54;
+    --on-accent: #ffffff;
+    --accent-500-rgb: 119, 76, 213;
 }
 
-/* ── Indigo ── */
+/* Indigo */
 [data-palette="cosmic-night"],
 [data-palette="midnight-indigo"] {
-    --accent-50: #eef2ff;
-    --accent-100: #e0e7ff;
-    --accent-200: #c7d2fe;
-    --accent-300: #a5b4fc;
-    --accent-400: #818cf8;
-    --accent-500: #6366f1;
-    --accent-600: #4f46e5;
-    --accent-700: #4338ca;
-    --accent-800: #3730a3;
-    --accent-900: #312e81;
-    --accent-950: #1e1b4b;
-    --accent-500-rgb: 99, 102, 241;
-    --fg-on-accent: #ffffff;
+    --h: 277;
+    --c: 1;
+    --fill-l: 0.54;
+    --on-accent: #ffffff;
+    --accent-500-rgb: 87, 88, 223;
 }
 
-/* ── Blue ── */
+/* Cobalt */
 [data-palette="bold-tech"] {
-    --accent-50: #eff6ff;
-    --accent-100: #dbeafe;
-    --accent-200: #bfdbfe;
-    --accent-300: #93c5fd;
-    --accent-400: #60a5fa;
-    --accent-500: #3b82f6;
-    --accent-600: #2563eb;
-    --accent-700: #1d4ed8;
-    --accent-800: #1e40af;
-    --accent-900: #1e3a8a;
-    --accent-950: #172554;
-    --accent-500-rgb: 59, 130, 246;
-    --fg-on-accent: #ffffff;
+    --h: 258;
+    --c: 1;
+    --fill-l: 0.53;
+    --on-accent: #ffffff;
+    --accent-500-rgb: 0, 100, 220;
 }
 
-/* ── Sky ── */
+/* Sky */
 [data-palette="sky-blue"] {
-    --accent-50: #f0f9ff;
-    --accent-100: #e0f2fe;
-    --accent-200: #bae6fd;
-    --accent-300: #7dd3fc;
-    --accent-400: #38bdf8;
-    --accent-500: #0ea5e9;
-    --accent-600: #0284c7;
-    --accent-700: #0369a1;
-    --accent-800: #075985;
-    --accent-900: #0c4a6e;
-    --accent-950: #082f49;
-    --accent-500-rgb: 14, 165, 233;
-    --fg-on-accent: #ffffff;
+    --h: 237;
+    --c: 0.9;
+    --fill-l: 0.77;
+    --on-accent: #06202f;
+    --accent-500-rgb: 0, 194, 255;
 }
 
-/* ── Cyan ── */
+/* Lagoon */
 [data-palette="ocean-breeze"] {
-    --accent-50: #ecfeff;
-    --accent-100: #cffafe;
-    --accent-200: #a5f3fc;
-    --accent-300: #67e8f9;
-    --accent-400: #22d3ee;
-    --accent-500: #06b6d4;
-    --accent-600: #0891b2;
-    --accent-700: #0e7490;
-    --accent-800: #155e75;
-    --accent-900: #164e63;
-    --accent-950: #083344;
-    --accent-500-rgb: 6, 182, 212;
-    --fg-on-accent: #ffffff;
+    --h: 212;
+    --c: 0.85;
+    --fill-l: 0.79;
+    --on-accent: #042229;
+    --accent-500-rgb: 0, 213, 249;
 }
 
-/* ── Teal ── */
+/* Teal */
 [data-palette="perpetuity"] {
-    --accent-50: #f0fdfa;
-    --accent-100: #ccfbf1;
-    --accent-200: #99f6e4;
-    --accent-300: #5eead4;
-    --accent-400: #2dd4bf;
-    --accent-500: #14b8a6;
-    --accent-600: #0d9488;
-    --accent-700: #0f766e;
-    --accent-800: #115e59;
-    --accent-900: #134e4a;
-    --accent-950: #042f2e;
-    --accent-500-rgb: 20, 184, 166;
-    --fg-on-accent: #ffffff;
+    --h: 182;
+    --c: 0.8;
+    --fill-l: 0.79;
+    --on-accent: #03241f;
+    --accent-500-rgb: 0, 219, 194;
 }
 
-/* ── Emerald ── */
+/* Emerald */
 [data-palette="emerald-glow"] {
-    --accent-50: #ecfdf5;
-    --accent-100: #d1fae5;
-    --accent-200: #a7f3d0;
-    --accent-300: #6ee7b7;
-    --accent-400: #34d399;
-    --accent-500: #10b981;
-    --accent-600: #059669;
-    --accent-700: #047857;
-    --accent-800: #065f46;
-    --accent-900: #064e3b;
-    --accent-950: #022c22;
-    --accent-500-rgb: 16, 185, 129;
-    --fg-on-accent: #ffffff;
+    --h: 160;
+    --c: 0.85;
+    --fill-l: 0.79;
+    --on-accent: #03241a;
+    --accent-500-rgb: 42, 219, 148;
 }
 
-/* ── Lime ── */
+/* Lime */
 [data-palette="lime-fusion"] {
-    --accent-50: #f7fee7;
-    --accent-100: #ecfccb;
-    --accent-200: #d9f99d;
-    --accent-300: #bef264;
-    --accent-400: #a3e635;
-    --accent-500: #84cc16;
-    --accent-600: #65a30d;
-    --accent-700: #4d7c0f;
-    --accent-800: #3f6212;
-    --accent-900: #365314;
-    --accent-950: #1a2e05;
-    --accent-500-rgb: 132, 204, 22;
-    --fg-on-accent: #1a2e05;
+    --h: 128;
+    --c: 0.95;
+    --fill-l: 0.82;
+    --on-accent: #162407;
+    --accent-500-rgb: 160, 218, 62;
 }
 
-/* ── Amber ── */
+/* Amber */
 [data-palette="amber-minimal"] {
-    --accent-50: #fffbeb;
-    --accent-100: #fef3c7;
-    --accent-200: #fde68a;
-    --accent-300: #fcd34d;
-    --accent-400: #fbbf24;
-    --accent-500: #f59e0b;
-    --accent-600: #d97706;
-    --accent-700: #b45309;
-    --accent-800: #92400e;
-    --accent-900: #78350f;
-    --accent-950: #451a03;
-    --accent-500-rgb: 245, 158, 11;
-    --fg-on-accent: #451a03;
+    --h: 72;
+    --c: 0.9;
+    --fill-l: 0.82;
+    --on-accent: #2b1b02;
+    --accent-500-rgb: 255, 173, 0;
 }
 
-/* ── Orange ── */
+/* Sunset */
 [data-palette="solar-dusk"],
 [data-palette="tangerine"] {
-    --accent-50: #fff7ed;
-    --accent-100: #ffedd5;
-    --accent-200: #fed7aa;
-    --accent-300: #fdba74;
-    --accent-400: #fb923c;
-    --accent-500: #f97316;
-    --accent-600: #ea580c;
-    --accent-700: #c2410c;
-    --accent-800: #9a3412;
-    --accent-900: #7c2d12;
-    --accent-950: #431407;
-    --accent-500-rgb: 249, 115, 22;
-    --fg-on-accent: #ffffff;
+    --h: 45;
+    --c: 1;
+    --fill-l: 0.7;
+    --on-accent: #2a1002;
+    --accent-500-rgb: 254, 106, 0;
 }
 
-/* ── Rose ── */
+/* Rose */
 [data-palette="cherry-blossom"],
 [data-palette="warm-coral"] {
-    --accent-50: #fff1f2;
-    --accent-100: #ffe4e6;
-    --accent-200: #fecdd3;
-    --accent-300: #fda4af;
-    --accent-400: #fb7185;
-    --accent-500: #f43f5e;
-    --accent-600: #e11d48;
-    --accent-700: #be123c;
-    --accent-800: #9f1239;
-    --accent-900: #881337;
-    --accent-950: #4c0519;
-    --accent-500-rgb: 244, 63, 94;
-    --fg-on-accent: #ffffff;
+    --h: 17;
+    --c: 1;
+    --fill-l: 0.54;
+    --on-accent: #ffffff;
+    --accent-500-rgb: 200, 31, 66;
 }
 
-/* ── Pink ── */
+/* Blush */
 [data-palette="quantum-rose"] {
-    --accent-50: #fdf2f8;
-    --accent-100: #fce7f3;
-    --accent-200: #fbcfe8;
-    --accent-300: #f9a8d4;
-    --accent-400: #f472b6;
-    --accent-500: #ec4899;
-    --accent-600: #db2777;
-    --accent-700: #be185d;
-    --accent-800: #9d174d;
-    --accent-900: #831843;
-    --accent-950: #500724;
-    --accent-500-rgb: 236, 72, 153;
-    --fg-on-accent: #ffffff;
+    --h: 354;
+    --c: 1;
+    --fill-l: 0.54;
+    --on-accent: #ffffff;
+    --accent-500-rgb: 190, 35, 118;
 }
 
-/* ── Fuchsia ── */
+/* Orchid */
 [data-palette="cyberpunk"] {
-    --accent-50: #fdf4ff;
-    --accent-100: #fae8ff;
-    --accent-200: #f5d0fe;
-    --accent-300: #f0abfc;
-    --accent-400: #e879f9;
-    --accent-500: #d946ef;
-    --accent-600: #c026d3;
-    --accent-700: #a21caf;
-    --accent-800: #86198f;
-    --accent-900: #701a75;
-    --accent-950: #4a044e;
-    --accent-500-rgb: 217, 70, 239;
-    --fg-on-accent: #ffffff;
+    --h: 322;
+    --c: 1;
+    --fill-l: 0.53;
+    --on-accent: #ffffff;
+    --accent-500-rgb: 158, 52, 174;
 }
 
-/* ── Copper (warm bronze) ── */
+/* Copper */
 [data-palette="copper-glow"] {
-    --accent-50: #fdf5ef;
-    --accent-100: #f9e7d6;
-    --accent-200: #f0c9a9;
-    --accent-300: #e4a578;
-    --accent-400: #d6824f;
-    --accent-500: #c06835;
-    --accent-600: #a2522a;
-    --accent-700: #833f24;
-    --accent-800: #6a3421;
-    --accent-900: #582d1e;
-    --accent-950: #31160d;
-    --accent-500-rgb: 192, 104, 53;
-    --fg-on-accent: #ffffff;
+    --h: 50;
+    --c: 0.62;
+    --fill-l: 0.52;
+    --on-accent: #ffffff;
+    --accent-500-rgb: 160, 80, 25;
 }
 
-/* ── Merlot (deep wine) ── */
+/* Merlot */
 [data-palette="merlot-night"] {
-    --accent-50: #fdf2f4;
-    --accent-100: #fbe3e9;
-    --accent-200: #f6c4d2;
-    --accent-300: #ec97b0;
-    --accent-400: #dc6188;
-    --accent-500: #c23a67;
-    --accent-600: #a62851;
-    --accent-700: #8a1e42;
-    --accent-800: #731c3a;
-    --accent-900: #5f1a33;
-    --accent-950: #380a19;
-    --accent-500-rgb: 194, 58, 103;
-    --fg-on-accent: #ffffff;
+    --h: 8;
+    --c: 0.78;
+    --fill-l: 0.5;
+    --on-accent: #ffffff;
+    --accent-500-rgb: 168, 48, 82;
 }
 
-/* ── Graphite (monochrome stealth) ── */
+/* Graphite */
 [data-palette="graphite-mono"] {
-    --accent-50: #f6f7f9;
-    --accent-100: #eceef2;
-    --accent-200: #d9dde4;
-    --accent-300: #b6bdca;
-    --accent-400: #8b95a7;
-    --accent-500: #66718a;
-    --accent-600: #515a70;
-    --accent-700: #43495b;
-    --accent-800: #3a3f4d;
-    --accent-900: #333743;
-    --accent-950: #1c1f27;
-    --accent-500-rgb: 102, 113, 138;
-    --fg-on-accent: #ffffff;
+    --h: 265;
+    --c: 0.16;
+    --fill-l: 0.46;
+    --on-accent: #ffffff;
+    --accent-500-rgb: 79, 88, 106;
 }
 
-/* ── Contrast tuning for bright palettes on light canvas ── */
-[data-theme="light"][data-palette="lime-fusion"],
-[data-theme="light"][data-palette="amber-minimal"],
-[data-theme="light"][data-palette="ocean-breeze"],
-[data-theme="light"][data-palette="sky-blue"] {
-    --accent-strong: var(--accent-700);
+/* The scale pages already use, now all one hue. 500 is the filled colour itself. */
+:root,
+[data-palette] {
+    --accent-50: oklch(0.97 calc(0.02 * var(--c)) var(--h));
+    --accent-100: oklch(0.94 calc(0.04 * var(--c)) var(--h));
+    --accent-200: oklch(0.89 calc(0.08 * var(--c)) var(--h));
+    --accent-300: oklch(min(0.93, calc(var(--fill-l) + 0.2)) calc(0.12 * var(--c)) var(--h));
+    --accent-400: oklch(min(0.9, calc(var(--fill-l) + 0.1)) calc(0.16 * var(--c)) var(--h));
+    --accent-500: oklch(var(--fill-l) calc(0.2 * var(--c)) var(--h));
+    --accent-600: oklch(calc(var(--fill-l) - 0.06) calc(0.2 * var(--c)) var(--h));
+    --accent-700: oklch(calc(var(--fill-l) - 0.13) calc(0.18 * var(--c)) var(--h));
+    --accent-800: oklch(calc(var(--fill-l) - 0.2) calc(0.15 * var(--c)) var(--h));
+    --accent-900: oklch(calc(var(--fill-l) - 0.27) calc(0.12 * var(--c)) var(--h));
+    --accent-950: oklch(calc(var(--fill-l) - 0.34) calc(0.09 * var(--c)) var(--h));
+    --fg-on-accent: var(--on-accent);
+    --accent-fill: var(--accent-500);
 }

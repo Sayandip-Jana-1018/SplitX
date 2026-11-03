@@ -68,9 +68,9 @@ export function getAvatarHue(name: string): number {
     return Math.abs(hash) % 360;
 }
 
-/** Generate a stable pastel color for avatars */
+/** A stable depth of the theme's one colour, so people still look different */
 export function getAvatarColor(name: string): string {
-    return `hsl(${getAvatarHue(name)}, 70%, 60%)`;
+    return `oklch(${[0.38, 0.44, 0.5, 0.56][getAvatarHue(name) % 4]} calc(0.15 * var(--c)) var(--h))`;
 }
 
 /** Time-of-day greeting for an hour (0-23) */

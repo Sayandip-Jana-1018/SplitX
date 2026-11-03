@@ -880,7 +880,7 @@ export default function SettlementGraph({
                                     position: 'absolute',
                                     inset: -12,
                                     borderRadius: '50%',
-                                    background: `radial-gradient(circle, ${color}30 0%, ${color}0 74%)`,
+                                    background: `radial-gradient(circle, color-mix(in oklab, ${color} 22%, transparent) 0%, transparent 74%)`,
                                     opacity: isDragging ? 0.95 : 0.8,
                                     pointerEvents: 'none',
                                 }}

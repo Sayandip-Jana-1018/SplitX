@@ -30,7 +30,6 @@ import ThemeSelector from '@/components/features/ThemeSelector';
 import Avatar from '@/components/ui/Avatar';
 import BrandMark from '@/components/ui/BrandMark';
 import OfflineIndicator from '@/components/ui/OfflineIndicator';
-import Ambient from '@/components/ui/Ambient';
 import { IconButton } from '@/components/ui/kit';
 import AppTopBar from './AppTopBar';
 import DbKeepAlive from '@/components/providers/DbKeepAlive';
@@ -242,10 +241,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     const dockHidden = keyboardOpen && coarsePointer;
 
     useEffect(() => {
-        document.documentElement.dataset.motion = mode;
-    }, [mode]);
-
-    useEffect(() => {
         [...PRIMARY_NAV, ...MORE_NAV].forEach((item) => router.prefetch(item.href));
         router.prefetch('/transactions/new');
     }, [router]);
@@ -296,7 +291,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
     return (
         <div className={cn(styles.shell, isPrintRoute && styles.printShell)}>
-            {showChrome && <Ambient variant="subtle" glyphs={false} />}
             {showChrome && <a className={styles.skipLink} href="#workspace">Skip to content</a>}
             {showChrome && <OfflineIndicator />}
             <DbKeepAlive />
@@ -324,6 +318,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                         aria-label="Navigation menu"
                         tabIndex={-1}
                         data-focus-dialog
+                        data-glass="thick"
+                        data-glass-mode="css"
                         className={styles.drawer}
                         initial={{ x: '-104%' }}
                         animate={{ x: 0 }}
@@ -372,15 +368,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                                 )}
                                 {!meta.composer && (
                                     <IconButton
-                                        icon={(
-                                            <motion.span
-                                                className={styles.liveIcon}
-                                                animate={{ scale: [1, 1.16, 1], rotate: [0, 8, -6, 0] }}
-                                                transition={{ duration: 3.2, repeat: Infinity, repeatDelay: 2.4, ease: 'easeInOut' }}
-                                            >
-                                                <Sparkles size={18} />
-                                            </motion.span>
-                                        )}
+                                        icon={<Sparkles size={18} />}
                                         label="Ask SplitX AI"
                                         onClick={() => setAssistantOpen(true)}
                                         tour="ai"
@@ -437,7 +425,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             {/* ── Floating dock (phones & tablets) ── */}
             {showDock && (
                 <nav className={cn(styles.dock, dockHidden && styles.dockHidden)} aria-label="Primary">
-                    <div className={styles.dockInner}>
+                    <div className={styles.dockInner} data-glass="thin" data-glass-mode="css">
                         {DOCK_ITEMS.map((item) => {
                             const Icon = item.icon;
                             if (item.primary) {
@@ -446,17 +434,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                                         key={item.href}
                                         href={item.href}
                                         className={styles.dockAdd}
+                                        data-glass="accent"
                                         aria-label="Add an expense"
                                         data-tour={item.href}
                                         onClick={() => haptics.medium()}
                                     >
-                                        <motion.span
-                                            className={styles.dockAddGlyph}
-                                            animate={{ y: [0, -3, 0], scale: [1, 1.08, 1] }}
-                                            transition={{ duration: 2.8, repeat: Infinity, ease: 'easeInOut' }}
-                                        >
-                                            <Icon size={24} strokeWidth={2.6} />
-                                        </motion.span>
+                                        <Icon size={24} strokeWidth={2.4} />
                                     </Link>
                                 );
                             }
@@ -474,7 +457,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                                         <motion.span
                                             layoutId="dock-active-pill"
                                             className={styles.dockPill}
-                                            transition={{ type: 'spring', stiffness: 520, damping: 38 }}
+                                            data-glass="clear"
+                                            transition={{ type: 'spring', stiffness: 420, damping: 30 }}
                                         />
                                     )}
                                     <motion.span
@@ -503,7 +487,7 @@ function PageHeading({ heading, onBack }: { heading: DesktopHeading; onBack: () 
     return (
         <div className={styles.pageHeading}>
             {heading.backLabel && (
-                <button type="button" className={styles.pageBack} onClick={onBack}>
+                <button type="button" className={styles.pageBack} onClick={onBack} data-glass="thin">
                     <ArrowLeft size={15} />
                     {heading.backLabel}
                 </button>
@@ -550,7 +534,6 @@ function NavPanel({
             <button type="button" className={styles.searchField} onClick={onSearch}>
                 <Search size={17} />
                 <span>Search groups & expenses</span>
-                <kbd className={styles.kbd}>⌘K</kbd>
             </button>
 
             <nav className={styles.navList} aria-label="Main navigation">
@@ -616,7 +599,9 @@ function NavItem({
                 <Icon size={18} strokeWidth={active ? 2.3 : 1.9} />
             </span>
             <span className={styles.navText}>{item.label}</span>
-            {active && <ChevronRight size={16} className={styles.navChevron} />}
+            <span className={styles.navChevronSlot}>
+                {active && <ChevronRight size={16} className={styles.navChevron} />}
+            </span>
         </Link>
     );
 }

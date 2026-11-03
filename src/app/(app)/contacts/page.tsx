@@ -545,21 +545,21 @@ export default function ContactsPage() {
                         <div className={styles.shareGrid}>
                             <button
                                 type="button"
-                                className={styles.shareOption}
+                                className={styles.shareOption} data-glass="thin"
                                 onClick={() => window.open(`https://wa.me/${digits}?text=${encodeURIComponent(shareData.message)}`, '_blank')}
                             >
                                 <span className={styles.shareIcon}><MessageCircle size={18} /></span>WhatsApp
                             </button>
                             <button
                                 type="button"
-                                className={styles.shareOption}
+                                className={styles.shareOption} data-glass="thin"
                                 onClick={() => window.open(`sms:${digits}?body=${encodeURIComponent(shareData.message)}`, '_blank')}
                             >
                                 <span className={styles.shareIcon}><MessageSquare size={18} /></span>SMS
                             </button>
                             <button
                                 type="button"
-                                className={styles.shareOption}
+                                className={styles.shareOption} data-glass="thin"
                                 onClick={() => window.open(`mailto:${shareFor?.email ?? ''}?subject=${encodeURIComponent('Join me on SplitX')}&body=${encodeURIComponent(shareData.message)}`, '_blank')}
                             >
                                 <span className={styles.shareIcon}><Mail size={18} /></span>Email

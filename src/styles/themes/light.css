@@ -1,139 +1,131 @@
-/* ═══════════════════════════════════════════════════════════════
-   Light theme — calm, cool neutrals with a whisper of the accent hue.
+/* ═══════════════════════════════════════
+   Light mode: pale colour behind milky glass. Every colour is one hue at
+   some depth (themes/accents.css). Surfaces let the liquid show through,
+   so nothing here may be opaque unless it has to be read over a moving
+   page, such as a popover.
    Applied when <html data-theme="light">
-   ═══════════════════════════════════════════════════════════════ */
+   ═══════════════════════════════════════ */
 
 [data-theme="light"] {
     color-scheme: light;
 
     /* ── Canvas & surfaces ── */
-    --bg-primary: color-mix(in oklab, var(--accent-500) 3%, #f3f4f7);
-    --bg-secondary: #fafafc;
-    --bg-tertiary: color-mix(in oklab, var(--accent-500) 4%, #eceef2);
-    --bg-elevated: #ffffff;
-    --bg-sunken: color-mix(in oklab, var(--accent-500) 3%, #e9ebf0);
-    --bg-muted: #eef0f4;
-    --bg-overlay: rgba(10, 12, 18, 0.5);
-    --scrim: rgba(12, 14, 22, 0.34);
-    --voice-overlay: rgba(243, 244, 247, 0.94);
+    --bg-primary: oklch(0.955 calc(0.022 * var(--c)) var(--h));
+    --bg-secondary: rgba(255, 255, 255, 0.46);
+    --bg-tertiary: oklch(0.9 calc(0.04 * var(--c)) var(--h) / 0.6);
+    --bg-elevated: rgba(255, 255, 255, 0.82);
+    --bg-sunken: oklch(0.88 calc(0.04 * var(--c)) var(--h) / 0.5);
+    --bg-muted: rgba(255, 255, 255, 0.4);
+    --bg-overlay: oklch(0.25 calc(0.05 * var(--c)) var(--h) / 0.42);
+    --scrim: oklch(0.25 calc(0.05 * var(--c)) var(--h) / 0.32);
+    --voice-overlay: oklch(0.95 calc(0.022 * var(--c)) var(--h) / 0.94);
 
-    --surface-card: #ffffff;
-    --surface-card-hover: #fcfcfd;
-    --surface-panel: #ffffff;
-    --surface-popover: #ffffff;
-    --surface-input: color-mix(in oklab, var(--accent-500) 2%, #f5f6f9);
-    --surface-input-hover: #eff1f5;
-    --surface-sunken: var(--bg-sunken);
+    --surface-card: rgba(255, 255, 255, 0.54);
+    --surface-card-hover: rgba(255, 255, 255, 0.68);
+    --surface-panel: rgba(255, 255, 255, 0.72);
+    --surface-popover: rgba(255, 255, 255, 0.95);
+    --surface-input: rgba(255, 255, 255, 0.62);
+    --surface-input-hover: rgba(255, 255, 255, 0.76);
+    --surface-sunken: oklch(0.88 calc(0.04 * var(--c)) var(--h) / 0.4);
     --surface-primary: var(--surface-card);
-    --surface-secondary: #f2f3f7;
-    --surface-elevated: #ffffff;
+    --surface-secondary: rgba(255, 255, 255, 0.42);
+    --surface-elevated: rgba(255, 255, 255, 0.84);
     --bg-surface: var(--surface-card);
 
-    /* Legacy "glass" tokens — solid for crisp, fast rendering */
-    --bg-glass: #ffffff;
-    --bg-glass-strong: #ffffff;
-    --bg-glass-subtle: rgba(255, 255, 255, 0.72);
-
     /* Chrome */
-    --header-surface: color-mix(in srgb, var(--bg-primary) 80%, transparent);
-    --dock-surface: rgba(255, 255, 255, 0.84);
-    --drawer-surface: #ffffff;
+    --header-surface: rgba(255, 255, 255, 0.42);
+    --dock-surface: rgba(255, 255, 255, 0.58);
+    --drawer-surface: rgba(255, 255, 255, 0.94);
     --nav-surface: var(--dock-surface);
 
     /* ── Text ── */
-    --fg-primary: #0d0f14;
-    --fg-secondary: #3d4250;
-    --fg-tertiary: #5d6272;
-    --fg-muted: #8b909e;
+    --fg-primary: oklch(0.2 calc(0.05 * var(--c)) var(--h));
+    --fg-secondary: oklch(0.28 calc(0.05 * var(--c)) var(--h) / 0.9);
+    --fg-tertiary: oklch(0.34 calc(0.05 * var(--c)) var(--h) / 0.82);
+    --fg-muted: oklch(0.38 calc(0.05 * var(--c)) var(--h) / 0.76);
     --fg-inverse: #ffffff;
-    --fg-primary-rgb: 13, 15, 20;
+    --fg-primary-rgb: 30, 24, 54;
 
     /* ── Borders ── */
-    --border-default: rgba(13, 15, 20, 0.08);
-    --border-subtle: rgba(13, 15, 20, 0.05);
-    --border-strong: rgba(13, 15, 20, 0.14);
-    --border-glass: rgba(13, 15, 20, 0.07);
+    --border-default: oklch(0.25 calc(0.04 * var(--c)) var(--h) / 0.16);
+    --border-subtle: oklch(0.25 calc(0.04 * var(--c)) var(--h) / 0.1);
+    --border-strong: oklch(0.25 calc(0.04 * var(--c)) var(--h) / 0.26);
     --border-primary: var(--border-default);
     --border-secondary: var(--border-default);
     --border-tertiary: var(--border-subtle);
-    --border-focus: var(--accent-500);
+    --border-focus: var(--accent-strong);
 
     /* ── Accent semantics ── */
     --accent: var(--accent-500);
-    --accent-strong: var(--accent-600);
-    --accent-soft: rgba(var(--accent-500-rgb), 0.1);
-    --accent-softer: rgba(var(--accent-500-rgb), 0.06);
-    --accent-ring: rgba(var(--accent-500-rgb), 0.28);
+    --accent-strong: oklch(0.45 calc(0.2 * var(--c)) var(--h));
+    --accent-soft: rgba(var(--accent-500-rgb), 0.2);
+    --accent-softer: rgba(var(--accent-500-rgb), 0.12);
+    --accent-ring: rgba(var(--accent-500-rgb), 0.45);
 
-    /* ── Status ── */
-    --color-success: #059669;
-    --color-success-solid: #10b981;
-    --color-success-bg: #ecfdf5;
-    --color-success-border: #a7f3d0;
-    --success-rgb: 16, 185, 129;
-    --color-error: #e11d48;
-    --color-error-solid: #f43f5e;
-    --color-error-bg: #fff1f2;
-    --color-error-border: #fecdd3;
-    --danger-rgb: 244, 63, 94;
-    --color-warning: #b45309;
-    --color-warning-solid: #f59e0b;
-    --color-warning-bg: #fffbeb;
-    --color-warning-border: #fde68a;
-    --color-info: #2563eb;
-    --color-info-bg: #eff6ff;
-    --color-info-border: #bfdbfe;
-    --money-in: var(--color-success);
-    --money-out: var(--color-error);
+    /* ── Status: one colour, told apart by brightness and words. Red is kept for errors and for what can't be undone. ── */
+    --color-success: oklch(0.42 calc(0.17 * var(--c)) var(--h));
+    --color-success-solid: var(--accent-500);
+    --color-success-bg: var(--accent-soft);
+    --color-success-border: rgba(var(--accent-500-rgb), 0.4);
+    --success-rgb: var(--accent-500-rgb);
+    --color-error: #c81e3f;
+    --color-error-solid: #e11d48;
+    --color-error-bg: rgba(225, 29, 72, 0.12);
+    --color-error-border: rgba(225, 29, 72, 0.32);
+    --danger-rgb: 225, 29, 72;
+    --color-warning: oklch(0.38 calc(0.15 * var(--c)) var(--h));
+    --color-warning-solid: var(--accent-500);
+    --color-warning-bg: var(--accent-soft);
+    --color-warning-border: rgba(var(--accent-500-rgb), 0.4);
+    --color-info: var(--accent-strong);
+    --color-info-bg: var(--accent-softer);
+    --color-info-border: rgba(var(--accent-500-rgb), 0.32);
+    --money-in: oklch(0.42 calc(0.17 * var(--c)) var(--h));
+    --money-out: oklch(0.3 calc(0.05 * var(--c)) var(--h) / 0.88);
 
     /* ── Scrollbar / skeleton ── */
     --scrollbar-bg: transparent;
-    --scrollbar-thumb: rgba(13, 15, 20, 0.16);
-    --scrollbar-thumb-hover: rgba(13, 15, 20, 0.28);
-    --skeleton-base: #eceef2;
-    --skeleton-shine: #f8f9fb;
+    --scrollbar-thumb: oklch(0.25 calc(0.04 * var(--c)) var(--h) / 0.2);
+    --scrollbar-thumb-hover: oklch(0.25 calc(0.04 * var(--c)) var(--h) / 0.34);
+    --skeleton-base: rgba(255, 255, 255, 0.5);
+    --skeleton-shine: rgba(255, 255, 255, 0.85);
 
     /* ── Elevation ── */
-    --shadow-xs: 0 1px 2px rgba(16, 18, 27, 0.05);
-    --shadow-sm: 0 1px 2px rgba(16, 18, 27, 0.04), 0 2px 8px rgba(16, 18, 27, 0.05);
-    --shadow-md: 0 2px 4px rgba(16, 18, 27, 0.04), 0 8px 24px rgba(16, 18, 27, 0.07);
-    --shadow-lg: 0 4px 8px rgba(16, 18, 27, 0.04), 0 16px 40px rgba(16, 18, 27, 0.1);
-    --shadow-xl: 0 8px 16px rgba(16, 18, 27, 0.06), 0 24px 64px rgba(16, 18, 27, 0.14);
-    --shadow-2xl: 0 32px 80px rgba(16, 18, 27, 0.22);
-    --shadow-card: 0 1px 2px rgba(16, 18, 27, 0.04), 0 8px 22px -10px rgba(16, 18, 27, 0.1);
-    --shadow-card-hover: 0 2px 4px rgba(16, 18, 27, 0.05), 0 18px 38px -14px rgba(16, 18, 27, 0.18);
+    --shadow-xs: 0 1px 2px oklch(0.3 calc(0.08 * var(--c)) var(--h) / 0.08);
+    --shadow-sm: 0 1px 2px oklch(0.3 calc(0.08 * var(--c)) var(--h) / 0.07), 0 2px 8px oklch(0.3 calc(0.08 * var(--c)) var(--h) / 0.08);
+    --shadow-md: 0 2px 4px oklch(0.3 calc(0.08 * var(--c)) var(--h) / 0.07), 0 8px 24px oklch(0.3 calc(0.08 * var(--c)) var(--h) / 0.12);
+    --shadow-lg: 0 4px 8px oklch(0.3 calc(0.08 * var(--c)) var(--h) / 0.07), 0 16px 40px oklch(0.3 calc(0.08 * var(--c)) var(--h) / 0.16);
+    --shadow-xl: 0 8px 16px oklch(0.3 calc(0.08 * var(--c)) var(--h) / 0.09), 0 24px 64px oklch(0.3 calc(0.08 * var(--c)) var(--h) / 0.2);
+    --shadow-2xl: 0 32px 80px oklch(0.3 calc(0.08 * var(--c)) var(--h) / 0.28);
+    --shadow-card: 0 14px 34px oklch(0.3 calc(0.08 * var(--c)) var(--h) / 0.12);
+    --shadow-card-hover: 0 18px 40px oklch(0.3 calc(0.08 * var(--c)) var(--h) / 0.18);
     --shadow-glow: 0 8px 24px -6px rgba(var(--accent-500-rgb), 0.45);
     --shadow-glow-lg: 0 16px 40px -8px rgba(var(--accent-500-rgb), 0.5);
     --shadow-glow-sm: 0 4px 14px -4px rgba(var(--accent-500-rgb), 0.4);
-    --shadow-dock: 0 1px 0 rgba(255, 255, 255, 0.9) inset, 0 10px 30px -8px rgba(16, 18, 27, 0.18), 0 2px 6px rgba(16, 18, 27, 0.05);
-}
+    --shadow-dock: 0 14px 34px oklch(0.3 calc(0.08 * var(--c)) var(--h) / 0.16);
 
-/* ── Liquid glass ── */
-[data-theme="light"] {
-    --glass-bg: linear-gradient(152deg, rgba(255, 255, 255, 0.86) 0%, rgba(255, 255, 255, 0.62) 52%, rgba(255, 255, 255, 0.78) 100%);
-    --glass-bg-strong: linear-gradient(152deg, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.84));
-    --glass-border: rgba(255, 255, 255, 0.9);
+    /* ── Liquid glass ── */
+    --glass-bg: rgba(255, 255, 255, 0.54);
+    --glass-bg-strong: rgba(255, 255, 255, 0.76);
+    --glass-pearl: rgba(255, 255, 255, 0.86);
+    --glass-tinted: oklch(0.86 calc(0.09 * var(--c)) var(--h) / 0.72);
+    --glass-rim: rgba(255, 255, 255, 0.95);
+    --glass-border: rgba(255, 255, 255, 0.8);
+    --border-glass: var(--glass-border);
     --glass-sheen: rgba(255, 255, 255, 0.75);
-    --glass-tint: color-mix(in oklab, var(--accent-500) 7%, transparent);
-    --glass-shadow:
-        0 24px 48px -28px rgba(16, 18, 27, 0.34),
-        0 8px 18px -12px rgba(16, 18, 27, 0.14);
-    --glass-inset:
-        inset 0 1px 0 rgba(255, 255, 255, 0.95),
-        inset 0 -1px 0 rgba(16, 18, 27, 0.05);
-}
-
-/* ── Inner edge light that gives flat surfaces depth without a blur ── */
-[data-theme="light"] {
-    --surface-inset:
-        inset 0 1px 0 rgba(255, 255, 255, 0.92),
-        inset 0 -1px 0 rgba(16, 18, 27, 0.035);
-}
-
-/* Legacy aliases point at the liquid material so older surfaces inherit it */
-[data-theme="light"] {
+    --glass-tint: rgba(var(--accent-500-rgb), 0.08);
+    --glass-shadow: 0 14px 34px oklch(0.3 calc(0.08 * var(--c)) var(--h) / 0.16);
+    --glass-inset: inset 0 1px 1px rgba(255, 255, 255, 0.7);
+    --surface-inset: inset 0 1px 1px rgba(255, 255, 255, 0.6);
     --bg-glass: var(--glass-bg);
     --bg-glass-strong: var(--glass-bg-strong);
     --bg-glass-subtle: var(--glass-bg);
-    --border-glass: var(--glass-border);
+
+    /* Words sitting straight on the liquid, whatever passes behind them */
+    --ink-on-wall-shadow: 0 1px 14px rgba(255, 255, 255, 0.55);
+
+    /* The wall before the shader's first frame, and whenever there is no shader */
+    --wall-1: oklch(0.78 calc(0.14 * var(--c)) var(--h));
+    --wall-2: oklch(0.84 calc(0.1 * var(--c)) var(--h));
+    --wall-3: oklch(0.7 calc(0.17 * var(--c)) var(--h));
 }

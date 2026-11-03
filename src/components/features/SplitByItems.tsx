@@ -368,7 +368,7 @@ export default function SplitByItems({
                                                     {/* Status Icon */}
                                                     <div style={{
                                                         width: 40, height: 40, borderRadius: '12px',
-                                                        background: assigned.size > 0 ? 'rgba(var(--accent-500-rgb), 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                                                        background: assigned.size > 0 ? 'rgba(var(--accent-500-rgb), 0.1)' : 'rgba(var(--danger-rgb), 0.1)',
                                                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                                                         color: assigned.size > 0 ? 'var(--accent-500)' : 'var(--color-error)',
                                                         flexShrink: 0
@@ -623,7 +623,7 @@ export default function SplitByItems({
                                             <span role="status" style={{
                                                 marginTop: 6, maxWidth: 360, textAlign: 'center',
                                                 color: 'var(--color-warning)', fontSize: '13px', fontWeight: 600,
-                                                background: 'rgba(245, 158, 11, 0.1)', padding: '4px 10px', borderRadius: 8,
+                                                background: 'rgba(var(--accent-500-rgb), 0.1)', padding: '4px 10px', borderRadius: 8,
                                             }}>
                                                 The items and taxes come to {formatCurrency(split.itemsTotal + split.taxTotal)}, but the bill
                                                 says {formatCurrency(split.total)}. Check the items before saving.

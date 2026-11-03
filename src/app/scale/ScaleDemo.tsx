@@ -132,7 +132,7 @@ export default function ScaleDemo() {
                 </p>
             </header>
 
-            <section className={styles.card} aria-labelledby="size-label">
+            <section className={styles.card} data-glass="reg" aria-labelledby="size-label">
                 <div className={styles.sizeRow}>
                     <label id="size-label" htmlFor="group-size" className={styles.label}>
                         Group size
@@ -165,7 +165,7 @@ export default function ScaleDemo() {
             </section>
 
             {plan && (
-                <section className={styles.card} aria-live="polite">
+                <section className={styles.card} data-glass="reg" aria-live="polite">
                     <p className={styles.context}>
                         {whole.format(plan.people)} people{SEPARATOR}
                         {whole.format(plan.expenses)} expenses{SEPARATOR}
@@ -199,7 +199,7 @@ export default function ScaleDemo() {
                 </section>
             )}
 
-            <section className={styles.card} aria-labelledby="pods-title">
+            <section className={styles.card} data-glass="reg" aria-labelledby="pods-title">
                 <h2 id="pods-title" className={styles.subtitle}>
                     Servers that answered you
                 </h2>

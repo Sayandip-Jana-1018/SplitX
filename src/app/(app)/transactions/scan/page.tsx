@@ -407,7 +407,7 @@ function ScanReceipt() {
 
                         <ol className={styles.steps}>
                             {STEPS.map((step, index) => (
-                                <li key={step.title} className={styles.step}>
+                                <li key={step.title} className={styles.step} data-glass="thin">
                                     <span className={styles.stepIcon}><step.Icon size={16} /></span>
                                     <span className={styles.stepText}>
                                         <strong>{index + 1}. {step.title}</strong>
@@ -439,7 +439,7 @@ function ScanReceipt() {
                 {/* ── Reading ── */}
                 {state === 'loading' && (
                     <motion.div key="loading" className={styles.stack} {...fade}>
-                        <div className={styles.scanCard}>
+                        <div className={styles.scanCard} data-glass="reg">
                             {preview && (
                                 <div className={styles.previewFrame}>
                                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -465,7 +465,7 @@ function ScanReceipt() {
                 {/* ── Review ── */}
                 {state === 'result' && hasResult && (
                     <motion.div key="result" className={styles.stack} {...fade}>
-                        <div className={styles.resultHead}>
+                        <div className={styles.resultHead} data-glass="reg">
                             {preview ? (
                                 /* eslint-disable-next-line @next/next/no-img-element */
                                 <img src={preview} alt="" className={styles.thumb} />
@@ -489,7 +489,7 @@ function ScanReceipt() {
                         )}
 
                         {mode === 'advanced' && advanced && (
-                            <div className={styles.receipt}>
+                            <div className={styles.receipt} data-glass="reg">
                                 <div className={styles.receiptTop}>
                                     <span className={styles.receiptMerchant}>{advanced.merchant || 'Receipt'}</span>
                                     {advanced.date && <span className={styles.receiptDate}>{advanced.date}</span>}
@@ -524,7 +524,7 @@ function ScanReceipt() {
 
                         {mode === 'basic' && parsed && (
                             <>
-                                <div className={styles.amountCard}>
+                                <div className={styles.amountCard} data-glass="reg">
                                     <span className={styles.amountLabel}>Amount</span>
                                     <span className={cn(styles.amountValue, !parsed.amount && styles.amountMissing)}>
                                         {parsed.amount ? formatCurrency(parsed.amount) : 'Not found'}
@@ -544,7 +544,7 @@ function ScanReceipt() {
                                         />
                                     )}
                                 </ListGroup>
-                                <details className={styles.raw}>
+                                <details className={styles.raw} data-glass="thin">
                                     <summary><FileText size={13} /> Show raw text</summary>
                                     <pre>{parsed.rawText}</pre>
                                 </details>
@@ -576,7 +576,7 @@ function ScanReceipt() {
                 {/* ── Error ── */}
                 {state === 'error' && (
                     <motion.div key="error" className={styles.stack} {...fade}>
-                        <div className={styles.errorCard}>
+                        <div className={styles.errorCard} data-glass="reg">
                             <span className={styles.errorIcon}><X size={26} /></span>
                             <p className={styles.errorTitle}>Couldn’t read that one</p>
                             <p className={styles.errorText}>{errorMsg}</p>

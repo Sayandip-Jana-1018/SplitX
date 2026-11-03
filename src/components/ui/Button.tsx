@@ -4,6 +4,7 @@ import { forwardRef, ButtonHTMLAttributes } from 'react';
 import { motion, HTMLMotionProps } from 'framer-motion';
 import styles from './button.module.css';
 import { cn } from '@/lib/utils';
+import type { GlassKind } from '@/lib/glass/styles';
 
 type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'outline' | 'soft' | 'success';
 type ButtonSize = 'sm' | 'md' | 'lg' | 'xl';
@@ -17,6 +18,12 @@ interface ButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'onA
     leftIcon?: React.ReactNode;
     rightIcon?: React.ReactNode;
 }
+
+const GLASS: Partial<Record<ButtonVariant, GlassKind>> = {
+    primary: 'accent',
+    success: 'accent',
+    secondary: 'thin',
+};
 
 const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     (
@@ -43,7 +50,7 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
                 type={type}
                 aria-busy={loading || undefined}
                 whileTap={inactive ? undefined : { scale: 0.97 }}
-                transition={{ type: 'spring', stiffness: 520, damping: 30 }}
+                transition={{ type: 'spring', stiffness: 460, damping: 26 }}
                 className={cn(
                     styles.button,
                     styles[variant],
@@ -54,6 +61,7 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
                     className
                 )}
                 disabled={inactive}
+                data-glass={GLASS[variant]}
                 {...(props as HTMLMotionProps<'button'>)}
             >
                 {loading ? <span className={styles.spinner} aria-hidden="true" /> : leftIcon}

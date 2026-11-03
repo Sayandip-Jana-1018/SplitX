@@ -15,11 +15,14 @@ interface AvatarProps {
     style?: CSSProperties;
 }
 
+const AVATAR_DEPTHS = [0.38, 0.44, 0.5, 0.56];
+
 export default function Avatar({ name, image, size = 'md', ring, className, style }: AvatarProps) {
     const [failedSrc, setFailedSrc] = useState<string | null>(null);
     const showImage = Boolean(image) && failedSrc !== image;
     const hue = getAvatarHue(name || '?');
-    const fallbackBackground = `linear-gradient(135deg, hsl(${hue} 72% 62%), hsl(${(hue + 38) % 360} 68% 48%))`;
+    const depth = AVATAR_DEPTHS[hue % AVATAR_DEPTHS.length];
+    const fallbackBackground = `oklch(${depth} calc(0.15 * var(--c)) var(--h))`;
 
     return (
         <span

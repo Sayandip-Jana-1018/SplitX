@@ -6,9 +6,9 @@
     flex-shrink: 0;
     overflow: hidden;
     border-radius: 50%;
-    background-color: var(--bg-tertiary);
-    color: #fff;
-    font-weight: 700;
+    background-color: var(--surface-secondary);
+    color: #ffffff;
+    font-weight: 600;
     letter-spacing: 0.01em;
     user-select: none;
     vertical-align: middle;

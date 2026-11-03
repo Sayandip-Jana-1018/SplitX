@@ -5,7 +5,15 @@ import { useId, type CSSProperties, type MouseEventHandler, type ReactNode } fro
 import { motion, type Variants } from 'framer-motion';
 import { ChevronRight } from 'lucide-react';
 import { cn, formatCurrency } from '@/lib/utils';
+import { useThemeContext } from '@/components/providers/ThemeProvider';
+import { GLASS_STYLE_IDS, type GlassKind, type GlassStyleId } from '@/lib/glass/styles';
 import styles from './kit.module.css';
+
+const ICON_BUTTON_GLASS: Partial<Record<IconButtonVariant, GlassKind>> = {
+    surface: 'thin',
+    solid: 'accent',
+    glass: 'clear',
+};
 
 /* ═══════════════════════════════════════════════════════════════
    IconButton
@@ -49,6 +57,7 @@ export function IconButton({
         active && styles.ibActive,
         className,
     );
+    const glass = ICON_BUTTON_GLASS[variant];
     const badgeNode = badge ? (
         <span className={cn(styles.ibBadge, typeof badge === 'boolean' && styles.ibDot)} aria-hidden="true">
             {typeof badge === 'number' ? (badge > 9 ? '9+' : badge) : null}
@@ -57,7 +66,7 @@ export function IconButton({
 
     if (href) {
         return (
-            <Link href={href} className={classes} aria-label={label} style={style} data-tour={tour}>
+            <Link href={href} className={classes} aria-label={label} style={style} data-tour={tour} data-glass={glass}>
                 {icon}
                 {badgeNode}
             </Link>
@@ -75,6 +84,7 @@ export function IconButton({
             whileTap={{ scale: 0.9 }}
             style={style}
             data-tour={tour}
+            data-glass={glass}
         >
             {icon}
             {badgeNode}
@@ -168,7 +178,7 @@ export function Section({
    ═══════════════════════════════════════════════════════════════ */
 
 export function ListGroup({ children, className }: { children: ReactNode; className?: string }) {
-    return <div className={cn(styles.listGroup, className)}>{children}</div>;
+    return <div className={cn(styles.listGroup, className)} data-glass="reg">{children}</div>;
 }
 
 interface ListRowProps {
@@ -213,13 +223,17 @@ export function ListRow({
                 {subtitle && <span className={styles.rowSubtitle}>{subtitle}</span>}
                 {meta && <span className={styles.rowMeta}>{meta}</span>}
             </span>
-            {(trailing || trailingSub) && (
-                <span className={styles.rowTrailing}>
-                    {trailing}
-                    {trailingSub && <span className={styles.rowTrailingSub}>{trailingSub}</span>}
+            {(trailing || trailingSub || chevron) && (
+                <span className={styles.rowEnd}>
+                    {(trailing || trailingSub) && (
+                        <span className={styles.rowTrailing}>
+                            {trailing}
+                            {trailingSub && <span className={styles.rowTrailingSub}>{trailingSub}</span>}
+                        </span>
+                    )}
+                    {chevron && <ChevronRight size={17} className={styles.rowChevron} aria-hidden="true" />}
                 </span>
             )}
-            {chevron && <ChevronRight size={17} className={styles.rowChevron} aria-hidden="true" />}
         </>
     );
 
@@ -232,13 +246,14 @@ export function ListRow({
         className,
     );
 
+    const glass = card ? 'reg' : undefined;
     if (href) {
-        return <Link href={href} className={classes}>{content}</Link>;
+        return <Link href={href} className={classes} data-glass={glass}>{content}</Link>;
     }
     if (onClick) {
-        return <button type="button" className={classes} onClick={onClick} disabled={disabled}>{content}</button>;
+        return <button type="button" className={classes} onClick={onClick} disabled={disabled} data-glass={glass}>{content}</button>;
     }
-    return <div className={classes}>{content}</div>;
+    return <div className={classes} data-glass={glass}>{content}</div>;
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -281,7 +296,7 @@ export function StatTile({
     className?: string;
 }) {
     return (
-        <div className={cn(styles.stat, tone !== 'neutral' && styles[`stat_${tone}`], className)}>
+        <div className={cn(styles.stat, tone !== 'neutral' && styles[`stat_${tone}`], className)} data-glass="thin">
             <span className={styles.statHead}>
                 {icon && <span className={styles.statIcon}>{icon}</span>}
                 <span className={styles.statLabel}>{label}</span>
@@ -319,7 +334,7 @@ export function Segmented<T extends string>({
 }) {
     const id = useId();
     return (
-        <div className={cn(styles.segmented, size === 'sm' && styles.seg_sm, className)} role="tablist" aria-label={ariaLabel}>
+        <div className={cn(styles.segmented, size === 'sm' && styles.seg_sm, className)} role="tablist" aria-label={ariaLabel} data-glass="thin">
             {options.map((option) => {
                 const active = option.value === value;
                 return (
@@ -335,7 +350,8 @@ export function Segmented<T extends string>({
                             <motion.span
                                 layoutId={`seg-${id}`}
                                 className={styles.segPill}
-                                transition={{ type: 'spring', stiffness: 520, damping: 40 }}
+                                data-glass="clear"
+                                transition={{ type: 'spring', stiffness: 420, damping: 30 }}
                             />
                         )}
                         <span className={styles.segLabel}>
@@ -373,6 +389,7 @@ export function Chip({
             onClick={onClick}
             aria-pressed={active}
             className={cn(styles.chip, active && styles.chipActive, className)}
+            data-glass={active ? 'accent' : 'thin'}
         >
             {icon && <span className={styles.chipIcon}>{icon}</span>}
             {children}
@@ -421,7 +438,6 @@ export function Amount({
 
 export function IconTile({
     children,
-    color,
     size = 40,
     tone = 'accent',
     radius,
@@ -429,8 +445,6 @@ export function IconTile({
     style,
 }: {
     children: ReactNode;
-    /** Explicit hex colour (e.g. category colour). Overrides tone. */
-    color?: string;
     size?: number;
     tone?: 'accent' | 'neutral' | 'success' | 'danger' | 'warning' | 'solid';
     radius?: number;
@@ -441,11 +455,10 @@ export function IconTile({
         width: size,
         height: size,
         borderRadius: radius ?? Math.round(size * 0.34),
-        ...(color ? { background: `color-mix(in srgb, ${color} 14%, transparent)`, color } : null),
         ...style,
     };
     return (
-        <span className={cn(styles.iconTile, !color && styles[`tile_${tone}`], className)} style={tileStyle}>
+        <span className={cn(styles.iconTile, styles[`tile_${tone}`], className)} style={tileStyle}>
             {children}
         </span>
     );
@@ -471,7 +484,7 @@ export function Notice({
     className?: string;
 }) {
     return (
-        <div className={cn(styles.notice, styles[`notice_${tone}`], className)} role={tone === 'danger' ? 'alert' : 'status'}>
+        <div className={cn(styles.notice, styles[`notice_${tone}`], className)} role={tone === 'danger' ? 'alert' : 'status'} data-glass="thin">
             {icon && <span className={styles.noticeIcon}>{icon}</span>}
             <div className={styles.noticeBody}>
                 {title && <div className={styles.noticeTitle}>{title}</div>}
@@ -520,7 +533,7 @@ const staggerChild: Variants = {
 
 export function Stagger({ children, className, style }: { children: ReactNode; className?: string; style?: CSSProperties }) {
     return (
-        <motion.div className={className} style={style} variants={staggerParent} initial="hidden" animate="show">
+        <motion.div className={className} style={style} variants={staggerParent} initial="hidden" animate="show" data-fade>
             {children}
         </motion.div>
     );
@@ -528,8 +541,45 @@ export function Stagger({ children, className, style }: { children: ReactNode; c
 
 export function StaggerItem({ children, className, style }: { children: ReactNode; className?: string; style?: CSSProperties }) {
     return (
-        <motion.div className={className} style={style} variants={staggerChild}>
+        <motion.div className={className} style={style} variants={staggerChild} data-fade>
             {children}
         </motion.div>
     );
 }
+
+/* ══════════════════════════════════════════
+   Glass picker: each choice is made of the material it names
+   ══════════════════════════════════════════ */
+
+const GLASS_NAMES: Record<GlassStyleId, { name: string; hint: string }> = {
+    liquid: { name: 'Liquid', hint: 'Bends the light' },
+    frosted: { name: 'Frosted', hint: 'Soft and misty' },
+    crystal: { name: 'Crystal', hint: 'Almost clear' },
+    tinted: { name: 'Tinted', hint: 'Full of colour' },
+    pearl: { name: 'Pearl', hint: 'Calm and solid' },
+};
+
+export function GlassPicker({ className }: { className?: string }) {
+    const { glass, setGlass } = useThemeContext();
+    return (
+        <div className={cn(styles.glassPicker, className)} role="radiogroup" aria-label="Kind of glass">
+            {GLASS_STYLE_IDS.map((id) => (
+                <motion.button
+                    key={id}
+                    type="button"
+                    role="radio"
+                    aria-checked={glass === id}
+                    className={styles.glassPick}
+                    data-glass="reg"
+                    data-glass-sample={id}
+                    whileTap={{ scale: 0.93 }}
+                    onClick={() => setGlass(id)}
+                >
+                    {GLASS_NAMES[id].name}
+                    <span className={styles.glassPickHint}>{GLASS_NAMES[id].hint}</span>
+                </motion.button>
+            ))}
+        </div>
+    );
+}
+

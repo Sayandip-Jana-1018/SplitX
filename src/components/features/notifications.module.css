@@ -111,7 +111,7 @@
     width: 100%;
     padding: 12px;
     border-radius: 18px;
-    text-align: left;
+    text-align: center;
     transition: background-color var(--duration-fast) var(--ease-out);
 }
 
@@ -199,8 +199,8 @@
 }
 
 .accept {
-    background: linear-gradient(135deg, #10b981, #059669);
-    color: #fff;
+    background: var(--accent-gradient);
+    color: var(--on-accent);
     font-weight: 700;
     box-shadow: 0 6px 14px -6px rgba(5, 150, 105, 0.6);
 }

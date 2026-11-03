@@ -357,7 +357,7 @@
     border: 1px solid var(--border-default);
     background: var(--surface-card);
     box-shadow: var(--surface-inset);
-    text-align: left;
+    text-align: center;
     transition:
         border-color var(--duration-fast) var(--ease-out),
         background-color var(--duration-fast) var(--ease-out),
@@ -622,7 +622,7 @@
 }
 
 .keyDel {
-    color: var(--color-error);
+    color: var(--fg-secondary);
 }
 
 .keyEq {
@@ -664,7 +664,7 @@
     color: var(--fg-primary);
     font-size: 15px;
     font-weight: 600;
-    text-align: left;
+    text-align: center;
     transition: border-color var(--duration-fast) var(--ease-out), background-color var(--duration-fast) var(--ease-out);
 }
 

@@ -93,7 +93,7 @@
     padding: 10px 12px;
     border-radius: 16px;
     color: var(--fg-primary);
-    text-align: left;
+    text-align: center;
 }
 
 .itemActive {
