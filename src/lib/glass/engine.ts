@@ -1,5 +1,5 @@
 import { coinCode, coinKind, coinPose, coinReach, type CoinKind } from '@/lib/glass/coins';
-import { frameIsDue, Governor, LOWEST_LEVEL, nextFrameDue, QUALITY } from '@/lib/glass/governor';
+import { frameIsDue, Governor, isSoftwareRenderer, LOWEST_LEVEL, nextFrameDue, QUALITY } from '@/lib/glass/governor';
 import { glassPalette, type GlassMode, type GlassPalette } from '@/lib/glass/palette';
 import { COIN_FS, DOWN_FS, DROPS_FS, FULL_VS, GLASS_FS, LIQUID_FS, QUAD_VS } from '@/lib/glass/shaders';
 import { surfaceLook, type SurfaceLook } from '@/lib/glass/styles';
@@ -284,7 +284,6 @@ class Engine implements GlassEngine {
     /* ── GPU setup ─────────────────────────────────────────────── */
 
     private setUpGl(): boolean {
-        // A software renderer is worse than CSS glass, so it counts as no WebGL at all.
         const options = { antialias: false, depth: false, stencil: false, powerPreference: 'low-power', failIfMajorPerformanceCaveat: true } as const;
         const gl = this.gl ?? this.canvas.getContext('webgl', { ...options, alpha: true, premultipliedAlpha: true });
         const wallGl = this.wallGl ?? this.wallCanvas.getContext('webgl', { ...options, alpha: false });
@@ -293,6 +292,9 @@ class Engine implements GlassEngine {
         this.wallGl = wallGl;
         const debug = gl.getExtension('WEBGL_debug_renderer_info');
         if (debug) this.gpu = String(gl.getParameter(debug.UNMASKED_RENDERER_WEBGL));
+        // A software renderer is worse than CSS glass, so it counts as no WebGL at all. The
+        // performance-caveat flag above can't be relied on for this: SwiftShader passes it.
+        if (isSoftwareRenderer(this.gpu)) return false;
 
         const liquid = this.link(gl, FULL_VS, LIQUID_FS, uniformNames.liquid);
         const down = this.link(gl, FULL_VS, DOWN_FS, uniformNames.down);

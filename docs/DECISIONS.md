@@ -5554,7 +5554,7 @@ drew the ₹ in solid fill, which sliced into pills behind the headline, and let
 liquid's soft edges into steps. Both are gone: fine lines only affect the lighting, and the large ₹ fades as the coin parts.
 
 **The GitHub runners were crawling.** End-to-end took 9.6 minutes there against 2.4 here, and two tests timed out once before
-passing on retry. They have no GPU, so CSS glass does everything, which re-blurred every card in software. Cards without the
+passing on retry. They were thought to fall back to CSS glass, re-blurring every card in software. D-124 corrects this: the WebGL engine itself was running there. Cards without the
 engine are now a deeper tint with no blur, and only what floats blurs. Whether this was the cause is what the next CI run shows.
 That change first broke filled buttons under Crystal, Tinted and Pearl (a style's fill beat the accent's): caught in the user's own
 screenshot before it went live, and now excluded.
@@ -5580,6 +5580,25 @@ internal names that nothing outside the code depends on.
 
 **A risk, told to the user before going ahead:** Splitit is already the name of a payments company (instalment plans on credit cards). That doesn't
 matter for a web app today, but it should be checked properly before a Play Store or App Store listing, and before any trademark filing.
+
+### D-124 · A software renderer gets CSS glass, as the code always claimed
+**2026-11-04** · ✅ measured here with no GPU and a 6× slower CPU. A correction to D-119 and D-122.
+
+**The coin push made GitHub's browser tests much worse:** 22 minutes with one failure and six flakes, against about 12 before. D-122 had blamed
+CSS blur, assuming the runners fell back to CSS because the engine asks for `failIfMajorPerformanceCaveat`. **That was wrong.** SwiftShader passes the flag,
+so on any machine without a GPU the whole WebGL engine ran on the CPU, and the coins' larger shader made it worse.
+
+Measured with `handoff/tools/slow-probe.mjs`, at 6× slower CPU and phone resolution, frames a second and share of time in long tasks:
+
+| Page | Engine in software | No WebGL, CSS glass |
+|---|---|---|
+| Landing | 20 fps, 56% | 60 fps, 0% |
+| Home | 13 fps, 94% | 60 fps, 0% |
+| Group | 30 fps, 0% | 60 fps, 0% |
+| Settle up | 9 fps, 80% | 47 fps, 9% |
+
+So the engine now asks for the renderer's name and steps aside for SwiftShader, llvmpipe, softpipe and Microsoft's Basic Render driver. This matters beyond CI: it is any
+laptop or phone whose GPU the browser has blocklisted, which was getting the worst version of the app. The no-blur fallback from D-122 is what makes the right-hand column so cheap.
 
 ---
 

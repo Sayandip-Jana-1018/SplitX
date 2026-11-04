@@ -27,6 +27,13 @@ export const QUALITY: readonly QualityLevel[] = [
 
 export const LOWEST_LEVEL = QUALITY.length - 1;
 
+const SOFTWARE_RENDERER = /swiftshader|llvmpipe|softpipe|software|basic render/i;
+
+/** Whether a GPU's reported name is really the CPU. Browsers don't reliably say so themselves. */
+export function isSoftwareRenderer(name: string | null | undefined): boolean {
+    return Boolean(name) && SOFTWARE_RENDERER.test(name as string);
+}
+
 const WINDOW_FRAMES = 40;
 /** More than this share of slow frames in a window means the level is too high. */
 const TOO_SLOW = 0.2;

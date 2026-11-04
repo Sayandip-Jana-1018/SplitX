@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { frameIsDue, Governor, LOWEST_LEVEL, nextFrameDue, QUALITY, type GovernorEvent } from '@/lib/glass/governor';
+import { frameIsDue, Governor, LOWEST_LEVEL, nextFrameDue, QUALITY, type GovernorEvent, isSoftwareRenderer } from '@/lib/glass/governor';
 
 const WINDOW = 40;
 
@@ -172,5 +172,32 @@ describe('the governor', () => {
         const governor = new Governor(LOWEST_LEVEL);
         expect(governor.targetMs).toBeCloseTo(33.4);
         expect(feed(governor, 33.4, 3)).toEqual([]);
+    });
+});
+
+describe('a renderer that is really the CPU', () => {
+    it.each([
+        'ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)',
+        'Google SwiftShader',
+        'llvmpipe (LLVM 15.0.7, 256 bits)',
+        'Mesa softpipe',
+        'ANGLE (Microsoft, Microsoft Basic Render Driver Direct3D11 vs_5_0 ps_5_0, D3D11)',
+    ])('%s counts as no GPU', (name) => {
+        expect(isSoftwareRenderer(name)).toBe(true);
+    });
+
+    it.each([
+        'ANGLE (Intel, Intel(R) UHD Graphics (0x00004688) Direct3D11 vs_5_0 ps_5_0, D3D11)',
+        'Adreno (TM) 730',
+        'Mali-G710',
+        'Apple GPU',
+        '',
+    ])('%s is left to the engine', (name) => {
+        expect(isSoftwareRenderer(name)).toBe(false);
+    });
+
+    it('leaves an unknown renderer to the engine', () => {
+        expect(isSoftwareRenderer(null)).toBe(false);
+        expect(isSoftwareRenderer(undefined)).toBe(false);
     });
 });
