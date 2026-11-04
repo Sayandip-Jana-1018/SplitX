@@ -71,52 +71,65 @@ body {
     opacity: 1;
 }
 
-/* CSS glass: the engine's stand-in, and the real thing for whatever floats over a scrolling page. */
+/*
+ * CSS glass. For a card it is the engine's stand-in: a deeper tint with no blur, since a page
+ * of cards all re-blurring a moving wall is the very cost the engine exists to avoid, and
+ * without a GPU it brings a page to a crawl. Only what floats over the page blurs.
+ */
 [data-glass] {
-    background: var(--glass-bg);
+    background: var(--glass-bg-strong);
     border: 1px solid var(--glass-rim);
     box-shadow: var(--glass-shadow), var(--glass-inset);
+}
+
+[data-glass='clear'] {
+    background: var(--glass-bg);
+}
+
+[data-glass-mode='css'] {
+    background: var(--glass-bg);
     -webkit-backdrop-filter: blur(24px) saturate(190%);
     backdrop-filter: blur(24px) saturate(190%);
 }
 
-[data-glass='clear'] {
+[data-glass-mode='css'][data-glass='clear'] {
     background: rgba(255, 255, 255, 0.08);
     -webkit-backdrop-filter: blur(3px) saturate(180%);
     backdrop-filter: blur(3px) saturate(180%);
 }
 
-[data-glass='thin'] {
+[data-glass-mode='css'][data-glass='thin'] {
     -webkit-backdrop-filter: blur(12px) saturate(190%);
     backdrop-filter: blur(12px) saturate(190%);
 }
 
-[data-glass='thick'] {
+[data-glass-mode='css'][data-glass='thick'] {
     background: var(--glass-bg-strong);
     -webkit-backdrop-filter: blur(38px) saturate(190%);
     backdrop-filter: blur(38px) saturate(190%);
 }
 
-/* Without the shader, the person's choice of glass still shows. */
-[data-glass-style='frosted'] [data-glass] {
-    -webkit-backdrop-filter: blur(40px) saturate(170%);
-    backdrop-filter: blur(40px) saturate(170%);
+html[data-glass-all-blur] [data-glass]:not([data-glass='accent']) {
+    background: var(--glass-bg);
+    -webkit-backdrop-filter: blur(24px) saturate(190%);
+    backdrop-filter: blur(24px) saturate(190%);
 }
 
-[data-glass-style='crystal'] [data-glass] {
-    background: rgba(255, 255, 255, 0.06);
-    -webkit-backdrop-filter: blur(3px) saturate(190%);
-    backdrop-filter: blur(3px) saturate(190%);
+/* Without the shader, the person's choice of glass still shows, in the surface's fill. */
+[data-glass-style='crystal'] [data-glass]:not([data-glass='accent']) {
+    background: oklch(0.2 calc(0.05 * var(--c)) var(--h) / 0.5);
 }
 
-[data-glass-style='tinted'] [data-glass] {
+[data-theme='light'][data-glass-style='crystal'] [data-glass]:not([data-glass='accent']) {
+    background: rgba(255, 255, 255, 0.5);
+}
+
+[data-glass-style='tinted'] [data-glass]:not([data-glass='accent']) {
     background: var(--glass-tinted);
 }
 
-[data-glass-style='pearl'] [data-glass] {
+[data-glass-style='pearl'] [data-glass]:not([data-glass='accent']) {
     background: var(--glass-pearl);
-    -webkit-backdrop-filter: blur(40px);
-    backdrop-filter: blur(40px);
 }
 
 /* Glass inside floating glass takes a tint only: its parent has already blurred what is behind it. */
@@ -233,19 +246,52 @@ html[data-moment] :is(#workspace, header, nav) {
     border: 1px solid var(--glass-rim);
 }
 
-[data-petals] {
-    display: block;
+[data-coin] {
+    display: grid;
+    place-items: center;
+    container-type: inline-size;
     pointer-events: none;
     border-radius: 50%;
-    background: radial-gradient(circle, var(--accent-300), transparent 68%);
-    filter: blur(6px);
+    border: 1px solid var(--glass-rim);
+    background: var(--glass-bg);
+    box-shadow: var(--glass-inset);
+    color: var(--fg-secondary);
+    font-style: normal;
+    font-weight: 600;
+    line-height: 1;
+}
+
+[data-coin='note'],
+[data-coin='bill'] {
+    border-radius: 12px;
+}
+
+[data-coin='coin']::before,
+[data-coin='split']::before,
+[data-coin='note']::before,
+[data-coin='bill']::before {
+    content: '₹';
+    font-size: 54cqw;
+    opacity: 0.55;
+}
+
+[data-coin='split']::before {
+    opacity: 0.16;
+}
+
+[data-coin='note']::before {
+    font-size: 30cqw;
 }
 
 html[data-gl='on'] [data-drop]:not([data-glass-mode='css'] *),
-html[data-gl='on'] [data-petals] {
+html[data-gl='on'] [data-coin]:not([data-glass-mode='css'] *) {
     background: none;
     border-color: transparent;
-    filter: none;
+    box-shadow: none;
+}
+
+html[data-gl='on'] [data-coin]:not([data-glass-mode='css'] *)::before {
+    content: none;
 }
 
 /* Paper is plain. */
@@ -255,7 +301,8 @@ html[data-gl='on'] [data-petals] {
     }
 
     [data-glass-wall],
-    [data-glass-layer] {
+    [data-glass-layer],
+    [data-coin] {
         display: none;
     }
 

@@ -434,7 +434,7 @@
     text-align: center;
 }
 
-.allSettledDrop {
+.allSettledCoin {
     position: absolute;
     left: calc(50% - 120px);
     top: 10px;

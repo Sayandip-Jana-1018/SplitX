@@ -155,6 +155,16 @@
     overflow-wrap: anywhere;
 }
 
+/* The landing page's coin, on screen for the whole speed test. */
+.coin {
+    position: fixed;
+    left: 50%;
+    top: 50%;
+    width: min(116vw, 94dvh, 820px);
+    aspect-ratio: 1;
+    transform: translate(-50%, -50%);
+}
+
 /* Home's content */
 .hero {
     padding: 22px 16px 16px;

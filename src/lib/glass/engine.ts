@@ -1,6 +1,7 @@
+import { coinCode, coinKind, coinPose, coinReach, type CoinKind } from '@/lib/glass/coins';
 import { frameIsDue, Governor, LOWEST_LEVEL, nextFrameDue, QUALITY } from '@/lib/glass/governor';
 import { glassPalette, type GlassMode, type GlassPalette } from '@/lib/glass/palette';
-import { BLOOM_FS, DOWN_FS, DROPS_FS, FULL_VS, GLASS_FS, LIQUID_FS, QUAD_VS } from '@/lib/glass/shaders';
+import { COIN_FS, DOWN_FS, DROPS_FS, FULL_VS, GLASS_FS, LIQUID_FS, QUAD_VS } from '@/lib/glass/shaders';
 import { surfaceLook, type SurfaceLook } from '@/lib/glass/styles';
 
 /**
@@ -60,6 +61,16 @@ export interface GlassEngine {
     destroy(): void;
 }
 
+interface Coin {
+    el: Element;
+    kind: CoinKind;
+    x: number;
+    y: number;
+    r: number;
+    fade: number;
+    shown: boolean;
+}
+
 interface Surface {
     el: Element;
     parent: Surface | null;
@@ -91,6 +102,8 @@ const GLASS_SELECTOR = '[data-glass]:not([data-glass-mode="css"])';
 const BLOB_SIZES = [0.36, 0.27, 0.21, 0.31, 0.17, 0.24, 0.19];
 const MAX_SURFACES = 40;
 const MAX_DROPS = 10;
+const MAX_COINS = 12;
+const COIN_DETAIL_FROM_LEVEL = 2;
 /** The wall has no glass to pay for, so it can afford a sharper picture of the liquid than the glass reads. */
 const WALL_SHARPNESS = 1.5;
 const SHADOW_MARGIN = 44;
@@ -114,7 +127,7 @@ const uniformNames = {
     down: ['uTex', 'uTexel'],
     glass: ['uQuad', 'uCanvas', 'uSharp', 'uSoft', 'uL', 'uT', 'uShadow', 'uLight', 'uTintK', 'uDisperseOn', 'uUnder', 'uTint', 'uAcc', 'uRimC', 'uR', 'uS', 'uG'],
     drops: ['uQuad', 'uCanvas', 'uSharp', 'uL', 'uLight', 'uRimC', 'uD', 'uDN'],
-    bloom: ['uQuad', 'uCanvas', 'uT', 'uBloomA', 'uC1', 'uC2', 'uGlow', 'uBloom'],
+    coins: ['uQuad', 'uCanvas', 'uSharp', 'uL', 'uLight', 'uFade', 'uKind', 'uCut', 'uCutAt', 'uT', 'uDetail', 'uRimC', 'uC1', 'uC2', 'uGlow', 'uC', 'uTilt'],
 };
 
 function readLevel(): number | null {
@@ -192,13 +205,11 @@ class Engine implements GlassEngine {
     private dropData = new Float32Array(MAX_DROPS * 3);
     private dropCount = 0;
     private dropBox: [number, number, number, number] = [0, 0, 0, 0];
-    private bloom: [number, number, number] = [0, 0, 1];
-    private bloomAlpha = 0;
+    private coins: Coin[] = [];
 
     private surfaces: Surface[] = [];
     private byEl = new Map<Element, Surface>();
     private dropEls: Element[] = [];
-    private bloomEl: Element | null = null;
     private surfacesDirty = true;
     /** Surfaces already checked for whether they can ride on the canvas. */
     private riders = new WeakSet<Element>();
@@ -287,10 +298,10 @@ class Engine implements GlassEngine {
         const down = this.link(gl, FULL_VS, DOWN_FS, uniformNames.down);
         const glass = this.link(gl, QUAD_VS, GLASS_FS, uniformNames.glass);
         const drops = this.link(gl, QUAD_VS, DROPS_FS, uniformNames.drops);
-        const bloom = this.link(gl, QUAD_VS, BLOOM_FS, uniformNames.bloom);
+        const coins = this.link(gl, QUAD_VS, COIN_FS, uniformNames.coins);
         const wall = this.link(wallGl, FULL_VS, LIQUID_FS, uniformNames.liquid);
-        if (!liquid || !down || !glass || !drops || !bloom || !wall) return false;
-        this.programs = { liquid, down, glass, drops, bloom };
+        if (!liquid || !down || !glass || !drops || !coins || !wall) return false;
+        this.programs = { liquid, down, glass, drops, coins };
         this.wallProgram = wall;
 
         // One buffer: a triangle over the whole target, then a unit rectangle.
@@ -464,6 +475,7 @@ class Engine implements GlassEngine {
         this.wallCanvas.style.visibility = this.ready && !this.gaveUp ? '' : 'hidden';
         if (this.drawsSurfaces() && this.painted) html.setAttribute('data-gl', 'on');
         else html.removeAttribute('data-gl');
+        html.toggleAttribute('data-glass-all-blur', this.mode === 'css');
         if (this.canAnimate()) html.removeAttribute('data-glass-calm');
         else html.setAttribute('data-glass-calm', '');
         this.needsDraw = true;
@@ -657,7 +669,10 @@ class Engine implements GlassEngine {
         this.byEl = next;
         this.surfaces = list;
         this.dropEls = Array.from(document.querySelectorAll('[data-drop]')).filter((el) => !el.closest('[data-glass-mode="css"]')).slice(0, MAX_DROPS);
-        this.bloomEl = document.querySelector('[data-petals]');
+        this.coins = Array.from(document.querySelectorAll('[data-coin]'))
+            .filter((el) => !el.closest('[data-glass-mode="css"]'))
+            .slice(0, MAX_COINS)
+            .map((el) => ({ el, kind: coinKind(el.getAttribute('data-coin')), x: 0, y: 0, r: 0, fade: 1, shown: false }));
         this.needsDraw = true;
     }
 
@@ -744,13 +759,14 @@ class Engine implements GlassEngine {
         }
         this.dropCount = count;
         this.dropBox = [left, top, right - left, bottom - top];
-        this.bloomAlpha = 0;
-        if (this.bloomEl) {
-            const box = this.bloomEl.getBoundingClientRect();
-            if (box.width > 0 && box.bottom > -this.over && box.top < this.viewH + this.over) {
-                this.bloom = [box.left + box.width / 2, box.top + box.height / 2 + this.over, Math.max(box.width / 340, 0.01)];
-                this.bloomAlpha = fadeOf(this.bloomEl, getComputedStyle(this.bloomEl));
-            }
+        for (const coin of this.coins) {
+            const box = coin.el.getBoundingClientRect();
+            coin.shown = box.width >= 1 && box.bottom > -this.over && box.top < this.viewH + this.over;
+            if (!coin.shown) continue;
+            coin.x = box.left + box.width / 2;
+            coin.y = box.top + box.height / 2 + this.over;
+            coin.r = box.width / 2;
+            coin.fade = fadeOf(coin.el, getComputedStyle(coin.el));
         }
     }
 
@@ -868,9 +884,44 @@ class Engine implements GlassEngine {
         }
     }
 
+    /** Each piece is its own small box, so the page pays only for the money on screen. */
+    private drawCoins(now: number) {
+        if (!this.coins.some((coin) => coin.shown)) return;
+        const gl = this.gl!;
+        const { prog, u } = this.programs!.coins;
+        const pal = this.pal;
+        gl.useProgram(prog);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, this.sharp!.tex);
+        gl.uniform1i(u.uSharp, 0);
+        gl.uniform2f(u.uCanvas, this.cssW, this.cssH);
+        gl.uniform2f(u.uL, this.light[0], this.light[1]);
+        gl.uniform1f(u.uLight, pal.light);
+        gl.uniform3fv(u.uRimC, pal.rim);
+        gl.uniform3fv(u.uC1, pal.c1);
+        gl.uniform3fv(u.uC2, pal.c2);
+        gl.uniform3fv(u.uGlow, pal.glow);
+        gl.uniform1f(u.uT, now);
+        // The finest engraving is the first thing to go on a phone that is struggling.
+        gl.uniform1f(u.uDetail, this.governor.level <= COIN_DETAIL_FROM_LEVEL ? 1 : 0);
+        this.coins.forEach((coin, seed) => {
+            if (!coin.shown || coin.fade < 0.001) return;
+            const pose = coinPose(coin.kind, seed, now);
+            const reach = coin.r * (coinReach(coin.kind) + 0.24) + 14;
+            gl.uniform4f(u.uQuad, coin.x - reach, coin.y - reach, reach * 2, reach * 2);
+            gl.uniform4f(u.uC, coin.x, coin.y, coin.r, pose.spin);
+            gl.uniform4f(u.uTilt, pose.axisX, pose.axisY, pose.lean, pose.facing);
+            gl.uniform1f(u.uKind, coinCode(coin.kind));
+            gl.uniform1f(u.uFade, coin.fade);
+            gl.uniform1f(u.uCut, pose.cut);
+            gl.uniform1f(u.uCutAt, pose.cutAt);
+            gl.drawArrays(gl.TRIANGLE_STRIP, 3, 4);
+        });
+    }
+
     private drawScreen(withSurfaces: boolean) {
         const gl = this.gl!;
-        const { glass, drops, bloom } = this.programs!;
+        const { glass, drops } = this.programs!;
         const sharp = this.sharp!;
         const soft = this.soft!;
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -881,20 +932,7 @@ class Engine implements GlassEngine {
         gl.enable(gl.BLEND);
         const pal = this.pal;
         const now = (performance.now() - this.t0) / 1000;
-        if (this.bloomAlpha > 0.001) {
-            const u = bloom.u;
-            const reach = 184 * this.bloom[2];
-            gl.useProgram(bloom.prog);
-            gl.uniform2f(u.uCanvas, this.cssW, this.cssH);
-            gl.uniform1f(u.uT, now);
-            gl.uniform1f(u.uBloomA, this.bloomAlpha);
-            gl.uniform3fv(u.uC1, pal.c1);
-            gl.uniform3fv(u.uC2, pal.c2);
-            gl.uniform3fv(u.uGlow, pal.glow);
-            gl.uniform3f(u.uBloom, this.bloom[0], this.bloom[1], this.bloom[2]);
-            gl.uniform4f(u.uQuad, this.bloom[0] - reach, this.bloom[1] - reach, reach * 2, reach * 2);
-            gl.drawArrays(gl.TRIANGLE_STRIP, 3, 4);
-        }
+        this.drawCoins(now);
         if (this.dropCount > 0) {
             const u = drops.u;
             gl.useProgram(drops.prog);
@@ -1030,6 +1068,7 @@ class Engine implements GlassEngine {
         document.removeEventListener('visibilitychange', this.onVisibility);
         document.documentElement.removeAttribute('data-gl');
         document.documentElement.removeAttribute('data-glass-calm');
+        document.documentElement.removeAttribute('data-glass-all-blur');
         this.gl?.getExtension('WEBGL_lose_context')?.loseContext();
         this.wallGl?.getExtension('WEBGL_lose_context')?.loseContext();
         this.wall.remove();

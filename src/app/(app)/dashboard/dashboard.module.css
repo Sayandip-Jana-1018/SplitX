@@ -1,5 +1,5 @@
 /* ═════════════════════════
-   Home: one centre axis. The balance floats in a drop of glass, and everything
+   Home: one centre axis. The balance sits on a coin of glass, and everything
    else mirrors around it. Motion comes from the liquid behind, so nothing here idles.
    ═════════════════════════ */
 
@@ -33,14 +33,14 @@
     letter-spacing: -0.03em;
 }
 
-/* ── Balance: a drop of clear glass holding one number ── */
+/* ── Balance: a coin of clear glass holding one number ── */
 .hero {
     display: flex;
     flex-direction: column;
     gap: 14px;
 }
 
-.heroDrop {
+.heroCoin {
     position: relative;
     display: flex;
     flex-direction: column;
@@ -48,32 +48,64 @@
     justify-content: center;
     gap: 6px;
     width: 100%;
-    min-height: 236px;
+    min-height: 306px;
     text-align: center;
 }
 
-.drop {
+.coinBig {
     position: absolute;
-    animation: float 7s ease-in-out infinite;
+    left: 50%;
+    top: 2px;
+    width: min(100%, 300px);
+    aspect-ratio: 1;
+    margin-left: calc(min(100%, 300px) / -2);
+    animation: coinFloat 13s ease-in-out infinite;
 }
 
-.dropBig {
-    left: calc(50% - 112px);
-    top: 6px;
-    width: 224px;
-    height: 224px;
+.coinLeft,
+.coinRight {
+    position: absolute;
+    top: 196px;
+    width: 40px;
+    aspect-ratio: 1;
 }
 
-.dropLeft,
-.dropRight {
-    top: 182px;
-    width: 38px;
-    height: 38px;
-    animation-delay: -2.6s;
+.coinLeft {
+    left: 0;
+    animation: driftLeft 16s ease-in-out infinite;
 }
 
-.dropLeft { left: 8px; }
-.dropRight { right: 8px; }
+.coinRight {
+    right: 0;
+    top: 170px;
+    width: 32px;
+    animation: driftRight 19s ease-in-out infinite;
+}
+
+@keyframes coinFloat {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-6px); }
+}
+
+@keyframes driftLeft {
+    0%, 100% { transform: translate(0, 0); }
+    33% { transform: translate(3px, -40px); }
+    66% { transform: translate(-2px, -16px); }
+}
+
+@keyframes driftRight {
+    0%, 100% { transform: translate(0, -22px); }
+    33% { transform: translate(-3px, 8px); }
+    66% { transform: translate(2px, -44px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .coinBig,
+    .coinLeft,
+    .coinRight {
+        animation: none;
+    }
+}
 
 .heroLabel {
     position: relative;
@@ -385,24 +417,24 @@
         min-width: 0;
     }
 
-    .heroDrop {
-        min-height: 280px;
+    .heroCoin {
+        min-height: 344px;
     }
 
-    .dropBig {
-        left: calc(50% - 138px);
-        top: 2px;
-        width: 276px;
-        height: 276px;
+    .coinBig {
+        width: 340px;
+        margin-left: -170px;
     }
 
-    .dropLeft,
-    .dropRight {
+    .coinLeft {
+        top: 220px;
+        left: 7%;
+    }
+
+    .coinRight {
         top: 190px;
+        right: 7%;
     }
-
-    .dropLeft { left: 12%; }
-    .dropRight { right: 12%; }
 
     .quick {
         grid-template-columns: repeat(2, minmax(0, 1fr));

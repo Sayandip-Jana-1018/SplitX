@@ -357,10 +357,10 @@ function BalanceCard({
 
     return (
         <section className={styles.hero} data-tour="balance" aria-label="Net balance">
-            <div className={styles.heroDrop}>
-                <i data-drop className={cn(styles.drop, styles.dropBig)} />
-                <i data-drop className={cn(styles.drop, styles.dropLeft)} />
-                <i data-drop className={cn(styles.drop, styles.dropRight)} />
+            <div className={styles.heroCoin}>
+                <i aria-hidden data-coin="rim" className={styles.coinBig} />
+                <i aria-hidden data-coin="coin" className={styles.coinLeft} />
+                <i aria-hidden data-coin="coin" className={styles.coinRight} />
                 <span className={styles.heroLabel}>{status.label}</span>
                 <div className={styles.heroAmount}>
                     {net !== 0 && <span className={styles.heroSign}>{net > 0 ? '+' : '−'}</span>}

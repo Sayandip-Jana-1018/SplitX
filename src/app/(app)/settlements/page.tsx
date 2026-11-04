@@ -482,7 +482,7 @@ export default function SettlementsPage() {
                     {visible.length === 0 ? (
                         tab === 'pending' ? (
                             <div className={styles.allSettled}>
-                                <i data-drop className={styles.allSettledDrop} />
+                                <i aria-hidden data-coin="rim" className={styles.allSettledCoin} />
                                 <h2 className={styles.allSettledTitle}>All settled up</h2>
                                 <p className={styles.allSettledText}>{isGlobal ? 'Nobody owes anybody across your groups.' : 'Everyone in this group is square. Enjoy it.'}</p>
                             </div>

@@ -190,6 +190,7 @@ export default function GlassLab() {
                     <h1 className={styles.name}>Hi, Asha</h1>
                 </section>
 
+                <i aria-hidden data-coin="split" className={styles.coin} />
                 <Glass as="section" kind="accent" className={styles.hero}>
                     <p className={styles.heroLabel}>Net balance</p>
                     <p className={styles.heroValue}>+₹42,049.12</p>

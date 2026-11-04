@@ -1,5 +1,5 @@
 /* ═════════════════════════
-   The public page: the bloom and the liquid, everything on one centre axis.
+   The public page: a coin that splits and the liquid, everything on one centre axis.
    ═════════════════════════ */
 
 .page {
@@ -18,7 +18,7 @@
     padding: 0 var(--gutter) 64px;
 }
 
-/* ── The bloom ── */
+/* ── The coin ── */
 .hero {
     position: relative;
     display: flex;
@@ -28,26 +28,107 @@
     padding-top: calc(var(--header-height) + 16px);
 }
 
-.bloom {
+.heartCoin {
     position: absolute;
     left: 50%;
     top: 50%;
-    width: min(150vw, 880px);
+    width: min(116vw, 94dvh, 820px);
     aspect-ratio: 1;
     transform: translate(-50%, -50%);
+    animation: coinArrives 1600ms var(--spring) both;
 }
 
-.dropLeft,
-.dropRight {
+.coinA,
+.noteB,
+.coinC,
+.billD,
+.coinE,
+.coinF {
     position: absolute;
-    bottom: 12%;
-    width: clamp(44px, 9vw, 86px);
-    aspect-ratio: 1;
-    animation: float 7s ease-in-out infinite;
+    animation: driftOne 19s ease-in-out infinite;
 }
 
-.dropLeft { left: 2%; }
-.dropRight { right: 2%; animation-delay: -3s; }
+.coinA {
+    top: 13%;
+    left: 5%;
+    width: clamp(46px, 7.5vw, 112px);
+    aspect-ratio: 1;
+}
+
+.noteB {
+    top: 20%;
+    right: 4%;
+    width: clamp(78px, 13vw, 200px);
+    aspect-ratio: 1 / 0.54;
+    animation-name: driftTwo;
+    animation-duration: 24s;
+}
+
+.coinC {
+    bottom: 18%;
+    right: 8%;
+    width: clamp(38px, 5.5vw, 80px);
+    aspect-ratio: 1;
+    animation-name: driftThree;
+    animation-duration: 17s;
+}
+
+.billD {
+    bottom: 11%;
+    left: 6%;
+    width: clamp(46px, 6.5vw, 100px);
+    aspect-ratio: 1 / 1.46;
+    animation-name: driftTwo;
+    animation-duration: 27s;
+    animation-delay: -9s;
+}
+
+.coinE {
+    top: 9%;
+    right: 26%;
+    width: clamp(26px, 3.2vw, 48px);
+    aspect-ratio: 1;
+    animation-name: driftThree;
+    animation-duration: 15s;
+}
+
+.coinF {
+    bottom: 5%;
+    left: 34%;
+    width: clamp(24px, 3vw, 44px);
+    aspect-ratio: 1;
+    animation-delay: -6s;
+    animation-duration: 21s;
+}
+
+@keyframes coinArrives {
+    from {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.82);
+    }
+
+    to {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+    }
+}
+
+@keyframes driftOne {
+    0%, 100% { transform: translate(0, 0); }
+    33% { transform: translate(14px, -26px); }
+    66% { transform: translate(-8px, -12px); }
+}
+
+@keyframes driftTwo {
+    0%, 100% { transform: translate(0, 0); }
+    50% { transform: translate(-18px, 22px); }
+}
+
+@keyframes driftThree {
+    0%, 100% { transform: translate(0, 0); }
+    40% { transform: translate(-12px, -20px); }
+    75% { transform: translate(10px, 8px); }
+}
 
 .heroCopy {
     position: relative;

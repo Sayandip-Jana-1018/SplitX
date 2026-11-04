@@ -5519,6 +5519,46 @@ Glass over them doesn't bend them, which is hard to notice since the words over 
 `scroll-behavior: smooth`, and a smooth scroll restarted every frame hardly moves. The figures in D-119 and D-120 for
 scrolling therefore mean less than they say. The tests now scroll for real.
 
+### D-122 · Next.js 16.4.5, and money in the background instead of a flower
+**2026-11-04** · ✅ on the live site. ⚠️ Prisma's high advisory remains: see below.
+
+**A critical hole, found because the release gate stopped.** The release job's scan had failed on every push since going live,
+and `kind-e2e` failed with it, because it finds no signed release. The log needs a sign-in this laptop no longer has, so the
+cause was looked for with `npm audit`: **Next.js 16.3.8 had two critical advisories of unauthenticated remote code execution**
+(GHSA-2464-fhr4-w9xw, GHSA-673q-mjm6-r5xr) and a high one of denial of service, on the live site. They predate this overhaul.
+It went out alone and first (c22f830), ahead of the visual work below.
+- **Next.js goes to 16.4.5 and Zod to 4.6.7** (GHSA-mrhx-c7xc-m3w5, high).
+- **`eslint-config-next` stays on 16.3.8.** 16.4.5 brings stricter hook rules with ten findings in existing code. It never runs on
+  the site, and those findings should not be rushed along with a security fix.
+- **Prisma stays on 6.** Its high advisory is in `deepmerge-ts`, reached through `@prisma/config`, which reads the project's own
+  config at build and migrate time, not anyone's input. The fix is a major version that touches every query.
+
+**The petals are gone, and coins took their place.** The user asked for the page to look like an expense-splitting app. A big glass
+coin sits behind the landing page's headline. It cuts into five slices, twists apart like an iris, drifts, and closes whole
+again, on a 22 s cycle. Coins, a banknote and a bill tumble slowly around it. Everything stays in the palette's one hue
+(gold is still the logo's alone). The motion is pure arithmetic in `src/lib/glass/coins.ts`, which is tested.
+
+**Home's balance sits on a coin.** The two small drops merged into the big one and made ears, because the drops' field sums.
+Rather than fight that, Home has no drops now: the balance sits on a big coin that turns right round every 11 s, lingering when it
+faces you, with two small coins beside it. All Settled uses the same coin. The drops stay for the moment after adding an expense,
+where their pooling is the point.
+
+**How a coin is drawn.** Seen from far away a tilted disc is an ellipse, so the outline, face and milled edge come from flat
+arithmetic with no ray tracing. The rim and edge are polished metal in the palette's colour, reflecting a simple studio, so they
+catch the light as they turn; the face stays glass and bends the liquid behind it. Each piece is its own small box, so a page pays only
+for what is on screen. With the big coin on screen throughout, the test page cost 3.4 ms of 16.7 at full quality on the Intel UHD at
+phone size, against 2.0 ms before. The finest engraving goes first when the governor drops below balanced.
+
+**The first version was rejected by the user as "very basic", and rightly:** a flat disc with a thin outline. The first version also
+drew the ₹ in solid fill, which sliced into pills behind the headline, and let fine lines bend the refraction, which cut the
+liquid's soft edges into steps. Both are gone: fine lines only affect the lighting, and the large ₹ fades as the coin parts.
+
+**The GitHub runners were crawling.** End-to-end took 9.6 minutes there against 2.4 here, and two tests timed out once before
+passing on retry. They have no GPU, so CSS glass does everything, which re-blurred every card in software. Cards without the
+engine are now a deeper tint with no blur, and only what floats blurs. Whether this was the cause is what the next CI run shows.
+That change first broke filled buttons under Crystal, Tinted and Pearl (a style's fill beat the accent's): caught in the user's own
+screenshot before it went live, and now excluded.
+
 ---
 
 ## Open problems

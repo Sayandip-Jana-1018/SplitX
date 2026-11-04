@@ -139,11 +139,15 @@ export default function LandingPage() {
             <Navbar />
 
             <main className={styles.main}>
-                {/* ── The bloom, with the promise in its heart ── */}
+                {/* ── One coin that splits and comes back whole, with the promise on it ── */}
                 <section className={styles.hero}>
-                    <i data-petals className={styles.bloom} />
-                    <i data-drop className={styles.dropLeft} />
-                    <i data-drop className={styles.dropRight} />
+                    <i aria-hidden data-coin="split" className={styles.heartCoin} />
+                    <i aria-hidden data-coin="coin" className={styles.coinA} />
+                    <i aria-hidden data-coin="note" className={styles.noteB} />
+                    <i aria-hidden data-coin="coin" className={styles.coinC} />
+                    <i aria-hidden data-coin="bill" className={styles.billD} />
+                    <i aria-hidden data-coin="coin" className={styles.coinE} />
+                    <i aria-hidden data-coin="coin" className={styles.coinF} />
                     <motion.div
                         className={styles.heroCopy}
                         initial={{ opacity: 0, y: 24, scale: 0.97 }}
