@@ -5600,6 +5600,11 @@ Measured with `handoff/tools/slow-probe.mjs`, at 6× slower CPU and phone resolu
 So the engine now asks for the renderer's name and steps aside for SwiftShader, llvmpipe, softpipe and Microsoft's Basic Render driver. This matters beyond CI: it is any
 laptop or phone whose GPU the browser has blocklisted, which was getting the worst version of the app. The no-blur fallback from D-122 is what makes the right-hand column so cheap.
 
+**Proven on GitHub:** all 14 browser tests passed in 2.6 minutes with no retries (e009c8c), against 22 minutes with failures.
+
+**The same run showed a second problem.** The release stopped at the upload to the Security tab, with no error in its log, before the scan had run. That upload is only a
+display, and the scan after it is the gate, so it can no longer stop a release.
+
 ---
 
 ## Open problems
