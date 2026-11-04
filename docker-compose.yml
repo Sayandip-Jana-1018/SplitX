@@ -71,7 +71,7 @@ services:
 
   # ── PostgreSQL (Local Development DB) ──
   postgres:
-    image: postgres:17.11-alpine3.24@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+    image: postgres:17.11-alpine3.24@sha256:eee6c6e1b0894fa4fe0075eb054af9fd1cf39a35321c2d4110626cfe506411fb
     container_name: splitx-postgres
     deploy:
       resources:
@@ -98,7 +98,7 @@ services:
   # Limiter counters are ephemeral by design: no persistence, bounded memory,
   # least-recently-used keys evicted first. A restart only resets the windows.
   redis:
-    image: redis:7.4.11-alpine@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
+    image: redis:7.4.11-alpine@sha256:57e4255cc971b1c8d6f8a6ca283ac01bc3ecdd914273ef6bfaede87aaecd6541
     container_name: splitx-redis
     deploy:
       resources:
@@ -131,7 +131,7 @@ services:
 
   # ── SonarQube (Code Quality Analysis) ──
   sonarqube:
-    image: sonarqube:26.9.0.129388-community
+    image: sonarqube:26.10.0.133078-community
     container_name: splitx-sonarqube
     deploy:
       resources:
@@ -152,7 +152,7 @@ services:
 
   # ── Nexus (Artifact Repository) ──
   nexus:
-    image: sonatype/nexus3:3.96.3@sha256:a406f4e9dc149e050723a93bf57964311f6d1c88e1dcbed2e42ea373319a1772
+    image: sonatype/nexus3:3.97.1@sha256:ffed04698ded3565ca3b40f4abd063d59b63c2fbeb134170e095bc1197931cd5
     container_name: splitx-nexus
     deploy:
       resources:
