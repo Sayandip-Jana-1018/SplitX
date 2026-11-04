@@ -5,7 +5,7 @@
 #   covers, says why it cannot be exploited here, and expires; on that date
 #   the gate refuses the image again unless a fixed release has replaced it.
 #   tests/unit/infra/opsApi.test.ts refuses an entry without all four.
-#   Checked again on 2026-11-03 (D-118): 2.3.0 is still k6's newest release.
+#   Checked again on 2026-11-04 (D-124): 2.3.0 is still k6's newest release.
 # ═══════════════════════════════════════════════════════════════
 vulnerabilities:
   - id: CVE-2026-84445
@@ -56,4 +56,19 @@ vulnerabilities:
       its rate and length (ops/lab/limits.mjs), so no other server ever
       answers k6. The most such a peer could do is use CPU in one run, which
       ends within 180 s; the lab accepts connections from ops-api only.
+    expired_at: 2026-12-15
+  - id: CVE-2026-111943
+    paths:
+      - usr/local/bin/k6
+    statement: >-
+      Go crypto/x509: a small list of intermediate certificates that one
+      certificate authority issued is no longer trusted. Fixed in Go 1.27.3
+      (published 2026-10-19); k6 2.3.0, the newest release, is built with Go
+      1.27.1, and v1.8.2 (2026-10-12) came out before the fix. The lab's k6 has
+      one peer, TARGET_URL, SplitIT's own edge, set in the lab's ConfigMap when
+      the platform is installed, and its one script (ops/lab/preview.js) sends
+      no credential: it opens a public page and asks for a made-up settlement
+      plan. So someone who could misuse one of those certificates would see only
+      load-test traffic and could only skew one run's numbers; the lab accepts
+      connections from ops-api only.
     expired_at: 2026-12-15
