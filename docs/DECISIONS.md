@@ -5606,10 +5606,10 @@ laptop or phone whose GPU the browser has blocklisted, which was getting the wor
 display, and the scan after it is the gate, so it can no longer stop a release.
 
 **The scan's own finding, read at last.** The app's image passes. The ops image had one finding: CVE-2026-111943 in the Go inside `k6`, fixed in Go 1.27.3. **The Next.js upgrade
-did not clear the gate, and could not have:** this was the block all along, and it would have been found sooner if the log had been readable. No fixed k6 exists: 2.3.0 is still the newest, and v1.8.2
+was still needed, but it was not the last block:** whether the app's image also failed before it was never read, because the log needs a sign-in. No fixed k6 exists: 2.3.0 is still the newest, and v1.8.2
 predates the Go fix. So it joins the four from D-118 as an acceptance in `ops/.trivyignore.yaml`, on the same terms: one file, a reason, and the same 2026-12-15 expiry, when the gate refuses
 it again unless a fixed k6 has replaced it. The reason: the fix distrusts a few intermediate certificates, and the lab's k6 talks only to our own edge and sends no credential.
-**This loosens a security gate, so it was told to the user plainly.**
+**This loosens a security gate, so it was told to the user plainly.** With it, the release job passed for the first time since going live (316490d): scanned, signed and attested.
 
 ---
 
