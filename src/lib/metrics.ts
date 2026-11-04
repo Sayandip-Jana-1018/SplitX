@@ -3,7 +3,7 @@ import { previewMaxInFlight, previewsInFlight } from '@/lib/previewAdmission';
 import { CATEGORIES, PAYMENT_METHODS } from '@/lib/utils';
 
 // ═══════════════════════════════════════════════════════════════
-//   SplitX — Prometheus Metrics
+//   SplitIT — Prometheus Metrics
 //
 //   Next.js compiles this module into every server entry point on its
 //   own: the proxy, each route handler and instrumentation all get a
@@ -176,12 +176,12 @@ function createMetrics() {
     };
 }
 
-export type SplitXMetrics = ReturnType<typeof createMetrics>;
+export type SplitITMetrics = ReturnType<typeof createMetrics>;
 
-const globalForMetrics = globalThis as typeof globalThis & { __splitxMetrics?: SplitXMetrics };
+const globalForMetrics = globalThis as typeof globalThis & { __splititMetrics?: SplitITMetrics };
 
-function getMetrics(): SplitXMetrics {
-    if (!globalForMetrics.__splitxMetrics) {
+function getMetrics(): SplitITMetrics {
+    if (!globalForMetrics.__splititMetrics) {
         const created = createMetrics();
         created.appInfo.set(
             {
@@ -191,9 +191,9 @@ function getMetrics(): SplitXMetrics {
             },
             1
         );
-        globalForMetrics.__splitxMetrics = created;
+        globalForMetrics.__splititMetrics = created;
     }
-    return globalForMetrics.__splitxMetrics;
+    return globalForMetrics.__splititMetrics;
 }
 
 export const metrics = getMetrics();

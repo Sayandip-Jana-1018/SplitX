@@ -16,7 +16,7 @@ vulnerabilities:
       server. k6 2.3.0, the newest release (2026-09-21), embeds grpc 1.84.0,
       and no fixed 1.84 release exists yet. The traffic lab's k6 serves no
       gRPC and its one script (ops/lab/preview.js) makes plain HTTP requests
-      to SplitX's own edge, so the vulnerable code never runs; the lab also
+      to SplitIT's own edge, so the vulnerable code never runs; the lab also
       accepts connections from ops-api only. Dependabot watches ops/ for a
       k6 release with the fix.
     expired_at: 2026-12-15
@@ -29,7 +29,7 @@ vulnerabilities:
       release, is built with Go 1.27.1; the fix is in Go 1.27.2 (published
       2026-10-09), and no k6 built with it exists yet. The traffic lab runs
       k6 as an HTTP client only (`k6 run`, ops/lab/server.mjs), and its one
-      script requests SplitX's own edge, so no Go server of k6's answers a
+      script requests SplitIT's own edge, so no Go server of k6's answers a
       Range request; the lab accepts connections from ops-api only.
     expired_at: 2026-12-15
   - id: CVE-2026-97031
@@ -39,7 +39,7 @@ vulnerabilities:
       Go crypto/tls denial of service through repeated ECH outer extension
       references in a ClientHello, which a TLS server parses. Fixed in Go
       1.27.2 (published 2026-10-09); k6 2.3.0 is built with Go 1.27.1 and no
-      newer k6 exists yet. The lab's k6 is a TLS client of SplitX's own edge
+      newer k6 exists yet. The lab's k6 is a TLS client of SplitIT's own edge
       and runs no TLS server, so it never parses a ClientHello.
     expired_at: 2026-12-15
   - id: CVE-2026-78669
@@ -51,7 +51,7 @@ vulnerabilities:
       frames makes the other side spend excessive CPU, a client as well as a
       server. Fixed in Go 1.27.2 and x/net 0.60.0 (published 2026-10-08); k6
       2.3.0, the newest release, is built with Go 1.27.1 and x/net 0.58.0.
-      The lab's k6 has one peer, TARGET_URL, SplitX's own edge, set in the
+      The lab's k6 has one peer, TARGET_URL, SplitIT's own edge, set in the
       lab's ConfigMap when the platform is installed; a run can choose only
       its rate and length (ops/lab/limits.mjs), so no other server ever
       answers k6. The most such a peer could do is use CPU in one run, which

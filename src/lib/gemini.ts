@@ -3,7 +3,7 @@
  *
  * - The key travels in the `x-goog-api-key` header, never in the URL, where
  *   proxies and logs keep it.
- * - Instructions and SplitX's own data go in `systemInstruction`; what the
+ * - Instructions and SplitIT's own data go in `systemInstruction`; what the
  *   person typed or said is a user turn of its own. Mixed into one prompt, a
  *   message could pose as instructions.
  * - Every call has a deadline. Gemini can take a minute and more when it is
@@ -11,7 +11,7 @@
  *   off than one told to try again.
  *
  * The model is `GEMINI_MODEL`, by default `gemini-3.6-flash`: on 2026-09-22
- * Google retired `gemini-2.0-flash`, which SplitX used, and named this as its
+ * Google retired `gemini-2.0-flash`, which SplitIT used, and named this as its
  * replacement.
  */
 

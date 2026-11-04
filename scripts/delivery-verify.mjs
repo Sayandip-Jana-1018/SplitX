@@ -206,7 +206,7 @@ async function github(path) {
     return res.json();
 }
 
-console.log('SplitX — delivery verification (' + (EKS ? 'EKS, through ' + target.base : 'Kind') + ')\n');
+console.log('SplitIT — delivery verification (' + (EKS ? 'EKS, through ' + target.base : 'Kind') + ')\n');
 
 // The release this cluster's Jenkins was last asked to deploy.
 let deployment = null;

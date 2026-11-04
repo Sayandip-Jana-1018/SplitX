@@ -1,6 +1,6 @@
-name: SplitX on AWS
+name: SplitIT on AWS
 description: >-
-  What aws-edge, aws-up and aws-down start with: one of SplitX's two CI roles,
+  What aws-edge, aws-up and aws-down start with: one of SplitIT's two CI roles,
   assumed with GitHub's OIDC token (no stored keys); the pinned Terraform,
   kubectl and Helm; and both Terraform roots initialised against the state
   bucket the splitx-bootstrap stack made, with the committed lock files.

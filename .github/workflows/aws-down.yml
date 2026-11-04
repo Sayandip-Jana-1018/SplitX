@@ -1,6 +1,6 @@
 name: AWS down
 
-# Removes SplitX's demo platform from AWS and proves nothing is left. It runs
+# Removes SplitIT's demo platform from AWS and proves nothing is left. It runs
 # as splitx-ci-teardown, which can look and remove but never create, so it
 # needs no approval, and every evening at 23:30 IST it checks by itself: budget
 # data lags 8 to 12 hours, so a forgotten platform would otherwise run all
@@ -10,7 +10,7 @@ name: AWS down
 # The order matters. The load balancer and the volumes were made by the
 # cluster, not by Terraform, and the network can't be deleted while they
 # exist, so they go first, through Kubernetes; then Terraform destroys what it
-# made; then a sweep removes anything the cluster left, by SplitX's tags; then
+# made; then a sweep removes anything the cluster left, by SplitIT's tags; then
 # the report lists everything the platform makes, and fails unless it is all
 # gone.
 

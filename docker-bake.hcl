@@ -1,5 +1,5 @@
 # ═══════════════════════════════════════════════════════════════
-#   SplitX — image builds (docker buildx bake)
+#   SplitIT — image builds (docker buildx bake)
 #
 #   npm run image:build          the production image, with provenance
 #   npm run image:report         naive vs production, measured

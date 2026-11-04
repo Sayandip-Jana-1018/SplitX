@@ -1,5 +1,5 @@
 # ═══════════════════════════════════════════════════════════════
-#   SplitX — the whole platform, end to end, on a GitHub runner (D-099)
+#   SplitIT — the whole platform, end to end, on a GitHub runner (D-099)
 #
 #   The same `k8s:up` as on a laptop builds the Kind cluster on a
 #   GitHub-hosted runner (4 CPUs, 16 GB) with a signed release. Then:

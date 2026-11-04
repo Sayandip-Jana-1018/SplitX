@@ -105,7 +105,7 @@ function ResetPasswordForm() {
         <AuthCard
             icon={<span className={cn(styles.stateIcon, styles.stateAccent)}><KeyRound size={30} /></span>}
             title="Choose a new password"
-            subtitle="Make it something you haven’t used on SplitX before."
+            subtitle="Make it something you haven’t used on SplitIT before."
             footer={<>Remembered it? <Link href="/login">Sign in</Link></>}
         >
             <AnimatePresence initial={false}>

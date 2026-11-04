@@ -52,7 +52,7 @@ function ThemeModeSwitch({ size = 'md' }: { size?: 'sm' | 'md' }) {
     );
 }
 
-/** Everything about how SplitX looks, in Settings and behind the appearance button alike. */
+/** Everything about how SplitIT looks, in Settings and behind the appearance button alike. */
 export function AppearanceControls() {
     const { palette, setPalette, glass, motion: motionChoice, setMotion } = useThemeContext();
     const current = COLOR_PALETTES.find((entry) => entry.id === palette) ?? COLOR_PALETTES[0];
@@ -100,7 +100,7 @@ export function AppearanceControls() {
 }
 
 /**
- * One tap opens everything about how SplitX looks.
+ * One tap opens everything about how SplitIT looks.
  * The button itself previews the palette you're on.
  */
 export default function ThemeSelector({ size = 44 }: { size?: number }) {
@@ -135,7 +135,7 @@ export default function ThemeSelector({ size = 44 }: { size?: number }) {
                 isOpen={open}
                 onClose={() => setOpen(false)}
                 title="Appearance"
-                description="Make SplitX feel like yours."
+                description="Make SplitIT feel like yours."
                 size="wide"
             >
                 <AppearanceControls />

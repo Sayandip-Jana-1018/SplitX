@@ -61,7 +61,7 @@ function LoginForm() {
         <AuthCard
             title="Welcome back"
             subtitle="Sign in to see who owes what and settle up in seconds."
-            footer={<>New to SplitX? <Link href={registerHref}>Create an account</Link></>}
+            footer={<>New to SplitIT? <Link href={registerHref}>Create an account</Link></>}
         >
             <SocialSignIn callbackUrl={callbackUrl} />
 

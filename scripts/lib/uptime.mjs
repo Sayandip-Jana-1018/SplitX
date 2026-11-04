@@ -33,7 +33,7 @@ const json = (body) => {
     }
 };
 
-const titled = (body) => /<title>[^<]*SplitX[^<]*<\/title>/.test(body);
+const titled = (body) => /<title>[^<]*SplitIT[^<]*<\/title>/.test(body);
 
 /** The first of the page's own scripts (`/_next/static/…js`), or null. */
 export function firstScript(html) {
@@ -59,7 +59,7 @@ export function judge(name, answer) {
         case 'home':
         case 'sign-in': {
             if (status !== 200) return wrongStatus(200);
-            return titled(body) ? { ok: true, detail: 'the page, titled SplitX' } : { ok: false, detail: 'HTTP 200, but not SplitX\'s page' };
+            return titled(body) ? { ok: true, detail: 'the page, titled SplitIT' } : { ok: false, detail: 'HTTP 200, but not SplitIT\'s page' };
         }
         case 'scripts': {
             if (status !== 200) return wrongStatus(200);

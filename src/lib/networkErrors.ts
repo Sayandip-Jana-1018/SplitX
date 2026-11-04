@@ -12,7 +12,7 @@ export class NetworkTaggedError extends Error {
     }
 }
 
-const RESTRICTED_NETWORK_EVENT = 'splitx:network-blocked';
+const RESTRICTED_NETWORK_EVENT = 'splitit:network-blocked';
 
 function emitRestrictedNetworkSignal() {
     if (typeof window === 'undefined') return;
@@ -54,12 +54,12 @@ export function getNetworkErrorCopy(variant: NetworkErrorVariant) {
         case 'offline':
             return {
                 title: 'You are offline',
-                message: 'Reconnect to the internet and try again. SplitX will be ready when your connection returns.',
+                message: 'Reconnect to the internet and try again. SplitIT will be ready when your connection returns.',
             };
         case 'restricted':
             return {
                 title: 'Out of network',
-                message: 'This network may be blocking SplitX. Try again or switch to a different network.',
+                message: 'This network may be blocking SplitIT. Try again or switch to a different network.',
             };
         case 'server':
             return {
@@ -69,7 +69,7 @@ export function getNetworkErrorCopy(variant: NetworkErrorVariant) {
         case 'network':
             return {
                 title: 'Connection problem',
-                message: 'We could not reach SplitX right now. Please try again.',
+                message: 'We could not reach SplitIT right now. Please try again.',
             };
         default:
             return {

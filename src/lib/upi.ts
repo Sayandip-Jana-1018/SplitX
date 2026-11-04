@@ -27,7 +27,7 @@ export function generateUpiLink({
     upiId,
     payeeName,
     amount,
-    note = 'SplitX Settlement',
+    note = 'SplitIT Settlement',
     currency = 'INR',
 }: UpiPayParams): string {
     const params = new URLSearchParams({

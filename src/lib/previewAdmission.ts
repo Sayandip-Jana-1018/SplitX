@@ -24,11 +24,11 @@
 export const PREVIEW_ADMISSION_HEADER = 'x-splitx-preview-admission';
 const STALE_AFTER_MS = 60_000;
 
-const state = globalThis as typeof globalThis & { __splitxPreviewAdmissions?: Map<string, number> };
+const state = globalThis as typeof globalThis & { __splititPreviewAdmissions?: Map<string, number> };
 
 function admissions(): Map<string, number> {
-    state.__splitxPreviewAdmissions ??= new Map();
-    return state.__splitxPreviewAdmissions;
+    state.__splititPreviewAdmissions ??= new Map();
+    return state.__splititPreviewAdmissions;
 }
 
 export function previewMaxInFlight(): number {

@@ -15,7 +15,7 @@
  *    at most `exactLimit` people are left — every real friend group;
  * 3. otherwise looks for zero-sum triples within a fixed work budget and
  *    settles the rest largest-first;
- * 4. keeps the largest-first plan SplitX has always shown unless that plan
+ * 4. keeps the largest-first plan SplitIT has always shown unless that plan
  *    needs more payments, so a group's plan only changes when a payment is saved.
  */
 

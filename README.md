@@ -1,8 +1,8 @@
 <div align="center">
 
-# SplitX
+# SplitIT
 
-**Split expenses with friends, on a platform where every DevOps tool does real, checkable work.**
+**A mobile-first app to split expenses with friends, on a platform where every DevOps tool does real, checkable work.**
 
 [![CI](https://github.com/Sayandip-Jana-1018/SplitX/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Sayandip-Jana-1018/SplitX/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/Sayandip-Jana-1018/SplitX/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/Sayandip-Jana-1018/SplitX/actions/workflows/codeql.yml)
@@ -16,10 +16,20 @@
 
 <br/>
 
-<img src="https://raw.githubusercontent.com/Sayandip-Jana-1018/SplitX/main/public/screenshots/1.png" alt="SplitX landing page" width="180" />
-<img src="https://raw.githubusercontent.com/Sayandip-Jana-1018/SplitX/main/public/screenshots/2.png" alt="SplitX dashboard" width="180" />
-<img src="https://raw.githubusercontent.com/Sayandip-Jana-1018/SplitX/main/public/screenshots/3.png" alt="SplitX activity, dark" width="180" />
-<img src="https://raw.githubusercontent.com/Sayandip-Jana-1018/SplitX/main/public/screenshots/8.png" alt="SplitX settlement graph" width="180" />
+<img src="public/screenshots/landing-amethyst.webp" alt="The landing page in Amethyst, its coin split into shares" width="180" />
+<img src="public/screenshots/home-emerald.webp" alt="Home in Emerald, the balance on a turning 3D coin" width="180" />
+<img src="public/screenshots/home-rose.webp" alt="Home in Quantum Rose, light mode" width="180" />
+<img src="public/screenshots/settle-ocean.webp" alt="Settle up in Ocean Breeze, with the money flow map" width="180" />
+<br/>
+<img src="public/screenshots/group-amber.webp" alt="A group in Amber" width="180" />
+<img src="public/screenshots/add-cherry.webp" alt="Adding an expense in Cherry Blossom" width="180" />
+<img src="public/screenshots/scan-perpetuity.webp" alt="Scanning a bill in Perpetuity" width="180" />
+<img src="public/screenshots/groups-lime.webp" alt="Groups in Lime Fusion, light mode" width="180" />
+
+<br/>
+
+**Mobile-first, in Liquid Glass.** Designed for your phone, in 16 colours and 5 kinds of glass, dark and light.<br/>
+Install it from your browser today. Play Store and App Store apps are on the way.
 
 <!--
   Space for the control room, from the rehearsal on AWS:
@@ -33,7 +43,7 @@
 
 ## Contents
 
-- [What SplitX is](#what-splitx-is)
+- [What SplitIT is](#what-splitit-is)
 - [The platform at a glance](#the-platform-at-a-glance)
 - [From a merge to a running pod](#from-a-merge-to-a-running-pod)
 - [The supply chain](#the-supply-chain)
@@ -47,10 +57,12 @@
 
 ---
 
-## What SplitX is
+## What SplitIT is
 
-**An expense-splitting app**, installable on a phone. You record who paid for what in groups and
-trips, and it settles everyone up in the fewest payments, with UPI links. It is built with Next.js 16,
+**A mobile-first expense-splitting app**, designed for your phone and installable from the browser
+today, with Play Store and App Store apps [on the way](docs/mobile/ROADMAP.md). You record who paid for what
+in groups and trips, and it settles everyone up in the fewest payments, with UPI links. Its Liquid Glass
+design is drawn by a WebGL engine of its own, with coins that turn and split. It is built with Next.js 16,
 Prisma on Neon Postgres, and NextAuth v5, and it is live on Vercel for real users.
 
 **A DevOps platform around it**, built so that nothing in the pipeline only *says* it worked.
@@ -65,7 +77,7 @@ Prisma on Neon Postgres, and NextAuth v5, and it is live on Vercel for real user
 - **On AWS EKS, on demo days,** behind an HTTPS edge (API Gateway). It is built that morning, and removed that evening.
 
 Every decision, what was rejected, and the measurement behind each claim is in
-**[docs/DECISIONS.md](docs/DECISIONS.md)**: 117 decisions, with the open problems at the end.
+**[docs/DECISIONS.md](docs/DECISIONS.md)**: 123 decisions, with the open problems at the end.
 
 ---
 
@@ -84,7 +96,7 @@ flowchart LR
 
     subgraph eks["EKS, on demo days"]
         alb["ALB<br/>the app serves only the edge"]
-        app["SplitX pods<br/>autoscaled 2 to 10"]
+        app["SplitIT pods<br/>autoscaled 2 to 10"]
         redis[("Redis")]
         opsapi["ops-api"]
         lab["traffic lab<br/>k6"]
@@ -268,7 +280,7 @@ flowchart LR
     jen["Jenkins"] --> prom
     kyv["Kyverno"] --> prom
     ks["node-exporter ·<br/>kube-state-metrics"] --> prom
-    prom -->|"SplitX rules, tested with promtool"| am["Alertmanager"] -->|"email"| inbox(["Inbox"])
+    prom -->|"SplitIT rules, tested with promtool"| am["Alertmanager"] -->|"email"| inbox(["Inbox"])
     alloy["Alloy<br/>pod logs, by the API"] --> loki["Loki"]
     prom --> graf["Grafana<br/>dashboards as code"]
     loki --> graf
@@ -286,7 +298,7 @@ flowchart LR
 ```
 
 - **Request IDs:** one request ID follows a request from the ingress to the pod's log line.
-- **Alerts:** every SplitX alert is unit-tested to fire when it should, and to stay silent through load
+- **Alerts:** every SplitIT alert is unit-tested to fire when it should, and to stay silent through load
   shedding, restarts and quiet nights.
 - **The first real outage:** Redis was stopped on purpose, the alert email arrived 199 s later, and
   the resolution five minutes after the fix ([D-052](docs/DECISIONS.md)).

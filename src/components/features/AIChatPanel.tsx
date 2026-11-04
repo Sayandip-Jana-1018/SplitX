@@ -174,7 +174,7 @@ export default function AIChatPanel({
                     <motion.section
                         role="dialog"
                         aria-modal="true"
-                        aria-label="SplitX AI assistant"
+                        aria-label="SplitIT AI assistant"
                         className={cn(styles.panel, isSheet ? styles.panelSheet : styles.panelFloating)} data-glass="thick" data-glass-mode="css"
                         initial={isSheet ? { y: '100%' } : { opacity: 0, y: 24, scale: 0.97 }}
                         animate={isSheet ? { y: 0 } : { opacity: 1, y: 0, scale: 1 }}
@@ -197,7 +197,7 @@ export default function AIChatPanel({
                         <header className={styles.header} onPointerDown={startDrag}>
                             <span className={styles.botMark}><Sparkles size={18} /></span>
                             <div className={styles.headerText}>
-                                <h2 className={styles.title}>SplitX AI</h2>
+                                <h2 className={styles.title}>SplitIT AI</h2>
                                 <p className={styles.status}>
                                     <span className={styles.statusDot} />
                                     {loading ? 'Thinking…' : 'Knows your groups & balances'}
@@ -226,7 +226,7 @@ export default function AIChatPanel({
                                     </motion.div>
                                     <h3 className={styles.welcomeTitle}>How can I help?</h3>
                                     <p className={styles.welcomeText}>
-                                        Ask about balances, spending or settling up — answers come from your live SplitX data.
+                                        Ask about balances, spending or settling up — answers come from your live SplitIT data.
                                     </p>
                                     <div className={styles.suggestions}>
                                         {SUGGESTIONS.map((suggestion, index) => (
@@ -317,7 +317,7 @@ export default function AIChatPanel({
                                 onChange={(event) => setInput(event.target.value)}
                                 placeholder="Ask anything about your money…"
                                 enterKeyHint="send"
-                                aria-label="Message SplitX AI"
+                                aria-label="Message SplitIT AI"
                             />
                             <button type="submit" className={styles.send} disabled={!input.trim() || loading} aria-label="Send message">
                                 <ArrowUp size={19} strokeWidth={2.6} />

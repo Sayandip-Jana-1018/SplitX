@@ -47,9 +47,9 @@ export async function POST(
         const upiId = settlement.to.upiId as string;
         const upiUrl = generateUpiLink({
             upiId,
-            payeeName: settlement.to.name || 'SplitX User',
+            payeeName: settlement.to.name || 'SplitIT User',
             amount: settlement.amount / 100,
-            note: 'SplitX settlement',
+            note: 'SplitIT settlement',
         });
 
         return NextResponse.json({

@@ -88,7 +88,7 @@ export default function AppTopBar({
     return (
         <header className={cn(styles.bar, scrolled && styles.barScrolled)}>
             <div className={styles.inner} data-glass="thin" data-glass-mode="css">
-                <Link href="/dashboard" className={styles.brand} aria-label="SplitX home">
+                <Link href="/dashboard" className={styles.brand} aria-label="SplitIT home">
                     <BrandMark size={30} />
                 </Link>
 
@@ -134,7 +134,7 @@ export default function AppTopBar({
                     </button>
                     <IconButton
                         icon={<Sparkles size={18} />}
-                        label="Ask SplitX AI"
+                        label="Ask SplitIT AI"
                         onClick={onAssistant}
                         tour="ai"
                     />

@@ -6,7 +6,7 @@ import { logger } from '@/lib/logger';
 /**
  * GET /api/health/ready — readiness probe.
  *
- * Ready means this pod can serve real requests, which for SplitX requires the
+ * Ready means this pod can serve real requests, which for SplitIT requires the
  * database. A failure removes the pod from the Service until it recovers; it
  * never restarts the pod — that is liveness's job, and liveness ignores the DB.
  */

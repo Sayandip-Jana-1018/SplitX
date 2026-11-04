@@ -109,7 +109,7 @@ function getRouteMeta(pathname: string): RouteMeta {
             title: 'Scan receipt',
             back: 'history',
             composer: true,
-            heading: { title: 'Scan a receipt', subtitle: 'SplitX reads the bill, then you split it item by item', backLabel: 'Back' },
+            heading: { title: 'Scan a receipt', subtitle: 'SplitIT reads the bill, then you split it item by item', backLabel: 'Back' },
         };
     }
     if (pathname === '/transactions/receipts') {
@@ -152,7 +152,7 @@ function getRouteMeta(pathname: string): RouteMeta {
     }
     if (pathname.startsWith('/history')) return { title: 'History', heading: null };
     if (pathname.startsWith('/contacts')) {
-        return { title: 'Contacts', heading: { title: 'Contacts', subtitle: 'The people you split with, and who is already on SplitX' } };
+        return { title: 'Contacts', heading: { title: 'Contacts', subtitle: 'The people you split with, and who is already on SplitIT' } };
     }
     if (pathname.startsWith('/settings')) {
         return { title: 'Settings', heading: { title: 'Settings', subtitle: 'Your profile, payments and preferences' } };
@@ -160,7 +160,7 @@ function getRouteMeta(pathname: string): RouteMeta {
     if (pathname.startsWith('/admin')) {
         return { title: 'System health', back: '/settings', heading: { title: 'System health', backLabel: 'Settings' } };
     }
-    return { title: 'SplitX', heading: null };
+    return { title: 'SplitIT', heading: null };
 }
 
 /** Header gains a frosted backdrop once content scrolls beneath it. */
@@ -369,7 +369,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                                 {!meta.composer && (
                                     <IconButton
                                         icon={<Sparkles size={18} />}
-                                        label="Ask SplitX AI"
+                                        label="Ask SplitIT AI"
                                         onClick={() => setAssistantOpen(true)}
                                         tour="ai"
                                     />
@@ -517,7 +517,7 @@ function NavPanel({
     return (
         <div className={styles.nav}>
             <div className={styles.navTop}>
-                <Link href="/dashboard" className={styles.navBrand} aria-label="SplitX home" onClick={onClose}>
+                <Link href="/dashboard" className={styles.navBrand} aria-label="SplitIT home" onClick={onClose}>
                     <BrandMark size={32} />
                 </Link>
                 <IconButton icon={<X size={18} />} label="Close menu" onClick={onClose} variant="ghost" />

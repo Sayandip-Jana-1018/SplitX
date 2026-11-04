@@ -1,6 +1,6 @@
 #!/bin/bash
 # ═══════════════════════════════════════════════════════════════
-#   SplitX — image vulnerability scan (Trivy)
+#   SplitIT — image vulnerability scan (Trivy)
 #
 #   ./scripts/scan-image.sh [image]            default: splitx:local
 #   SEVERITY=CRITICAL ./scripts/scan-image.sh  gate on critical only

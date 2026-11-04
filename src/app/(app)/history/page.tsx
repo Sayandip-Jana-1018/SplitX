@@ -81,7 +81,7 @@ export default function HistoryPage() {
                 <EmptyState
                     icon={<GitBranch size={26} />}
                     title="No journeys yet"
-                    description="Create or join a group — SplitX records every change to your balance there."
+                    description="Create or join a group — SplitIT records every change to your balance there."
                     actionLabel="Create a group"
                     actionHref="/groups?create=1"
                     actionIcon={<Plus size={16} />}

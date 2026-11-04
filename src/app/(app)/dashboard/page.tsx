@@ -317,7 +317,7 @@ export default function DashboardPage() {
                                     <ListRow
                                         onClick={openAssistant}
                                         leading={<IconTile tone="solid"><Sparkles size={18} /></IconTile>}
-                                        title="Ask SplitX AI"
+                                        title="Ask SplitIT AI"
                                         subtitle="“How much did we spend on food?”"
                                         chevron
                                     />

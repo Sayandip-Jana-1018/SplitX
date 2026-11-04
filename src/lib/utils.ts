@@ -1,5 +1,5 @@
 /**
- * SplitX — Utility Functions
+ * SplitIT — Utility Functions
  */
 
 /**

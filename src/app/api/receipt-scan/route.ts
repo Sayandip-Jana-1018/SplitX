@@ -26,7 +26,7 @@ interface ReceiptScanResult {
     subtotal: number;   // paise
     taxes: Record<string, number>; // e.g. { CGST: 1702, SGST: 1702 }
     total: number;       // paise
-    /** ISO 4217 code of the amounts as printed. SplitX records rupees, so the page warns about any other. */
+    /** ISO 4217 code of the amounts as printed. SplitIT records rupees, so the page warns about any other. */
     currency: string;
     category: string;
     confidence: number;

@@ -40,10 +40,10 @@ try {
     await transport.verify();
     console.log(`Signed in to ${SMTP_HOST}:${port}.`);
     const info = await transport.sendMail({
-        from: EMAIL_FROM || `SplitX <${SMTP_USER}>`,
+        from: EMAIL_FROM || `SplitIT <${SMTP_USER}>`,
         to,
-        subject: 'SplitX email test',
-        text: 'If you can read this, SplitX can send email: password resets and sign-up confirmations will arrive. You can delete this message.',
+        subject: 'SplitIT email test',
+        text: 'If you can read this, SplitIT can send email: password resets and sign-up confirmations will arrive. You can delete this message.',
     });
     console.log(`Sent: the mail server accepted it (${info.response ?? 'no reply text'}). Check the inbox, and the spam folder.`);
 } catch (error) {

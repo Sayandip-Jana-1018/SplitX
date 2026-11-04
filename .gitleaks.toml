@@ -1,9 +1,9 @@
 # ═══════════════════════════════════════════════════════════════
-#   SplitX — secret scanning (gitleaks v8)
+#   SplitIT — secret scanning (gitleaks v8)
 #   Runs in the pre-commit hook and on every CI run over full history.
 # ═══════════════════════════════════════════════════════════════
 
-title = "SplitX"
+title = "SplitIT"
 
 [extend]
 useDefault = true

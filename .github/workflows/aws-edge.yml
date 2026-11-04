@@ -1,6 +1,6 @@
 name: AWS edge
 
-# Applies terraform/edge, SplitX's HTTPS front door, an API Gateway HTTP API
+# Applies terraform/edge, SplitIT's HTTPS front door, an API Gateway HTTP API
 # (D-114), which stays up between AWS days at no cost: once to create it, and
 # again whenever its configuration changes. It keeps whatever the edge points
 # at, so it never takes the site online or offline; aws-up and aws-down do

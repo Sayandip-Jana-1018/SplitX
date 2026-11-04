@@ -45,7 +45,7 @@ const TOUR_STEPS: TourStep[] = [
     },
     {
         target: '[data-tour="ai"]',
-        title: 'Ask SplitX AI',
+        title: 'Ask SplitIT AI',
         description: 'Ask who owes you, what you spent on food, or how to settle — in plain English.',
         position: 'bottom',
     },
@@ -239,7 +239,7 @@ export default function OnboardingTour() {
             >
                 <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} onClick={dismiss}>
                     <defs>
-                        <mask id="splitx-tour-mask">
+                        <mask id="splitit-tour-mask">
                             <rect width="100%" height="100%" fill="white" />
                             {spotlightRect && (
                                 <rect
@@ -253,7 +253,7 @@ export default function OnboardingTour() {
                             )}
                         </mask>
                     </defs>
-                    <rect width="100%" height="100%" fill="rgba(6, 8, 14, 0.62)" mask="url(#splitx-tour-mask)" />
+                    <rect width="100%" height="100%" fill="rgba(6, 8, 14, 0.62)" mask="url(#splitit-tour-mask)" />
                 </svg>
 
                 {spotlightRect && (

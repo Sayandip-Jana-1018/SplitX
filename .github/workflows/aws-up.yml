@@ -1,6 +1,6 @@
 name: AWS up
 
-# Builds SplitX's demo platform on AWS on the morning of an AWS day, and
+# Builds SplitIT's demo platform on AWS on the morning of an AWS day, and
 # checks each part as it goes. aws-down removes it that evening, or at 23:30
 # IST by itself.
 #

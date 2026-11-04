@@ -40,7 +40,7 @@ export default function OpsPage() {
         <div className={styles.page}>
             <PageIntro
                 eyebrow="Operations"
-                title="SplitX, live"
+                title="SplitIT, live"
                 subtitle="Every number is read from its source as the page refreshes: the pipeline every 15 seconds, the cluster every 5. Where a source can't be read, it says so."
             />
 

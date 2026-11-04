@@ -9,7 +9,7 @@ interface BrandMarkProps {
 }
 
 /**
- * SplitX's logo: a coin of liquid glass. Its gold rim and rupee stay the same everywhere,
+ * SplitIT's logo: a coin of liquid glass. Its gold rim and rupee stay the same everywhere,
  * so it is always recognisably ours; its face and liquid take the active palette.
  * The installed app's icon is the same coin (public/icons), in the default colour.
  */
@@ -45,7 +45,7 @@ export default function BrandMark({ size = 30, wordmark = true, className }: Bra
             </svg>
             {wordmark && (
                 <span className={styles.word} style={{ fontSize: Math.max(15, Math.round(size * 0.6)) }}>
-                    Split<span className={styles.x}>X</span>
+                    Split<span className={styles.it}>IT</span>
                 </span>
             )}
         </span>

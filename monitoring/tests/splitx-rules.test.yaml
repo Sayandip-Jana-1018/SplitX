@@ -1,5 +1,5 @@
 # ═══════════════════════════════════════════════════════════════
-#   Unit tests for the SplitX alert rules (k8s/base/prometheusrule.yaml),
+#   Unit tests for the SplitIT alert rules (k8s/base/prometheusrule.yaml),
 #   run with promtool by `node scripts/test-alerts.mjs`.
 #
 #   Each alert has a case that must fire and a case built from what
@@ -33,7 +33,7 @@ tests:
               namespace: splitx
               deployment: splitx
             exp_annotations:
-              summary: No SplitX pod is available to serve requests
+              summary: No SplitIT pod is available to serve requests
               description: The splitx deployment has had no available replicas for a minute. Check `kubectl -n splitx get pods` and whether the readiness probe can reach the database.
 
   # ── SplitXServerErrors ────────────────────────────────────────
@@ -100,7 +100,7 @@ tests:
           - exp_labels:
               severity: critical
             exp_annotations:
-              summary: More than 2% of SplitX responses are unintended server errors
+              summary: More than 2% of SplitIT responses are unintended server errors
               description: 'Over the last 5 minutes more than 2% of responses were 5xx errors that were not deliberate load shedding. Search Loki for {namespace="splitx", level="error"}.'
 
   - name: an occasional error at low traffic does not fire
@@ -134,7 +134,7 @@ tests:
           - exp_labels:
               severity: warning
             exp_annotations:
-              summary: SplitX has been refusing more than 5% of previews for 10 minutes
+              summary: SplitIT has been refusing more than 5% of previews for 10 minutes
               description: The pods are shedding load to stay responsive. Check whether the autoscaler is at its maximum (KubeHpaMaxedOut) or new pods cannot become ready.
 
   - name: a three-minute burst of shedding does not fire
@@ -174,7 +174,7 @@ tests:
           - exp_labels:
               severity: warning
             exp_annotations:
-              summary: SplitX p95 response time has been above 1 second for 10 minutes
+              summary: SplitIT p95 response time has been above 1 second for 10 minutes
               description: Most requests are still answered, but slowly. Check CPU against the autoscaler's target and event-loop lag per pod.
 
   - name: slow health checks and scrapes with nobody using the site do not fire
@@ -298,7 +298,7 @@ tests:
           - exp_labels:
               severity: warning
             exp_annotations:
-              summary: SplitX rate limiting is off because Redis cannot be reached
+              summary: SplitIT rate limiting is off because Redis cannot be reached
               description: Rate-limit checks have been failing for 2 minutes, so requests are served without limits. Check the splitx-redis pod.
 
   - name: working rate-limit checks do not fire

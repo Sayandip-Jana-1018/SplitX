@@ -90,7 +90,7 @@ async function parseWithGemini(
     memberNames: string[],
     groupName: string
 ): Promise<{ result: ParsedVoiceResult; provider: 'gemini' | 'gemini_fallback' }> {
-    const system = `You are a precise transaction parser for the SplitX app. Parse the user's voice transcript into structured expense data.
+    const system = `You are a precise transaction parser for the SplitIT app. Parse the user's voice transcript into structured expense data.
 
 RULES:
 1. Extract the amount (a number in the transcript). If multiple numbers exist, the first/largest is likely the total.

@@ -95,7 +95,7 @@ export function clampMembers(value: number): number {
 
 /** The short, distinguishing end of a pod name: splitx-7d9f8c6b5-x2kqp gives x2kqp. */
 export function podLabel(pod: string | null): string {
-    if (!pod) return 'SplitX';
+    if (!pod) return 'SplitIT';
     const parts = pod.split('-');
     return parts.length >= 3 ? parts[parts.length - 1] : pod;
 }

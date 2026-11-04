@@ -45,7 +45,7 @@ const CreateTransactionSchema = z.object({
     category: z.string().min(1).max(40).default('other'),
     method: z.string().min(1).max(40).default('cash'),
     description: z.string().max(500).optional(),
-    receiptUrl: z.string().refine(isTrustedReceiptUrl, { message: 'receiptUrl must point to SplitX receipt storage' }).optional(),
+    receiptUrl: z.string().refine(isTrustedReceiptUrl, { message: 'receiptUrl must point to SplitIT receipt storage' }).optional(),
     payerId: z.string().max(64).optional(), // who paid — defaults to logged-in user
     splitType: z.enum(SPLIT_TYPES).default('equal'),
     splitAmong: z.array(z.string().min(1).max(64)).max(200).optional(), // subset of member IDs to split among

@@ -39,14 +39,14 @@ const BACKEND_ERROR_LOG_INTERVAL_MS = 30_000;
 
 // Process-wide state, shared across bundles (see getStore).
 const globalForLimiter = globalThis as typeof globalThis & {
-    __splitxRateLimitStore?: RateLimitStore | null;
-    __splitxLimiterErrorLoggedAt?: number;
+    __splititRateLimitStore?: RateLimitStore | null;
+    __splititLimiterErrorLoggedAt?: number;
 };
 
 function reportBackendError(error: unknown) {
     const now = Date.now();
-    if (now - (globalForLimiter.__splitxLimiterErrorLoggedAt ?? 0) < BACKEND_ERROR_LOG_INTERVAL_MS) return;
-    globalForLimiter.__splitxLimiterErrorLoggedAt = now;
+    if (now - (globalForLimiter.__splititLimiterErrorLoggedAt ?? 0) < BACKEND_ERROR_LOG_INTERVAL_MS) return;
+    globalForLimiter.__splititLimiterErrorLoggedAt = now;
     logger.warn('Rate limit backend unavailable; allowing requests', { err: error });
 }
 
@@ -55,7 +55,7 @@ function reportBackendError(error: unknown) {
 // variable would give each bundle its own copy and its own Redis connection.
 
 function getStore(): RateLimitStore | null {
-    if (globalForLimiter.__splitxRateLimitStore !== undefined) return globalForLimiter.__splitxRateLimitStore;
+    if (globalForLimiter.__splititRateLimitStore !== undefined) return globalForLimiter.__splititRateLimitStore;
 
     const redisUrl = process.env.REDIS_URL;
     const upstashUrl = process.env.UPSTASH_REDIS_REST_URL;
@@ -64,7 +64,7 @@ function getStore(): RateLimitStore | null {
     let created: RateLimitStore | null = null;
     if (redisUrl) created = createRedisStore(redisUrl, reportBackendError);
     else if (upstashUrl && upstashToken) created = createUpstashStore(upstashUrl, upstashToken, reportBackendError);
-    globalForLimiter.__splitxRateLimitStore = created;
+    globalForLimiter.__splititRateLimitStore = created;
 
     metrics.rateLimiterInfo.set({ backend: created?.backend ?? 'disabled' }, 1);
     if (!created) logger.warn('Rate limiting is disabled: set REDIS_URL or UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN');
@@ -167,8 +167,8 @@ export async function consumeAllowance(key: string, limit: number, windowMs: num
 
 /** Test hook: use a specific store (null = disabled) or reset to environment configuration. */
 export async function setRateLimitStore(next: RateLimitStore | null | undefined) {
-    const current = globalForLimiter.__splitxRateLimitStore;
+    const current = globalForLimiter.__splititRateLimitStore;
     if (current && current !== next) await current.close();
-    globalForLimiter.__splitxRateLimitStore = next;
-    globalForLimiter.__splitxLimiterErrorLoggedAt = 0;
+    globalForLimiter.__splititRateLimitStore = next;
+    globalForLimiter.__splititLimiterErrorLoggedAt = 0;
 }

@@ -151,7 +151,7 @@ async function inCluster(name, path) {
 const promQuery = (expr) => inCluster('prometheus', '/api/v1/query?query=' + encodeURIComponent(expr));
 const isReady = (pod) => pod.status?.conditions?.some((c) => c.type === 'Ready' && c.status === 'True');
 
-console.log('SplitX — cluster verification (' + (EKS ? 'EKS, through ' + BASE : 'Kind') + ')\n');
+console.log('SplitIT — cluster verification (' + (EKS ? 'EKS, through ' + BASE : 'Kind') + ')\n');
 
 // ── 1. Scheduling: where the pods actually run ────────────────────────────
 console.log('[1] Scheduling');
@@ -418,7 +418,7 @@ if (EKS) {
     const unrouted = k(['exec', placement[0].pod, '--', 'sh', '-c', 'wget -qO- http://127.0.0.1:3000/ 2>&1 | head -1']);
     const unroutedSaid = (unrouted.stdout + ' ' + unrouted.stderr).trim();
     record(
-        'The application refuses a request that did not come through SplitX\'s edge',
+        'The application refuses a request that did not come through SplitIT\'s edge',
         unroutedSaid.includes('403'),
         unroutedSaid.includes('403') ? "GET / inside a pod, without the edge's X-Origin-Verify: HTTP 403" : unroutedSaid.slice(0, 80)
     );
@@ -868,9 +868,9 @@ const committedAlerts = (readFileSync(join(root, 'k8s/base/prometheusrule.yaml')
 const splitxRules = ruleGroups.filter((group) => group.name.startsWith('splitx.')).flatMap((group) => group.rules);
 const brokenRules = ruleGroups.flatMap((group) => group.rules).filter((rule) => rule.health !== 'ok');
 record(
-    'The SplitX alert rules are loaded, and every rule evaluates cleanly',
+    'The SplitIT alert rules are loaded, and every rule evaluates cleanly',
     splitxRules.length === committedAlerts && brokenRules.length === 0,
-    splitxRules.length + ' of ' + committedAlerts + ' SplitX rules loaded; '
+    splitxRules.length + ' of ' + committedAlerts + ' SplitIT rules loaded; '
         + ruleGroups.flatMap((group) => group.rules).length + ' rules in total, '
         + (brokenRules.length ? brokenRules.map((rule) => rule.name + ': ' + rule.lastError).join('; ') : '0 with errors')
 );
@@ -1107,11 +1107,11 @@ sections.push({
             return '| `' + job + '` | ' + (of[0]?.labels.namespace ?? '-') + ' | ' + of.filter((t) => t.health === 'up').length + ' of ' + of.length + ' |';
         }),
         '',
-        '| SplitX alert | Severity | State now |',
+        '| SplitIT alert | Severity | State now |',
         '|---|---|---|',
         ...splitxRules.map((rule) => '| `' + rule.name + '` | ' + rule.labels.severity + ' | ' + rule.state + ' |'),
         '',
-        'Each SplitX rule is unit-tested with promtool in CI (`npm run test:alerts`), against series',
+        'Each SplitIT rule is unit-tested with promtool in CI (`npm run test:alerts`), against series',
         'that should fire it and series that must not. ' + ruleGroups.flatMap((group) => group.rules).length
             + ' rules are loaded in total, including the Kubernetes defaults.',
         '',

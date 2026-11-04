@@ -1,5 +1,5 @@
 # ═══════════════════════════════════════════════════════════════
-#   Prometheus scrapes every SplitX pod directly, found through the
+#   Prometheus scrapes every SplitIT pod directly, found through the
 #   Service's endpoints. Each pod keeps its own counters, so scraping the
 #   Service address would read a different pod each time.
 # ═══════════════════════════════════════════════════════════════

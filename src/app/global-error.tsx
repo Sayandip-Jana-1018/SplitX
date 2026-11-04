@@ -12,7 +12,7 @@ export default function GlobalError({ error, reset }: { error: Error & { digest?
                 <div style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
                     <div style={{ maxWidth: 360, textAlign: 'center' }}>
                         <div style={{ fontSize: 40, marginBottom: 12 }}>⚠</div>
-                        <h1 style={{ fontSize: 20, fontWeight: 800, marginBottom: 8 }}>SplitX couldn’t start</h1>
+                        <h1 style={{ fontSize: 20, fontWeight: 800, marginBottom: 8 }}>SplitIT couldn’t start</h1>
                         <p style={{ fontSize: 14, lineHeight: 1.6, color: '#9aa0ae', marginBottom: 20 }}>
                             Reload the page to try again.
                         </p>

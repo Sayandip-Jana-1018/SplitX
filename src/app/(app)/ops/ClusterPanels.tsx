@@ -285,7 +285,7 @@ function TrafficLab({ lab, onChanged }: Readonly<{ lab: Reading<LabRun>; onChang
                 setProblem(body.error ?? `The lab answered ${response.status}.`);
             }
         } catch {
-            setProblem('The request did not reach SplitX.');
+            setProblem('The request did not reach SplitIT.');
         } finally {
             setBusy(false);
             onChanged();

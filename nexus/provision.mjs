@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 /**
- * Sets up a fresh Nexus for SplitX's release evidence (D-096), through Nexus'
+ * Sets up a fresh Nexus for SplitIT's release evidence (D-096), through Nexus'
  * own REST API. Run as the Job in nexus/provision.yaml after every install;
  * safe to run again, because each step first asks whether it is already done.
  *
  *   1. waits until Nexus answers and can write
  *   2. accepts the Community Edition licence: component uploads are refused
- *      until an administrator does. SplitX's owner accepted it for these
+ *      until an administrator does. SplitIT's owner accepted it for these
  *      instances on 2026-09-24 (docs/DECISIONS.md, D-095 and D-096).
  *   3. turns anonymous access off: nothing is readable without an account
  *   4. creates the raw repository splitx-evidence, where nothing is ever
@@ -95,7 +95,7 @@ if (eula.json?.accepted) {
 } else {
     // Nexus wants its own disclaimer text back, unchanged, with accepted: true.
     await must('accepting the licence', api('POST', '/v1/system/eula', { accepted: true, disclaimer: eula.json?.disclaimer ?? '' }));
-    say('accepted, as SplitX\'s owner decided (D-095): ' + (eula.json?.disclaimer ?? '').slice(0, 160));
+    say('accepted, as SplitIT\'s owner decided (D-095): ' + (eula.json?.disclaimer ?? '').slice(0, 160));
 }
 
 // ── 3. anonymous access ──────────────────────────────────────────────────────
@@ -138,7 +138,7 @@ async function account({ role: roleId, actions, what, userId, firstName, passwor
         await must('creating the user ' + userId, api('POST', '/v1/security/users', {
             userId,
             firstName,
-            lastName: 'SplitX',
+            lastName: 'SplitIT',
             emailAddress: userId + '@splitx.invalid',
             password,
             status: 'active',

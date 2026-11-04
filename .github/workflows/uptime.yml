@@ -1,5 +1,5 @@
 # ═══════════════════════════════════════════════════════════════
-#   SplitX — the live site, checked every 15 minutes (D-106)
+#   SplitIT — the live site, checked every 15 minutes (D-106)
 #
 #   Production is splitsj.vercel.app. Prometheus, Alertmanager and the
 #   rest run only on the Kind runs and the AWS days, so without this

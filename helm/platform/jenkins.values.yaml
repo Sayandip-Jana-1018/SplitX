@@ -238,7 +238,7 @@ controller:
       splitx: |
         jenkins:
           systemMessage: >-
-            SplitX delivery. Deploys releases that GitHub Actions signed on main,
+            SplitIT delivery. Deploys releases that GitHub Actions signed on main,
             when GitHub announces them. Configured as code in
             helm/platform/jenkins.values.yaml; nothing here is set by hand.
           globalNodeProperties:
@@ -293,7 +293,7 @@ controller:
         jobs:
           - script: |
               pipelineJob('splitx-deploy') {
-                displayName('SplitX: deploy a signed release')
+                displayName('SplitIT: deploy a signed release')
                 description('Deploys the release a GitHub deployment names, once its webhook and its image are verified, and rolls it back if it does not come up healthy (D-055). Steps: jenkins/Jenkinsfile.')
                 logRotator { numToKeep(100) }
                 parameters {

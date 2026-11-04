@@ -4,7 +4,7 @@
  * role splitx-ci-teardown: it may look at everything in the platform's region
  * and delete what the platform made, and nothing else
  * (cloudformation/bootstrap.yaml). What counts as the platform's is decided in
- * scripts/lib/aws-leftovers.mjs, by SplitX's tags and names only.
+ * scripts/lib/aws-leftovers.mjs, by SplitIT's tags and names only.
  *
  *   node scripts/aws-teardown.mjs wait-load-balancers
  *       After the Ingresses are deleted: until the load balancers the AWS Load

@@ -279,7 +279,7 @@ export default function GroupDetailPage() {
     const shareInvite = async () => {
         if (navigator.share) {
             try {
-                await navigator.share({ title: `Join ${group.name} on SplitX`, text: `Split expenses with us in "${group.name}".`, url: inviteLink });
+                await navigator.share({ title: `Join ${group.name} on SplitIT`, text: `Split expenses with us in "${group.name}".`, url: inviteLink });
             } catch { /* dismissed */ }
         } else {
             void copyInvite();
@@ -740,21 +740,21 @@ export default function GroupDetailPage() {
                                 <button
                                     type="button"
                                     className={styles.shareOption} data-glass="thin"
-                                    onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(`Join "${group.name}" on SplitX to split expenses: ${inviteLink}`)}`, '_blank')}
+                                    onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(`Join "${group.name}" on SplitIT to split expenses: ${inviteLink}`)}`, '_blank')}
                                 >
                                     <span className={styles.shareIcon}><MessageCircle size={18} /></span>WhatsApp
                                 </button>
                                 <button
                                     type="button"
                                     className={styles.shareOption} data-glass="thin"
-                                    onClick={() => window.open(`sms:?body=${encodeURIComponent(`Join "${group.name}" on SplitX: ${inviteLink}`)}`, '_blank')}
+                                    onClick={() => window.open(`sms:?body=${encodeURIComponent(`Join "${group.name}" on SplitIT: ${inviteLink}`)}`, '_blank')}
                                 >
                                     <span className={styles.shareIcon}><MessageSquare size={18} /></span>SMS
                                 </button>
                                 <button
                                     type="button"
                                     className={styles.shareOption} data-glass="thin"
-                                    onClick={() => window.open(`mailto:?subject=${encodeURIComponent(`Join ${group.name} on SplitX`)}&body=${encodeURIComponent(`Split expenses with us in "${group.name}".\n\n${inviteLink}`)}`, '_blank')}
+                                    onClick={() => window.open(`mailto:?subject=${encodeURIComponent(`Join ${group.name} on SplitIT`)}&body=${encodeURIComponent(`Split expenses with us in "${group.name}".\n\n${inviteLink}`)}`, '_blank')}
                                 >
                                     <span className={styles.shareIcon}><Mail size={18} /></span>Email
                                 </button>
@@ -782,7 +782,7 @@ export default function GroupDetailPage() {
                         compact
                         variant="plain"
                         icon={<Users size={22} />}
-                        title="No contacts on SplitX yet"
+                        title="No contacts on SplitIT yet"
                         description="Add friends in Contacts, or share the invite link instead."
                         actionLabel="Share invite link"
                         actionIcon={<Link2 size={16} />}

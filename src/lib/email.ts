@@ -3,7 +3,7 @@ import { Resend } from 'resend';
 import { siteUrl } from '@/lib/siteUrl';
 
 /**
- * How SplitX sends email: password resets and address verification.
+ * How SplitIT sends email: password resets and address verification.
  *
  * - **SMTP** — `SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD` (and `SMTP_PORT`,
  *   465 by default). With a Gmail account and an app password this reaches
@@ -33,11 +33,11 @@ export function emailTransport(): EmailTransport | null {
     return null;
 }
 
-const globalForMail = globalThis as typeof globalThis & { __splitxSmtp?: Transporter };
+const globalForMail = globalThis as typeof globalThis & { __splititSmtp?: Transporter };
 
 function smtpTransport() {
     const port = Number(process.env.SMTP_PORT) || 465;
-    globalForMail.__splitxSmtp ??= nodemailer.createTransport({
+    globalForMail.__splititSmtp ??= nodemailer.createTransport({
         host: process.env.SMTP_HOST,
         port,
         // 465 is encrypted from the first byte; any other port (587) must turn
@@ -50,7 +50,7 @@ function smtpTransport() {
         greetingTimeout: 10_000,
         socketTimeout: 20_000,
     });
-    return globalForMail.__splitxSmtp;
+    return globalForMail.__splititSmtp;
 }
 
 export interface OutgoingEmail {
@@ -62,7 +62,7 @@ export interface OutgoingEmail {
 
 /**
  * Top-level domains reserved so that they never resolve (RFC 2606, RFC 6761).
- * Mail to them can only bounce, back to SplitX's own sender: the cluster's
+ * Mail to them can only bounce, back to SplitIT's own sender: the cluster's
  * verifier signs up a `…@example.invalid` account on every AWS day.
  */
 const RESERVED_TLD = /\.(?:invalid|test|example|localhost)$/i;
@@ -78,7 +78,7 @@ export async function sendEmail(mail: OutgoingEmail) {
     const transport = emailTransport();
     if (transport === 'smtp') {
         await smtpTransport().sendMail({
-            from: process.env.EMAIL_FROM || `SplitX <${process.env.SMTP_USER}>`,
+            from: process.env.EMAIL_FROM || `SplitIT <${process.env.SMTP_USER}>`,
             ...mail,
         });
         return;
@@ -118,7 +118,7 @@ export function stripTags(html: string) {
     return text;
 }
 
-/** One layout for every SplitX email: a heading, a sentence, a button, and a plain-text copy. */
+/** One layout for every SplitIT email: a heading, a sentence, a button, and a plain-text copy. */
 function layout(params: { icon: string; title: string; body: string; button: string; url: string; footnote: string }) {
     const html = `<!DOCTYPE html>
 <html>
@@ -131,7 +131,7 @@ function layout(params: { icon: string; title: string; body: string; button: str
         <div style="text-align:center;margin-bottom:32px;">
             <div style="display:inline-flex;align-items:center;gap:8px;">
                 <div style="width:36px;height:36px;background:linear-gradient(135deg,#6366f1,#8b5cf6);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;">⚡</div>
-                <span style="font-size:20px;font-weight:800;color:#fff;">SplitX</span>
+                <span style="font-size:20px;font-weight:800;color:#fff;">SplitIT</span>
             </div>
         </div>
         <div style="background:rgba(20,20,45,0.9);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:36px 32px;text-align:center;">
@@ -141,7 +141,7 @@ function layout(params: { icon: string; title: string; body: string; button: str
             <a href="${params.url}" style="display:inline-block;padding:12px 36px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;text-decoration:none;border-radius:10px;font-weight:700;font-size:14px;letter-spacing:0.3px;">${params.button}</a>
             <p style="font-size:12px;color:#64748b;margin:24px 0 0;line-height:1.5;">${params.footnote}</p>
         </div>
-        <p style="text-align:center;font-size:11px;color:#475569;margin-top:24px;">© ${new Date().getFullYear()} SplitX · Expense splitting made easy</p>
+        <p style="text-align:center;font-size:11px;color:#475569;margin-top:24px;">© ${new Date().getFullYear()} SplitIT · Expense splitting made easy</p>
     </div>
 </body>
 </html>`;
@@ -154,7 +154,7 @@ export async function sendPasswordResetEmail(email: string, token: string) {
     const url = `${appUrl()}/reset-password?token=${encodeURIComponent(token)}`;
     await sendEmail({
         to: email,
-        subject: 'Reset your SplitX password',
+        subject: 'Reset your SplitIT password',
         ...layout({
             icon: '🔒',
             title: 'Reset your password',
@@ -175,11 +175,11 @@ export async function sendAlreadyRegisteredEmail(email: string) {
     const url = `${appUrl()}/login`;
     await sendEmail({
         to: email,
-        subject: 'You already have a SplitX account',
+        subject: 'You already have a SplitIT account',
         ...layout({
             icon: '👋',
             title: 'You already have an account',
-            body: 'Someone just tried to create a SplitX account with this address. If it was you, sign in instead, or reset your password from the sign-in page.',
+            body: 'Someone just tried to create a SplitIT account with this address. If it was you, sign in instead, or reset your password from the sign-in page.',
             button: 'Sign in',
             url,
             footnote: 'If it wasn’t you, you can ignore this email.<br>Nothing about your account has changed.',
@@ -192,14 +192,14 @@ export async function sendVerificationEmail(email: string, token: string) {
     const url = `${appUrl()}/verify-email?token=${encodeURIComponent(token)}`;
     await sendEmail({
         to: email,
-        subject: 'Confirm your email for SplitX',
+        subject: 'Confirm your email for SplitIT',
         ...layout({
             icon: '✉️',
             title: 'Confirm your email',
-            body: 'Confirm this address to finish setting up your SplitX account. This link expires in <strong style="color:#c4b5fd;">24 hours</strong>.',
+            body: 'Confirm this address to finish setting up your SplitIT account. This link expires in <strong style="color:#c4b5fd;">24 hours</strong>.',
             button: 'Confirm email',
             url,
-            footnote: 'If you didn’t sign up for SplitX, you can ignore this email.<br>No account will be opened with this address.',
+            footnote: 'If you didn’t sign up for SplitIT, you can ignore this email.<br>No account will be opened with this address.',
         }),
     });
 }

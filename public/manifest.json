@@ -1,6 +1,6 @@
 {
-  "name": "SplitX — Split bills, settle up",
-  "short_name": "SplitX",
+  "name": "SplitIT — Split bills, settle up",
+  "short_name": "SplitIT",
   "description": "Split group expenses, see who owes whom, and settle up by UPI or cash in a tap.",
   "start_url": "/dashboard",
   "display": "standalone",

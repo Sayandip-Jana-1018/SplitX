@@ -27,7 +27,7 @@ export default function Navbar() {
     return (
         <nav className={cn(styles.nav, scrolled && styles.scrolled)} aria-label="Main">
             <div className={styles.inner} data-glass="thin" data-glass-mode="css">
-                <Link href="/" className={styles.logo} aria-label="SplitX home">
+                <Link href="/" className={styles.logo} aria-label="SplitIT home">
                     <BrandMark size={32} />
                 </Link>
                 <div className={styles.actions}>

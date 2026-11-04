@@ -14,7 +14,7 @@ afterEach(() => {
 });
 
 describe('takeAiQuota', () => {
-    it("counts one use against the person's daily allowance and SplitX's", async () => {
+    it("counts one use against the person's daily allowance and SplitIT's", async () => {
         consumeAllowance.mockResolvedValue(allow);
 
         expect(await takeAiQuota('chat', 'user-1')).toEqual({ ok: true });
@@ -41,7 +41,7 @@ describe('takeAiQuota', () => {
 
         const result = await takeAiQuota('voice', 'user-1');
 
-        expect(result).toMatchObject({ ok: false, status: 429, error: 'SplitX has reached today’s limit for AI features. Please try again tomorrow.' });
+        expect(result).toMatchObject({ ok: false, status: 429, error: 'SplitIT has reached today’s limit for AI features. Please try again tomorrow.' });
     });
 
     it('refuses rather than calling a paid API unmetered when the counter is unreachable', async () => {

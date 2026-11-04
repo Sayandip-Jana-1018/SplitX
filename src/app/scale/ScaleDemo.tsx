@@ -34,7 +34,7 @@ function describeProblem(outcome: Outcome, keepGoing: boolean): string {
         return 'This phone is planning faster than one device may. Waiting ' + outcome.retryAfterSeconds + ' s.';
     }
     if (outcome.kind === 'failed') {
-        return outcome.status === 0 ? 'Could not reach SplitX. Check your connection.' : 'Something went wrong (HTTP ' + outcome.status + ').';
+        return outcome.status === 0 ? 'Could not reach SplitIT. Check your connection.' : 'Something went wrong (HTTP ' + outcome.status + ').';
     }
     return '';
 }
@@ -77,7 +77,7 @@ export default function ScaleDemo() {
         }
 
         if (outcome.kind === 'planned') {
-            const name = outcome.plan.pod ?? 'SplitX';
+            const name = outcome.plan.pod ?? 'SplitIT';
             streak.current = 0;
             setPlan(outcome.plan);
             setPlans((count) => count + 1);
@@ -126,7 +126,7 @@ export default function ScaleDemo() {
                 <p className={styles.eyebrow}>Live on Kubernetes</p>
                 <h1 className={styles.title}>Settle a trip for a crowd</h1>
                 <p className={styles.lede}>
-                    Pick a group size and SplitX works out the fewest payments that settle everyone. Each plan is
+                    Pick a group size and SplitIT works out the fewest payments that settle everyone. Each plan is
                     computed live by one of the servers behind this page. Keep planning while the rest of the room
                     does, and watch more servers join in.
                 </p>
@@ -223,7 +223,7 @@ export default function ScaleDemo() {
             </section>
 
             <footer className={styles.footer}>
-                <Link href="/">SplitX home</Link>
+                <Link href="/">SplitIT home</Link>
             </footer>
         </main>
     );

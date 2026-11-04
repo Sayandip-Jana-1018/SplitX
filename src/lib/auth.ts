@@ -96,7 +96,7 @@ export async function authorizeCredentials(credentials: Partial<Record<'email' |
 }
 
 /**
- * Runs on every sign-in. A Google or GitHub sign-in is tied to a SplitX account
+ * Runs on every sign-in. A Google or GitHub sign-in is tied to a SplitIT account
  * by email, and only by an email the provider has verified: GitHub used to fall
  * back to the first address on the account, verified or not, which let someone
  * claim another person's account.

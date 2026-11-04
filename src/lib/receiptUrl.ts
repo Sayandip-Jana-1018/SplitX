@@ -1,5 +1,5 @@
 /**
- * Receipt images only ever live in SplitX's own Supabase Storage.
+ * Receipt images only ever live in SplitIT's own Supabase Storage.
  *
  * A receipt URL is shown to everyone in a group as an image and as an
  * "open original" link, so accepting arbitrary URLs would let one member put a
@@ -50,7 +50,7 @@ export function isTrustedReceiptUrl(value: unknown): value is string {
 }
 
 /**
- * A receipt this user uploaded through SplitX: signed uploads always land in
+ * A receipt this user uploaded through SplitIT: signed uploads always land in
  * the uploader's own folder, so a new expense can't borrow anyone else's photo.
  * Only the private bucket counts: a new expense never gets a public photo.
  */

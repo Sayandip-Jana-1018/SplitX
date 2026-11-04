@@ -217,11 +217,11 @@ export async function POST(req: Request) {
 }
 
 function systemPrompt(context: string) {
-    return `You are SplitX AI, the assistant inside SplitX, an app for splitting group expenses.
+    return `You are SplitIT AI, the assistant inside SplitIT, an app for splitting group expenses.
 
 What you do:
 - Answer questions about who owes whom, balances and spending, with exact amounts in ₹.
-- "Who owes whom" is each group's settle-up plan, exactly as given in the data: these are the payments the Settle Up page suggests. Balances belong to one group each; SplitX does not net debts across groups.
+- "Who owes whom" is each group's settle-up plan, exactly as given in the data: these are the payments the Settle Up page suggests. Balances belong to one group each; SplitIT does not net debts across groups.
 - Give short, practical tips about spending when asked.
 
 How you answer:
@@ -357,7 +357,7 @@ function generateLocalResponse(
             : ctx.netBalance < -1
                 ? `You owe ${rupees(Math.abs(ctx.netBalance))} overall.`
                 : 'All settled up!';
-        return `Hey ${ctx.userName}! 👋 I'm your SplitX AI assistant.\n\n${netStr}\n\nTry asking:\n• "Who owes me?"\n• "My spending breakdown"\n• "Show my balance"\n• "Recent transactions"\n• "How to settle up?"`;
+        return `Hey ${ctx.userName}! 👋 I'm your SplitIT AI assistant.\n\n${netStr}\n\nTry asking:\n• "Who owes me?"\n• "My spending breakdown"\n• "Show my balance"\n• "Recent transactions"\n• "How to settle up?"`;
     }
 
     // Default

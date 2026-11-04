@@ -93,7 +93,7 @@ export interface Pipeline {
 
 /** The newest CI run on main, its jobs, and what its release job did. */
 export function readPipeline(): Promise<Reading<Pipeline | null>> {
-    return recentReading('github:pipeline', TTL_MS, () => readSource('GitHub Actions: SplitX CI on main', async () => {
+    return recentReading('github:pipeline', TTL_MS, () => readSource('GitHub Actions: SplitIT CI on main', async () => {
         const { workflow_runs: [run] } = await github<{ workflow_runs: WorkflowRun[] }>('/actions/workflows/ci.yml/runs?branch=main&event=push&per_page=1');
         if (!run) return null;
 

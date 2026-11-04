@@ -216,7 +216,7 @@ async function analyse(csvPath) {
 }
 
 // ── run ───────────────────────────────────────────────────────────────────
-console.log('SplitX load test: ' + testName + ' (' + label + ')');
+console.log('SplitIT load test: ' + testName + ' (' + label + ')');
 const powerAtStart = powerSource();
 console.log('power: ' + powerAtStart.source + ' (' + powerAtStart.detail + ')');
 if (powerAtStart.source === 'battery' && !args.includes('--allow-battery')) {

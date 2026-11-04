@@ -357,7 +357,7 @@ export default function SettlementsPage() {
                 <EmptyState
                     icon={<Users size={26} />}
                     title="Nothing to settle yet"
-                    description="Once you add expenses in a group, SplitX works out the fewest payments to square everyone up."
+                    description="Once you add expenses in a group, SplitIT works out the fewest payments to square everyone up."
                     actionLabel="Go to groups"
                     actionHref="/groups"
                 />

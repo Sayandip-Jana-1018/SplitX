@@ -1,5 +1,5 @@
 /**
- * Shared by every SplitX load test.
+ * Shared by every SplitIT load test.
  *
  * Tests run in the official k6 container (scripts/load-run.mjs), so BASE_URL
  * defaults to the Windows host as seen from inside Docker: port 80 there is

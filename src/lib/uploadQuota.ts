@@ -43,7 +43,7 @@ export async function takeReceiptUpload(userId: string): Promise<UploadQuotaResu
         return {
             ok: false,
             status: 429,
-            error: 'SplitX has stored today’s limit of receipt photos. Please add this one tomorrow.',
+            error: 'SplitIT has stored today’s limit of receipt photos. Please add this one tomorrow.',
             retryAfterSeconds: Math.ceil(everyone.resetMs / 1000),
         };
     }

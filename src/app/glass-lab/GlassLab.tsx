@@ -28,7 +28,7 @@ const GROUPS = [
     { name: 'Goa Trip', meta: '4 members · ₹34,405', balance: '+₹10,398' },
     { name: 'Flat 402', meta: '3 members · ₹51,735', balance: '+₹31,651' },
 ];
-const MORE = ['Balance journey', 'Spending insights', 'Ask SplitX AI', 'Receipts', 'Contacts', 'History'];
+const MORE = ['Balance journey', 'Spending insights', 'Ask SplitIT AI', 'Receipts', 'Contacts', 'History'];
 const NAV = ['Home', 'Groups', '+', 'Activity', 'Settle'];
 const MODES: { id: GlassCanvasMode; label: string }[] = [
     { id: 'locked', label: 'Glass moves with page' },

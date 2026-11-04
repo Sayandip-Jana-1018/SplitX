@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Checks the money in a SplitX database against the rules the app now keeps
+ * Checks the money in a SplitIT database against the rules the app now keeps
  * (D-063, D-064), and reports how many records break each one. Read only: it
  * runs SELECTs and nothing else, and prints counts, never names, addresses or
  * record IDs. Repairs are separate and approved one at a time.

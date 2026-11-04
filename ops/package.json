@@ -2,7 +2,7 @@
   "name": "splitx-ops",
   "version": "1.0.0",
   "private": true,
-  "description": "ops-api and the traffic lab: the cluster half of SplitX's /ops page (docs/DECISIONS.md, D-097)",
+  "description": "ops-api and the traffic lab: the cluster half of SplitIT's /ops page (docs/DECISIONS.md, D-097)",
   "type": "module",
   "engines": {
     "node": ">=24"

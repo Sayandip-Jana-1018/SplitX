@@ -95,7 +95,7 @@ export default function JoinGroupPage() {
                 title="This invite has expired"
                 subtitle="Ask a friend in the group to share a fresh link."
             >
-                <Button fullWidth size="lg" onClick={() => router.push('/dashboard')}>Go to SplitX</Button>
+                <Button fullWidth size="lg" onClick={() => router.push('/dashboard')}>Go to SplitIT</Button>
             </AuthCard>
         );
     } else if (joined) {

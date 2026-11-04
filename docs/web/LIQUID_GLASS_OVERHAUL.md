@@ -1,7 +1,7 @@
-# SplitX web: the Liquid Glass overhaul
+# SplitIT web: the Liquid Glass overhaul
 
 **Status:** 3 November 2026. Phases 0 to 8 are built and tested on the laptop, on the `feat/liquid-glass` branch. Your live site is untouched. What's left is Phase 9: your phone, then going live. Details are in `docs/DECISIONS.md`, D-120.
-**The look we are building:** [SplitX Liquid Glass canvas](https://claude.ai/artifact/XSFNfEYYXmoVufit1w6w9B).
+**The look we are building:** [SplitIT Liquid Glass canvas](https://claude.ai/artifact/XSFNfEYYXmoVufit1w6w9B).
 **The phone app** ([roadmap](../mobile/ROADMAP.md)) is paused until this ships.
 
 ## 1. The goal

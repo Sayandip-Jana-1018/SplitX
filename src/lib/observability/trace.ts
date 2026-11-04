@@ -7,7 +7,7 @@ import { randomBytes } from 'node:crypto';
  * in every log line — so one value finds a request in logs, metrics and the
  * client's error report.
  *
- * SplitX is the root of the trace: incoming `traceparent` headers are replaced,
+ * SplitIT is the root of the trace: incoming `traceparent` headers are replaced,
  * so a client cannot choose the ID its requests are logged under.
  */
 

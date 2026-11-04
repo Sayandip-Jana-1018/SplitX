@@ -1,6 +1,6 @@
 # Demo day: the runbook
 
-SplitX's demo platform runs on AWS only on the two days that need it: the **rehearsal** and the
+SplitIT's demo platform runs on AWS only on the two days that need it: the **rehearsal** and the
 **demo**. `aws-up` builds it that morning, and `aws-down` removes it that evening, or at 23:30 IST by
 itself. On any other day, `splitsj.vercel.app` serves the app, and the edge's address answers 404.
 
@@ -160,7 +160,7 @@ Then open http://localhost:3000 and sign in as `admin`, with `GF_ADMIN_PASSWORD`
 
 1. GitHub → Actions → **AWS down** → Run workflow. It needs no approval, and it can only remove.
    - It takes the edge offline, then deletes the load balancer and the volumes, then destroys the
-     platform, then sweeps anything left by SplitX's tags.
+     platform, then sweeps anything left by SplitIT's tags.
    - Its last step lists everything the platform makes, and fails unless it is all gone.
 2. If nobody runs it, it runs itself at 23:30 IST. Budget data lags 8 to 12 hours, so don't count on
    the budget alarm to notice a platform left up.

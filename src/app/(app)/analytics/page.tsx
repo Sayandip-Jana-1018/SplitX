@@ -179,7 +179,7 @@ export default function AnalyticsPage() {
                     <span className={styles.heroAmount}>{animatedTotal}</span>
                     <span className={styles.heroDelta}>
                         {delta === null ? (
-                            'First month on SplitX'
+                            'First month on SplitIT'
                         ) : delta === 0 ? (
                             'Same as last month'
                         ) : (

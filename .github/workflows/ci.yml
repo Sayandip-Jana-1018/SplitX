@@ -1,4 +1,4 @@
-name: SplitX CI
+name: SplitIT CI
 
 on:
   workflow_dispatch:

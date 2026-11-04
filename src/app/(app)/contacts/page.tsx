@@ -157,7 +157,7 @@ export default function ContactsPage() {
                 await mutate((prev) => [created, ...(prev ?? [])], { revalidate: false });
                 setAddOpen(false);
                 setForm(EMPTY_FORM);
-                toast(created.linkedUser ? `${firstName(name)} is already on SplitX` : `${firstName(name)} added`, 'success');
+                toast(created.linkedUser ? `${firstName(name)} is already on SplitIT` : `${firstName(name)} added`, 'success');
             } else {
                 setFormError(errorMessage(payload, 'Could not add this contact'));
             }
@@ -270,7 +270,7 @@ export default function ContactsPage() {
         if (!shareData) return;
         if (navigator.share) {
             try {
-                await navigator.share({ title: 'Join me on SplitX', text: shareData.message });
+                await navigator.share({ title: 'Join me on SplitIT', text: shareData.message });
             } catch { /* dismissed */ }
         } else {
             void copyLink();
@@ -299,7 +299,7 @@ export default function ContactsPage() {
                         <EmptyState
                             icon={<Users size={26} />}
                             title="Your people live here"
-                            description="Add friends once and split with them in any group — we’ll tell you who’s already on SplitX."
+                            description="Add friends once and split with them in any group — we’ll tell you who’s already on SplitIT."
                             actionLabel="Add a contact"
                             actionIcon={<UserPlus size={16} />}
                             onAction={() => setAddOpen(true)}
@@ -315,7 +315,7 @@ export default function ContactsPage() {
                                     onChange={setFilter}
                                     options={[
                                         { value: 'all', label: 'All', count: contacts.length },
-                                        { value: 'onApp', label: 'On SplitX', count: onAppCount },
+                                        { value: 'onApp', label: 'On SplitIT', count: onAppCount },
                                         { value: 'invite', label: 'To invite', count: inviteCount },
                                     ]}
                                 />
@@ -345,7 +345,7 @@ export default function ContactsPage() {
                                 <Notice
                                     tone="info"
                                     icon={<Send size={16} />}
-                                    title={`${inviteCount} ${inviteCount === 1 ? 'friend isn’t' : 'friends aren’t'} on SplitX yet`}
+                                    title={`${inviteCount} ${inviteCount === 1 ? 'friend isn’t' : 'friends aren’t'} on SplitIT yet`}
                                     action={<Button size="sm" variant="soft" onClick={() => setFilter('invite')}>Invite</Button>}
                                 >
                                     Invite them so they can see balances and settle up in the app.
@@ -375,7 +375,7 @@ export default function ContactsPage() {
                                                         title={contact.name}
                                                         subtitle={contact.email}
                                                         trailing={contact.linkedUser
-                                                            ? <Tag tone="success" icon={<UserCheck size={11} />}>On SplitX</Tag>
+                                                            ? <Tag tone="success" icon={<UserCheck size={11} />}>On SplitIT</Tag>
                                                             : undefined}
                                                         chevron
                                                     />
@@ -455,8 +455,8 @@ export default function ContactsPage() {
                             {selected.phone ? ` · ${selected.phone}` : ''}
                         </p>
                         {selected.linkedUser
-                            ? <Tag tone="success" icon={<UserCheck size={11} />}>On SplitX</Tag>
-                            : <Tag tone="warning">Not on SplitX yet</Tag>}
+                            ? <Tag tone="success" icon={<UserCheck size={11} />}>On SplitIT</Tag>
+                            : <Tag tone="warning">Not on SplitIT yet</Tag>}
                         <ListGroup className={styles.cardActions}>
                             {selected.linkedUser && (
                                 <ListRow
@@ -470,7 +470,7 @@ export default function ContactsPage() {
                             <ListRow
                                 onClick={() => openShare(selected)}
                                 leading={<IconTile tone="neutral"><Share2 size={18} /></IconTile>}
-                                title={selected.linkedUser ? 'Share invite link' : 'Invite to SplitX'}
+                                title={selected.linkedUser ? 'Share invite link' : 'Invite to SplitIT'}
                                 subtitle="WhatsApp, SMS, email or a link"
                                 chevron
                             />
@@ -560,7 +560,7 @@ export default function ContactsPage() {
                             <button
                                 type="button"
                                 className={styles.shareOption} data-glass="thin"
-                                onClick={() => window.open(`mailto:${shareFor?.email ?? ''}?subject=${encodeURIComponent('Join me on SplitX')}&body=${encodeURIComponent(shareData.message)}`, '_blank')}
+                                onClick={() => window.open(`mailto:${shareFor?.email ?? ''}?subject=${encodeURIComponent('Join me on SplitIT')}&body=${encodeURIComponent(shareData.message)}`, '_blank')}
                             >
                                 <span className={styles.shareIcon}><Mail size={18} /></span>Email
                             </button>

@@ -134,8 +134,8 @@ function GroupsContent() {
         if (navigator.share) {
             try {
                 await navigator.share({
-                    title: 'Join my group on SplitX',
-                    text: `Join "${groupName.trim()}" on SplitX to split expenses together.`,
+                    title: 'Join my group on SplitIT',
+                    text: `Join "${groupName.trim()}" on SplitIT to split expenses together.`,
                     url: createdGroup.inviteLink,
                 });
             } catch {
@@ -396,7 +396,7 @@ function GroupsContent() {
                     <p className={styles.hint}>Paste the invite link or code a friend shared with you.</p>
                     <Input
                         label="Invite link or code"
-                        placeholder="splitx.app/join/abc123"
+                        placeholder="splitit.app/join/abc123"
                         value={joinInput}
                         onChange={(event) => setJoinInput(event.target.value)}
                         onKeyDown={(event) => { if (event.key === 'Enter') void handleJoin(); }}

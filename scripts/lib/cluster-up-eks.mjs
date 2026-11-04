@@ -1,5 +1,5 @@
 /**
- * `node scripts/cluster-up.mjs --target eks` (D-093): SplitX's platform on the
+ * `node scripts/cluster-up.mjs --target eks` (D-093): SplitIT's platform on the
  * EKS cluster aws-up has just built. aws-up runs it on GitHub's runner with
  * kubectl's context "splitx" (aws eks update-kubeconfig --alias splitx), and
  * with helm, terraform (both roots initialised) and the AWS CLI on PATH.

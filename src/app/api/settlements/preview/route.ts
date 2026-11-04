@@ -93,7 +93,7 @@ async function plan(request: Request) {
             metrics.settlementPreviewQueue.observe(waited / 1000);
             if (waited > previewMaxQueueMs()) {
                 metrics.settlementPreviews.inc({ mode, outcome: 'shed' });
-                const response = apiError('SplitX is busy right now. Please try again in a moment.', 503, 'OVERLOADED');
+                const response = apiError('SplitIT is busy right now. Please try again in a moment.', 503, 'OVERLOADED');
                 response.headers.set('Retry-After', '1');
                 return response;
             }

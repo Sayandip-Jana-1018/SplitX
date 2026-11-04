@@ -2,7 +2,7 @@
  * The two paths only the cluster itself may reach (D-043): Prometheus's scrape
  * endpoint, and the readiness probe, which asks the database on every call.
  *
- * On EKS, visitors arrive through SplitX's edge. The load balancer refuses
+ * On EKS, visitors arrive through SplitIT's edge. The load balancer refuses
  * these paths' exact spelling, and the proxy refuses every other spelling of
  * them that came through the edge (D-114, which took this over from
  * CloudFront's edge function).

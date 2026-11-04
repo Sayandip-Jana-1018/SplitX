@@ -105,7 +105,7 @@ async function write(name, contents, description) {
 }
 
 for (const [name, contents, description] of [
-    [APP_SECRET, app, 'The SplitX app on the demo platform (splitx-secrets), from .env by npm run aws:secrets'],
+    [APP_SECRET, app, 'The SplitIT app on the demo platform (splitx-secrets), from .env by npm run aws:secrets'],
     [PLATFORM_SECRET, platform, 'Grafana, Alertmanager, Jenkins and Nexus on the demo platform, from .env by npm run aws:secrets'],
 ]) {
     const outcome = await write(name, contents, description);

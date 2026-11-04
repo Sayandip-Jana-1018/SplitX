@@ -5,7 +5,7 @@ import { Notice, PageIntro } from '@/components/ui/kit';
 import { opsViewer } from '@/lib/ops/access';
 import styles from './ops.module.css';
 
-// The root layout adds "· SplitX".
+// The root layout adds "· SplitIT".
 export const metadata: Metadata = { title: 'Operations' };
 export const dynamic = 'force-dynamic';
 
@@ -23,8 +23,8 @@ export default async function OpsLayout({ children }: { children: ReactNode }) {
         <div className={styles.page}>
             <PageIntro
                 eyebrow="Operations"
-                title="For SplitX's operators"
-                subtitle="This page shows SplitX's live pipeline and platform. It opens for the accounts listed in OPS_ADMINS."
+                title="For SplitIT's operators"
+                subtitle="This page shows SplitIT's live pipeline and platform. It opens for the accounts listed in OPS_ADMINS."
             />
             <Notice tone="info" title="Your sign-in">
                 {viewer.identities.length > 0 ? (

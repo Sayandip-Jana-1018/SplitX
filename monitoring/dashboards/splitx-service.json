@@ -1,7 +1,7 @@
 {
   "uid": "splitx-service",
-  "title": "SplitX · Service",
-  "description": "Traffic, errors, latency, the autoscaler and the Node.js runtime of SplitX on Kubernetes. Provisioned from monitoring/dashboards/splitx-service.json.",
+  "title": "SplitIT · Service",
+  "description": "Traffic, errors, latency, the autoscaler and the Node.js runtime of SplitIT on Kubernetes. Provisioned from monitoring/dashboards/splitx-service.json.",
   "tags": [
     "splitx"
   ],
@@ -1774,7 +1774,7 @@
       "id": 35,
       "type": "table",
       "title": "Firing alerts",
-      "description": "Everything Prometheus has firing now, from the SplitX rules and the Kubernetes defaults. Watchdog always fires: it proves the alerting pipeline is alive.",
+      "description": "Everything Prometheus has firing now, from the SplitIT rules and the Kubernetes defaults. Watchdog always fires: it proves the alerting pipeline is alive.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"

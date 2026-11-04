@@ -14,7 +14,7 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: Request) {
     const viewer = await opsViewer();
     if (!viewer) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (!viewer.allowed) return NextResponse.json({ error: 'Only SplitX operators can read this.' }, { status: 403 });
+    if (!viewer.allowed) return NextResponse.json({ error: 'Only SplitIT operators can read this.' }, { status: 403 });
 
     const [pipeline, codeScanning, dependabot, deliveries, qualityGate, siteChecks] = await Promise.all([
         readPipeline(),

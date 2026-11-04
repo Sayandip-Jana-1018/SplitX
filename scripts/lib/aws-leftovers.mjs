@@ -1,10 +1,10 @@
 /**
- * What a SplitX platform leaves on AWS, decided from the AWS CLI's answers.
+ * What a SplitIT platform leaves on AWS, decided from the AWS CLI's answers.
  *
  * aws-down (scripts/aws-teardown.mjs) asks AWS what exists in the platform's
  * region; these functions pick out what belongs to the platform, by the tags
  * Terraform and the cluster's controllers put on it (terraform/platform) and by
- * names only SplitX uses. Nothing else in the account is ever selected, which
+ * names only SplitIT uses. Nothing else in the account is ever selected, which
  * is what makes it safe for the teardown role to delete what they return.
  */
 

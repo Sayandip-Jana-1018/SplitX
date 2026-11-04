@@ -92,11 +92,11 @@ class HttpMetricsProcessor implements SpanProcessor {
     }
 }
 
-const globalForTracing = globalThis as typeof globalThis & { __splitxHttpMetrics?: boolean };
+const globalForTracing = globalThis as typeof globalThis & { __splititHttpMetrics?: boolean };
 
 export function startHttpMetrics() {
-    if (globalForTracing.__splitxHttpMetrics) return;
-    globalForTracing.__splitxHttpMetrics = true;
+    if (globalForTracing.__splititHttpMetrics) return;
+    globalForTracing.__splititHttpMetrics = true;
 
     const provider = new NodeTracerProvider({
         // Every request must be counted, so an incoming `traceparent` marked

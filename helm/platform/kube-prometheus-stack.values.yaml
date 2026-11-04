@@ -4,7 +4,7 @@
 #
 #   The application's own ServiceMonitor and alert rules live with the
 #   application (k8s/base); its dashboards live in monitoring/dashboards.
-#   Nothing here is specific to SplitX except the Secrets it names.
+#   Nothing here is specific to SplitIT except the Secrets it names.
 # ═══════════════════════════════════════════════════════════════
 
 # Kind binds etcd, the scheduler, the controller manager and kube-proxy's

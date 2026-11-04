@@ -1,5 +1,5 @@
 /**
- * Calendar days and months as SplitX's users live them: India Standard Time,
+ * Calendar days and months as SplitIT's users live them: India Standard Time,
  * UTC+5:30 all year (India keeps no daylight saving time).
  *
  * Servers run in UTC (Vercel's do), so a month read off the server's clock

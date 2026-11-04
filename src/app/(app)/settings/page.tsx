@@ -74,7 +74,7 @@ export default function SettingsPage() {
         const handleInstalled = () => {
             setInstallPrompt(null);
             setInstalledNow(true);
-            toast('SplitX is installed on this device', 'success');
+            toast('SplitIT is installed on this device', 'success');
         };
         window.addEventListener('beforeinstallprompt', handlePrompt);
         window.addEventListener('appinstalled', handleInstalled);
@@ -161,7 +161,7 @@ export default function SettingsPage() {
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
-            link.download = `splitx-export-${new Date().toISOString().split('T')[0]}.json`;
+            link.download = `splitit-export-${new Date().toISOString().split('T')[0]}.json`;
             link.click();
             URL.revokeObjectURL(url);
             toast('Your data is downloading', 'success');
@@ -180,7 +180,7 @@ export default function SettingsPage() {
         try {
             await installPrompt.prompt();
             const choice = await installPrompt.userChoice;
-            if (choice.outcome === 'accepted') toast('Installing SplitX…', 'success');
+            if (choice.outcome === 'accepted') toast('Installing SplitIT…', 'success');
         } catch {
             toast('The install prompt isn’t available right now', 'error');
         } finally {
@@ -334,7 +334,7 @@ export default function SettingsPage() {
                                 <ListRow
                                     onClick={openAssistant}
                                     leading={<IconTile><Sparkles size={18} /></IconTile>}
-                                    title="Ask SplitX AI"
+                                    title="Ask SplitIT AI"
                                     subtitle="Balances, groups, spending — just ask"
                                     chevron
                                 />
@@ -390,7 +390,7 @@ export default function SettingsPage() {
                                 <ListRow
                                     onClick={isInstalled ? undefined : installApp}
                                     leading={<IconTile tone="neutral"><MonitorSmartphone size={18} /></IconTile>}
-                                    title={isInstalled ? 'Installed' : 'Install SplitX'}
+                                    title={isInstalled ? 'Installed' : 'Install SplitIT'}
                                     subtitle={isInstalled
                                         ? 'Running as an app on this device'
                                         : installPrompt ? 'Add it to your home screen in one tap' : 'Works offline, opens instantly'}
@@ -415,7 +415,7 @@ export default function SettingsPage() {
                     </motion.button>
                 </StaggerItem>
                 <StaggerItem className={styles.footerArea}>
-                    <p className={styles.footer}>SplitX {APP_VERSION} · Split fairly, settle instantly</p>
+                    <p className={styles.footer}>SplitIT {APP_VERSION} · Split fairly, settle instantly</p>
                 </StaggerItem>
             </Stagger>
 

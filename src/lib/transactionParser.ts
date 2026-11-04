@@ -18,7 +18,7 @@ export interface ParsedTransaction {
     upiRef: string | null;
     date: Date | null;
     confidence: number;           // 0-1
-    /** ISO 4217 code the text's amounts look to be in; SplitX records rupees. */
+    /** ISO 4217 code the text's amounts look to be in; SplitIT records rupees. */
     currency: string;
     rawText: string;
     items: ReceiptLineItem[];     // extracted line items

@@ -85,7 +85,7 @@ async function api(path, { cookie, method = 'GET', body } = {}) {
     }
 }
 
-console.log('SplitX — the control room on a running cluster\n');
+console.log('SplitIT — the control room on a running cluster\n');
 
 // ── 1. who may read it ────────────────────────────────────────────────────
 console.log('[1] Who may read it');

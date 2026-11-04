@@ -1,6 +1,6 @@
-# SplitX on AWS: the setup
+# SplitIT on AWS: the setup
 
-SplitX's demo platform runs on AWS only on the days that need it. This guide sets up what stays in
+SplitIT's demo platform runs on AWS only on the days that need it. This guide sets up what stays in
 the account between those days. It is done once, and costs nothing, or cents, while idle. What to do
 on each AWS day is in the runbook, [docs/DEMO_DAY.md](docs/DEMO_DAY.md). Why each part is built this
 way is in [docs/DECISIONS.md](docs/DECISIONS.md): D-087 to D-103.

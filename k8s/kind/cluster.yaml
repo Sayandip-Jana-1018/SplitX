@@ -1,5 +1,5 @@
 # ═══════════════════════════════════════════════════════════════
-#   SplitX — local rehearsal cluster
+#   SplitIT — local rehearsal cluster
 #
 #   Three nodes so scheduling is real: pods spread across two
 #   workers, and the control plane stays free of application load

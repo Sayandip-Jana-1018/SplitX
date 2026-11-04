@@ -48,19 +48,19 @@ const THEME_BOOTSTRAP = `(function(){try{var d=document.documentElement,s=window
 
 export const metadata: Metadata = {
   title: {
-    default: 'SplitX — Split expenses. Settle smarter.',
-    template: '%s · SplitX',
+    default: 'SplitIT — Split expenses. Settle smarter.',
+    template: '%s · SplitIT',
   },
   description:
     'Shared money, beautifully simple. Track group expenses, see who owes whom in real time and settle up via UPI or cash in a tap.',
   keywords: ['expense splitter', 'split bills', 'group expenses', 'settle up', 'UPI', 'trip expenses'],
   authors: [{ name: 'Sayan' }],
   manifest: '/manifest.json',
-  applicationName: 'SplitX',
+  applicationName: 'SplitIT',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
-    title: 'SplitX',
+    title: 'SplitIT',
   },
   // The SVG for browsers that take one, favicon.ico for the rest, and a
   // 180 px PNG for an iPhone's home screen, which otherwise shows a screenshot.
@@ -72,7 +72,7 @@ export const metadata: Metadata = {
     apple: [{ url: '/icons/apple-touch-icon.png', sizes: '180x180' }],
   },
   openGraph: {
-    title: 'SplitX — Split expenses. Settle smarter.',
+    title: 'SplitIT — Split expenses. Settle smarter.',
     description: 'Shared money, beautifully simple. Track, split and settle group expenses in seconds.',
     type: 'website',
   },

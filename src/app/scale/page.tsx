@@ -3,7 +3,7 @@ import ScaleDemo from './ScaleDemo';
 
 export const metadata: Metadata = {
     title: 'Watch it scale',
-    description: 'Settle a trip for up to 2,000 people and see which server in the SplitX cluster did the work.',
+    description: 'Settle a trip for up to 2,000 people and see which server in the SplitIT cluster did the work.',
 };
 
 /**

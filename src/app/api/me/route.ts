@@ -68,7 +68,7 @@ export async function GET() {
 }
 
 // No `image`: a profile photo is shown to everyone in your groups, so it comes
-// only from an upload to SplitX's storage (/api/me/avatar) or from Google or
+// only from an upload to SplitIT's storage (/api/me/avatar) or from Google or
 // GitHub at sign-in, never from a URL anyone types (a tracking pixel, say).
 const UpdateProfileSchema = z.object({
     name: z.string().min(1).max(100).optional(),

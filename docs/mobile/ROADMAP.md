@@ -1,7 +1,7 @@
-# SplitX app: the roadmap
+# SplitIT app: the roadmap
 
 **Status: paused on 3 November 2026.** The web app gets the Liquid Glass design first ([the overhaul plan](../web/LIQUID_GLASS_OVERHAUL.md)). Nothing here is built. When this resumes, Section 6 must be rewritten: it still describes "Arcade Ledger", which was replaced by Liquid Glass, and the stack needs a line on real-time glass.
-**Design boards:** [SplitX Liquid Glass canvas](https://claude.ai/artifact/XSFNfEYYXmoVufit1w6w9B) (private to you).
+**Design boards:** [SplitIT Liquid Glass canvas](https://claude.ai/artifact/XSFNfEYYXmoVufit1w6w9B) (private to you).
 
 ## 1. The brief, as you decided it
 
@@ -46,7 +46,7 @@ The web app is a strong base. The money engine, tests and decision log are worth
 | No restore drill has ever been run; errors reach no one (B-032) | A backup you haven't restored isn't proven | Drill in Phase 2, Sentry's free plan |
 
 **Also found:**
-- **The name is taken.** Google Play already has three apps called exactly "SplitX", plus "SplitX: Split Bills & Expenses". The App Store has "SplitX: Bill & Expense Split" and "SplitX - Manage Group Expenses". `splitx.app` and `splitx.in` are registered. See section 12.
+- **The name is taken.** Google Play already has three apps called exactly "SplitIT", plus "SplitIT: Split Bills & Expenses". The App Store has "SplitIT: Bill & Expense Split" and "SplitIT - Manage Group Expenses". `splitx.app` and `splitx.in` are registered. See section 12.
 - **CI will likely stop at the next push to `main`.** The k6 exceptions in `ops/.trivyignore.yaml` expired on 24 October.
 - **Your tools are nearly ready.** Android Studio, Android SDK platforms 33 to 36 and Node 24 are installed. `java` on your PATH is version 8 and `adb` isn't on PATH, so Phase 0 points both at the right versions. Build-tools 36 needs adding.
 - **You've used Expo before** (`AudioApp`, Expo 51). Flutter is installed, but I found no Flutter project in your Projects folder.
@@ -247,8 +247,8 @@ The details that make this good rather than annoying:
 ### iPhone
 
 iOS gives apps no way to read other apps' notifications or messages, so this can't be matched there. The nearest options:
-- **Share sheet:** share a payment screenshot or text from any app to SplitX.
-- **Shortcuts automation:** a guided setup where the person's own automation fires on messages containing "debited" and passes them to a SplitX App Intent. Apple's Shortcuts supports a message trigger with sender and text filters. Whether every bank's sender works needs testing on a real iPhone.
+- **Share sheet:** share a payment screenshot or text from any app to SplitIT.
+- **Shortcuts automation:** a guided setup where the person's own automation fires on messages containing "debited" and passes them to a SplitIT App Intent. Apple's Shortcuts supports a message trigger with sender and text filters. Whether every bank's sender works needs testing on a real iPhone.
 - **Quick add** from a widget, or the Action Button on supported phones.
 
 The store listing and app must say plainly that automatic capture is Android-only.
@@ -438,7 +438,7 @@ That is about ₹4,000 a month for servers. This is the default, not a commitmen
 4. Has the laptop's second fan been replaced? It changes how much can run locally.
 
 **Before Phase 1's logo:**
-5. **The name.** I recommend renaming, because the app would be at least the fifth "SplitX" in the same category, and `splitx.app` and `splitx.in` are gone. Candidates I checked and ruled out: Chukta (three finance apps), Barabar (three split apps), Kwits (an existing split app). Settlr looks clear on Play as a name, but `settlr.app` and `settlr.in` are taken. "SplitX" can stay as the codename meanwhile, since the package name only locks at the first upload.
+5. **The name.** I recommend renaming, because the app would be at least the fifth "SplitIT" in the same category, and `splitx.app` and `splitx.in` are gone. Candidates I checked and ruled out: Chukta (three finance apps), Barabar (three split apps), Kwits (an existing split app). Settlr looks clear on Play as a name, but `settlr.app` and `settlr.in` are taken. "SplitIT" can stay as the codename meanwhile, since the package name only locks at the first upload.
 
 **Later, each with step-by-step directions when we get there:** a free Firebase project (Phase 2), and at least 12 testers (launch).
 
@@ -452,4 +452,4 @@ Checked on 3 November 2026.
 - **Stack:** [Expo changelog](https://expo.dev/changelog), [Expo SDK 58](https://expo.dev/changelog/sdk-58), [Expo pricing](https://expo.dev/pricing), [react-native-filament](https://npmjs.com/package/react-native-filament).
 - **Hosting:** [Vercel fair use](https://vercel.com/docs/limits/fair-use-guidelines), [Vercel regions](https://vercel.com/docs/regions), [Vercel Daemons](https://vercel.com/kb/guide/vercel-daemons), [Neon regions](https://neon.com/docs/introduction/regions), [Neon pricing](https://neon.com/pricing), [Supabase pricing](https://supabase.com/pricing), [Supabase regions](https://supabase.com/docs/guides/platform/regions), [Fly.io regions](https://docs.fly.io/reference/regions).
 - **India:** [DPDP Rules notified (Bar and Bench)](https://www.barandbench.com/amp/story/view-point/meity-notifies-final-digital-personal-data-protection-rules-2025), a law-firm summary rather than the gazette; [HDFC SMS change (Business Standard)](https://www.business-standard.com/amp/finance/personal-finance/hdfc-bank-to-stop-sms-alerts-for-upi-payments-up-to-rs-100-check-details-124052901252_1.html); [UPI Collect phase-out (PayU)](https://docs.payu.in/docs/upi-collect-disablement-information); [link payments to personal IDs (a developer's write-up, unofficial)](https://dev.to/srvmhptr/how-upi-deep-links-work-upipay-build-a-payment-link-and-qr-code-without-a-payment-gateway-g8m).
-- **Market and names:** [Figma trends](https://www.figma.com/resource-library/web-design-trends/), [Splitwise free plan limits (a competitor's blog, treat with care)](https://getfinny.app/blog/splitwise-pricing-2026), [SplitX on the App Store](https://apps.apple.com/in/app/splitx-bill-expense-split/id6746949423), [Play search for "splitx"](https://play.google.com/store/search?q=splitx&c=apps&hl=en_IN&gl=IN).
+- **Market and names:** [Figma trends](https://www.figma.com/resource-library/web-design-trends/), [Splitwise free plan limits (a competitor's blog, treat with care)](https://getfinny.app/blog/splitwise-pricing-2026), [SplitIT on the App Store](https://apps.apple.com/in/app/splitx-bill-expense-split/id6746949423), [Play search for "splitx"](https://play.google.com/store/search?q=splitx&c=apps&hl=en_IN&gl=IN).

@@ -13,12 +13,12 @@ import type { RateLimitPolicy } from './policies';
 const MAX_KEYS = 10_000;
 
 const globalForLocal = globalThis as typeof globalThis & {
-    __splitxLocalLimits?: Map<string, { windowStart: number; count: number }>;
+    __splititLocalLimits?: Map<string, { windowStart: number; count: number }>;
 };
 
 function windows() {
-    globalForLocal.__splitxLocalLimits ??= new Map();
-    return globalForLocal.__splitxLocalLimits;
+    globalForLocal.__splititLocalLimits ??= new Map();
+    return globalForLocal.__splititLocalLimits;
 }
 
 export function hitLocally(key: string, limit: number, windowMs: number, now = Date.now()) {

@@ -3,7 +3,7 @@ import { isIP } from 'node:net';
 /**
  * The client address as recorded by the nearest proxy we trust.
  *
- * Each proxy in front of SplitX appends the address it received the request
+ * Each proxy in front of SplitIT appends the address it received the request
  * from to X-Forwarded-For. Entries to the left of those were written by the
  * client and can say anything — keying a rate limit on the leftmost entry lets
  * a client pick a fresh identity per request. The client IP is therefore read

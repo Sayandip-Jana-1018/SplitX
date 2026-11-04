@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * The traffic lab (D-097): a button on /ops that sends real load at SplitX,
+ * The traffic lab (D-097): a button on /ops that sends real load at SplitIT,
  * so the audience can watch the autoscaler add pods (and a node) and take
  * them away again. It holds no credentials and has one fixed target.
  *

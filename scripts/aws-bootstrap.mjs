@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Deploys SplitX's two permanent CloudFormation stacks from the laptop, as the
+ * Deploys SplitIT's two permanent CloudFormation stacks from the laptop, as the
  * IAM user splitx-devops (terraform/bootstrap):
  *
  *   splitx-bootstrap   Terraform's state bucket, GitHub's OIDC provider, the

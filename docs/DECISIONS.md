@@ -1,4 +1,4 @@
-# SplitX — Engineering Decision Log
+# SplitIT — Engineering Decision Log
 
 Every decision that shapes the platform, why it was made, what was rejected,
 and how it was verified. Newest phase last. Open problems discovered along the
@@ -299,7 +299,7 @@ history (D-003: history is not rewritten).
   an empty Prisma client) and a type-check step in CI.
 - **Now:** 671 unit tests, 9 integration tests, 5 hardening checks.
 
-### D-019 · Receipts are kept; only SplitX storage URLs are accepted
+### D-019 · Receipts are kept; only SplitIT storage URLs are accepted
 **2026-09-13** · ✅ done
 
 - `POST /api/transactions` now saves `receiptUrl` (B-003). Receipts attached in
@@ -1330,7 +1330,7 @@ scrapes every pod with the metrics token from the app's own Secret, and a Promet
 validates both against the Prometheus Operator's JSON schemas, pinned to a commit of the
 CRDs catalog, so a misspelled field fails the build.
 
-**Six SplitX alerts**, each with its reason next to it in `k8s/base/prometheusrule.yaml`:
+**Six SplitIT alerts**, each with its reason next to it in `k8s/base/prometheusrule.yaml`:
 
 | Alert | Fires when | Why that threshold |
 |---|---|---|
@@ -2049,7 +2049,7 @@ deadline (security finding H3). Checking them against the live API found two mor
 
 **Decided:**
 - **Allowances** (`src/lib/aiQuota.ts`): per person per day, 30 chat questions, 40 voice entries and
-  10 receipt scans, plus 400 AI calls a day for all of SplitX, each overridable (`AI_DAILY_*`).
+  10 receipt scans, plus 400 AI calls a day for all of SplitIT, each overridable (`AI_DAILY_*`).
   `AI_DISABLED=true` switches all of it off. They count in the rate limiter's Redis
   (`consumeAllowance`), and **fail closed**: if the counter can't be reached, no paid call is made.
 - **Past a limit, the help doesn't stop, only the cost.** The chat answers from the same data
@@ -2057,7 +2057,7 @@ deadline (security finding H3). Checking them against the live API found two mor
   the simple parser. Receipt scans, which have no server-side substitute, say so and point to
   on-device scanning, with `Retry-After`.
 - **One Gemini client** (`src/lib/gemini.ts`): the key in the `x-goog-api-key` header instead of the
-  URL; instructions and SplitX's data in `systemInstruction`, the person's words as their own turn,
+  URL; instructions and SplitIT's data in `systemInstruction`, the person's words as their own turn,
   and a line telling the model that names and titles in the data are data, not instructions; a
   deadline on every call (25 s chat, 15 s voice), after which the local answer is used; thinking set
   to `low` for the chat and `minimal` for voice; the model is `GEMINI_MODEL`, by default
@@ -2070,7 +2070,7 @@ deadline (security finding H3). Checking them against the live API found two mor
 - **The chat answers from the ledger** (B-028): balances per group over live expenses, and "who owes
   whom" from each group's settle-up plan, the same as Settle Up. It used to net every expense pair
   by pair, deleted expenses and deleted groups included, and its instructions told the model that
-  SplitX nets debts across groups, which it doesn't.
+  SplitIT nets debts across groups, which it doesn't.
 
 **Tests:** the allowance rules (per person, overall, unreachable counter, kill switch, overrides);
 the Gemini client (key only in a header, instructions apart from the message, deadline, busy and
@@ -2154,7 +2154,7 @@ holds. No production data was affected by the old member removal (B-029 closed).
 ### D-070 · Email that reaches anyone, addresses that are confirmed, and an auth library without critical holes
 **2026-09-22** · ✅ written and unit-tested (987 → 1,006 tests; 1,017 with the later changes) · ✅ live: SMTP settings in `.env` and Vercel; a test through Gmail on 587 was accepted, and production's forgot-password answers as configured
 
-**Email.** SplitX sent mail through Resend's shared `onboarding@resend.dev`, which delivers only to
+**Email.** SplitIT sent mail through Resend's shared `onboarding@resend.dev`, which delivers only to
 the Resend account's owner: every reset link for anyone else was reported sent and never arrived.
 The code also ignored the error Resend returns (it doesn't throw), so failures were silent.
 `src/lib/email.ts` now sends through **SMTP** when `SMTP_HOST`, `SMTP_USER` and `SMTP_PASSWORD` are
@@ -2165,7 +2165,7 @@ neither, nothing claims to have sent: "forgot password" answers 503 for every ad
 server's answer.
 
 **Confirming addresses** (the rest of security finding H2; D-068 did provider sign-in):
-- While SplitX can send email, a password account signs in only once its address is confirmed.
+- While SplitIT can send email, a password account signs in only once its address is confirmed.
   Sign-up sends a link; the link is single use, kept as SHA-256 in `VerificationToken`, valid for
   24 hours, and sent at most once every ten minutes per address.
 - Only someone who gets the password right learns that the address is unconfirmed (the sign-in page
@@ -2186,7 +2186,7 @@ configuration error (GHSA-8fpg-xm3f-6cx3) and an address check done before Unico
 `getToken`) and a moderate (GHSA-x445-f3h2-j279). **Upgraded to 5.0.0-beta.32 with `@auth/core`
 0.41.3**, which fixes all four.
 - `next-auth` names nodemailer as an optional peer, `^7.0.7 || ^8.0.5`, and every 7.x and 8.x release
-  carries high advisories fixed only in 9.1. SplitX never uses next-auth's email provider, the only
+  carries high advisories fixed only in 9.1. SplitIT never uses next-auth's email provider, the only
   thing that loads it through `next-auth`, so an npm `overrides` entry gives `next-auth` the same
   nodemailer 10 the app uses, instead of turning off peer checks for the whole project.
 - Fixed within their ranges: `ws` (through Supabase), `uuid` (through Resend), `defu` (through the
@@ -2649,7 +2649,7 @@ does breaks it. Evidence so far, from production:
   violations. To prove it would catch one, an image from `example.com` was added to the landing page:
   it was reported as `img-src`. That probe also sent one report to production's `/api/csp-report` at
   about 12:10 IST.
-- **Profile photos.** Production's 9 accounts use `lh3.googleusercontent.com` (8) and SplitX's Supabase
+- **Profile photos.** Production's 9 accounts use `lh3.googleusercontent.com` (8) and SplitIT's Supabase
   (1). The policy allows both, and GitHub's avatar host.
 - **The OCR worker** gets the same policy with its own file, and the policy allows everything it does:
   load its engine and model from the site, compile WebAssembly, and fetch. Its only uses of `Function`
@@ -2665,7 +2665,7 @@ header becomes `Content-Security-Policy`, keeping `report-uri`, so anything miss
 **2026-09-23** · ✅ written and unit-tested (1,103 → 1,108 tests)
 
 Two more items from the audit's low list:
-- **Profile photos only from SplitX's storage or the sign-in provider.** `PATCH /api/me` accepted any
+- **Profile photos only from SplitIT's storage or the sign-in provider.** `PATCH /api/me` accepted any
   string up to 2,000 characters as `image`. Everyone in your groups sees your photo, so one request
   could make every member's browser load a tracking pixel from any site. No page ever sent that field:
   photos are uploaded through `/api/me/avatar` or come from Google or GitHub at sign-in. The field is
@@ -2846,7 +2846,7 @@ address confirms the subscription.
   - it may pass roles only to EKS, EC2 and Pod Identity.
 
 What remains, by design: it can edit the boundary through the bootstrap stack. It is the one identity
-that manages SplitX's IAM. Since it can't change its own policy, the account's administrator applies
+that manages SplitIT's IAM. Since it can't change its own policy, the account's administrator applies
 version 2, in the console.
 
 **CI** (`iac` job, required for a release) lints both templates with `cfn-lint` 1.57.0, then runs Trivy's
@@ -2894,7 +2894,7 @@ was deployed, while a change still cost nothing.
   so a tag-conditioned revoke would be denied at night and leave the platform running.
 - **Both CI roles are held to the stack's region** (`aws:RequestedRegion`) for every regional service.
   CloudFront, IAM and STS answer globally and are allowed separately. The account's other region holds
-  the user's coursework (four stopped instances and their volumes, in us-east-1), and no SplitX
+  the user's coursework (four stopped instances and their volumes, in us-east-1), and no SplitIT
   workflow can reach it.
 - **The deploy role can't create KMS keys** (`kms:*` became `Describe*` and `List*`). A key costs
   money every month and lingers for a week after deletion, and nothing here uses one (D-089).
@@ -2950,7 +2950,7 @@ demands CloudFormation, not CloudFront"). It is needed:
   The camera receipt scan and the offline app also need HTTPS, and Google refuses non-HTTPS
   sign-in callbacks.
 - **CloudFront is the only free HTTPS here.** An ALB serves HTTPS only for a domain it holds a
-  certificate for, and SplitX owns no domain. CloudFront's `*.cloudfront.net` certificate is free.
+  certificate for, and SplitIT owns no domain. CloudFront's `*.cloudfront.net` certificate is free.
 - **Its address stays the same.** The ALB's name changes every AWS day, and the distribution's
   doesn't. So the OAuth callbacks, the webhook and the QR code are registered once.
 - **Idle, it costs nothing.**
@@ -2979,8 +2979,8 @@ Rejected alternatives:
     origin is contacted.
   - `tests/unit/infra/edgeFunction.test.ts` runs the very template Terraform renders (26 cases:
     each spelling of the internal paths, the paths that must pass, and a malformed escape).
-- **The origin while the platform is down (5.1, item 6)** is an empty private bucket SplitX owns.
-  CloudFront requires an origin with a publicly resolvable name, and a name SplitX doesn't own could
+- **The origin while the platform is down (5.1, item 6)** is an empty private bucket SplitIT owns.
+  CloudFront requires an origin with a publicly resolvable name, and a name SplitIT doesn't own could
   be claimed by someone else and served under our address. The function answers before CloudFront
   would ever ask the bucket. `origin_domain` accepts only an ALB's DNS name, so a typo can't send
   visitors and their cookies elsewhere.
@@ -3144,7 +3144,7 @@ is up, steps 2–5 are skipped and it only confirms that. A failed nightly run e
 set its schedule, through GitHub's own notifications.
 
 `scripts/aws-teardown.mjs` asks AWS; `scripts/lib/aws-leftovers.mjs` decides what counts as the
-platform's, by SplitX's tags and names alone. Its tests hold the negative case to account: the user's
+platform's, by SplitIT's tags and names alone. Its tests hold the negative case to account: the user's
 coursework instances and volumes, the default VPC, other log groups, and the account layer's
 `splitx-ci-*` roles are never selected (`tests/unit/infra/awsLeftovers.test.ts`).
 
@@ -3196,7 +3196,7 @@ How the mapping works (`scripts/lib/demo-secrets.mjs`):
   - a live `ListSecrets` call it signed was answered 200, and the same call with a tampered
     signature was refused with `InvalidSignatureException`.
 
-### D-092 · On EKS the app answers only requests that came through SplitX's own edge
+### D-092 · On EKS the app answers only requests that came through SplitIT's own edge
 **2026-09-23** · 🚧 written and unit-tested (`tests/unit/proxy.origin.test.ts`, 10 cases); it takes
 effect the first time the platform runs online (B-031)
 
@@ -3465,7 +3465,7 @@ plan. The user reported 32 days and about $60 of credit left on 2026-09-24.
    works on either.
 
 **Also recorded here, 2026-09-24:** the user accepted Sonatype's Nexus Repository Community Edition
-licence ("accept the nexus agreement"), so SplitX's Nexus instances accept it when they are set up
+licence ("accept the nexus agreement"), so SplitIT's Nexus instances accept it when they are set up
 (D-096).
 
 **Later the same morning:**
@@ -3641,7 +3641,7 @@ a gRPC *server*.
   in grpc 1.82.2, 1.83.2 and an unreleased 1.85 build; there is no fixed 1.84 release, and no k6
   built with one.
 - **Why it doesn't apply here:** the lab's k6 serves no gRPC. Its one script makes plain HTTP
-  requests to SplitX's own edge, and only ops-api can reach the lab.
+  requests to SplitIT's own edge, and only ops-api can reach the lab.
 - **What was accepted:** that one finding, in `ops/.trivyignore.yaml`.
   - It covers the k6 binary alone, carries its reason, and expires on 2026-10-24.
   - The gate reads the file for the ops image only. The app's image has no exceptions.
@@ -3684,7 +3684,7 @@ from `.env` through `npm run aws:secrets`, and Kind's `k8s:up` now copies the sa
 - **CVE-2026-97031:** crypto/tls, a denial of service through repeated ECH outer extension
   references in a ClientHello, which a TLS server parses.
 - **Why neither applies:** both are in server code. The lab runs k6 as a client only (`k6 run`),
-  against SplitX's own edge, and only ops-api can reach the lab.
+  against SplitIT's own edge, and only ops-api can reach the lab.
 - **What was accepted:** both, in `ops/.trivyignore.yaml`, for `usr/local/bin/k6` alone, each with
   its reason and the same expiry, 2026-10-24. The app's image had no finding and still has no
   exceptions.
@@ -3693,7 +3693,7 @@ from `.env` through `npm run aws:secrets`, and Kind's `k8s:up` now copies the sa
 for CVE-2026-78669 (GO-2026-6611), in Go 1.27.1's net/http and in x/net 0.58.0, both in k6 2.3.0. A
 malicious HTTP/2 peer that opens many streams and then sends many small SETTINGS frames makes the
 other side spend excessive CPU, a client as well as a server. k6 2.3.0 is still the newest release.
-- **Why it is accepted:** k6 is a client here, but its one peer is `TARGET_URL`, SplitX's own edge,
+- **Why it is accepted:** k6 is a client here, but its one peer is `TARGET_URL`, SplitIT's own edge,
   set in the lab's ConfigMap when the platform is installed. A run can choose only its rate and its
   length, so no other server ever answers k6. The most such a peer could do is use CPU in one run,
   which ends within 180 s, and only ops-api can start one.
@@ -4146,7 +4146,7 @@ guessed from the symptom.
 - Functions Storage is the function bundles kept with every retained deployment, counted in
   GB-months (each project's daily peak, summed over the period).
 
-**Why SplitX filled it.**
+**Why SplitIT filled it.**
 - Every push goes to both branches (the push-to-main policy), so Vercel built each commit twice: a
   Production deployment on `main`, and a Preview of the same code on `feat/devops-platform`.
 - Every Dependabot branch got Previews too.
@@ -4508,7 +4508,7 @@ B-031 items a describe call can answer now, so they cannot cost the rehearsal an
   the Free plan may launch (D-095).
 - **The vCPU quota** for on-demand standard instances is 8: four nodes.
 - **Nothing that costs money is running.** There is no cluster, NAT gateway, load balancer, Elastic
-  IP, SplitX volume or VPC, and no demo secret. CloudFront has no distribution yet; the edge
+  IP, SplitIT volume or VPC, and no demo secret. CloudFront has no distribution yet; the edge
   function exists, as the two failed `AWS edge` runs left it.
 - **The budget** reads $1.66 spent this month, and a forecast of $2.19, against $15.
 
@@ -4568,12 +4568,12 @@ watching it. If it went down at night, nobody would know until someone complaine
 :22, :37 and :52, off the busy top of the hour. It asks production what a visitor's browser asks.
 The rules are in `scripts/lib/uptime.mjs`, unit-tested against the answers production gave:
 - **The app:** `/api/health/live` answers "alive", without touching the database.
-- **The home page:** 200, titled SplitX, not just any page.
+- **The home page:** 200, titled SplitIT, not just any page.
 - **Its own JavaScript:** the first `/_next/static/…js` it names is served as JavaScript. A deploy
   whose HTML loads but whose scripts are missing fails here.
 - **The headers:** HSTS of a year or more, `nosniff`, and a Content Security Policy. The report
   says whether the CSP is enforced or report-only (report-only today).
-- **The sign-in page:** 200, titled SplitX.
+- **The sign-in page:** 200, titled SplitIT.
 - **The database,** once an hour, at :07, and on every run started by hand or by a change to the
   checks: `/api/health/ready`.
   - Each check wakes Neon's compute if it sleeps. Every 15 minutes would keep it awake about a third
@@ -4604,7 +4604,7 @@ worth seeing.
 
 **Checked before pushing.**
 - From the laptop against production: all 6 checks passed.
-- Against a site that isn't SplitX (`example.com`): 5 of 5 failed, each once more after 20 s, each
+- Against a site that isn't SplitIT (`example.com`): 5 of 5 failed, each once more after 20 s, each
   with its reason, and the run exited 1.
 - 16 unit tests for the rules and the workflow, and 4 for `/ops`: the reader, and each of the
   item's states.
@@ -5558,6 +5558,28 @@ passing on retry. They have no GPU, so CSS glass does everything, which re-blurr
 engine are now a deeper tint with no blur, and only what floats blurs. Whether this was the cause is what the next CI run shows.
 That change first broke filled buttons under Crystal, Tinted and Pearl (a style's fill beat the accent's): caught in the user's own
 screenshot before it went live, and now excluded.
+
+### D-123 · SplitX becomes SplitIT
+**2026-11-04** · ✅ everything people read. ⏳ The rest waits for the repository's own rename, below.
+
+The user chose the name, over several Hindi ones that were checked. Older entries in this log now say SplitIT too.
+
+**What changed:** the app, its emails and metadata, the wordmark, the docs, the README, the tests, comments, dashboards' titles, and
+internal names that nothing outside the code depends on.
+
+**What deliberately did not, and why:**
+- **The repository's address, its image path and the signing identity** (`Sayandip-Jana-1018/SplitX`, `ghcr.io/sayandip-jana-1018/splitx`, the
+  cosign identity in `policy/` and `jenkins/`, the Sonar key). They name things outside this repository, and they have to change in the same breath as the rename on GitHub, or
+  the cluster refuses every release.
+- **`terraform/`, `cloudformation/`, and the `splitx-*` names in `k8s/`, `helm/`, `jenkins/`, `monitoring/` and `scripts/`.** Some name things that
+  still exist in the AWS account, and the `splitx_*` metrics are what the dashboards and alerts read. None can be proven on this laptop: only a green `kind-e2e` can, and
+  that is blocked by the release scan. Nobody using the app ever sees them.
+- **`docs/evidence/` and `synopsis/`.** They record what was measured and what was submitted. Changing them would falsify them.
+- **Saved settings' keys** (`SplitX-theme`, `splitx:add-expense-draft:v1`, and the like) **and the rate limiter's salt.** Renaming them would cost every existing user their
+  theme and any half-written expense, and would reset device limits, for a name nobody sees.
+
+**A risk, told to the user before going ahead:** Splitit is already the name of a payments company (instalment plans on credit cards). That doesn't
+matter for a web app today, but it should be checked properly before a Play Store or App Store listing, and before any trademark filing.
 
 ---
 

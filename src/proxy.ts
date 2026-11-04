@@ -79,7 +79,7 @@ function clearSessionCookies(request: NextRequest, response: NextResponse) {
 }
 
 /**
- * On the EKS platform, only requests that came through SplitX's own edge, an
+ * On the EKS platform, only requests that came through SplitIT's own edge, an
  * API Gateway HTTP API (D-114). The load balancer is open to the internet, the
  * only way API Gateway can reach it, so anyone could call it directly and skip
  * the edge's HTTPS. The edge adds this header with a value only it has
@@ -142,7 +142,7 @@ function forward(request: NextRequest, trace: TraceContext, receivedAt: number, 
 
 function overloaded(trace: TraceContext) {
     const response = NextResponse.json(
-        { success: false, error: 'SplitX is busy right now. Please try again in a moment.', code: 'OVERLOADED', requestId: trace.traceId },
+        { success: false, error: 'SplitIT is busy right now. Please try again in a moment.', code: 'OVERLOADED', requestId: trace.traceId },
         { status: 503, headers: { 'Retry-After': '1' } }
     );
     applySecurityHeaders(response);

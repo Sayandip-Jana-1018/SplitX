@@ -1,5 +1,5 @@
 # ═══════════════════════════════════════════════════════════════
-#   SplitX — NAIVE image. A comparison exhibit only: never deploy it.
+#   SplitIT — NAIVE image. A comparison exhibit only: never deploy it.
 #
 #   This is how the app would be containerised without any care:
 #   one stage, the full Debian Node image, every dev dependency and

@@ -23,10 +23,10 @@ metadata:
     alb.ingress.kubernetes.io/target-type: ip
     # HTTP only. The edge, an API Gateway HTTP API, holds the visitor's HTTPS
     # connection and forwards over HTTP (terraform/edge, D-114), so an HTTPS
-    # listener would need a certificate for a domain SplitX doesn't have.
+    # listener would need a certificate for a domain SplitIT doesn't have.
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
     # Open to the internet: API Gateway reaches the load balancer from AWS's
-    # public addresses, which no list names. What makes it SplitX's edge only
+    # public addresses, which no list names. What makes it SplitIT's edge only
     # is the header the edge adds: the app refuses every request without it
     # (X-Origin-Verify, D-092), and refuses the internal paths before that
     # (ingress-internal.yaml).

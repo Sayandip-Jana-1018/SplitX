@@ -1,6 +1,6 @@
 # ═══════════════════════════════════════════════════════════════
 #   Sets up a fresh Nexus (nexus/provision.mjs): accepts the Community
-#   Edition licence as SplitX's owner decided (D-095), turns anonymous
+#   Edition licence as SplitIT's owner decided (D-095), turns anonymous
 #   access off, and creates the evidence repository and Jenkins' user.
 #   Safe to run again. A Job's pod template can't change, so cluster-up
 #   deletes it before applying this.

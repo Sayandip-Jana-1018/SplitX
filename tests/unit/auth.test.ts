@@ -130,7 +130,7 @@ describe('authorizeCredentials', () => {
         expect(sendVerificationLink).toHaveBeenCalledWith('alice@example.com');
     });
 
-    it('lets an unconfirmed address sign in while SplitX has no way to send the link', async () => {
+    it('lets an unconfirmed address sign in while SplitIT has no way to send the link', async () => {
         verificationRequired.mockReturnValue(false);
         prisma.user.findFirst.mockResolvedValue({ id: 'u1', email: 'alice@example.com', password: passwordHash, emailVerified: null });
 

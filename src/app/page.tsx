@@ -53,24 +53,24 @@ const STATS = [
 ];
 
 const FEATURES: { icon: LucideIcon; title: string; desc: string }[] = [
-    { icon: Zap, title: 'Silent Auto-Capture', desc: 'Connect your SMS or UPI notifications. Whenever you make a payment for the trip, SplitX reads the alert and logs the expense instantly.' },
+    { icon: Zap, title: 'Silent Auto-Capture', desc: 'Connect your SMS or UPI notifications. Whenever you make a payment for the trip, SplitIT reads the alert and logs the expense instantly.' },
     { icon: BarChart3, title: 'Stunning Analytics', desc: 'Visualize your spending across categories, view historical trends, and see exactly where the budget went.' },
-    { icon: WifiOff, title: 'Offline Capable PWA', desc: 'Install SplitX directly to your home screen. It works natively even without an internet connection on a hike.' },
-    { icon: ShieldCheck, title: 'Privacy First Infrastructure', desc: 'Your financial data stays yours. SplitX relies on localized Edge networking and strict row-level security. No ads, no trackers.' },
+    { icon: WifiOff, title: 'Offline Capable PWA', desc: 'Install SplitIT directly to your home screen. It works natively even without an internet connection on a hike.' },
+    { icon: ShieldCheck, title: 'Privacy First Infrastructure', desc: 'Your financial data stays yours. SplitIT relies on localized Edge networking and strict row-level security. No ads, no trackers.' },
 ];
 
 const VOICES = [
     { text: "Finally an app that doesn't make me do the math. The receipt OCR read a crumpled, faded bar bill in Goa flawlessly. Saved us hours.", name: 'Aman Verma', role: 'Used for a 7-day trip' },
-    { text: 'We used to use Splitwise, but the ads were unbearable. SplitX is fast, gorgeous, and the one-tap UPI payments are game changers.', name: 'Priya Sharma', role: 'Event Organizer' },
+    { text: 'We used to use Splitwise, but the ads were unbearable. SplitIT is fast, gorgeous, and the one-tap UPI payments are game changers.', name: 'Priya Sharma', role: 'Event Organizer' },
     { text: 'The design is incredibly satisfying to use. Dark mode actually looks cohesive, and everything feels instantly responsive.', name: 'Kunal Roy', role: 'UI/UX Designer' },
     { text: 'OCR picked up every line item from a messy handwritten bill. The graph view for settlements is pure genius. 10/10 recommend!', name: 'Sneha Jain', role: 'College trip organizer' },
 ];
 
 const QUESTIONS = [
-    { q: 'Is SplitX really completely free?', a: "Yes. SplitX is a side-project originally built to solve my own friend group's annoyances. There are no paywalls, premium tiers, or hidden fees." },
+    { q: 'Is SplitIT really completely free?', a: "Yes. SplitIT is a side-project originally built to solve my own friend group's annoyances. There are no paywalls, premium tiers, or hidden fees." },
     { q: 'How does Auto-Capture work?', a: 'AutoCapture parses UPI SMS alerts strictly on your device. We use machine learning to identify the merchant and amount, logging it instantly without needing your bank login.' },
     { q: 'Is my financial data safe?', a: 'Absolutely. All receipt parsing happens on the device where possible, and we do not sell your transaction data to advertisers. Your data remains completely yours.' },
-    { q: 'Does it work without the internet?', a: 'Yes! SplitX is a Progressive Web App (PWA). You can install it to your home screen, log expenses offline on a mountain, and it will sync once you reconnect.' },
+    { q: 'Does it work without the internet?', a: 'Yes! SplitIT is a Progressive Web App (PWA). You can install it to your home screen, log expenses offline on a mountain, and it will sync once you reconnect.' },
 ];
 
 const SOCIALS: { icon: IconType; href: string; label: string }[] = [
@@ -156,7 +156,7 @@ export default function LandingPage() {
                     >
                         <p className={styles.heroBadge} data-glass="thin"><Sparkles size={14} />V-1.0 is here - Experience next-gen tracking</p>
                         <h1 className={styles.heroTitle}>
-                            <span className={styles.heroBrand}>SplitX</span>
+                            <span className={styles.heroBrand}>SplitIT</span>
                             Split expenses
                             <span className={styles.heroAccent}>Keep the Vibe.</span>
                         </h1>
@@ -205,7 +205,7 @@ export default function LandingPage() {
                 {/* ── Receipts ── */}
                 <section className={styles.section}>
                     <SectionHead eyebrow="Advanced AI" title="Never type a long restaurant bill again.">
-                        Drop an image of any paper receipt. SplitX&apos;s OCR instantly recognizes line-items, prices, and even obscure taxes.
+                        Drop an image of any paper receipt. SplitIT&apos;s OCR instantly recognizes line-items, prices, and even obscure taxes.
                     </SectionHead>
                     <div className={styles.grid2}>
                         <Reveal>
@@ -332,7 +332,7 @@ export default function LandingPage() {
                         );
                     })}
                 </div>
-                <p className={styles.footerNote}>© 2026 SplitX. Built for friends who hate Math.</p>
+                <p className={styles.footerNote}>© 2026 SplitIT. Built for friends who hate Math.</p>
             </footer>
         </div>
     );

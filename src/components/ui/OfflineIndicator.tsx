@@ -101,7 +101,7 @@ export default function OfflineIndicator() {
             )}
             {isOnline && !showReconnected && showRestricted && (
                 <StatusPill key="restricted" tone="restricted" icon={<ShieldAlert size={15} />}>
-                    This network may be blocking SplitX
+                    This network may be blocking SplitIT
                 </StatusPill>
             )}
         </AnimatePresence>

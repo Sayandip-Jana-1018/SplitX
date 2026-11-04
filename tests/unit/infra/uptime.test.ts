@@ -15,7 +15,7 @@ const HEADERS = {
     'x-content-type-options': 'nosniff',
     'content-security-policy-report-only': "default-src 'self'; frame-ancestors 'none'",
 };
-const PAGE = '<html><head><title>SplitX — Split expenses. Settle smarter.</title>'
+const PAGE = '<html><head><title>SplitIT — Split expenses. Settle smarter.</title>'
     + '<script src="/_next/static/chunks/1pud6v14gjs13.js" async></script></head></html>';
 
 describe('what each check accepts', () => {
@@ -25,16 +25,16 @@ describe('what each check accepts', () => {
         expect(judge('live', { status: 503, body: '' })).toEqual({ ok: false, detail: 'HTTP 503, expected 200' });
     });
 
-    it('wants SplitX\'s own page, not any page', () => {
+    it('wants SplitIT\'s own page, not any page', () => {
         expect(judge('home', { status: 200, headers: HEADERS, body: PAGE }).ok).toBe(true);
-        expect(judge('sign-in', { status: 200, body: '<title>Example Domain</title>' })).toEqual({ ok: false, detail: 'HTTP 200, but not SplitX\'s page' });
+        expect(judge('sign-in', { status: 200, body: '<title>Example Domain</title>' })).toEqual({ ok: false, detail: 'HTTP 200, but not SplitIT\'s page' });
         // A redirect is judged, not followed: the checks ask for pages that answer 200 today.
         expect(judge('home', { status: 307, body: '' }).ok).toBe(false);
     });
 
     it('finds the page\'s own script, and wants it served as JavaScript', () => {
         expect(firstScript(PAGE)).toBe('/_next/static/chunks/1pud6v14gjs13.js');
-        expect(firstScript('<title>SplitX</title>')).toBeNull();
+        expect(firstScript('<title>SplitIT</title>')).toBeNull();
         expect(judge('scripts', { status: 200, headers: { 'content-type': 'application/javascript; charset=UTF-8' }, body: '' }).ok).toBe(true);
         expect(judge('scripts', { status: 200, headers: { 'content-type': 'text/html' }, body: '' }))
             .toEqual({ ok: false, detail: 'served as text/html' });

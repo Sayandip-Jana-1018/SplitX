@@ -4,7 +4,7 @@ import { consumeAllowance } from '@/lib/rateLimit';
  * Daily allowances for the features that cost money on every call: the AI
  * chat and voice parsing (Gemini) and receipt scanning (OpenAI).
  *
- * Each person has an allowance per feature, and all of SplitX has one ceiling
+ * Each person has an allowance per feature, and all of SplitIT has one ceiling
  * across every feature and person, so a cost can't run away however many
  * accounts ask. `AI_DISABLED=true` switches every AI feature off at once.
  * If the counter can't be reached the feature is unavailable: a paid API is
@@ -63,7 +63,7 @@ export async function takeAiQuota(feature: AiFeature, userId: string): Promise<A
         return {
             ok: false,
             status: 429,
-            error: 'SplitX has reached today’s limit for AI features. Please try again tomorrow.',
+            error: 'SplitIT has reached today’s limit for AI features. Please try again tomorrow.',
             retryAfterSeconds: Math.ceil(everyone.resetMs / 1000),
         };
     }

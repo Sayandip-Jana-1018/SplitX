@@ -1,7 +1,7 @@
 {
   "uid": "splitx-logs",
-  "title": "SplitX · Logs",
-  "description": "Logs of the SplitX pods and of ingress-nginx, from Loki. Provisioned from monitoring/dashboards/splitx-logs.json.",
+  "title": "SplitIT · Logs",
+  "description": "Logs of the SplitIT pods and of ingress-nginx, from Loki. Provisioned from monitoring/dashboards/splitx-logs.json.",
   "tags": [
     "splitx"
   ],
@@ -49,7 +49,7 @@
   },
   "links": [
     {
-      "title": "SplitX · Service",
+      "title": "SplitIT · Service",
       "type": "link",
       "url": "/d/splitx-service",
       "icon": "dashboard"
@@ -72,7 +72,7 @@
       "title": "Find a request",
       "options": {
         "mode": "markdown",
-        "content": "Every response carries an `X-Request-Id` header, and SplitX shows it with any error. Paste one into **request_id** above: the panel below lists every line that request wrote, from the ingress access log and from the pod that served it. The request ID is stored as structured metadata, not a label, so any number of them costs nothing to index."
+        "content": "Every response carries an `X-Request-Id` header, and SplitIT shows it with any error. Paste one into **request_id** above: the panel below lists every line that request wrote, from the ingress access log and from the pod that served it. The request ID is stored as structured metadata, not a label, so any number of them costs nothing to index."
       }
     },
     {
@@ -128,7 +128,7 @@
       },
       "type": "timeseries",
       "title": "Application log lines by level",
-      "description": "Lines per minute from the SplitX pods, by level. Errors are server errors and failed dependencies; warnings include refused and rate-limited requests.",
+      "description": "Lines per minute from the SplitIT pods, by level. Errors are server errors and failed dependencies; warnings include refused and rate-limited requests.",
       "targets": [
         {
           "refId": "A",
@@ -316,7 +316,7 @@
       },
       "type": "logs",
       "title": "All application logs",
-      "description": "Every line from the SplitX pods, including the database and cache containers.",
+      "description": "Every line from the SplitIT pods, including the database and cache containers.",
       "targets": [
         {
           "refId": "A",

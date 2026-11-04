@@ -114,7 +114,7 @@ describe('the pipeline reading', () => {
             // A failed attestation step is reported as not attested, whatever the job's verdict.
             release: { scanned: true, signed: true, attested: false },
         });
-        expect(reading.source).toBe('GitHub Actions: SplitX CI on main');
+        expect(reading.source).toBe('GitHub Actions: SplitIT CI on main');
         expect(fetchMock.mock.calls[0][1]?.headers).toMatchObject({ authorization: 'Bearer github-read-only-token-for-tests' });
     });
 

@@ -23,7 +23,7 @@ metadata:
   labels:
     app.kubernetes.io/part-of: splitx
   annotations:
-    policies.kyverno.io/title: SplitX releases must be signed
+    policies.kyverno.io/title: SplitIT releases must be signed
     policies.kyverno.io/category: Supply chain
     policies.kyverno.io/severity: high
     policies.kyverno.io/description: >-

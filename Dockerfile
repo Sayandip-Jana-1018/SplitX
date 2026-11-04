@@ -1,5 +1,5 @@
 # ═══════════════════════════════════════════════════════════════
-#   SplitX — production image
+#   SplitIT — production image
 #
 #   Measured against a deliberately naive build in
 #   docs/evidence/image-comparison.md; every choice below is
@@ -87,7 +87,7 @@ ARG APP_VERSION=dev
 ARG BUILD_DATE=unknown
 ENV GIT_SHA=${GIT_SHA} \
     APP_VERSION=${APP_VERSION}
-LABEL org.opencontainers.image.title="SplitX" \
+LABEL org.opencontainers.image.title="SplitIT" \
       org.opencontainers.image.description="Expense splitting with the fewest settle-up payments" \
       org.opencontainers.image.source="https://github.com/Sayandip-Jana-1018/SplitX" \
       org.opencontainers.image.revision="${GIT_SHA}" \

@@ -1,5 +1,5 @@
 # ═══════════════════════════════════════════════════════════════
-#   SplitX — Full Development Stack
+#   SplitIT — Full Development Stack
 #   Run: docker compose --profile ci up -d
 #   App only: docker compose up -d
 #
@@ -20,7 +20,7 @@
 
 services:
 
-  # ── SplitX Application ──
+  # ── SplitIT Application ──
   splitx:
     build:
       context: .

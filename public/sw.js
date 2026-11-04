@@ -1,5 +1,5 @@
 /*
- * SplitX service worker.
+ * SplitIT service worker.
  *
  * It makes the app installable and shows an offline page when there is no
  * connection. It keeps nothing else: API responses are one person's money and

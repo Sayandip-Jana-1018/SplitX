@@ -11,7 +11,7 @@ const CHECK_INBOX = 'Check your email: we sent a link to confirm your address.';
 
 // POST /api/register — opens a password account.
 //
-// While SplitX can send email, the address must be confirmed before the
+// While SplitIT can send email, the address must be confirmed before the
 // account can sign in (lib/emailVerification.ts), and the answer is the same
 // whether or not the address already has an account: its owner gets an email
 // instead. Without email, a taken address is refused as before.

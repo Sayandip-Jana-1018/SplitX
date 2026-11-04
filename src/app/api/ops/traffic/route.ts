@@ -26,7 +26,7 @@ const NO_STORE = { 'Cache-Control': 'no-store' };
 async function operator() {
     const viewer = await opsViewer();
     if (!viewer) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (!viewer.allowed) return NextResponse.json({ error: 'Only SplitX operators can run the traffic lab.' }, { status: 403 });
+    if (!viewer.allowed) return NextResponse.json({ error: 'Only SplitIT operators can run the traffic lab.' }, { status: 403 });
     return null;
 }
 

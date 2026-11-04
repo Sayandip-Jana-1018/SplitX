@@ -72,10 +72,10 @@ function UpiFlow({ amount, payeeName, settlementId, payeeUpiId: knownUpiId, onCl
     const localLink = (upiId: string) => {
         const query = new URLSearchParams({
             pa: upiId,
-            pn: payeeName || 'SplitX user',
+            pn: payeeName || 'SplitIT user',
             am: (amount / 100).toFixed(2),
             cu: 'INR',
-            tn: 'SplitX settlement',
+            tn: 'SplitIT settlement',
         });
         return `upi://pay?${query.toString()}`;
     };

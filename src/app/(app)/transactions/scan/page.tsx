@@ -322,7 +322,7 @@ function ScanReceipt() {
         router.push(`/transactions/new?${params.toString()}`);
     };
 
-    // SplitX keeps every group in rupees. A bill in another currency carries
+    // SplitIT keeps every group in rupees. A bill in another currency carries
     // over without its amount, for the person to type what they paid in ₹.
     const billCurrency = mode === 'advanced' ? advanced?.currency ?? 'INR' : parsed?.currency ?? 'INR';
     const inRupees = billCurrency === 'INR';
@@ -483,7 +483,7 @@ function ScanReceipt() {
 
                         {!inRupees && (
                             <Notice tone="warning" title={`This bill ${mode === 'advanced' ? 'is' : 'looks to be'} in ${billCurrency}`}>
-                                SplitX keeps every group in rupees, so its amount doesn’t carry over. Type what you paid
+                                SplitIT keeps every group in rupees, so its amount doesn’t carry over. Type what you paid
                                 in ₹ on the next screen.{mode === 'advanced' && ' Splitting by item works for bills in rupees.'}
                             </Notice>
                         )}

@@ -106,7 +106,7 @@ describe('clampMembers and podLabel', () => {
 
     it('shows the distinguishing end of a pod name', () => {
         expect(podLabel('splitx-7d9f8c6b5-x2kqp')).toBe('x2kqp');
-        expect(podLabel(null)).toBe('SplitX');
+        expect(podLabel(null)).toBe('SplitIT');
         expect(podLabel('standalone')).toBe('standalone');
     });
 });

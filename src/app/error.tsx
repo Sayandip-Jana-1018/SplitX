@@ -12,7 +12,7 @@ import { useEffect, useState } from 'react';
  * screen still renders even when the app's own chunks are broken.
  */
 
-const RELOAD_FLAG = 'splitx:self-heal';
+const RELOAD_FLAG = 'splitit:self-heal';
 const STALE_BUILD = /ChunkLoadError|Loading chunk|Failed to fetch dynamically imported module|error #(130|418|421|422|423|425)/i;
 
 /** True once per session for errors that smell like a stale build. */
@@ -54,10 +54,10 @@ export default function AppError({ error, reset }: { error: Error & { digest?: s
     return (
         <div style={shell}>
             <div style={card}>
-                <div style={{ ...glyph, animation: healing ? 'splitx-spin 1s linear infinite' : undefined }}>
+                <div style={{ ...glyph, animation: healing ? 'splitit-spin 1s linear infinite' : undefined }}>
                     {healing ? '↻' : '⚠'}
                 </div>
-                <h1 style={title}>{healing ? 'Updating SplitX…' : 'Something went wrong'}</h1>
+                <h1 style={title}>{healing ? 'Updating SplitIT…' : 'Something went wrong'}</h1>
                 <p style={text}>
                     {healing
                         ? 'A newer version is available. Loading it now.'
@@ -72,7 +72,7 @@ export default function AppError({ error, reset }: { error: Error & { digest?: s
                     </div>
                 )}
             </div>
-            <style>{'@keyframes splitx-spin{to{transform:rotate(360deg)}}'}</style>
+            <style>{'@keyframes splitit-spin{to{transform:rotate(360deg)}}'}</style>
         </div>
     );
 }

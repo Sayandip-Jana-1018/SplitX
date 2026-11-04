@@ -69,7 +69,7 @@ function RegisterForm() {
                 return;
             }
 
-            // While SplitX can email, a new account confirms its address first.
+            // While SplitIT can email, a new account confirms its address first.
             if (data?.verificationSent) {
                 setSentTo(email.trim());
                 setLoading(false);
@@ -125,7 +125,7 @@ function RegisterForm() {
         <AuthCard
             title="Create your account"
             subtitle="Split bills with friends, track who owes what, and settle up by UPI."
-            footer={<>Already on SplitX? <Link href={loginHref}>Sign in</Link></>}
+            footer={<>Already on SplitIT? <Link href={loginHref}>Sign in</Link></>}
         >
             <SocialSignIn callbackUrl={callbackUrl} />
 

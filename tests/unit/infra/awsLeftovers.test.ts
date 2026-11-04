@@ -59,7 +59,7 @@ describe('what counts as the platform\'s', () => {
 
 describe('the report', () => {
     it('counts nothing in an account that holds only other things', () => {
-        // What this account really holds besides SplitX: coursework instances
+        // What this account really holds besides SplitIT: coursework instances
         // and their volumes, the default VPC, and the account layer.
         const rows = leftovers({
             ...empty,

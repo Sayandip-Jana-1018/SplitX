@@ -9,7 +9,7 @@ import { hashSecretToken, newSecretToken } from '@/lib/secretTokens';
  * A password account can sign in only once its address is confirmed, so an
  * account opened with someone else's address is never usable (the rest of
  * security finding H2; D-068 covered provider sign-in). This applies only
- * while SplitX can send email (lib/email.ts): without a sender, nobody could
+ * while SplitIT can send email (lib/email.ts): without a sender, nobody could
  * ever confirm, so nobody is asked to.
  *
  * Confirmation links are single use, kept as SHA-256 in VerificationToken,
