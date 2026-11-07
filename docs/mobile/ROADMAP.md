@@ -1,6 +1,6 @@
 # SplitIT app: the roadmap
 
-**Status: paused on 3 November 2026.** The web app gets the Liquid Glass design first ([the overhaul plan](../web/LIQUID_GLASS_OVERHAUL.md)). Nothing here is built. When this resumes, Section 6 must be rewritten: it still describes "Arcade Ledger", which was replaced by Liquid Glass, and the stack needs a line on real-time glass.
+**Status: started on 7 November 2026, on the `feat/app` branch.** The website got Liquid Glass first, and the app now brings the same design to the phone. Phase 0's code is written: the app's frame, its glass engine on the GPU, the theme and the first screens (section 9). You asked for code first and testing on a phone after a phase or two, so the first phone test is the end of Phase 1.
 **Design boards:** [SplitIT Liquid Glass canvas](https://claude.ai/artifact/XSFNfEYYXmoVufit1w6w9B) (private to you).
 
 ## 1. The brief, as you decided it
@@ -26,7 +26,7 @@ The web app is a strong base. The money engine, tests and decision log are worth
 **Keep:**
 - **The money logic.** About 1,500 lines in 11 modules have no framework imports, so they can move into a shared package unchanged: `settlementPlanner`, `groupFinance`, `splits`, `expenseSplits`, `receiptSplit`, `transactionParser`, `upi`, `categoryInference`, `indiaTime`, `settlementStatus`, `utils`.
 - **The settlement state machine** (`src/lib/settlementTransitions.ts`), with its race protection and audit log.
-- **Integer paise, soft deletes, idempotent expense saves, the rate limiter, and 1,465 tests.**
+- **Integer paise, soft deletes, idempotent expense saves, the rate limiter, and 1,566 tests.**
 - **The signed 81 MB container image.** It already runs on Kubernetes, so the backend isn't tied to one host.
 
 **Change:**
@@ -46,8 +46,8 @@ The web app is a strong base. The money engine, tests and decision log are worth
 | No restore drill has ever been run; errors reach no one (B-032) | A backup you haven't restored isn't proven | Drill in Phase 2, Sentry's free plan |
 
 **Also found:**
-- **The name is taken.** Google Play already has three apps called exactly "SplitIT", plus "SplitIT: Split Bills & Expenses". The App Store has "SplitIT: Bill & Expense Split" and "SplitIT - Manage Group Expenses". `splitx.app` and `splitx.in` are registered. See section 12.
-- **CI will likely stop at the next push to `main`.** The k6 exceptions in `ops/.trivyignore.yaml` expired on 24 October.
+- **The name.** The old name, SplitX, was taken several times on both stores, so the app is now SplitIT (D-123). Splitit is also an existing instalment-payments company. That doesn't matter while nothing is listed, but the name needs a proper check before any store listing or trademark filing.
+- **CI is green** since 4 November. Five accepted findings in the load-testing tool's image expire on 15 December 2026, when the gate refuses them again unless a fixed k6 exists.
 - **Your tools are nearly ready.** Android Studio, Android SDK platforms 33 to 36 and Node 24 are installed. `java` on your PATH is version 8 and `adb` isn't on PATH, so Phase 0 points both at the right versions. Build-tools 36 needs adding.
 - **You've used Expo before** (`AudioApp`, Expo 51). Flutter is installed, but I found no Flutter project in your Projects folder.
 
@@ -55,9 +55,10 @@ The web app is a strong base. The money engine, tests and decision log are worth
 
 | Layer | Language | Tools |
 |---|---|---|
-| App screens and logic | **TypeScript** (strict) | React Native 0.88 with Expo SDK 58, Expo Router |
-| Animation and effects | TypeScript, plus **SkSL** shaders | Reanimated 4, Gesture Handler, React Native Skia |
-| 3D | TypeScript, **glTF** assets from Blender | Filament on the phone, Three.js on the web (Phase 0 confirms Filament) |
+| App screens and logic | **TypeScript** (strict) | React Native 0.88 with Expo SDK 58, Expo Router 58 |
+| Animation and effects | TypeScript, plus **SkSL** shaders | Reanimated 4, Gesture Handler, React Native Skia 2 |
+| Liquid Glass | **SkSL**, from the website's own shaders | Skia on the GPU: the liquid, every glass surface and the coins |
+| 3D | Shaders first; **glTF** only if needed | The coins are already 3D in shaders. Filament stays an option for a later moment that needs a real model |
 | Vector stickers and characters | Rive files | The same files on phone and web |
 | Android-only code | **Kotlin** | Notification listener, UPI result handling, quick tile |
 | iPhone-only code | **Swift** | Share extension, App Intents |
@@ -76,9 +77,9 @@ The web app is a strong base. The money engine, tests and decision log are worth
 - **Flutter:** excellent for custom visuals, but Dart means rewriting the money logic, and iPhone builds need a Mac or a cloud service. Reasonable, but the wrong trade for this project.
 - **Wrapping the website (Capacitor):** fastest, but it can't reach this design's feel on budget phones, and Apple asks for apps to be more than a repackaged website.
 - **Separate Kotlin and Swift apps:** the best possible feel, but two full codebases for one person.
-- **Rewriting the backend in Go or Java:** throws away 1,465 tests and 117 recorded decisions, and buys nothing this app needs. A backend is strong because it is correct and well operated, not because of its language.
+- **Rewriting the backend in Go or Java:** throws away 1,566 tests and 124 recorded decisions, and buys nothing this app needs. A backend is strong because it is correct and well operated, not because of its language.
 
-**The honest trade-off:** real-time 3D is React Native's weakest area. So 3D gets its own proof on a budget phone in Phase 0, with pre-rendered art as the planned fallback.
+**The honest trade-off:** real-time graphics are React Native's weakest area. The answer here is Skia: the glass and the coins are GPU shaders, which React Native drives without touching the JavaScript thread on every frame. Their cost on a budget phone is measured at the end of Phase 1, with a calmer tier as the planned fallback.
 
 ## 4. Architecture
 
@@ -118,9 +119,9 @@ flowchart TB
     core -.-> site
 ```
 
-**Repository:** one monorepo, this one, using npm workspaces. `apps/mobile` holds the app. `packages/core`, `packages/contract` and `packages/tokens` hold the shared money rules, API contract and design tokens. `modules/` holds the Kotlin and Swift code. Phase 0 proves this layout before anything depends on it.
+**Repository:** this one. `apps/mobile` is the app, an Expo project with its own packages, deliberately not an npm workspace yet: the website and the app need different builds of React, and keeping them apart leaves the website's build untouched. Shared code is read straight from where it lives, through a path alias, so there is one copy of each rule. Today that is `src/lib/glass`: the colours, the liquid's motion, the coins and the kinds of glass, which import nothing. The money modules move into `packages/core` in Phase 1, shared the same way, with the website's tests still green. `modules/` will hold the Kotlin and Swift code.
 
-**Branch:** all work happens on a long-lived `feat/app` branch, and reaches `main` only when you approve a phase. Vercel deploys `main`, so the live site and its data stay untouched. This replaces the current push-straight-to-main habit for this project only, and needs your OK.
+**Branch:** all work happens on a long-lived `feat/app` branch, and reaches `main` only when you approve a phase. Vercel deploys `main`, so the live site and its data stay untouched. This replaces the current push-straight-to-main habit for this project only. You started Phase 0 on 7 November, so I took this as agreed; say if you'd rather have it otherwise.
 
 **Three environments, all free until launch:**
 
@@ -155,51 +156,40 @@ No Kubernetes or Docker cluster runs on the laptop. The EKS, Jenkins and Nexus p
 - Errors say what happened and what to do next, with a request ID for support.
 - Every feature that can fail has a fallback: no capture means manual entry, no UPI app means a QR code and a copyable ID, no AI means the on-device parser (this one exists already).
 
-## 6. Design: "Arcade Ledger"
+## 6. Design: Liquid Glass, on the phone
 
-**The idea:** a money ledger inside an arcade cabinet. Receipts, stamps and tape meet neon, chrome and coins. That one world gives all 12 trends a reason to exist, so they read as one app rather than a pile of effects.
+**The idea:** the website's design, made native. The same liquid floats behind every screen, the same glass bends it at its edges, and the same coins carry the money. Your rules from the web hold here too: Apple-style glass, everything on one centre axis, one theme colour at a time, the liquid always moving, and maximalism left out.
 
-**The rule that keeps it usable: three zones.** Loudness depends on what the person is doing.
+**What carries over exactly, from the same source files:**
+- **16 colours**, each one hue at different depths, in light and dark (`src/lib/glass/palette.ts`).
+- **Five kinds of glass:** Liquid, Frosted, Crystal, Tinted and Pearl (`styles.ts`), chosen in Appearance.
+- **The coins** (`coins.ts` and the web's coin shader): the balance on a coin that turns right round, and on Welcome a coin that splits into shares and comes back whole.
+- **The liquid's motion** (`liquid.ts`), so a phone and the website show the same drift.
+- **Plus Jakarta Sans**, with the same type scale; money told apart by brightness and sign, red only for errors.
+- **Calm motion**, which also follows the phone's Reduce Motion setting.
 
-| Zone | Screens | Allowed |
-|---|---|---|
-| **Loud** | Home hero, wins, recaps, onboarding, empty states | All 12 trends |
-| **Working** | Add expense, editing a split, approving or paying | Big type and tactile controls. Nothing moves or sits behind a number being entered or approved |
-| **Reading** | Lists, ledgers, history | Ticket styling, fixed-width numbers, no tilt |
+**How it is drawn.** On the web, one WebGL engine paints the liquid into a texture and the glass reads it back. On a phone the liquid is a function of the screen point and the time, so every piece of glass draws the same liquid at its own place, bent by its own edge. Nothing is read back from the GPU, and the wall and the glass agree to the pixel. One clock drives them all; scrolling is followed on the UI thread, so nothing is measured while a list moves.
 
-**Each trend gets one job and one guardrail:**
+**What only the phone has:**
+- **Touch:** controls give a little under the thumb, with a light haptic tick.
+- **The thumb zone:** one floating bar of glass, with adding an expense in its centre.
+- **A keypad of glass** for amounts, instead of a keyboard.
+- **iOS 26's own glass** stays possible for system parts later. The app's own glass is kept everywhere for one look on every phone.
 
-| # | Trend | Where it lives | Guardrail |
-|---|---|---|---|
-| 1 | 3D and immersive | Spinning rupee coin, Settle Orbit map with gyroscope tilt, collectible group tokens | Real-time only on capable phones, pre-rendered elsewhere |
-| 2 | Experimental navigation | **The Dial:** a thumb wheel that fans out with haptic clicks. **The Deck:** swipeable group tickets | Classic tabs in settings, automatic with a screen reader |
-| 3 | Vibrant colour | Acid lime, hot pink, electric violet, yellow and cyan on near-black. Your 12 palettes become unlockable skins | AA contrast tested in CI. Owed and owe are never colour alone |
-| 4 | Bold typography | Archivo variable (width and weight animate), huge amounts, JetBrains Mono for ledgers, Silkscreen for HUD labels, Caveat for notes | Survives 200% font scale; the ₹ sign is checked in each font |
-| 5 | Dark mode | Near-black by default. The light theme is "Paper", thermal-receipt cream rather than white | Both themes tested on every screen |
-| 6 | Motion | Spring presets (Snap, Bounce, Drift), ticket-to-detail transitions, receipts that print, stamps that slam, rolling numbers | Interruptible and never blocks input. Reduced Motion gives simple fades |
-| 7 | Gamified | XP, levels, streaks, quests, badges as stickers, "board cleared" wins | Rewards good habits only. No public ranking of debtors, no cash prizes, and it can be turned off |
-| 8 | Neumorphism | Only physical controls: keypad, switches, Dial, split selector | Always a visible edge at 3:1 contrast, because pure neumorphism fails it |
-| 9 | Retrofuturism | Chrome wordmark, "P1" arcade labels, CRT scanlines on the hero, pixel coins, marquee ticker | Decoration only. Errors stay plain |
-| 10 | Maximalism | Home hero stack, win screens, trip recaps | Loud zone only, one stack per screen |
-| 11 | Collage | Torn receipts, tape, die-cut avatars, handwritten notes, sticker book, trip scrapbook | Share cards hide amounts unless the person opts in |
-| 12 | Neo-brutalism | Thick borders, hard offset shadows, raw ticket layouts, slight tilt | Tilt of 2° at most, and none on working screens. Tap targets at least 48 dp |
-
-**Gamification rules:** money and shame are a bad mix. All XP and badges are computed on the server from the ledger, so they can't be farmed. Groups opt in to any shared board, and it only celebrates positive things, such as the fastest settler.
-
-**Performance tiers,** extending the `premium`, `balanced` and `calm` idea already in `usePerformanceMode.ts`:
+**Performance tiers,** the website's governor, ported in Phase 1:
 
 | Tier | Phones | Gets |
 |---|---|---|
-| High | Recent mid-range and up | Real-time 3D, shaders, full motion |
-| Mid | Most phones | Pre-rendered 3D, Skia effects, full motion |
-| Calm | Budget phones, Reduced Motion, or by choice | Still art and simple fades, everything still works |
+| Full | Recent mid-range and up | Liquid, glass and coins at full rate |
+| Balanced | Most phones | The same, with the finest engraving and frost detail dropped |
+| Calm | Budget phones, Reduce Motion, or by choice | A still picture of the same design; nothing moves, everything works |
 
 **Budgets, tested rather than hoped for:**
 - 60 fps on your cheapest test phone, with a cold start under 2.5 s.
 - App download under 40 MB (a target, refined in Phase 1).
 - Well under Play's memory lines, which can affect store visibility from February 2027: 2 GB in the foreground on a 4 GB phone, 200 MB of bitmaps in the background.
 
-**The website** uses the same tokens, Rive files, 3D models and motion spec. Components are built twice, once in React Native and once in React DOM, because this design relies on native gestures that don't translate well to the web. Desktop gets a top bar instead of the Dial, with the same world around it. Web also becomes the fast place to try a look: I can see it in the browser pane immediately.
+**Gamification, in Phase 6, stays quiet:** it celebrates good habits only, such as the fastest settler. No public ranking of debtors and no cash prizes, it is computed on the server so it can't be farmed, and it can be turned off.
 
 ## 7. Payment auto-capture
 
@@ -285,42 +275,40 @@ The store listing and app must say plainly that automatic capture is Android-onl
 
 ## 9. The phases
 
-I stop and report at the end of each phase, and start the next only when you say so. Estimates assume about 10 to 15 hours a week from you for testing and review. Treat them as a forecast: I'll re-estimate after Phase 1, using the real pace.
+I stop and report at the end of each phase, and start the next only when you say so. You asked for code first and testing after a phase or two, so the first test on your phone is the end of Phase 1. The proofs that need your phone and real money (capture and UPI payments) move to the start of Phase 4, where their answers are needed.
 
-| Phase | Name | Weeks | Ends with |
-|---|---|---|---|
-| 0 | Prove the risky parts | 2 | Go or no-go on capture, UPI and 3D |
-| 1 | Design language | 3–4 | You approve real screens running on your phone |
-| 2 | Backend for apps (overlaps Phase 1) | 3–4 | Laptop stack pushes to your phone; restore drill passes |
-| 3 | Core loop, phone and web | 6–7 | A full pretend trip works, including offline |
-| 4 | Auto-capture and smart input | 3–4 | Real alerts become correct expenses |
-| 5 | Missing money features | 3 | Ledger tests hold for every new case |
-| 6 | The delight layer | 3–4 | 3D and gamification inside budget |
-| 7 | Hardening | 2–3 | Security, privacy, accessibility reports with no high issues |
-| 8 | iPhone | 3 | All flows pass on the simulator |
-| 9 | Launch kit and rehearsal | 1–2 | **Launch-ready. Stop here.** |
+| Phase | Name | Ends with |
+|---|---|---|
+| 0 | Foundation | ✅ Code written: the app's frame, the glass engine and the first screens |
+| 1 | Design kit and every screen | All screens built on made-up data; **first test on your phone** |
+| 2 | Backend for apps | Laptop stack pushes to your phone; restore drill passes |
+| 3 | Core loop, phone and web | A full pretend trip works, including offline |
+| 4 | Auto-capture and smart input | Real alerts become correct expenses |
+| 5 | Missing money features | Ledger tests hold for every new case |
+| 6 | The delight layer | Gamification and the last moments, inside budget |
+| 7 | Hardening | Security, privacy, accessibility reports with no high issues |
+| 8 | iPhone | All flows pass on the simulator |
+| 9 | Launch kit and rehearsal | **Launch-ready. Stop here.** |
 
-**Total: about 6 to 7 months.** Android and web would be ready around May or June 2027, and iPhone a few weeks later.
+**Total: still about 6 to 7 months**, re-estimated at the end of Phase 1 from the real pace.
 
-### Phase 0: prove the risky parts
+### Phase 0: foundation (done in code, 7 November)
 
-- **Set up:** `feat/app` branch, Java and `adb` pointing at the right versions, phone connected over USB. Fix the expired CI exceptions.
-- **Proof A, capture:** a tiny Kotlin app on your phone for one week. It masks each alert before storing it (digits become `#`, names become tokens), and you review the export before anything is shared. It answers which of your apps and banks post usable alerts at all. Please don't paste raw bank messages into chat, because they'd sit in session logs.
-- **Proof B, UPI:** ₹1 test payments, made by you between your own accounts, through `upi://pay` to personal IDs in GPay, PhonePe, Paytm and BHIM. It answers which apps accept this, and what result they return. I found only unofficial reports of apps restricting link payments to personal IDs, so this needs measuring.
-- **Proof C, visuals:** one screen with the 3D coin, shaders and springs, measured on your cheapest phone.
-- **Proof D, repo:** the monorepo builds, with the 11 money modules moved and every test still green.
-- **Name:** a shortlist, checked against Play, the App Store, domains and India's trademark search.
-- **Exit test:** a one-page report with numbers. If capture is weak on real phones, we change the plan now, cheaply.
-- **Your part:** run the test apps, make the ₹1 payments.
+- **`apps/mobile`:** Expo SDK 58, React Native 0.88, Expo Router with its routes in `src/app`, TypeScript strict.
+- **The glass engine in Skia:** the liquid wall, glass surfaces with the five kinds of glass, and the coins, with the coin shader converted from the website's at start-up.
+- **The theme:** 16 colours, light and dark, Plus Jakarta Sans, calm motion, saved on the phone.
+- **Screens on made-up data:** Welcome, Home, Groups, Activity, Settle up, Appearance and Add expense with a keypad, under one floating tab bar.
+- **Checked:** the website's 1,566 tests, types, lint and unused-code checks still pass; the app type-checks, bundles for Android, and draws correctly in a browser preview.
+- **Not yet checked:** anything on a real phone.
 
-### Phase 1: design language
+### Phase 1: design kit and every screen
 
-- Refine Arcade Ledger on the canvas, including logo, sound and haptics.
-- `packages/tokens` drives both React Native and CSS.
-- Component kit in both: Ticket, Stamp, Sticker, Dial, Keypad, Marquee, Odometer, Coin.
-- Home, Add Expense and Settled running for real on phone and web.
-- **Exit test:** you approve; 60 fps measured on your cheapest phone; automated contrast check passes; Calm tier works on every screen built so far.
-- **Your part:** taste. This is the phase where your opinion matters most.
+- **`packages/core`:** the 11 money modules move out of the website, shared by both, with every website test still green.
+- **The kit:** sheets, toasts, inputs, segmented choices, the rolling amount, empty and loading states, avatars, and the touch ripple from the web.
+- **Every screen, on made-up data:** group detail (balances, expenses, members, chat), expense detail, the full add-expense flow (four ways to split, payers, category, receipt), settle-up with the UPI sheet, Balance Journey, Insights, profile and settings, sign-in and onboarding.
+- **The governor:** quality levels and frame-time measuring, ported from the web.
+- **Exit test, on your phone:** you install Expo Go, scan a code, and use every screen. 60 fps measured on your cheapest phone; Calm works on every screen.
+- **Your part:** a phone, about an hour, and your taste.
 
 ### Phase 2: backend for apps
 
@@ -343,9 +331,10 @@ I stop and report at the end of each phase, and start the next only when you say
 
 ### Phase 4: auto-capture and smart input
 
+- **First, the two proofs moved here from the old Phase 0:** a tiny capture app on your phone for a week, which masks each alert before storing it, and ₹1 UPI test payments between your own accounts. Their answers shape the rest of this phase. Please don't paste raw bank messages into chat.
 - Everything in section 7, plus QR pay-and-split, share target, ML Kit OCR, native voice, clipboard.
 - **Exit test, against a corpus built from your masked real alerts plus public bank formats:**
-  - At least 95% correct amounts, at most 2% false captures (starting targets, refined by Proof A).
+  - At least 95% correct amounts, at most 2% false captures (starting targets, refined by the capture proof).
   - Each payment shows once.
   - A test proves no raw text leaves the phone.
   - Kill switch works; no battery or wake-lock flags over a week.
@@ -422,7 +411,7 @@ That is about ₹4,000 a month for servers. This is the default, not a commitmen
 | Play pushes back on notification access | Unknown | Could delay launch | Disclosure, on-device processing, optional, kill switch, review video. Can only be tested at submission |
 | UPI apps refuse link payments to personal IDs | Unknown | Settle-up flow changes | Measured in Phase 0. Fallback is QR plus copy ID, with capture confirming afterwards |
 | 3D is too heavy on budget phones | Medium | Feels slow | Tiers; real-time 3D limited to a few moments |
-| 12 trends turn into visual noise | Medium | Hard to use | The three zones; your approval in Phase 1; real people testing |
+| The glass costs too much on budget phones | Medium | Feels slow | Tiers and the governor; Calm keeps every screen usable; measured in Phase 1 |
 | Gamification feels like shaming | Low | Trust damage | Rules in section 6 |
 | Laptop overheats | High without care | Lost work | No emulator, no cluster, cloud builds, phone over USB |
 | Name dispute later | High if unchanged | Rebrand under pressure | Decide before the logo in Phase 1 |
@@ -431,14 +420,14 @@ That is about ₹4,000 a month for servers. This is the default, not a commitmen
 
 ## 12. What I need from you
 
-**To start Phase 0:**
-1. Your go-ahead, and your OK for the `feat/app` branch rule.
+**For the first phone test (end of Phase 1):**
+1. ✅ Given on 7 November. The `feat/app` branch rule is taken as agreed unless you say otherwise.
 2. Your phones: brand, model, Android version. A second brand helps a lot. Do you have an iPhone or a Mac?
 3. Which UPI apps and banks you use, for the capture test.
 4. Has the laptop's second fan been replaced? It changes how much can run locally.
 
-**Before Phase 1's logo:**
-5. **The name.** I recommend renaming, because the app would be at least the fifth "SplitIT" in the same category, and `splitx.app` and `splitx.in` are gone. Candidates I checked and ruled out: Chukta (three finance apps), Barabar (three split apps), Kwits (an existing split app). Settlr looks clear on Play as a name, but `settlr.app` and `settlr.in` are taken. "SplitIT" can stay as the codename meanwhile, since the package name only locks at the first upload.
+**Settled since:**
+5. **The name** is SplitIT (D-123). Splitit, an instalment-payments company, needs a proper check before any listing.
 
 **Later, each with step-by-step directions when we get there:** a free Firebase project (Phase 2), and at least 12 testers (launch).
 

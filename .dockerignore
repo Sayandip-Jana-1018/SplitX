@@ -2,6 +2,9 @@
 # else stays out, so no secret can reach an image and an unrelated change
 # (a README edit, a Helm value, a test) doesn't invalidate the build cache.
 
+# The phone app: not part of the server's image
+apps
+
 # Secrets and local state
 .env*
 .claude

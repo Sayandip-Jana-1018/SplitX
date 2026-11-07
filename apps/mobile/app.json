@@ -1,0 +1,40 @@
+{
+  "expo": {
+    "name": "SplitIT",
+    "slug": "splitit",
+    "scheme": "splitit",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "backgroundColor": "#130B26",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "app.splitit"
+    },
+    "android": {
+      "package": "app.splitit",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#130B26"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "output": "single"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 140,
+          "backgroundColor": "#130B26"
+        }
+      ]
+    ]
+  }
+}

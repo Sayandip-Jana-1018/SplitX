@@ -2,6 +2,7 @@
  * How the money in the background moves. The engine draws it; this is only arithmetic, so
  * it can be tested without a GPU. A coin turns right round and lingers when it faces you, a
  * note or a bill rocks like paper, and the coin that splits leans back to show its thickness.
+ * The phone app reads this file as well; 'worklet' lets it run there on the UI thread.
  */
 
 export type CoinKind = 'coin' | 'rim' | 'split' | 'note' | 'bill';
@@ -54,21 +55,25 @@ export function coinReach(kind: CoinKind): number {
 }
 
 function ease(x: number): number {
+    'worklet';
     const t = Math.min(1, Math.max(0, x));
     return t * t * (3 - 2 * t);
 }
 
 /** Whole for a while, a slow parting, a while apart, and a slow return: 0 to 1. */
 function splitOpen(t: number): number {
+    'worklet';
     const at = (((t % SPLIT_CYCLE_S) + SPLIT_CYCLE_S) % SPLIT_CYCLE_S) / SPLIT_CYCLE_S;
     return ease((at - 0.2) / 0.2) * (1 - ease((at - 0.68) / 0.22));
 }
 
 export function splitAmount(t: number): number {
+    'worklet';
     return SPLIT_FAR * splitOpen(t) * (1 + 0.06 * Math.sin(t * 0.7));
 }
 
 function posed(axis: number, turn: number, spin: number, cut = 0, cutAt = 0): CoinPose {
+    'worklet';
     const sine = Math.sin(turn);
     const cosine = Math.cos(turn);
     return {
@@ -84,6 +89,7 @@ function posed(axis: number, turn: number, spin: number, cut = 0, cutAt = 0): Co
 
 /** `seed` keeps two pieces out of step, and `t` is in seconds. */
 export function coinPose(kind: CoinKind, seed: number, t: number): CoinPose {
+    'worklet';
     if (kind === 'coin') {
         const angle = t * (0.34 + (seed % 5) * 0.035) + seed * 1.9;
         const turn = angle - 0.36 * Math.sin(2 * angle);

@@ -1,4 +1,31 @@
-import type { PaletteId } from '@/hooks/useTheme';
+/**
+ * The palettes, owned here so this file imports nothing: the phone app (apps/mobile) reads it
+ * as it is, and both show the same colours.
+ */
+export type PaletteId =
+    | 'amethyst-haze' | 'cosmic-night' | 'bold-tech' | 'sky-blue' | 'ocean-breeze'
+    | 'perpetuity' | 'emerald-glow' | 'lime-fusion' | 'amber-minimal' | 'solar-dusk'
+    | 'cherry-blossom' | 'quantum-rose' | 'cyberpunk'
+    | 'copper-glow' | 'graphite-mono' | 'merlot-night';
+
+export const PALETTE_NAMES: Record<PaletteId, string> = {
+    'amethyst-haze': 'Amethyst',
+    'cosmic-night': 'Indigo',
+    'bold-tech': 'Cobalt',
+    'sky-blue': 'Sky',
+    'ocean-breeze': 'Lagoon',
+    perpetuity: 'Teal',
+    'emerald-glow': 'Emerald',
+    'lime-fusion': 'Lime',
+    'amber-minimal': 'Amber',
+    'solar-dusk': 'Sunset',
+    'cherry-blossom': 'Rose',
+    'quantum-rose': 'Blush',
+    cyberpunk: 'Orchid',
+    'copper-glow': 'Copper',
+    'merlot-night': 'Merlot',
+    'graphite-mono': 'Graphite',
+};
 
 export type GlassMode = 'light' | 'dark';
 export type Rgb = [number, number, number];

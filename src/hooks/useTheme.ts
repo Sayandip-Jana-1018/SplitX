@@ -1,18 +1,14 @@
 'use client';
 
 import { useCallback, useSyncExternalStore } from 'react';
-import { GLASS_THEMES, glassPalette } from '@/lib/glass/palette';
+import { GLASS_THEMES, glassPalette, PALETTE_NAMES, type PaletteId } from '@/lib/glass/palette';
 import { GLASS_STYLE_IDS, type GlassStyleId } from '@/lib/glass/styles';
 
 export type ThemePreference = 'light' | 'dark' | 'system';
 export type MotionPreference = 'full' | 'calm';
 export type ResolvedTheme = 'light' | 'dark';
 
-export type PaletteId =
-    | 'amethyst-haze' | 'cosmic-night' | 'bold-tech' | 'sky-blue' | 'ocean-breeze'
-    | 'perpetuity' | 'emerald-glow' | 'lime-fusion' | 'amber-minimal' | 'solar-dusk'
-    | 'cherry-blossom' | 'quantum-rose' | 'cyberpunk'
-    | 'copper-glow' | 'graphite-mono' | 'merlot-night';
+export type { PaletteId };
 
 export interface ColorPalette {
     id: PaletteId;
@@ -26,25 +22,6 @@ const PALETTE_STORAGE_KEY = 'SplitX-palette';
 const GLASS_STORAGE_KEY = 'SplitX-glass';
 const MOTION_STORAGE_KEY = 'SplitX-motion';
 const DEFAULT_PALETTE: PaletteId = 'amethyst-haze';
-
-const PALETTE_NAMES: Record<PaletteId, string> = {
-    'amethyst-haze': 'Amethyst',
-    'cosmic-night': 'Indigo',
-    'bold-tech': 'Cobalt',
-    'sky-blue': 'Sky',
-    'ocean-breeze': 'Lagoon',
-    perpetuity: 'Teal',
-    'emerald-glow': 'Emerald',
-    'lime-fusion': 'Lime',
-    'amber-minimal': 'Amber',
-    'solar-dusk': 'Sunset',
-    'cherry-blossom': 'Rose',
-    'quantum-rose': 'Blush',
-    cyberpunk: 'Orchid',
-    'copper-glow': 'Copper',
-    'merlot-night': 'Merlot',
-    'graphite-mono': 'Graphite',
-};
 
 /** The palettes on offer. The colours themselves come from one hue each (lib/glass/palette.ts). */
 export const COLOR_PALETTES: ColorPalette[] = (Object.keys(PALETTE_NAMES) as PaletteId[]).map((id) => {

@@ -1,5 +1,6 @@
 import { coinCode, coinKind, coinPose, coinReach, type CoinKind } from '@/lib/glass/coins';
 import { frameIsDue, Governor, isSoftwareRenderer, LOWEST_LEVEL, nextFrameDue, QUALITY } from '@/lib/glass/governor';
+import { floatBlobs, lightBase } from '@/lib/glass/liquid';
 import { glassPalette, type GlassMode, type GlassPalette } from '@/lib/glass/palette';
 import { COIN_FS, DOWN_FS, DROPS_FS, FULL_VS, GLASS_FS, LIQUID_FS, QUAD_VS } from '@/lib/glass/shaders';
 import { surfaceLook, type SurfaceLook } from '@/lib/glass/styles';
@@ -99,7 +100,6 @@ interface Program {
 }
 
 const GLASS_SELECTOR = '[data-glass]:not([data-glass-mode="css"])';
-const BLOB_SIZES = [0.36, 0.27, 0.21, 0.31, 0.17, 0.24, 0.19];
 const MAX_SURFACES = 40;
 const MAX_DROPS = 10;
 const MAX_COINS = 12;
@@ -774,29 +774,17 @@ class Engine implements GlassEngine {
 
     /* ── Drawing ───────────────────────────────────────────────── */
 
-    /** Seven masses, each on its own slow path. */
-    private floatBlobs(t: number, w: number, h: number) {
-        const m = Math.min(w, h);
-        for (let i = 0; i < 7; i++) {
-            const a = i * 2.399;
-            const sx = 0.075 + 0.028 * ((i * 3) % 5);
-            const sy = 0.062 + 0.024 * ((i * 2) % 5);
-            this.blobs[i * 3] = w * (0.5 + 0.52 * Math.sin(t * sx + a));
-            this.blobs[i * 3 + 1] = h * (0.5 + 0.54 * Math.sin(t * sy + a * 1.37 + 1.1));
-            this.blobs[i * 3 + 2] = m * BLOB_SIZES[i] * (1 + 0.09 * Math.sin(t * 0.42 + i * 1.3));
-        }
-    }
-
     private drawLiquid(now: number) {
         const { liquid, down } = this.programs!;
         const t = (now - this.t0) / 1000;
         const w = this.cssW;
         const h = this.viewH;
-        this.floatBlobs(t, w, h);
+        floatBlobs(t, w, h, this.blobs);
 
         // The light drifts on its own and leans toward the pointer.
-        const lx = -0.52 + Math.sin(t * 0.3) * 0.42 + this.lean[0];
-        const ly = -0.85 + Math.cos(t * 0.23) * 0.16 + this.lean[1];
+        const [baseX, baseY] = lightBase(t);
+        const lx = baseX + this.lean[0];
+        const ly = baseY + this.lean[1];
         const len = Math.hypot(lx, ly) || 1;
         this.light[0] += (lx / len - this.light[0]) * 0.1;
         this.light[1] += (ly / len - this.light[1]) * 0.1;

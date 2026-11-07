@@ -19,7 +19,9 @@
             ],
             "ignore": [
                 // k6 scripts: they run in k6, not in Node.
-                "load/**"
+                "load/**",
+                // The phone app, a separate project with its own packages and checks.
+                "apps/**"
             ],
             "ignoreDependencies": [
                 // Read from its folder by scripts/tesseract-assets.mjs, not imported.

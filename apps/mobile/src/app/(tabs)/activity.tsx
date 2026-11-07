@@ -1,0 +1,22 @@
+/** Every expense and payment, newest first. */
+import { View } from 'react-native';
+import { ACTIVITY } from '~/data/demo';
+import { ActivityList } from '~/ui/ActivityList';
+import { Screen } from '~/ui/Screen';
+import { Text } from '~/ui/Text';
+
+export default function Activity() {
+    return (
+        <Screen>
+            <View style={{ alignItems: 'center', gap: 4 }}>
+                <Text variant="eyebrow" tone="secondary" onLiquid>
+                    Every rupee, accounted for
+                </Text>
+                <Text variant="display" onLiquid>
+                    Activity
+                </Text>
+            </View>
+            <ActivityList items={ACTIVITY} />
+        </Screen>
+    );
+}
