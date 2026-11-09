@@ -19,7 +19,7 @@
 #trivy:ignore:AWS-0104
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
-  version = "21.26.0"
+  version = "21.29.0"
 
   name               = var.cluster_name
   kubernetes_version = var.kubernetes_version
