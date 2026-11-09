@@ -14,7 +14,7 @@ locals {
 # The AWS Load Balancer Controller turns the Ingresses into the ALB.
 module "alb_controller_identity" {
   source  = "terraform-aws-modules/eks-pod-identity/aws"
-  version = "2.9.0"
+  version = "2.10.0"
 
   name                     = "splitx-wl-alb-controller"
   use_name_prefix          = false
@@ -38,7 +38,7 @@ module "alb_controller_identity" {
 # add-on (cluster.tf) binds this role to its own service account.
 module "ebs_csi_identity" {
   source  = "terraform-aws-modules/eks-pod-identity/aws"
-  version = "2.9.0"
+  version = "2.10.0"
 
   name                     = "splitx-wl-ebs-csi"
   use_name_prefix          = false
@@ -54,7 +54,7 @@ module "ebs_csi_identity" {
 # removes it when it is empty. Only this cluster's node groups.
 module "cluster_autoscaler_identity" {
   source  = "terraform-aws-modules/eks-pod-identity/aws"
-  version = "2.9.0"
+  version = "2.10.0"
 
   name                     = "splitx-wl-cluster-autoscaler"
   use_name_prefix          = false
@@ -80,7 +80,7 @@ module "cluster_autoscaler_identity" {
 # secrets and no others.
 module "external_secrets_identity" {
   source  = "terraform-aws-modules/eks-pod-identity/aws"
-  version = "2.9.0"
+  version = "2.10.0"
 
   name                     = "splitx-wl-external-secrets"
   use_name_prefix          = false
@@ -105,7 +105,7 @@ module "external_secrets_identity" {
 # read only, and never Cost Explorer, which charges $0.01 for every call.
 module "ops_api_identity" {
   source  = "terraform-aws-modules/eks-pod-identity/aws"
-  version = "2.9.0"
+  version = "2.10.0"
 
   name                     = "splitx-wl-ops-api"
   use_name_prefix          = false
