@@ -175,6 +175,28 @@ describe('the governor', () => {
     });
 });
 
+describe('a governor over its own levels, as the phone app runs it', () => {
+    const LEVELS = [{ frameMs: 16.7 }, { frameMs: 25 }, { frameMs: 33.4 }, { frameMs: 50 }];
+
+    it('starts inside them', () => {
+        expect(new Governor(9, LEVELS).level).toBe(LEVELS.length - 1);
+        expect(new Governor(9, LEVELS).lowest).toBe(LEVELS.length - 1);
+    });
+
+    it('stops at its own lightest level, not the website’s', () => {
+        const governor = new Governor(LEVELS.length - 1, LEVELS);
+        expect(feed(governor, 90, 3)).toEqual(['calm']);
+        expect(governor.level).toBe(LEVELS.length - 1);
+    });
+
+    it('judges a frame by its own level’s pace', () => {
+        // 40 ms is slow for 60 a second, but on time for a level that draws every 33.4 ms.
+        const governor = new Governor(2, LEVELS);
+        expect(feed(governor, 40, 3)).toEqual([]);
+        expect(governor.level).toBe(2);
+    });
+});
+
 describe('a renderer that is really the CPU', () => {
     it.each([
         'ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)',

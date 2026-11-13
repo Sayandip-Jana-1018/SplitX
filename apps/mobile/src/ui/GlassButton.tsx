@@ -37,10 +37,10 @@ export function GlassButton({ kind = 'thin', radius = 999, onPress, accessibilit
                 accessibilityState={{ disabled }}
                 disabled={disabled}
                 onPressIn={() => {
-                    if (!calm) scale.value = withSpring(0.95, SPRING);
+                    if (!calm) scale.set(withSpring(0.95, SPRING));
                 }}
                 onPressOut={() => {
-                    scale.value = withSpring(1, SPRING);
+                    scale.set(withSpring(1, SPRING));
                 }}
                 onPress={() => {
                     tap();

@@ -1,7 +1,8 @@
 /**
  * The quality governor: watches how long real frames take and changes the
  * engine's quality before a stutter shows. Pure, so every rule here is tested
- * without a GPU (tests/unit/glass/governor.test.ts).
+ * without a GPU (tests/unit/glass/governor.test.ts). The phone app runs the
+ * same rules over its own levels (apps/mobile/src/glass/GlassProvider.tsx).
  */
 export interface QualityLevel {
     name: string;
@@ -26,6 +27,11 @@ export const QUALITY: readonly QualityLevel[] = [
 ];
 
 export const LOWEST_LEVEL = QUALITY.length - 1;
+
+/** All the governor needs to know about a level: how long one frame may take at it. */
+export interface PacedLevel {
+    frameMs: number;
+}
 
 const SOFTWARE_RENDERER = /swiftshader|llvmpipe|softpipe|software|basic render/i;
 
@@ -52,6 +58,7 @@ const STRUGGLING_WINDOWS_FOR_CALM = 3;
 const FRAME_SLACK_MS = 2;
 
 export function frameIsDue(now: number, due: number): boolean {
+    'worklet';
     return now >= due - FRAME_SLACK_MS;
 }
 
@@ -61,6 +68,7 @@ export function frameIsDue(now: number, due: number): boolean {
  * The carry is capped, so a long stall is not followed by a burst of catching up.
  */
 export function nextFrameDue(now: number, due: number, frameMs: number): number {
+    'worklet';
     return now + frameMs - Math.max(0, Math.min(now - due, frameMs / 2));
 }
 
@@ -81,13 +89,20 @@ export class Governor {
     private windowsSinceRaise = Infinity;
     private strugglingAtBottom = 0;
     private droppedFrom: { level: number; median: number } | null = null;
+    private readonly levels: readonly PacedLevel[];
 
-    constructor(startLevel = 0) {
-        this.level = Math.max(0, Math.min(LOWEST_LEVEL, startLevel));
+    /** `levels` run from the best to the lightest; the website's are QUALITY. */
+    constructor(startLevel = 0, levels: readonly PacedLevel[] = QUALITY) {
+        this.levels = levels;
+        this.level = Math.max(0, Math.min(this.lowest, startLevel));
+    }
+
+    get lowest(): number {
+        return this.levels.length - 1;
     }
 
     get targetMs(): number {
-        return Math.max(QUALITY[this.level].frameMs, this.capMs);
+        return Math.max(this.levels[this.level].frameMs, this.capMs);
     }
 
     /** One frame's length. Returns what changed, if anything; `level` holds the result. */
@@ -126,7 +141,7 @@ export class Governor {
 
         if (slowShare > TOO_SLOW) {
             this.smoothWindows = 0;
-            if (this.level === LOWEST_LEVEL) {
+            if (this.level === this.lowest) {
                 this.strugglingAtBottom++;
                 return this.strugglingAtBottom >= STRUGGLING_WINDOWS_FOR_CALM ? 'calm' : null;
             }

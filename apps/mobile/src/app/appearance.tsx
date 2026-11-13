@@ -4,6 +4,7 @@ import { Check, X } from 'lucide-react-native';
 import { Pressable, View } from 'react-native';
 import { GLASS_THEMES, PALETTE_NAMES, type PaletteId } from '@shared/glass/palette';
 import { GLASS_LABELS, GLASS_STYLE_IDS } from '@shared/glass/styles';
+import { useGlass } from '~/glass/GlassProvider';
 import { GlassSurface } from '~/glass/GlassSurface';
 import { useLook, type ModePreference, type MotionPreference } from '~/theme/ThemeProvider';
 import { GlassButton, tap } from '~/ui/GlassButton';
@@ -50,6 +51,7 @@ function Choice<T extends string>({ options, value, onChange }: { options: { id:
 
 export default function Appearance() {
     const look = useLook();
+    const { fps } = useGlass();
     const { tokens } = look;
     const palettes = Object.keys(GLASS_THEMES) as PaletteId[];
     return (
@@ -150,8 +152,13 @@ export default function Appearance() {
                 </Text>
                 <Choice options={MOTIONS} value={look.motion} onChange={look.setMotion} />
                 <Text variant="caption" tone="secondary" onLiquid>
-                    Calm stills the liquid and the coins. It's always on when your phone asks for reduced motion.
+                    Calm stills the liquid and the coins. It’s always on when your phone asks for reduced motion.
                 </Text>
+                {look.calm ? null : (
+                    <Text variant="caption" tone="muted" onLiquid tabular>
+                        The liquid moves {fps} times a second now, fewer if your phone gets busy.
+                    </Text>
+                )}
             </View>
         </Screen>
     );

@@ -2,8 +2,8 @@
 import { router } from 'expo-router';
 import { Palette } from 'lucide-react-native';
 import { Image, View } from 'react-native';
+import { ME, personById } from '~/data/ledger';
 import { useLook } from '~/theme/ThemeProvider';
-import { ME } from '~/data/demo';
 import { Avatar } from './Avatar';
 import { GlassButton } from './GlassButton';
 import { Text } from './Text';
@@ -27,8 +27,8 @@ export function TopBar() {
     const { tokens } = useLook();
     return (
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <GlassButton kind="clear" contentStyle={{ width: 46, height: 46 }} accessibilityLabel="Your profile" onPress={() => router.push('/appearance')}>
-                <Avatar name={ME.name} size={34} />
+            <GlassButton kind="clear" contentStyle={{ width: 46, height: 46 }} accessibilityLabel="Your profile" onPress={() => router.push('/profile')}>
+                <Avatar name={personById(ME).name} size={34} />
             </GlassButton>
             <Wordmark />
             <GlassButton kind="thin" contentStyle={{ width: 46, height: 46 }} accessibilityLabel="Appearance" onPress={() => router.push('/appearance')}>

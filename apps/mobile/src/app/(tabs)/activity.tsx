@@ -1,11 +1,15 @@
 /** Every expense and payment, newest first. */
+import { useMemo } from 'react';
 import { View } from 'react-native';
-import { ACTIVITY } from '~/data/demo';
+import { activity } from '~/data/ledger';
+import { useLedger } from '~/data/LedgerProvider';
 import { ActivityList } from '~/ui/ActivityList';
 import { Screen } from '~/ui/Screen';
 import { Text } from '~/ui/Text';
 
 export default function Activity() {
+    const { ledger } = useLedger();
+    const items = useMemo(() => activity(ledger), [ledger]);
     return (
         <Screen>
             <View style={{ alignItems: 'center', gap: 4 }}>
@@ -16,7 +20,7 @@ export default function Activity() {
                     Activity
                 </Text>
             </View>
-            <ActivityList items={ACTIVITY} />
+            <ActivityList items={items} />
         </Screen>
     );
 }

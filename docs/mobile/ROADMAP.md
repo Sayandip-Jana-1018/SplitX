@@ -1,6 +1,8 @@
 # SplitIT app: the roadmap
 
 **Status: started on 7 November 2026, on the `feat/app` branch.** The website got Liquid Glass first, and the app now brings the same design to the phone. Phase 0's code is written: the app's frame, its glass engine on the GPU, the theme and the first screens (section 9). You asked for code first and testing on a phone after a phase or two, so the first phone test is the end of Phase 1.
+
+**13 November:** Phase 1 is under way, and the app ran on a real phone for the first time: your Galaxy S23 Ultra over USB, in Expo Go. What's built and what's left is under Phase 1 in section 9.
 **Design boards:** [SplitIT Liquid Glass canvas](https://claude.ai/artifact/XSFNfEYYXmoVufit1w6w9B) (private to you).
 
 ## 1. The brief, as you decided it
@@ -103,7 +105,7 @@ flowchart TB
         worker["Worker<br/>outbox, recurring, reminders"]
         api --> svc
     end
-    core["packages/core<br/>money rules, shared and tested once"]
+    core["src/lib<br/>money rules, shared and tested once"]
     pg[("PostgreSQL")]
     fcm["Firebase Cloud Messaging<br/>free"]
 
@@ -119,7 +121,7 @@ flowchart TB
     core -.-> site
 ```
 
-**Repository:** this one. `apps/mobile` is the app, an Expo project with its own packages, deliberately not an npm workspace yet: the website and the app need different builds of React, and keeping them apart leaves the website's build untouched. Shared code is read straight from where it lives, through a path alias, so there is one copy of each rule. Today that is `src/lib/glass`: the colours, the liquid's motion, the coins and the kinds of glass, which import nothing. The money modules move into `packages/core` in Phase 1, shared the same way, with the website's tests still green. `modules/` will hold the Kotlin and Swift code.
+**Repository:** this one. `apps/mobile` is the app, an Expo project with its own packages, deliberately not an npm workspace yet: the website and the app need different builds of React, and keeping them apart leaves the website's build untouched. Shared code is read straight from where it lives, through a path alias, so there is one copy of each rule. Today that is `src/lib/glass`: the colours, the liquid's motion, the coins and the kinds of glass, which import nothing. The money modules are shared the same way, from where they are: the app imports `src/lib` through its `@/` alias (Phase 1), so the website's tests cover the very code the app runs, and nothing had to move. A `packages/core` folder waits until something else needs them. `modules/` will hold the Kotlin and Swift code.
 
 **Branch:** all work happens on a long-lived `feat/app` branch, and reaches `main` only when you approve a phase. Vercel deploys `main`, so the live site and its data stay untouched. This replaces the current push-straight-to-main habit for this project only. You started Phase 0 on 7 November, so I took this as agreed; say if you'd rather have it otherwise.
 
@@ -176,7 +178,7 @@ No Kubernetes or Docker cluster runs on the laptop. The EKS, Jenkins and Nexus p
 - **A keypad of glass** for amounts, instead of a keyboard.
 - **iOS 26's own glass** stays possible for system parts later. The app's own glass is kept everywhere for one look on every phone.
 
-**Performance tiers,** the website's governor, ported in Phase 1:
+**Performance tiers,** the website's governor, ported in Phase 1. On the phone it runs the website's own rules over the phone's levels, and paces the liquid at 60, 40, 30 or 20 frames a second while the glass keeps following every scroll. It never stills the liquid by itself; Calm stays the person's choice. Finer detail tiers come with the measurements on a budget phone:
 
 | Tier | Phones | Gets |
 |---|---|---|
@@ -303,12 +305,35 @@ I stop and report at the end of each phase, and start the next only when you say
 
 ### Phase 1: design kit and every screen
 
-- **`packages/core`:** the 11 money modules move out of the website, shared by both, with every website test still green.
+- **Shared money rules:** the app runs the website's own modules in place through the `@/` alias, so every website test still covers them.
 - **The kit:** sheets, toasts, inputs, segmented choices, the rolling amount, empty and loading states, avatars, and the touch ripple from the web.
 - **Every screen, on made-up data:** group detail (balances, expenses, members, chat), expense detail, the full add-expense flow (four ways to split, payers, category, receipt), settle-up with the UPI sheet, Balance Journey, Insights, profile and settings, sign-in and onboarding.
 - **The governor:** quality levels and frame-time measuring, ported from the web.
 - **Exit test, on your phone:** you install Expo Go, scan a code, and use every screen. 60 fps measured on your cheapest phone; Calm works on every screen.
 - **Your part:** a phone, about an hour, and your taste.
+
+**Progress on 13 November:**
+
+- **Done:**
+    - **The ledger** works on the website's money engine: splits by `resolveSplits`, balances, and the settlement planner's fewest payments.
+    - **Screens:**
+        - Home, Groups, Activity and Settle up, rebuilt on the ledger.
+        - Group detail (who pays, expenses, members).
+        - Add expense: keypad, a category guessed from the title, group, payer, and splits equally among chosen people, by exact amounts or by percentages.
+        - The pay sheet: it marks a payment paid, and never opens a UPI app for the made-up people.
+        - Insights, by category and by group.
+        - Profile, and the sign-in screen.
+    - **Kit:** toasts, fields, segmented choices, chips, the glass keypad, the rolling amount, headers and empty states.
+    - **The governor**, as described in section 6.
+    - **Checks:** the app's own lint rules (Expo's).
+    - **First run on a real phone:** your Galaxy S23 Ultra (SM-S918B, Android 17), over USB.
+- **Left:**
+    - **Group detail:** chat.
+    - **Expense detail.**
+    - **Add expense:** the fourth way to split (shares), and receipts.
+    - **New screens:** Balance Journey and onboarding.
+    - **Kit:** loading states, sheets, and the touch ripple.
+    - **Exit test:** 60 fps measured on a budget phone, and Calm checked on every screen.
 
 ### Phase 2: backend for apps
 
@@ -422,7 +447,7 @@ That is about ₹4,000 a month for servers. This is the default, not a commitmen
 
 **For the first phone test (end of Phase 1):**
 1. ✅ Given on 7 November. The `feat/app` branch rule is taken as agreed unless you say otherwise.
-2. Your phones: brand, model, Android version. A second brand helps a lot. Do you have an iPhone or a Mac?
+2. Your phones: a Samsung Galaxy S23 Ultra on Android 17 (read over USB, 13 November). A second, cheaper phone of another brand helps a lot, for the 60 fps test. Do you have an iPhone or a Mac?
 3. Which UPI apps and banks you use, for the capture test.
 4. Has the laptop's second fan been replaced? It changes how much can run locally.
 

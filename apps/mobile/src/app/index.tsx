@@ -1,6 +1,6 @@
 /**
  * Welcome: the coin that splits into shares and comes back whole, which is the app in one picture,
- * with the promise on it. Sign-in arrives in Phase 3; for now both buttons open the app.
+ * with the promise on it. Sign-in arrives in Phase 3; for now the sign-in screen shows the way and opens the app.
  */
 import { router } from 'expo-router';
 import { ArrowRight } from 'lucide-react-native';
@@ -53,7 +53,7 @@ export default function Welcome() {
                     </Text>
                     <ArrowRight size={20} color={tokens.onAccent} strokeWidth={2.4} />
                 </GlassButton>
-                <GlassButton kind="thin" radius={999} contentStyle={{ height: 54 }} onPress={() => router.replace('/home')}>
+                <GlassButton kind="thin" radius={999} contentStyle={{ height: 54 }} onPress={() => router.push('/sign-in')}>
                     <Text variant="label">I already have an account</Text>
                 </GlassButton>
                 <Text variant="caption" tone="muted" style={{ marginTop: 4 }}>
