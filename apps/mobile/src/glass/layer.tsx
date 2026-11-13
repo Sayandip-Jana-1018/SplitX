@@ -33,7 +33,7 @@ export const MARGIN = 26;
 const UNMEASURED = -5000;
 
 /** The liquid's own uniforms, shared by the glass and the coin shaders. */
-const LIQUID = ['uView', 'uL', 'uT', 'uGloss', 'uA0', 'uA1', 'uC1', 'uC2', 'uGlow', 'uBl', 'uTouch', 'uTouchA'];
+const LIQUID = ['uView', 'uL', 'uT', 'uGloss', 'uA0', 'uA1', 'uC1', 'uC2', 'uGlow', 'uBl', 'uTouch', 'uTouchA', 'uRip', 'uA0p', 'uA1p', 'uC1p', 'uC2p'];
 
 /** Uniforms of a pane of glass that change only with the look, not with each frame. */
 export interface SurfaceLook {

@@ -8,9 +8,10 @@
 import { COIN_FS } from '@shared/glass/shaders';
 
 /**
- * The liquid: the website's LIQUID_FS, with its touch ripple (a ring that bends the liquid as it
- * spreads from a finger) and without the theme ripple for now. `soft` from 0 to 1 is frost: wider
- * edges and less shine, which looks like blur and costs nothing.
+ * The liquid: the website's LIQUID_FS, with both its ripples. The theme ripple is a ring that
+ * spreads from where a new colour was chosen, the new colours inside it and the old outside; the
+ * touch ripple is a smaller ring from a finger. Each bends the liquid as it passes. `soft` from 0
+ * to 1 is frost: wider edges and less shine, which looks like blur and costs nothing.
  */
 const LIQUID_FN = `
 uniform float2 uView;
@@ -25,15 +26,34 @@ uniform float3 uGlow;
 uniform float3 uBl[7];
 uniform float3 uTouch;
 uniform float uTouchA;
+uniform float3 uRip;
+uniform float3 uA0p;
+uniform float3 uA1p;
+uniform float3 uC1p;
+uniform float3 uC2p;
 
 float3 liquid(float2 p, float soft) {
+  float3 a0 = uA0;
+  float3 a1 = uA1;
+  float3 c1 = uC1;
+  float3 c2 = uC2;
+  if (uRip.z >= 0.) {
+    float rd = length(p - uRip.xy);
+    float s = smoothstep(uRip.z - 46., uRip.z + 46., rd);
+    a0 = mix(uA0, uA0p, s);
+    a1 = mix(uA1, uA1p, s);
+    c1 = mix(uC1, uC1p, s);
+    c2 = mix(uC2, uC2p, s);
+    float q = (rd - uRip.z)/34.;
+    p += normalize(p - uRip.xy + 1e-3)*exp(-q*q)*20.;
+  }
   if (uTouchA > 0.) {
     float q = (length(p - uTouch.xy) - uTouch.z)/22.;
     p += normalize(p - uTouch.xy + 1e-3)*exp(-q*q)*13.*uTouchA;
   }
   float2 uv = p / uView;
   float g = uv.y + .2*sin(uv.x*2.6 + uT*.13) + .12*sin(uv.y*3.4 - uT*.1 + uv.x*1.3);
-  float3 c = mix(uA0, uA1, smoothstep(-.05, 1.05, g));
+  float3 c = mix(a0, a1, smoothstep(-.05, 1.05, g));
   float f = 0.;
   float2 gr = float2(0.);
   for (int i = 0; i < 7; i++) {
@@ -47,14 +67,14 @@ float3 liquid(float2 p, float soft) {
   float edge = .025 + soft*.32;
   float cov = smoothstep(1. - edge, 1. + edge, f);
   float halo = smoothstep(.38, 1., f)*(1. - cov);
-  c = mix(c, uC2, halo*.22);
+  c = mix(c, c2, halo*.22);
   if (cov > .001) {
     float h = clamp((f - 1.)/1.7, 0., 1.);
     float sl = 1. - h;
     float2 gn = gr/(length(gr) + 1e-4);
     float3 n = normalize(float3(-gn*sl*sl*1.7, 1.));
-    float3 body = mix(uC1, uC2, smoothstep(0., .9, h));
-    body = mix(body, uC1, .5*(.5 + .5*dot(n.xy, uL)));
+    float3 body = mix(c1, c2, smoothstep(0., .9, h));
+    body = mix(body, c1, .5*(.5 + .5*dot(n.xy, uL)));
     float fres = pow(1. - n.z, 1.9);
     float sp = pow(max(dot(n, normalize(float3(uL, .62))), 0.), 70.);
     float sp2 = pow(max(dot(n, normalize(float3(-uL, .7))), 0.), 12.);

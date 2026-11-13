@@ -4,9 +4,10 @@
  * shows, and the toasts above them.
  */
 import { useFonts } from 'expo-font';
-import { DarkTheme, DefaultTheme, SplashScreen, Stack, ThemeProvider as NavigationTheme } from 'expo-router';
+import { DarkTheme, DefaultTheme, SplashScreen, Stack, ThemeProvider as NavigationTheme, type ErrorBoundaryProps } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo } from 'react';
+import { Pressable, Text as PlainText, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { LedgerProvider } from '~/data/LedgerProvider';
@@ -17,6 +18,27 @@ import { FONT_FILES } from '~/theme/type';
 import { ToastProvider } from '~/ui/Toast';
 
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
+
+/**
+ * If a screen fails, this shows instead of the app closing. It uses plain views and fixed
+ * colours: the theme and the glass above it may be what failed.
+ */
+export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+    return (
+        <View style={{ flex: 1, backgroundColor: '#130B26', alignItems: 'center', justifyContent: 'center', padding: 28, gap: 12 }}>
+            <PlainText style={{ color: '#ffffff', fontSize: 24, fontWeight: '700', textAlign: 'center' }}>Something went wrong</PlainText>
+            <PlainText style={{ color: 'rgba(255,255,255,0.75)', fontSize: 15, lineHeight: 21, textAlign: 'center', maxWidth: 320 }}>
+                SplitIT hit a problem on this screen. What you added is still saved on this phone.
+            </PlainText>
+            <PlainText style={{ color: 'rgba(255,255,255,0.45)', fontSize: 12, textAlign: 'center', maxWidth: 320 }} numberOfLines={3}>
+                {error.message}
+            </PlainText>
+            <Pressable accessibilityRole="button" onPress={retry} style={({ pressed }) => ({ marginTop: 10, height: 52, paddingHorizontal: 32, borderRadius: 26, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? '#6a4ae0' : '#7c5cff' })}>
+                <PlainText style={{ color: '#ffffff', fontSize: 16, fontWeight: '700' }}>Try again</PlainText>
+            </Pressable>
+        </View>
+    );
+}
 
 export default function RootLayout() {
     const [fontsLoaded, fontError] = useFonts(FONT_FILES);

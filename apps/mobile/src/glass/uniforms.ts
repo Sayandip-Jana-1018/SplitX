@@ -5,9 +5,19 @@ import type { GlassPalette } from '@shared/glass/palette';
 /** How long a touch's ring takes to spread and fade, in seconds, as on the website (TOUCH_MS). */
 export const TOUCH_S = 0.85;
 
-/** `touch` is [x, y, when] on the liquid's clock; `when` below zero means no touch. */
-export function liquidUniforms(t: number, width: number, height: number, pal: GlassPalette, touch: number[]) {
+/** How long a new colour takes to spread across the screen, as on the website (RIPPLE_MS). */
+export const RIPPLE_S = 1.1;
+
+/**
+ * `touch` and `rip` are [x, y, when] on the liquid's clock; `when` below zero means none. `before`
+ * is the palette a theme ripple spreads over.
+ */
+export function liquidUniforms(t: number, width: number, height: number, pal: GlassPalette, touch: number[], before: GlassPalette, rip: number[]) {
     'worklet';
+    const rp = rip[2] < 0 ? 1 : (t - rip[2]) / RIPPLE_S;
+    const rippling = rp >= 0 && rp < 1;
+    // Far enough to reach the furthest corner from where it started.
+    const reach = Math.max(Math.hypot(rip[0], rip[1]), Math.hypot(width - rip[0], rip[1]), Math.hypot(rip[0], height - rip[1]), Math.hypot(width - rip[0], height - rip[1])) + 60;
     const p = touch[2] < 0 ? 1 : (t - touch[2]) / TOUCH_S;
     const touching = p >= 0 && p < 1;
     const flat: number[] = [];
@@ -29,5 +39,10 @@ export function liquidUniforms(t: number, width: number, height: number, pal: Gl
         uBl: blobs,
         uTouch: [touch[0], touch[1], touching ? (1 - (1 - p) ** 2) * 170 : 0],
         uTouchA: touching ? 1 - p : 0,
+        uRip: [rip[0], rip[1], rippling ? (1 - (1 - rp) ** 3) * reach : -1],
+        uA0p: before.a0,
+        uA1p: before.a1,
+        uC1p: before.c1,
+        uC2p: before.c2,
     };
 }

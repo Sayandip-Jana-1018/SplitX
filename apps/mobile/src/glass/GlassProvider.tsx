@@ -6,7 +6,8 @@
  * times each frame it draws, hands the governor forty at a time, and the governor picks how often
  * the liquid moves on. Only the liquid's clock is paced; the glass still follows a scroll at the
  * screen's own rate. A slow phone's liquid moves less often, but it never stops on its own.
- * While a touch's ring spreads, the liquid runs at full pace whatever the level, as on the website.
+ * While a touch's ring or a new colour spreads, the liquid runs at full pace whatever the level, as
+ * on the website.
  *
  * The liquid's state at each moment (where its masses are, where the light is) is worked out once
  * per frame here, and every pane of glass reads it, instead of each pane working it out again.
@@ -19,7 +20,7 @@ import { scheduleOnRN } from 'react-native-worklets';
 import { frameIsDue, Governor, nextFrameDue, type PacedLevel } from '@shared/glass/governor';
 import { useLook } from '~/theme/ThemeProvider';
 import { webDeps } from './deps';
-import { liquidUniforms, TOUCH_S } from './uniforms';
+import { liquidUniforms, RIPPLE_S, TOUCH_S } from './uniforms';
 
 /** The phone's levels, best first: the liquid moves on 60, 40, 30 or 20 times a second. */
 export const PACE: readonly (PacedLevel & { fps: number })[] = [
@@ -58,7 +59,23 @@ export function GlassProvider({ children }: { children: ReactNode }) {
     const { width, height } = useWindowDimensions();
     const time = useSharedValue(START);
     const touch = useSharedValue<number[]>([0, 0, -1]);
-    const liquid = useDerivedValue(() => liquidUniforms(time.value, width, height, pal, touch.value), webDeps([pal, width, height]));
+    const before = useSharedValue(pal);
+    const rip = useSharedValue<number[]>([0, 0, -1]);
+    const liquid = useDerivedValue(() => liquidUniforms(time.value, width, height, pal, touch.value, before.value, rip.value), webDeps([pal, width, height]));
+
+    // A new colour or mode spreads from where it was chosen: the last touch, if it was just now.
+    const shown = useRef(pal);
+    useEffect(() => {
+        if (shown.current === pal) return;
+        const old = shown.current;
+        shown.current = pal;
+        if (calm) return;
+        const [x, y, at] = touch.value;
+        const now = time.value;
+        const fresh = at >= 0 && now - at < 1.5;
+        before.set(old);
+        rip.set([fresh ? x : width / 2, fresh ? y : height / 2, now]);
+    }, [pal, calm, touch, time, before, rip, width, height]);
     const frameMs = useSharedValue(PACE[0].frameMs);
     const due = useSharedValue(0);
     const last = useSharedValue(0);
@@ -102,7 +119,7 @@ export function GlassProvider({ children }: { children: ReactNode }) {
     const clock = useFrameCallback((frame) => {
         'worklet';
         const now = frame.timestamp;
-        const rippling = touch.value[2] >= 0 && time.value - touch.value[2] < TOUCH_S;
+        const rippling = (touch.value[2] >= 0 && time.value - touch.value[2] < TOUCH_S) || (rip.value[2] >= 0 && time.value - rip.value[2] < RIPPLE_S);
         const pace = rippling ? PACE[0].frameMs : frameMs.value;
         if (!frameIsDue(now, due.value)) return;
         due.set(nextFrameDue(now, due.value, pace));

@@ -38,6 +38,8 @@ export default function ExpenseScreen() {
     const toast = useToast();
     const [asking, setAsking] = useState<'delete' | 'receipt' | null>(null);
     const [photoReady, setPhotoReady] = useState(false);
+    // The phone may clear a picked photo from its cache; then say so rather than show an empty box.
+    const [photoGone, setPhotoGone] = useState(false);
     const expense = ledger.expenses.find((candidate) => candidate.id === id);
 
     if (!expense) {
@@ -70,6 +72,7 @@ export default function ExpenseScreen() {
         const result = from === 'camera' ? await ImagePicker.launchCameraAsync(options) : await ImagePicker.launchImageLibraryAsync(options);
         if (result.canceled || !result.assets?.[0]) return;
         setPhotoReady(false);
+        setPhotoGone(false);
         setReceipt(expense.id, result.assets[0].uri);
         toast('Receipt attached');
     };
@@ -162,14 +165,23 @@ export default function ExpenseScreen() {
                 </Text>
                 {expense.receipt ? (
                     <GlassSurface style={{ padding: 10, gap: 10 }}>
-                        <View style={{ height: 260, borderRadius: 18, overflow: 'hidden' }}>
-                            {photoReady ? null : (
-                                <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
-                                    <Skeleton height={260} radius={18} />
-                                </View>
-                            )}
-                            <Image source={{ uri: expense.receipt }} accessibilityLabel={`Receipt for ${expense.title}`} resizeMode="cover" onLoad={() => setPhotoReady(true)} style={{ width: '100%', height: '100%' }} />
-                        </View>
+                        {photoGone ? (
+                            <View style={{ height: 120, borderRadius: 18, alignItems: 'center', justifyContent: 'center', gap: 4, backgroundColor: tokens.chip }}>
+                                <Text variant="label">This photo isn’t on your phone any more</Text>
+                                <Text variant="caption" tone="secondary">
+                                    Replace it, or remove it.
+                                </Text>
+                            </View>
+                        ) : (
+                            <View style={{ height: 260, borderRadius: 18, overflow: 'hidden' }}>
+                                {photoReady ? null : (
+                                    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
+                                        <Skeleton height={260} radius={18} />
+                                    </View>
+                                )}
+                                <Image source={{ uri: expense.receipt }} accessibilityLabel={`Receipt for ${expense.title}`} resizeMode="cover" onLoad={() => setPhotoReady(true)} onError={() => setPhotoGone(true)} style={{ width: '100%', height: '100%' }} />
+                            </View>
+                        )}
                         <View style={{ flexDirection: 'row', gap: 10 }}>
                             <GlassButton kind="thin" style={{ flex: 1 }} contentStyle={{ height: 46 }} onPress={() => setAsking('receipt')}>
                                 <Text variant="label">Replace</Text>
