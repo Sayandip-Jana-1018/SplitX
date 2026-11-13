@@ -1,0 +1,80 @@
+# The phone app as an APK to install, built on GitHub's machines: a native Android build
+# would hold the laptop's CPU at full load for 15-25 minutes, and with one fan it can't take
+# that heat. Every push to feat/app that touches the app, or the website code it shares,
+# builds one; it is the run's "splitit-apk" artifact.
+#
+# The APK is signed with React Native's standard debug key, which is fine for installing on
+# your own phone and not for a store. Each build's versionCode is the run number, so a newer
+# APK always installs over an older one.
+name: App APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feat/app
+    paths:
+      - apps/mobile/**
+      - src/lib/**
+      - .github/workflows/app-apk.yml
+
+permissions:
+  contents: read
+
+# A newer push makes the older build pointless.
+concurrency:
+  group: app-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    name: Android APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+
+      - name: Set up Java
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Install
+        run: npm ci
+
+      - name: Number this build
+        run: |
+          node -e "
+            const fs = require('fs');
+            const app = JSON.parse(fs.readFileSync('app.json', 'utf8'));
+            app.expo.android.versionCode = Number(process.env.GITHUB_RUN_NUMBER);
+            fs.writeFileSync('app.json', JSON.stringify(app, null, 2));
+          "
+
+      - name: Generate the Android project
+        run: npx expo prebuild --platform android --no-install
+
+      # 64-bit ARM only: every phone sold in years, and a quarter of the build time.
+      - name: Build the APK
+        working-directory: apps/mobile/android
+        run: ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a --no-daemon
+
+      - name: Keep the APK
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: splitit-apk
+          path: apps/mobile/android/app/build/outputs/apk/release/app-release.apk
+          retention-days: 30
+          if-no-files-found: error
