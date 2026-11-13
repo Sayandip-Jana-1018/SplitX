@@ -1,11 +1,13 @@
 /**
  * A screen over the liquid: it scrolls, keeps clear of the notch and the floating tab bar,
- * and keeps everything on one centre axis, at a readable width on a tablet too.
+ * and keeps everything on one centre axis, at a readable width on a tablet too. Its glass is drawn
+ * by one layer that stays still behind the scrolling content.
  */
 import type { ReactNode } from 'react';
 import { View, type StyleProp, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GlassScrollView } from '~/glass/GlassScroll';
+import { GlassLayer } from '~/glass/layer';
 
 /** The floating tab bar's height, with the gap above it. */
 export const TAB_BAR_ROOM = 112;
@@ -20,18 +22,20 @@ interface Props {
 export function Screen({ children, tabBar = true, contentStyle }: Props) {
     const insets = useSafeAreaInsets();
     return (
-        <GlassScrollView
-            style={{ flex: 1 }}
-            contentContainerStyle={{
-                paddingTop: insets.top + 12,
-                paddingBottom: insets.bottom + (tabBar ? TAB_BAR_ROOM : 32),
-                paddingHorizontal: 20,
-                alignItems: 'center',
-            }}
-            showsVerticalScrollIndicator={false}
-        >
-            <View style={[{ width: '100%', maxWidth: 560, gap: 22 }, contentStyle]}>{children}</View>
-        </GlassScrollView>
+        <GlassLayer style={{ flex: 1 }}>
+            <GlassScrollView
+                style={{ flex: 1 }}
+                contentContainerStyle={{
+                    paddingTop: insets.top + 12,
+                    paddingBottom: insets.bottom + (tabBar ? TAB_BAR_ROOM : 32),
+                    paddingHorizontal: 20,
+                    alignItems: 'center',
+                }}
+                showsVerticalScrollIndicator={false}
+            >
+                <View style={[{ width: '100%', maxWidth: 560, gap: 22 }, contentStyle]}>{children}</View>
+            </GlassScrollView>
+        </GlassLayer>
     );
 }
 

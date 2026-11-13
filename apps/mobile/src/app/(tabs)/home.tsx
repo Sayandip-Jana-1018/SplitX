@@ -6,7 +6,7 @@ import { router } from 'expo-router';
 import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, ChartPie, ChevronRight, Plus, ScanLine, type LucideIcon } from 'lucide-react-native';
 import { useMemo } from 'react';
 import { Pressable, useWindowDimensions, View } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeIn } from 'react-native-reanimated';
 import type { GlassKind } from '@shared/glass/styles';
 import { activity, groupBalances, ME, personById, totals } from '~/data/ledger';
 import { useLedger } from '~/data/LedgerProvider';
@@ -44,7 +44,7 @@ export default function Home() {
     const coin = Math.min(width - 56, 310);
     const sum = useMemo(() => totals(ledger), [ledger]);
     const lately = useMemo(() => activity(ledger).slice(0, 3), [ledger]);
-    const enter = (index: number) => (calm ? undefined : FadeInDown.delay(60 + index * 70).springify().damping(18));
+    const enter = (index: number) => (calm ? undefined : FadeIn.delay(60 + index * 70).duration(380));
     const owed = sum.net >= 0;
     const Arrow = owed ? ArrowDownLeft : ArrowUpRight;
 

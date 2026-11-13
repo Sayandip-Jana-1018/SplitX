@@ -12,6 +12,7 @@ import Animated, { interpolate, useAnimatedStyle, useDerivedValue, useSharedValu
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { scheduleOnRN } from 'react-native-worklets';
 import { GlassSurface } from '~/glass/GlassSurface';
+import { GlassLayer } from '~/glass/layer';
 import { ScrollContext } from '~/glass/origin';
 import { useLook } from '~/theme/ThemeProvider';
 import { Text } from './Text';
@@ -75,18 +76,20 @@ export function Sheet({ open, onClose, title, hint, children }: { open: boolean;
             <GestureDetector gesture={drag}>
                 <Animated.View accessibilityViewIsModal style={[{ position: 'absolute', left: 12, right: 12, bottom: insets.bottom + 12 }, slide]}>
                     <ScrollContext.Provider value={{ y: lift }}>
-                        <GlassSurface kind="thick" radius={32} style={{ paddingHorizontal: 18, paddingTop: 10, paddingBottom: 18, gap: 14 }}>
-                            <View style={{ alignSelf: 'center', width: 40, height: 5, borderRadius: 3, backgroundColor: tokens.borderStrong }} />
-                            <View style={{ gap: 4 }}>
-                                <Text variant="heading">{title}</Text>
-                                {hint ? (
-                                    <Text variant="caption" tone="secondary">
-                                        {hint}
-                                    </Text>
-                                ) : null}
-                            </View>
-                            {children}
-                        </GlassSurface>
+                        <GlassLayer>
+                            <GlassSurface kind="thick" radius={32} style={{ paddingHorizontal: 18, paddingTop: 10, paddingBottom: 18, gap: 14 }}>
+                                <View style={{ alignSelf: 'center', width: 40, height: 5, borderRadius: 3, backgroundColor: tokens.borderStrong }} />
+                                <View style={{ gap: 4 }}>
+                                    <Text variant="heading">{title}</Text>
+                                    {hint ? (
+                                        <Text variant="caption" tone="secondary">
+                                            {hint}
+                                        </Text>
+                                    ) : null}
+                                </View>
+                                {children}
+                            </GlassSurface>
+                        </GlassLayer>
                     </ScrollContext.Provider>
                 </Animated.View>
             </GestureDetector>

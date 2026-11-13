@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ME, personById } from '~/data/ledger';
 import { useLedger } from '~/data/LedgerProvider';
 import { GlassSurface } from '~/glass/GlassSurface';
+import { GlassLayer } from '~/glass/layer';
 import { useLook } from '~/theme/ThemeProvider';
 import { FONT } from '~/theme/type';
 import { Avatar } from '~/ui/Avatar';
@@ -69,107 +70,109 @@ export default function Chat() {
     };
 
     return (
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
-            <View style={{ paddingTop: insets.top + 12, paddingHorizontal: 20, paddingBottom: 8 }}>
-                <Header title={group ? `${group.emoji} ${group.name}` : 'Chat'} eyebrow="Group chat" />
-            </View>
+        <GlassLayer style={{ flex: 1 }}>
+            <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
+                <View style={{ paddingTop: insets.top + 12, paddingHorizontal: 20, paddingBottom: 8 }}>
+                    <Header title={group ? `${group.emoji} ${group.name}` : 'Chat'} eyebrow="Group chat" />
+                </View>
 
-            <ScrollView ref={list} style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 12, gap: 6 }} onContentSizeChange={() => list.current?.scrollToEnd({ animated: false })} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive">
-                {entries.map((entry, index) => {
-                    const before = entries[index - 1];
-                    const after = entries[index + 1];
-                    const newDay = !before || dayOf(before.at) !== dayOf(entry.at);
-                    const day = newDay ? (
-                        <View key={`${entry.id}-day`} style={{ alignItems: 'center', paddingTop: index === 0 ? 0 : 14, paddingBottom: 6 }}>
-                            <Text variant="eyebrow" tone="secondary" onLiquid>
-                                {dayLabel(entry.at)}
-                            </Text>
-                        </View>
-                    ) : null;
+                <ScrollView ref={list} style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 12, gap: 6 }} onContentSizeChange={() => list.current?.scrollToEnd({ animated: false })} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive">
+                    {entries.map((entry, index) => {
+                        const before = entries[index - 1];
+                        const after = entries[index + 1];
+                        const newDay = !before || dayOf(before.at) !== dayOf(entry.at);
+                        const day = newDay ? (
+                            <View key={`${entry.id}-day`} style={{ alignItems: 'center', paddingTop: index === 0 ? 0 : 14, paddingBottom: 6 }}>
+                                <Text variant="eyebrow" tone="secondary" onLiquid>
+                                    {dayLabel(entry.at)}
+                                </Text>
+                            </View>
+                        ) : null;
 
-                    if (entry.kind !== 'message') {
+                        if (entry.kind !== 'message') {
+                            return (
+                                <View key={entry.id}>
+                                    {day}
+                                    <Pressable
+                                        disabled={entry.kind !== 'expense'}
+                                        accessibilityRole={entry.kind === 'expense' ? 'button' : undefined}
+                                        onPress={() => router.push(`/expense/${entry.id}`)}
+                                        style={({ pressed }) => ({ alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 6, maxWidth: '88%', paddingVertical: 7, paddingHorizontal: 12, borderRadius: 999, backgroundColor: pressed ? tokens.borderStrong : tokens.chip, borderWidth: 1, borderColor: tokens.border, marginVertical: 4 })}
+                                    >
+                                        <Text style={{ fontSize: 14, lineHeight: 18 }}>{entry.kind === 'expense' ? entry.emoji : '✅'}</Text>
+                                        <Text variant="caption" weight="semibold" numberOfLines={2} style={{ flexShrink: 1 }}>
+                                            {entry.text}
+                                        </Text>
+                                    </Pressable>
+                                </View>
+                            );
+                        }
+
+                        const mine = entry.fromId === ME;
+                        const sameAsBefore = before?.kind === 'message' && before.fromId === entry.fromId && !newDay;
+                        const sameAsAfter = after?.kind === 'message' && after.fromId === entry.fromId && dayOf(after.at) === dayOf(entry.at);
+                        const person = personById(entry.fromId);
                         return (
                             <View key={entry.id}>
                                 {day}
-                                <Pressable
-                                    disabled={entry.kind !== 'expense'}
-                                    accessibilityRole={entry.kind === 'expense' ? 'button' : undefined}
-                                    onPress={() => router.push(`/expense/${entry.id}`)}
-                                    style={({ pressed }) => ({ alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 6, maxWidth: '88%', paddingVertical: 7, paddingHorizontal: 12, borderRadius: 999, backgroundColor: pressed ? tokens.borderStrong : tokens.chip, borderWidth: 1, borderColor: tokens.border, marginVertical: 4 })}
-                                >
-                                    <Text style={{ fontSize: 14, lineHeight: 18 }}>{entry.kind === 'expense' ? entry.emoji : '✅'}</Text>
-                                    <Text variant="caption" weight="semibold" numberOfLines={2} style={{ flexShrink: 1 }}>
-                                        {entry.text}
-                                    </Text>
-                                </Pressable>
-                            </View>
-                        );
-                    }
-
-                    const mine = entry.fromId === ME;
-                    const sameAsBefore = before?.kind === 'message' && before.fromId === entry.fromId && !newDay;
-                    const sameAsAfter = after?.kind === 'message' && after.fromId === entry.fromId && dayOf(after.at) === dayOf(entry.at);
-                    const person = personById(entry.fromId);
-                    return (
-                        <View key={entry.id}>
-                            {day}
-                            <View style={{ flexDirection: 'row', justifyContent: mine ? 'flex-end' : 'flex-start', alignItems: 'flex-end', gap: 8, marginTop: sameAsBefore ? 0 : 6 }}>
-                                {mine ? null : <View style={{ width: 30 }}>{sameAsAfter ? null : <Avatar name={person.name} size={30} />}</View>}
-                                <View
-                                    style={{
-                                        maxWidth: '78%',
-                                        paddingVertical: 9,
-                                        paddingHorizontal: 14,
-                                        borderRadius: 20,
-                                        borderBottomRightRadius: mine && !sameAsAfter ? 6 : 20,
-                                        borderBottomLeftRadius: !mine && !sameAsAfter ? 6 : 20,
-                                        backgroundColor: mine ? tokens.accent : tokens.chip,
-                                        borderWidth: mine ? 0 : 1,
-                                        borderColor: tokens.border,
-                                        gap: 2,
-                                    }}
-                                >
-                                    {mine || sameAsBefore ? null : (
-                                        <Text variant="caption" weight="bold" tone="accent" align="left">
-                                            {person.first}
+                                <View style={{ flexDirection: 'row', justifyContent: mine ? 'flex-end' : 'flex-start', alignItems: 'flex-end', gap: 8, marginTop: sameAsBefore ? 0 : 6 }}>
+                                    {mine ? null : <View style={{ width: 30 }}>{sameAsAfter ? null : <Avatar name={person.name} size={30} />}</View>}
+                                    <View
+                                        style={{
+                                            maxWidth: '78%',
+                                            paddingVertical: 9,
+                                            paddingHorizontal: 14,
+                                            borderRadius: 20,
+                                            borderBottomRightRadius: mine && !sameAsAfter ? 6 : 20,
+                                            borderBottomLeftRadius: !mine && !sameAsAfter ? 6 : 20,
+                                            backgroundColor: mine ? tokens.accent : tokens.chip,
+                                            borderWidth: mine ? 0 : 1,
+                                            borderColor: tokens.border,
+                                            gap: 2,
+                                        }}
+                                    >
+                                        {mine || sameAsBefore ? null : (
+                                            <Text variant="caption" weight="bold" tone="accent" align="left">
+                                                {person.first}
+                                            </Text>
+                                        )}
+                                        <Text variant="body" align="left" tone={mine ? 'onAccent' : 'primary'}>
+                                            {entry.text}
                                         </Text>
-                                    )}
-                                    <Text variant="body" align="left" tone={mine ? 'onAccent' : 'primary'}>
-                                        {entry.text}
-                                    </Text>
-                                    <Text variant="caption" align="right" tone={mine ? 'onAccent' : 'muted'} style={{ opacity: mine ? 0.75 : 1, fontSize: 11 }}>
-                                        {clock(entry.at)}
-                                    </Text>
+                                        <Text variant="caption" align="right" tone={mine ? 'onAccent' : 'muted'} style={{ opacity: mine ? 0.75 : 1, fontSize: 11 }}>
+                                            {clock(entry.at)}
+                                        </Text>
+                                    </View>
                                 </View>
                             </View>
-                        </View>
-                    );
-                })}
-            </ScrollView>
+                        );
+                    })}
+                </ScrollView>
 
-            <View style={{ paddingHorizontal: 12, paddingTop: 6, paddingBottom: insets.bottom + 10 }}>
-                <GlassSurface kind="thick" radius={28} style={{ flexDirection: 'row', alignItems: 'flex-end', padding: 6, gap: 6 }}>
-                    <TextInput
-                        value={draft}
-                        onChangeText={setDraft}
-                        placeholder={group ? `Message ${group.name}` : 'Message'}
-                        placeholderTextColor={tokens.muted}
-                        accessibilityLabel="Message"
-                        multiline
-                        maxLength={500}
-                        style={{ flex: 1, minHeight: 44, maxHeight: 120, paddingHorizontal: 14, paddingVertical: 11, color: tokens.fg, fontFamily: FONT.medium, fontSize: 16 }}
-                    />
-                    <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel="Send"
-                        disabled={!draft.trim()}
-                        onPress={send}
-                        style={({ pressed }) => ({ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: tokens.accent, opacity: draft.trim() ? (pressed ? 0.8 : 1) : 0.4 })}
-                    >
-                        <SendHorizontal size={20} color={tokens.onAccent} strokeWidth={2.4} />
-                    </Pressable>
-                </GlassSurface>
-            </View>
-        </KeyboardAvoidingView>
+                <View style={{ paddingHorizontal: 12, paddingTop: 6, paddingBottom: insets.bottom + 10 }}>
+                    <GlassSurface kind="thick" radius={28} style={{ flexDirection: 'row', alignItems: 'flex-end', padding: 6, gap: 6 }}>
+                        <TextInput
+                            value={draft}
+                            onChangeText={setDraft}
+                            placeholder={group ? `Message ${group.name}` : 'Message'}
+                            placeholderTextColor={tokens.muted}
+                            accessibilityLabel="Message"
+                            multiline
+                            maxLength={500}
+                            style={{ flex: 1, minHeight: 44, maxHeight: 120, paddingHorizontal: 14, paddingVertical: 11, color: tokens.fg, fontFamily: FONT.medium, fontSize: 16 }}
+                        />
+                        <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel="Send"
+                            disabled={!draft.trim()}
+                            onPress={send}
+                            style={({ pressed }) => ({ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: tokens.accent, opacity: draft.trim() ? (pressed ? 0.8 : 1) : 0.4 })}
+                        >
+                            <SendHorizontal size={20} color={tokens.onAccent} strokeWidth={2.4} />
+                        </Pressable>
+                    </GlassSurface>
+                </View>
+            </KeyboardAvoidingView>
+        </GlassLayer>
     );
 }

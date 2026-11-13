@@ -95,6 +95,7 @@ uniform float uWobble;
 uniform float uLight;
 uniform float3 uRimC;
 uniform float uShadow;
+uniform float2 uAt;
 
 float sdRR(float2 q, float2 hs, float r) {
   float2 d = abs(q) - hs + r;
@@ -111,7 +112,9 @@ float3 tintOf(float3 c, float z) {
   c = mix(float3(l), c, 1.26);
   return z < 0. ? mix(c, uAcc, -z) : mix(c, uTintC, min(z*uTintK, .94));
 }
-half4 main(float2 xy) {
+half4 main(float2 at) {
+  // A layer draws many panes in one canvas: uAt is where this one's box starts in it.
+  float2 xy = at - uAt;
   float2 hs = uSize*.5;
   float2 q = xy - uInset - hs;
   float r = min(uRadius, min(hs.x, hs.y));

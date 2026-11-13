@@ -36,7 +36,8 @@ export const TYPE = {
     heading: { fontSize: 19, lineHeight: 24, letterSpacing: -0.3, weight: 'bold' },
     body: { fontSize: 16, lineHeight: 22, letterSpacing: 0, weight: 'medium' },
     label: { fontSize: 14, lineHeight: 18, letterSpacing: 0, weight: 'semibold' },
-    caption: { fontSize: 12.5, lineHeight: 16, letterSpacing: 0.1, weight: 'medium' },
+    // No letter spacing: on Android a little of it made words like "Yesterday" measure a hair short and drop off the line.
+    caption: { fontSize: 12.5, lineHeight: 16, letterSpacing: 0, weight: 'medium' },
     eyebrow: { fontSize: 11.5, lineHeight: 14, letterSpacing: 1.2, weight: 'bold' },
 } as const;
 

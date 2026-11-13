@@ -4,7 +4,7 @@
  * so nothing is measured while a list moves.
  */
 import { useFocusEffect } from 'expo-router';
-import { createContext, useCallback, useContext, useRef, type ComponentRef } from 'react';
+import { createContext, useCallback, useContext, useMemo, useRef, type ComponentRef } from 'react';
 import type { View } from 'react-native';
 import { useDerivedValue, useSharedValue, type SharedValue } from 'react-native-reanimated';
 
@@ -15,18 +15,30 @@ export interface ScrollOffsets {
 
 export const ScrollContext = createContext<ScrollOffsets>({});
 
+/** A measured spot: its window position is (baseX - scrollX, baseY - scrollY). */
+export interface Place {
+    baseX: SharedValue<number>;
+    baseY: SharedValue<number>;
+    scrollX?: SharedValue<number>;
+    scrollY?: SharedValue<number>;
+}
+
 /** Long enough for a screen's entering transition to finish before measuring again. */
 const SETTLE_MS = 450;
 
-export function useScreenOrigin() {
+/**
+ * The spot only, with no work done per frame: a glass layer reads it while it draws. Until it is
+ * measured it sits far above the screen.
+ */
+export function useScreenPlace() {
     const ref = useRef<ComponentRef<typeof View>>(null);
     const scroll = useContext(ScrollContext);
     const baseX = useSharedValue(0);
     const baseY = useSharedValue(-10_000);
     const measure = useCallback(() => {
         ref.current?.measureInWindow((x, y) => {
-            baseX.value = x + (scroll.x?.value ?? 0);
-            baseY.value = y + (scroll.y?.value ?? 0);
+            baseX.set(x + (scroll.x?.value ?? 0));
+            baseY.set(y + (scroll.y?.value ?? 0));
         });
     }, [scroll, baseX, baseY]);
 
@@ -37,8 +49,14 @@ export function useScreenOrigin() {
         }, [measure]),
     );
 
-    const scrollX = scroll.x;
-    const scrollY = scroll.y;
+    const place = useMemo<Place>(() => ({ baseX, baseY, scrollX: scroll.x, scrollY: scroll.y }), [baseX, baseY, scroll]);
+    return { ref, measure, place };
+}
+
+/** The spot as a value that follows scrolling on its own: for glass that draws its own canvas. */
+export function useScreenOrigin() {
+    const { ref, measure, place } = useScreenPlace();
+    const { baseX, baseY, scrollX, scrollY } = place;
     const origin = useDerivedValue(() => [baseX.value - (scrollX ? scrollX.value : 0), baseY.value - (scrollY ? scrollY.value : 0)]);
     return { ref, measure, origin };
 }

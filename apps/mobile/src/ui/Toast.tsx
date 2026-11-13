@@ -5,6 +5,7 @@ import { View } from 'react-native';
 import Animated, { FadeInUp, FadeOutUp } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GlassSurface } from '~/glass/GlassSurface';
+import { GlassLayer } from '~/glass/layer';
 import { useLook } from '~/theme/ThemeProvider';
 import { Text } from './Text';
 
@@ -35,10 +36,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             <View pointerEvents="none" style={{ position: 'absolute', top: insets.top + 8, left: 0, right: 0, alignItems: 'center' }}>
                 {message ? (
                     <Animated.View key={message.id} entering={calm ? undefined : FadeInUp.springify().damping(16)} exiting={calm ? undefined : FadeOutUp.duration(220)} accessibilityLiveRegion="polite">
-                        <GlassSurface kind="thick" radius={999} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 12, paddingHorizontal: 18, maxWidth: 360 }}>
-                            <Icon size={18} color={tokens.accentText} strokeWidth={2.6} />
-                            <Text variant="label">{message.text}</Text>
-                        </GlassSurface>
+                        <GlassLayer always>
+                            <GlassSurface kind="thick" radius={999} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 12, paddingHorizontal: 18, maxWidth: 360 }}>
+                                <Icon size={18} color={tokens.accentText} strokeWidth={2.6} />
+                                <Text variant="label">{message.text}</Text>
+                            </GlassSurface>
+                        </GlassLayer>
                     </Animated.View>
                 ) : null}
             </View>

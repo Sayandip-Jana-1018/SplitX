@@ -5,9 +5,10 @@
 import { router } from 'expo-router';
 import { ArrowRight } from 'lucide-react-native';
 import { useWindowDimensions, View } from 'react-native';
-import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Coin } from '~/glass/Coin';
+import { GlassLayer } from '~/glass/layer';
 import { GlassSurface } from '~/glass/GlassSurface';
 import { useLook } from '~/theme/ThemeProvider';
 import { GlassButton } from '~/ui/GlassButton';
@@ -19,10 +20,10 @@ export default function Welcome() {
     const insets = useSafeAreaInsets();
     const { width, height } = useWindowDimensions();
     const coin = Math.min(width * 1.08, height * 0.56, 520);
-    const enter = (delay: number) => (calm ? undefined : FadeInDown.delay(delay).springify().damping(18));
+    const enter = (delay: number) => (calm ? undefined : FadeIn.delay(delay).duration(420));
 
     return (
-        <View style={{ flex: 1, paddingTop: insets.top + 14, paddingBottom: insets.bottom + 20, paddingHorizontal: 20, alignItems: 'center' }}>
+        <GlassLayer style={{ flex: 1, paddingTop: insets.top + 14, paddingBottom: insets.bottom + 20, paddingHorizontal: 20, alignItems: 'center' }}>
             <Animated.View entering={calm ? undefined : FadeIn.duration(500)}>
                 <GlassSurface kind="thin" radius={999} style={{ paddingVertical: 8, paddingHorizontal: 16 }}>
                     <Wordmark />
@@ -60,6 +61,6 @@ export default function Welcome() {
                     Preview build · the people and money in it are made up
                 </Text>
             </Animated.View>
-        </View>
+        </GlassLayer>
     );
 }

@@ -9,6 +9,7 @@ import type { ReactNode } from 'react';
 import { Pressable, View, type ViewProps } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GlassSurface } from '~/glass/GlassSurface';
+import { GlassLayer } from '~/glass/layer';
 import { useLook } from '~/theme/ThemeProvider';
 import { GlassButton, tap } from '~/ui/GlassButton';
 import { Text } from '~/ui/Text';
@@ -17,9 +18,11 @@ export function GlassTabBar({ children }: ViewProps & { children?: ReactNode }) 
     const insets = useSafeAreaInsets();
     return (
         <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: Math.max(insets.bottom, 12) + 4, alignItems: 'center' }}>
-            <GlassSurface kind="thick" radius={999} style={{ width: '92%', maxWidth: 440, flexDirection: 'row', alignItems: 'center', padding: 6 }}>
-                {children}
-            </GlassSurface>
+            <GlassLayer style={{ width: '92%', maxWidth: 440 }}>
+                <GlassSurface kind="thick" radius={999} style={{ flexDirection: 'row', alignItems: 'center', padding: 6 }}>
+                    {children}
+                </GlassSurface>
+            </GlassLayer>
         </View>
     );
 }

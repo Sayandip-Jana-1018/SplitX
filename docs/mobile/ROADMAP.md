@@ -331,13 +331,17 @@ I stop and report at the end of each phase, and start the next only when you say
     - **The governor**, as described in section 6.
     - **Checks:** the app's own lint rules (Expo's).
     - **On a real phone:** your Galaxy S23 Ultra (SM-S918B, Android 17), over USB.
-- **Measured on the S23 Ultra** (Expo Go, production mode):
-    - **At rest:** Home with the liquid moving draws at 6 ms a frame.
-    - **Scrolling Activity** (one pane of glass): 9 ms a frame, 5% janky.
-    - **Scrolling Home** (about 14 panes): 34 ms a frame, 63% janky.
-    - **Why:** every pane of glass is its own GPU canvas, and they all move while a screen scrolls. The website draws all its glass in one canvas, and the app needs to do the same.
+- **The glass engine, rebuilt for speed:**
+    - Every screen, the tab bar, a sheet and the toast now have one glass layer each.
+    - Each frame, a layer records all its glass and coins into one Skia picture on the UI thread, handing each shader its numbers directly.
+    - A layer whose screen isn't showing does nothing.
+- **Measured on the S23 Ultra** (Expo Go, production mode, scrolling Home):
+    - **Before:** 34 ms a frame, 63% janky.
+    - **After:** 9 ms a frame (about 110 fps on its 120 Hz screen), 31% janky, with the GPU at 2 ms.
+    - **What did it:**
+        - One canvas per layer alone only got to 31 ms.
+        - Recording each layer's glass as one picture, and skipping hidden screens, got to 9 ms.
 - **Left:**
-    - **The glass engine:** each layer's glass (the screen, the tab bar, a sheet) drawn in one canvas.
     - **The theme ripple:** a colour change spreading through the liquid, as on the website.
     - **Exit test:** 60 fps on a budget phone, and Calm checked on every screen.
 

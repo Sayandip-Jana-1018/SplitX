@@ -47,7 +47,7 @@ export function GlassButton({ kind = 'thin', radius = 999, onPress, accessibilit
                     onPress?.();
                 }}
             >
-                <GlassSurface kind={kind} radius={radius} style={[{ alignItems: 'center', justifyContent: 'center' }, contentStyle]}>
+                <GlassSurface kind={kind} radius={radius} scale={scale} dimmed={disabled} style={[{ alignItems: 'center', justifyContent: 'center' }, contentStyle]}>
                     {children}
                 </GlassSurface>
             </Pressable>

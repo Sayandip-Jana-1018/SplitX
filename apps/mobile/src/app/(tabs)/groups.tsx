@@ -2,7 +2,7 @@
 import { router } from 'expo-router';
 import { ChevronRight } from 'lucide-react-native';
 import { View } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeIn } from 'react-native-reanimated';
 import { groupBalances, ME, personById } from '~/data/ledger';
 import { useLedger } from '~/data/LedgerProvider';
 import { useLook } from '~/theme/ThemeProvider';
@@ -32,7 +32,7 @@ export default function Groups() {
             {ledger.groups.map((group, index) => {
                 const mine = groupBalances(ledger, group.id)[ME] ?? 0;
                 return (
-                    <Animated.View key={group.id} entering={calm ? undefined : FadeInDown.delay(60 + index * 70).springify().damping(18)}>
+                    <Animated.View key={group.id} entering={calm ? undefined : FadeIn.delay(60 + index * 70).duration(380)}>
                         <GlassButton kind="reg" radius={24} contentStyle={{ padding: 16, gap: 14, alignItems: 'stretch' }} onPress={() => router.push(`/group/${group.id}`)}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                                 <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: tokens.chip, alignItems: 'center', justifyContent: 'center' }}>

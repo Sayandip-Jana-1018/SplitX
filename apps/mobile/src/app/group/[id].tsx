@@ -62,7 +62,7 @@ export default function GroupScreen() {
                 <Text variant="caption" tone="secondary" tabular>
                     {rupees(spent)} spent together
                 </Text>
-                <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/journey', params: { group: group.id } })} hitSlop={8} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 }}>
+                <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/journey', params: { group: group.id } })} hitSlop={8} style={{ alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 }}>
                     <Text variant="caption" weight="bold" tone="accent">
                         See how you got here
                     </Text>
