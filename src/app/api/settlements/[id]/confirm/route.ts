@@ -2,10 +2,9 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
-import { createNotification } from '@/lib/notifications';
-import { refusalResponse, settlementRow, transitionSettlement, TransitionRefused } from '@/lib/settlementTransitions';
+import { refusalResponse, settlementRow, TransitionRefused } from '@/lib/settlementTransitions';
 import { logger } from '@/lib/logger';
-import { formatCurrency } from '@/lib/utils';
+import { markPaid } from '@/lib/services/settlements';
 
 const ConfirmSchema = z.object({
     action: z.literal('paid').optional(),
@@ -39,25 +38,11 @@ export async function POST(
 
         let settlement;
         try {
-            ({ after: settlement } = await transitionSettlement({
-                settlementId: id,
-                actorId: user.id,
-                action: 'mark_paid',
-                data: { method: paidInCash ? 'cash' : 'upi', ...(utrNumber ? { utrNumber } : {}) },
-            }));
+            settlement = await markPaid(user, id, { cash: paidInCash, utrNumber });
         } catch (error) {
             if (error instanceof TransitionRefused) return refusalResponse(error);
             throw error;
         }
-
-        await createNotification({
-            userId: settlement.toId,
-            actorId: user.id,
-            type: 'settlement_approval_request',
-            title: 'Payment approval needed',
-            body: `${settlement.from.name || 'Someone'} says they paid you ${formatCurrency(settlement.amount)}${paidInCash ? ' in cash' : ''}. Approve it once you receive the money${utrNumber ? ` (UTR: ${utrNumber})` : ''}.`,
-            link: '/settlements',
-        });
 
         return NextResponse.json({
             settlement: settlementRow(settlement),

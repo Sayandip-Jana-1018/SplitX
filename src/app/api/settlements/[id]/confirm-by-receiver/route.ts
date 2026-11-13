@@ -2,21 +2,14 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
-import { createNotification } from '@/lib/notifications';
-import { recordSettlementCompleted } from '@/lib/metrics';
-import { refusalResponse, transitionSettlement, TransitionRefused, type SettlementAction } from '@/lib/settlementTransitions';
+import { refusalResponse, TransitionRefused } from '@/lib/settlementTransitions';
 import { logger } from '@/lib/logger';
-import { formatCurrency } from '@/lib/utils';
+import { receiverRecords } from '@/lib/services/settlements';
 
 const ActionSchema = z.object({
     action: z.enum(['confirm', 'accept_cash', 'reject']).default('confirm'),
 });
 
-const MOVES: Record<z.infer<typeof ActionSchema>['action'], SettlementAction> = {
-    confirm: 'mark_received',
-    accept_cash: 'accept_cash',
-    reject: 'decline',
-};
 
 // POST /api/settlements/:id/confirm-by-receiver — the receiver records what
 // happened: they were handed cash (completed), it was never paid (cancelled),
@@ -41,46 +34,15 @@ export async function POST(
         const user = await prisma.user.findUnique({ where: { email: session.user.email } });
         if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
-        let settlement;
         try {
-            ({ after: settlement } = await transitionSettlement({
-                settlementId: id,
-                actorId: user.id,
-                action: MOVES[action],
-                ...(action === 'accept_cash' ? { data: { method: 'cash' } } : {}),
-            }));
+            await receiverRecords(user, id, action);
         } catch (error) {
             if (error instanceof TransitionRefused) return refusalResponse(error);
             throw error;
         }
 
-        if (action === 'reject') {
-            try {
-                await createNotification({
-                    userId: settlement.fromId,
-                    type: 'settlement_rejected',
-                    title: 'Settlement Rejected',
-                    body: `${settlement.to.name || 'The receiver'} marked your ${formatCurrency(settlement.amount)} payment as not received`,
-                    link: '/settlements',
-                });
-            } catch { /* notification failures are non-critical */ }
-            return NextResponse.json({ message: 'Settlement rejected and sender notified' });
-        }
-
-        if (action === 'accept_cash') {
-            recordSettlementCompleted('cash', settlement.amount);
-            try {
-                await createNotification({
-                    userId: settlement.fromId,
-                    type: 'settlement_completed',
-                    title: 'Settlement Completed',
-                    body: `${settlement.to.name || 'The receiver'} confirmed receiving ${formatCurrency(settlement.amount)} in cash`,
-                    link: '/settlements',
-                });
-            } catch { /* notification failures are non-critical */ }
-            return NextResponse.json({ message: 'Cash payment confirmed — settlement completed' });
-        }
-
+        if (action === 'reject') return NextResponse.json({ message: 'Settlement rejected and sender notified' });
+        if (action === 'accept_cash') return NextResponse.json({ message: 'Cash payment confirmed — settlement completed' });
         return NextResponse.json({ message: 'Settlement moved to paid_pending for approval' });
     } catch (error) {
         logger.error('Settlement confirm-by-receiver error', { err: error });

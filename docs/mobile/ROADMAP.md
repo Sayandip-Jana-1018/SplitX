@@ -285,14 +285,17 @@ I stop and report at the end of each phase, and start the next only when you say
 |---|---|---|
 | 0 | Foundation | ✅ Code written: the app's frame, the glass engine and the first screens |
 | 1 | Design kit and every screen | ✅ All screens built on made-up data; installed on your phone as an APK |
-| 2 | Backend for apps | Laptop stack pushes to your phone; restore drill passes |
-| 3 | Core loop, phone and web | A full pretend trip works, including offline |
-| 4 | Auto-capture and smart input | Real alerts become correct expenses |
-| 5 | Missing money features | Ledger tests hold for every new case |
-| 6 | The delight layer | Gamification and the last moments, inside budget |
-| 7 | Hardening | Security, privacy, accessibility reports with no high issues |
-| 8 | iPhone | All flows pass on the simulator |
-| 9 | Launch kit and rehearsal | **Launch-ready. Stop here.** |
+| 2 | Accounts and real data | You use the real app, with real friends, on the live site |
+| 3 | Notifications and reliability | A push reaches your phone; restore drill passes |
+| 4 | The full app: every website screen, the core loop | Settle-up mind map and every web screen on the phone; a pretend trip works offline |
+| 5 | Smart input and auto-capture | Real alerts become correct expenses; receipt scans work |
+| 6 | Missing money features | Ledger tests hold for every new case |
+| 7 | The delight layer | Gamification and the last moments, inside budget |
+| 8 | Hardening | Security, privacy, accessibility reports with no high issues; a real signing key |
+| 9 | iPhone | All flows pass on the simulator |
+| 10 | Launch kit and rehearsal | **Launch-ready. Stop here.** |
+
+**Replanned on 14 November, at your request:** a real, usable app with real accounts comes first (Phase 2), then notifications (3), then every website screen built on real data (4), so no screen is built twice. Phone-number sign-in is out: SMS codes need a billing account on Firebase since September 2024. Free sign-in codes by email take its place. Phases 3 onward keep their old content under new numbers.
 
 **Total: still about 6 to 7 months**, re-estimated at the end of Phase 1 from the real pace.
 
@@ -361,27 +364,27 @@ I stop and report at the end of each phase, and start the next only when you say
   - All existing tests still pass.
 - **Your part:** create a free Firebase project.
 
-**In steps** (started 14 November; each step is committed and reported on its own):
+**In steps** (started 14 November, replanned the same day; each step is committed and reported on its own):
 
-1. **Mobile sign-in on the server:**
-    - `Device` and `RefreshToken` tables.
-    - 15-minute access tokens, and refresh tokens that rotate on each use. A used one coming back revokes its whole family.
-    - Password and Google sign-in sharing the website's own rules (verified emails only), and sign-out.
-2. **API v1 and its contract:** zod schemas shared by the server and the app, the first reads (me, groups, balances, activity), and a typed client.
-3. **Writes through one service layer:** add and delete expenses with IDs made on the phone (so a retry never doubles one), settle-up checked by the server, and chat.
-4. **Sync:** `syncSeq` and tombstones, `GET /api/v1/sync?cursor=`, the phone's offline queue, and a clear choice when two edits clash.
-5. **The app on real data:**
-    - Sign-in screens, tokens in the phone's secure storage, and a client that refreshes them itself.
-    - The ledger saved on the phone first, then synced.
-    - The made-up preview stays as a demo mode.
-6. **Push:** the Firebase project, device registration, and the transactional outbox and worker, so a notification reaches the phone.
-7. **Control and operations:**
-    - Remote config, kill switches, and a minimum-version gate.
-    - Sentry.
-    - A backup and restore drill, with `ledger:audit`.
-8. **The exit tests above.**
+1. ✅ **Phone sign-in on the server:** `Device` and `RefreshToken`, 15-minute access tokens, rotating refresh tokens with copy detection, password and Google sign-in by the website's rules.
+2. ✅ **Reads and the app's client:** groups, balances and activity from the website's own ledger; a typed client that refreshes itself and words every failure.
+3. **Writes through one service layer:**
+    - ✅ **3a:** adding and deleting expenses (the website's routes call the same service).
+    - **3b:** settling up (every safeguard kept) and group chat.
+4. **Sign-in like real apps:**
+    - Sign-up with email confirmation, and sign-in with email and password.
+    - **A 6-digit code by email** instead of a password: free, and it replaces phone-number codes.
+    - **Forgot password**, with the new password set in the app.
+    - Sign-out, and sign-out of all devices.
+    - **Google and GitHub** through the website's own sign-in page in a secure in-app browser that hands the session back to the app.
+    - "Try the demo" keeps the made-up data.
+5. **The app on real data:** your groups, expenses, settle-up and chat, saved on the phone first and synced, with a clear choice when two edits clash.
+6. **Go live (your yes first):**
+    - The additive migrations through the production-database workflow.
+    - `MOBILE_TOKEN_SECRET` added to Vercel (by you).
+    - The deploy, and the APK pointed at the live site.
 
-**Where it runs:** the website's dev server and a throwaway Postgres on the laptop, reached from your phone over USB. Nothing reaches splitsj.vercel.app or its database until you say yes at the end of the phase. The rollout then is the additive migrations through the production-database workflow, then the deploy.
+**Where it runs until step 6:** the website's dev server and a throwaway Postgres on the laptop, reached from your phone over USB. Nothing reaches splitsj.vercel.app or its database until you say yes. Push notifications, remote config, Sentry and the backup drill (the old Phase 2's rest) are Phase 3 now.
 
 ### Phase 3: core loop, on phone and web
 

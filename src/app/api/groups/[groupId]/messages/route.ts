@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { logger } from '@/lib/logger';
+import { ChatRefused, listGroupMessages, sendGroupMessage } from '@/lib/services/groupChat';
 
 const SendMessageSchema = z.object({
     content: z.string().trim().min(1).max(1_000),
@@ -29,59 +30,10 @@ export async function GET(
         const user = await prisma.user.findUnique({ where: { email: session.user.email } });
         if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
-        // Verify membership (a deleted group's chat is gone too)
-        const group = await prisma.group.findFirst({
-            where: {
-                id: groupId,
-                deletedAt: null,
-                OR: [
-                    { ownerId: user.id },
-                    { members: { some: { userId: user.id } } },
-                ],
-            },
-            select: { id: true },
-        });
-
-        if (!group) {
-            return NextResponse.json({ error: 'Not a member of this group' }, { status: 403 });
-        }
-
-        const messages = await prisma.groupMessage.findMany({
-            where: { groupId },
-            orderBy: { createdAt: 'desc' },
-            take: limit + 1, // fetch one extra to know if there's more
-            ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-            include: {
-                sender: { select: { id: true, name: true, image: true } },
-                settlement: {
-                    select: {
-                        id: true,
-                        amount: true,
-                        status: true,
-                        from: { select: { id: true, name: true } },
-                        to: { select: { id: true, name: true } },
-                    },
-                },
-                transaction: {
-                    select: {
-                        id: true,
-                        title: true,
-                        amount: true,
-                        category: true,
-                    },
-                },
-            },
-        });
-
-        const hasMore = messages.length > limit;
-        const data = hasMore ? messages.slice(0, limit) : messages;
-        const nextCursor = hasMore ? data[data.length - 1]?.id : null;
-
-        return NextResponse.json({
-            messages: data.reverse(), // Return in chronological order
-            nextCursor,
-            hasMore,
-        });
+        // The rules themselves are shared with the phone app (lib/services/groupChat.ts).
+        const page = await listGroupMessages(user.id, groupId, { cursor, limit });
+        if (!page) return NextResponse.json({ error: 'Not a member of this group' }, { status: 403 });
+        return NextResponse.json(page);
     } catch (error) {
         logger.error('Group messages GET error', { err: error });
         return NextResponse.json({ error: 'Failed to fetch messages' }, { status: 500 });
@@ -117,103 +69,13 @@ export async function POST(
         const user = await prisma.user.findUnique({ where: { email: session.user.email } });
         if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
-        // Verify membership
-        const group = await prisma.group.findFirst({
-            where: {
-                id: groupId,
-                deletedAt: null,
-                OR: [
-                    { ownerId: user.id },
-                    { members: { some: { userId: user.id } } },
-                ],
-            },
-            select: {
-                id: true,
-                name: true,
-                ownerId: true,
-                members: { select: { userId: true } },
-            },
-        });
-
-        if (!group) {
-            return NextResponse.json({ error: 'Not a member of this group' }, { status: 403 });
+        try {
+            const message = await sendGroupMessage(user, groupId, { content, type, targetUserId });
+            return NextResponse.json({ message });
+        } catch (error) {
+            if (error instanceof ChatRefused) return NextResponse.json({ error: error.message }, { status: error.status });
+            throw error;
         }
-
-        if (type === 'payment_reminder') {
-            if (!targetUserId) {
-                return NextResponse.json({ error: 'A target user is required for payment reminders' }, { status: 400 });
-            }
-
-            const allowedTargetIds = new Set<string>([
-                group.ownerId,
-                ...group.members.map((member) => member.userId),
-            ]);
-
-            if (!allowedTargetIds.has(targetUserId)) {
-                return NextResponse.json({ error: 'Target user is not a member of this group' }, { status: 400 });
-            }
-        }
-
-        // Rate limit: max 5 messages per 10 seconds per user per group
-        const tenSecondsAgo = new Date(Date.now() - 10_000);
-        const recentCount = await prisma.groupMessage.count({
-            where: {
-                groupId,
-                senderId: user.id,
-                createdAt: { gte: tenSecondsAgo },
-            },
-        });
-        if (recentCount >= 5) {
-            return NextResponse.json(
-                { error: 'Slow down! You\'re sending messages too quickly.' },
-                { status: 429 }
-            );
-        }
-
-        // Create the message
-        const message = await prisma.groupMessage.create({
-            data: {
-                groupId,
-                senderId: user.id,
-                content,
-                type,
-            },
-            include: {
-                sender: { select: { id: true, name: true, image: true } },
-                settlement: {
-                    select: {
-                        id: true,
-                        amount: true,
-                        status: true,
-                        from: { select: { id: true, name: true } },
-                        to: { select: { id: true, name: true } },
-                    },
-                },
-                transaction: {
-                    select: {
-                        id: true,
-                        title: true,
-                        amount: true,
-                        category: true,
-                    },
-                },
-            },
-        });
-
-        // For payment_reminder type → also create a notification for the target user
-        if (type === 'payment_reminder' && targetUserId) {
-            await prisma.notification.create({
-                data: {
-                    user: { connect: { id: targetUserId } },
-                    type: 'payment_reminder',
-                    title: 'Payment Reminder',
-                    body: `${user.name || 'Someone'} sent you a payment reminder in ${group.name}.`,
-                    link: `/groups/${groupId}`,
-                },
-            });
-        }
-
-        return NextResponse.json({ message });
     } catch (error) {
         logger.error('Group messages POST error', { err: error });
         return NextResponse.json({ error: 'Failed to send message' }, { status: 500 });

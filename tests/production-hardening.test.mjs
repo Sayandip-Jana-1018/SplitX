@@ -56,10 +56,13 @@ check('invite notifications carry a resolvable invitation link and the panel par
 });
 
 check('payment reminders only allow targets who belong to the current group', () => {
-  const source = read('src/app/api/groups/[groupId]/messages/route.ts');
+  // The rule lives in the chat service the website's and the phone's routes share.
+  const service = read('src/lib/services/groupChat.ts');
+  assert.match(service, /if \(input\.type === 'payment_reminder'\)/);
+  assert.match(service, /A target user is required for payment reminders/);
+  assert.match(service, /const allowedTargetIds = new Set<string>\(/);
+  assert.match(service, /Target user is not a member of this group/);
 
-  assert.match(source, /if \(type === 'payment_reminder'\)/);
-  assert.match(source, /A target user is required for payment reminders/);
-  assert.match(source, /const allowedTargetIds = new Set<string>\(/);
-  assert.match(source, /Target user is not a member of this group/);
+  // And the website's route still sends through it.
+  assert.match(read('src/app/api/groups/[groupId]/messages/route.ts'), /sendGroupMessage\(/);
 });

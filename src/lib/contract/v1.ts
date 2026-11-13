@@ -176,3 +176,77 @@ export type Expense = z.infer<typeof Expense>;
 /** What saving an expense answers; `replayed` when it was saved before under the same clientId. */
 export const ExpenseSaved = z.object({ expense: Expense, replayed: z.boolean() });
 export type ExpenseSaved = z.infer<typeof ExpenseSaved>;
+
+export const NewSettlement = z.object({
+    groupId: z.string().max(64),
+    toUserId: z.string().max(64),
+    /** Set when you are the receiver, recording a payment made to you (cash, say). */
+    fromUserId: z.string().max(64).optional(),
+    amount: z.number().int().positive().max(2_147_483_647),
+    method: z.string().trim().min(1).max(40).default('upi'),
+    note: z.string().max(500).optional(),
+});
+export type NewSettlement = z.infer<typeof NewSettlement>;
+
+/**
+ * One step of a settlement. The payer: open_upi (answers the UPI link), mark_paid.
+ * The receiver: approve, send_back, mark_received, accept_cash, decline.
+ */
+export const SettlementMove = z.object({
+    action: z.enum(['open_upi', 'mark_paid', 'approve', 'send_back', 'mark_received', 'accept_cash', 'decline']),
+    /** mark_paid: it was cash, not UPI. */
+    cash: z.boolean().optional(),
+    /** mark_paid: the UPI reference the payer's app showed. */
+    utrNumber: z.string().trim().max(40).optional(),
+});
+export type SettlementMove = z.infer<typeof SettlementMove>;
+
+export const Settlement = z.object({
+    id: z.string(),
+    groupId: z.string(),
+    fromId: z.string(),
+    toId: z.string(),
+    amount: Paise,
+    /** pending, initiated, paid_pending (waiting for the receiver), completed or cancelled. */
+    status: z.string(),
+    method: z.string().nullable(),
+    note: z.string().nullable(),
+    createdAt: z.string(),
+});
+export type Settlement = z.infer<typeof Settlement>;
+
+/** `reused` when an identical request was already open: a retry never makes two. */
+export const SettlementSaved = z.object({ settlement: Settlement, reused: z.boolean() });
+export type SettlementSaved = z.infer<typeof SettlementSaved>;
+
+/** After a step; `upiUrl` only after open_upi. */
+export const SettlementMoved = z.object({ settlement: Settlement, upiUrl: z.string().nullable() });
+export type SettlementMoved = z.infer<typeof SettlementMoved>;
+
+export const ChatMessage = z.object({
+    id: z.string(),
+    senderId: z.string(),
+    senderName: z.string().nullable(),
+    /** text and payment_reminder from people; system and expense_added from the server. */
+    type: z.string(),
+    content: z.string(),
+    settlementId: z.string().nullable(),
+    transactionId: z.string().nullable(),
+    createdAt: z.string(),
+});
+export type ChatMessage = z.infer<typeof ChatMessage>;
+
+/** Oldest first; `nextCursor` asks for the page before it. */
+export const MessagePage = z.object({ messages: z.array(ChatMessage), nextCursor: z.string().nullable() });
+export type MessagePage = z.infer<typeof MessagePage>;
+
+export const NewMessage = z.object({
+    content: z.string().trim().min(1).max(1000),
+    type: z.enum(['text', 'payment_reminder']).default('text'),
+    /** payment_reminder: who is reminded. */
+    targetUserId: z.string().max(64).optional(),
+});
+export type NewMessage = z.infer<typeof NewMessage>;
+
+export const MessageSent = z.object({ message: ChatMessage });
+export type MessageSent = z.infer<typeof MessageSent>;

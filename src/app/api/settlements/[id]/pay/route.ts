@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
-import { generateUpiLink } from '@/lib/upi';
-import { refusalResponse, transitionSettlement, TransitionRefused } from '@/lib/settlementTransitions';
+import { refusalResponse, TransitionRefused } from '@/lib/settlementTransitions';
 import { logger } from '@/lib/logger';
+import { openUpi } from '@/lib/services/settlements';
 
 // POST /api/settlements/:id/pay — the payer opens their UPI app: returns the
 // UPI link and marks the settlement as initiated (lib/settlementTransitions.ts).
@@ -22,35 +22,14 @@ export async function POST(
         const user = await prisma.user.findUnique({ where: { email: session.user.email } });
         if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
-        let settlement;
+        let opened;
         try {
-            ({ after: settlement } = await transitionSettlement({
-                settlementId: id,
-                actorId: user.id,
-                action: 'open_upi',
-                data: { method: 'upi' },
-                guard: (current) => {
-                    if (!current.to.upiId) {
-                        throw new TransitionRefused(
-                            `${current.to.name || 'The recipient'} hasn't added their UPI ID yet. Ask them to add it in Settings → Payment.`,
-                            400,
-                            'no_upi_id'
-                        );
-                    }
-                },
-            }));
+            opened = await openUpi(user, id);
         } catch (error) {
             if (error instanceof TransitionRefused) return refusalResponse(error);
             throw error;
         }
-
-        const upiId = settlement.to.upiId as string;
-        const upiUrl = generateUpiLink({
-            upiId,
-            payeeName: settlement.to.name || 'SplitIT User',
-            amount: settlement.amount / 100,
-            note: 'SplitIT settlement',
-        });
+        const { settlement, upiUrl, upiId } = opened;
 
         return NextResponse.json({
             upiUrl,
