@@ -115,7 +115,7 @@ export default function Profile() {
 
             <GlassButton kind="thin" contentStyle={{ height: 54, flexDirection: 'row', gap: 10 }} onPress={signOut}>
                 <LogOut size={18} color={tokens.danger} strokeWidth={2.2} />
-                <Text variant="label" tone="danger">
+                <Text variant="label" weight="bold" tone="danger">
                     Sign out
                 </Text>
             </GlassButton>

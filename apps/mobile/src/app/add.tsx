@@ -1,12 +1,13 @@
 /**
  * Adding an expense: the amount on a keypad under the thumb, what it was for (the category is
  * guessed from that), the group, who paid, and how it splits: equally among the people you pick,
- * by exact amounts, or by percentages. Every split goes through the website's own rules
- * (resolveSplits), so the app can never save one the server would refuse.
+ * by exact amounts, by percentages, or by shares. Every split goes through the website's own
+ * rules (resolveSplits), so the app can never save one the server would refuse. Shares are saved
+ * as exact amounts, which the server already knows, with the shares kept to show later.
  */
 import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Check } from 'lucide-react-native';
+import { Check, Minus, Plus } from 'lucide-react-native';
 import { useMemo, useState } from 'react';
 import { Platform, Pressable, TextInput, View } from 'react-native';
 import { inferCategory } from '@/lib/categoryInference';
@@ -30,6 +31,8 @@ import { Text } from '~/ui/Text';
 import { useToast } from '~/ui/Toast';
 
 type Share = { userId: string; amount: number };
+/** The ways to split: the server's three, and shares, which become exact amounts. */
+type SplitMode = SplitType | 'shares';
 
 /** "1,234.5" → 123450 paise; anything that isn't a number is nothing. */
 const toPaise = (text: string | undefined) => {
@@ -43,10 +46,12 @@ const decimal = (text: string) => {
     return rest.length ? `${whole}.${rest.join('').slice(0, 2)}` : whole;
 };
 
-/** Percentages into paise that add up exactly, the leftover paise going to the largest remainders. */
-function percentShares(amount: number, percents: { userId: string; percent: number }[]): Share[] {
-    const parts = percents.map(({ userId, percent }) => {
-        const exact = (amount * percent) / 100;
+/** Weights (percentages or shares) into paise that add up exactly, the leftover paise going to the largest remainders. */
+function byWeight(amount: number, weights: { userId: string; weight: number }[]): Share[] {
+    const total = weights.reduce((sum, entry) => sum + entry.weight, 0);
+    if (total <= 0) return weights.map(({ userId }) => ({ userId, amount: 0 }));
+    const parts = weights.map(({ userId, weight }) => {
+        const exact = (amount * weight) / total;
         return { userId, amount: Math.floor(exact), remainder: exact - Math.floor(exact) };
     });
     let left = amount - parts.reduce((sum, part) => sum + part.amount, 0);
@@ -58,8 +63,9 @@ function percentShares(amount: number, percents: { userId: string; percent: numb
     return parts.map(({ userId, amount: share }) => ({ userId, amount: share }));
 }
 
-/** An even start for exact amounts or percentages, so a new split already adds up. */
-function evenly(memberIds: string[], amount: number, type: SplitType): Record<string, string> {
+/** An even start for exact amounts, percentages or shares, so a new split already adds up. */
+function evenly(memberIds: string[], amount: number, type: SplitMode): Record<string, string> {
+    if (type === 'shares') return Object.fromEntries(memberIds.map((id) => [id, '1']));
     if (type === 'percentage') {
         const base = Math.floor(10_000 / memberIds.length) / 100;
         const last = Math.round((100 - base * (memberIds.length - 1)) * 100) / 100;
@@ -83,7 +89,7 @@ export default function AddExpense() {
     const [picked, setPicked] = useState<string | null>(null);
     const [choosingCategory, setChoosingCategory] = useState(false);
     const [payerId, setPayerId] = useState(ME);
-    const [splitType, setSplitType] = useState<SplitType>('equal');
+    const [splitType, setSplitType] = useState<SplitMode>('equal');
     const [among, setAmong] = useState<string[]>(group.memberIds);
     const [typed, setTyped] = useState<Record<string, string>>({});
 
@@ -101,7 +107,7 @@ export default function AddExpense() {
         setTyped(splitType === 'equal' ? {} : evenly(next.memberIds, paise, splitType));
     };
 
-    const chooseSplit = (type: SplitType) => {
+    const chooseSplit = (type: SplitMode) => {
         setSplitType(type);
         setTyped(type === 'equal' ? {} : evenly(group.memberIds, paise, type));
     };
@@ -113,17 +119,22 @@ export default function AddExpense() {
         if (splitType === 'equal') {
             if (among.length === 0) return { ok: false, note: 'Pick at least one person to share it', shares: [] };
             request = { amount: paise, splitType, splitAmong: group.memberIds.filter((id) => among.includes(id)) };
+        } else if (splitType === 'shares') {
+            const weights = group.memberIds.map((id) => ({ userId: id, weight: Number(typed[id] || 0) }));
+            const count = weights.reduce((sum, entry) => sum + entry.weight, 0);
+            if (count <= 0) return { ok: false, note: 'Give someone at least one share', shares: [] };
+            request = { amount: paise, splitType: 'custom', splits: byWeight(paise, weights).filter((share) => share.amount > 0) };
         } else if (splitType === 'custom') {
             const shares = group.memberIds.map((id) => ({ userId: id, amount: toPaise(typed[id]) }));
             const total = shares.reduce((sum, share) => sum + share.amount, 0);
             if (total < paise) return { ok: false, note: `${rupees(paise - total)} still to share out`, shares };
             if (total > paise) return { ok: false, note: `${rupees(total - paise)} more than the expense`, shares };
-            request = { amount: paise, splitType, splits: shares };
+            request = { amount: paise, splitType, splits: shares.filter((share) => share.amount > 0) };
         } else {
-            const percents = group.memberIds.map((id) => ({ userId: id, percent: Number(typed[id] || 0) }));
-            const total = Math.round(percents.reduce((sum, entry) => sum + entry.percent, 0) * 100) / 100;
-            if (total !== 100) return { ok: false, note: `${total}% of 100% shared out`, shares: percentShares(paise, percents) };
-            request = { amount: paise, splitType, splits: percentShares(paise, percents) };
+            const percents = group.memberIds.map((id) => ({ userId: id, weight: Number(typed[id] || 0) }));
+            const total = Math.round(percents.reduce((sum, entry) => sum + entry.weight, 0) * 100) / 100;
+            if (total !== 100) return { ok: false, note: `${total}% of 100% shared out`, shares: percents.map(({ userId, weight }) => ({ userId, amount: Math.round((paise * weight) / 100) })) };
+            request = { amount: paise, splitType, splits: byWeight(paise, percents).filter((share) => share.amount > 0) };
         }
         const resolved = resolveSplits(request, group.memberIds);
         return resolved.ok ? { ok: true, note: 'Adds up exactly', shares: resolved.splits } : { ok: false, note: resolved.error, shares: [] };
@@ -140,9 +151,10 @@ export default function AddExpense() {
                 category,
                 amount: paise,
                 payerId,
-                splitType,
+                splitType: splitType === 'shares' ? 'custom' : splitType,
                 among: splitType === 'equal' ? group.memberIds.filter((id) => among.includes(id)) : undefined,
                 shares: splitType === 'equal' ? undefined : split.shares,
+                weights: splitType === 'shares' ? Object.fromEntries(group.memberIds.filter((id) => Number(typed[id] || 0) > 0).map((id) => [id, Number(typed[id])])) : undefined,
             });
         } catch (error) {
             toast(error instanceof Error ? error.message : 'That expense could not be saved', 'info');
@@ -220,12 +232,13 @@ export default function AddExpense() {
                 <Text variant="eyebrow" tone="secondary" onLiquid>
                     Split
                 </Text>
-                <Segmented<SplitType>
+                <Segmented<SplitMode>
                     compact
                     options={[
                         { id: 'equal', label: 'Equally' },
                         { id: 'custom', label: 'Exact ₹' },
                         { id: 'percentage', label: 'Percent' },
+                        { id: 'shares', label: 'Shares' },
                     ]}
                     value={splitType}
                     onChange={chooseSplit}
@@ -263,6 +276,33 @@ export default function AddExpense() {
                                         {included ? <Check size={16} color={tokens.onAccent} strokeWidth={3} /> : null}
                                     </View>
                                 </Pressable>
+                            );
+                        }
+                        if (splitType === 'shares') {
+                            const count = Number(typed[id] || 0);
+                            const step = (by: number) => {
+                                tap();
+                                setTyped((current) => ({ ...current, [id]: String(Math.max(0, Math.min(99, Number(current[id] || 0) + by))) }));
+                            };
+                            const round = { width: 34, height: 34, borderRadius: 17, alignItems: 'center' as const, justifyContent: 'center' as const, backgroundColor: tokens.chip };
+                            return (
+                                <View key={id} style={row}>
+                                    {name}
+                                    <Text variant="caption" tone="secondary" tabular>
+                                        {rupees(shareOf(id))}
+                                    </Text>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                        <Pressable accessibilityRole="button" accessibilityLabel={`One share less for ${firstName(id)}`} disabled={count === 0} onPress={() => step(-1)} style={[round, { opacity: count === 0 ? 0.4 : 1 }]}>
+                                            <Minus size={16} color={tokens.fg} strokeWidth={2.6} />
+                                        </Pressable>
+                                        <Text variant="heading" tabular style={{ minWidth: 24 }} accessibilityLabel={`${count} shares`}>
+                                            {count}
+                                        </Text>
+                                        <Pressable accessibilityRole="button" accessibilityLabel={`One share more for ${firstName(id)}`} onPress={() => step(1)} style={round}>
+                                            <Plus size={16} color={tokens.fg} strokeWidth={2.6} />
+                                        </Pressable>
+                                    </View>
+                                </View>
                             );
                         }
                         const percent = splitType === 'percentage';

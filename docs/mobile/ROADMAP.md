@@ -318,22 +318,28 @@ I stop and report at the end of each phase, and start the next only when you say
     - **The ledger** works on the website's money engine: splits by `resolveSplits`, balances, and the settlement planner's fewest payments.
     - **Screens:**
         - Home, Groups, Activity and Settle up, rebuilt on the ledger.
-        - Group detail (who pays, expenses, members).
-        - Add expense: keypad, a category guessed from the title, group, payer, and splits equally among chosen people, by exact amounts or by percentages.
+        - Group detail, with its chat (messages, with expenses and payments in the same timeline).
+        - Expense detail: shares, what it meant for you, a receipt photo (camera or photos, kept on the phone), and delete.
+        - Add expense: keypad, a category guessed from the title, group, payer, and four ways to split (equally among chosen people, exact amounts, percentages, shares).
         - The pay sheet: it marks a payment paid, and never opens a UPI app for the made-up people.
-        - Insights, by category and by group.
-        - Profile, and the sign-in screen.
-    - **Kit:** toasts, fields, segmented choices, chips, the glass keypad, the rolling amount, headers and empty states.
+        - Balance Journey, Insights, Profile, Sign-in and onboarding.
+    - **Kit:**
+        - Sheets (drag down to close) and toasts.
+        - Fields, segmented choices, chips and the glass keypad.
+        - The rolling amount, headers, empty states, and loading placeholders.
+        - The touch ripple from the website.
     - **The governor**, as described in section 6.
     - **Checks:** the app's own lint rules (Expo's).
-    - **First run on a real phone:** your Galaxy S23 Ultra (SM-S918B, Android 17), over USB.
+    - **On a real phone:** your Galaxy S23 Ultra (SM-S918B, Android 17), over USB.
+- **Measured on the S23 Ultra** (Expo Go, production mode):
+    - **At rest:** Home with the liquid moving draws at 6 ms a frame.
+    - **Scrolling Activity** (one pane of glass): 9 ms a frame, 5% janky.
+    - **Scrolling Home** (about 14 panes): 34 ms a frame, 63% janky.
+    - **Why:** every pane of glass is its own GPU canvas, and they all move while a screen scrolls. The website draws all its glass in one canvas, and the app needs to do the same.
 - **Left:**
-    - **Group detail:** chat.
-    - **Expense detail.**
-    - **Add expense:** the fourth way to split (shares), and receipts.
-    - **New screens:** Balance Journey and onboarding.
-    - **Kit:** loading states, sheets, and the touch ripple.
-    - **Exit test:** 60 fps measured on a budget phone, and Calm checked on every screen.
+    - **The glass engine:** each layer's glass (the screen, the tab bar, a sheet) drawn in one canvas.
+    - **The theme ripple:** a colour change spreading through the liquid, as on the website.
+    - **Exit test:** 60 fps on a budget phone, and Calm checked on every screen.
 
 ### Phase 2: backend for apps
 

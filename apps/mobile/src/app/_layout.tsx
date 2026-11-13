@@ -7,11 +7,10 @@ import { useFonts } from 'expo-font';
 import { DarkTheme, DefaultTheme, SplashScreen, Stack, ThemeProvider as NavigationTheme } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo } from 'react';
-import { View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { LedgerProvider } from '~/data/LedgerProvider';
-import { GlassProvider } from '~/glass/GlassProvider';
+import { GlassProvider, TouchRipples } from '~/glass/GlassProvider';
 import { LiquidWall } from '~/glass/LiquidWall';
 import { ThemeProvider, useLook } from '~/theme/ThemeProvider';
 import { FONT_FILES } from '~/theme/type';
@@ -50,15 +49,19 @@ function Frame() {
 
     return (
         <GlassProvider>
-            <View style={{ flex: 1, backgroundColor: tokens.bg }}>
+            <TouchRipples style={{ flex: 1, backgroundColor: tokens.bg }}>
                 <LiquidWall />
                 <ToastProvider>
                     <NavigationTheme value={navigationTheme}>
                         <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' }, animation: 'fade' }}>
                             <Stack.Screen name="index" />
+                            <Stack.Screen name="onboarding" />
                             <Stack.Screen name="sign-in" />
                             <Stack.Screen name="(tabs)" />
                             <Stack.Screen name="group/[id]" />
+                            <Stack.Screen name="chat/[id]" />
+                            <Stack.Screen name="expense/[id]" />
+                            <Stack.Screen name="journey" />
                             <Stack.Screen name="insights" />
                             <Stack.Screen name="profile" />
                             <Stack.Screen name="appearance" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
@@ -68,7 +71,7 @@ function Frame() {
                     </NavigationTheme>
                 </ToastProvider>
                 <StatusBar style={mode === 'dark' ? 'light' : 'dark'} />
-            </View>
+            </TouchRipples>
         </GlassProvider>
     );
 }

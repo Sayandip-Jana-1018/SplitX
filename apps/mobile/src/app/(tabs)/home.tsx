@@ -3,7 +3,7 @@
  * your groups, and what happened lately. Every number comes from the ledger.
  */
 import { router } from 'expo-router';
-import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, ChartPie, Plus, ScanLine, type LucideIcon } from 'lucide-react-native';
+import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, ChartPie, ChevronRight, Plus, ScanLine, type LucideIcon } from 'lucide-react-native';
 import { useMemo } from 'react';
 import { Pressable, useWindowDimensions, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -68,12 +68,18 @@ export default function Home() {
                             {sum.net === 0 ? 'All settled up' : owed ? 'You are owed' : 'You owe'}
                         </Text>
                         <RollingAmount paise={sum.net} sign variant="hero" weight="medium" onLiquid numberOfLines={1} adjustsFontSizeToFit />
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: tokens.chip, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 }}>
+                        <Pressable
+                            accessibilityRole="button"
+                            accessibilityHint="Opens your Balance Journey"
+                            onPress={() => router.push('/journey')}
+                            style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: pressed ? tokens.borderStrong : tokens.chip, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 })}
+                        >
                             <Arrow size={14} color={tokens.fg} strokeWidth={2.4} />
                             <Text variant="caption" weight="semibold">
                                 Across your groups
                             </Text>
-                        </View>
+                            <ChevronRight size={14} color={tokens.fg} strokeWidth={2.4} />
+                        </Pressable>
                     </View>
                 </Coin>
             </Animated.View>

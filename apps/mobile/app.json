@@ -34,6 +34,14 @@
           "imageWidth": 140,
           "backgroundColor": "#130B26"
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "SplitIT opens your photos only when you pick a receipt to attach.",
+          "cameraPermission": "SplitIT uses the camera only when you photograph a receipt.",
+          "microphonePermission": false
+        }
       ]
     ]
   }

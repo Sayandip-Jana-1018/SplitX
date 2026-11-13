@@ -1,6 +1,6 @@
 /** The ledger for the whole app: adding an expense or a payment updates every screen at once. */
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
-import { makeExpense, seedLedger, ME, type Expense, type ExpenseInput, type Ledger, type Settlement } from './ledger';
+import { makeExpense, seedLedger, ME, type Expense, type ExpenseInput, type Ledger, type Message, type Settlement } from './ledger';
 
 export type NewExpense = Omit<ExpenseInput, 'id' | 'createdAt'>;
 
@@ -8,6 +8,9 @@ interface LedgerContext {
     ledger: Ledger;
     addExpense: (input: NewExpense) => Expense;
     recordPayment: (input: { groupId: string; fromId: string; toId: string; amount: number; method: string }) => Settlement;
+    deleteExpense: (id: string) => void;
+    setReceipt: (id: string, uri: string | null) => void;
+    sendMessage: (groupId: string, text: string) => void;
 }
 
 const Context = createContext<LedgerContext | null>(null);
@@ -34,7 +37,23 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
         return settlement;
     }, []);
 
-    const value = useMemo(() => ({ ledger, addExpense, recordPayment }), [ledger, addExpense, recordPayment]);
+    const deleteExpense = useCallback((id: string) => {
+        setLedger((current) => ({ ...current, expenses: current.expenses.filter((expense) => expense.id !== id) }));
+    }, []);
+
+    const setReceipt = useCallback((id: string, uri: string | null) => {
+        setLedger((current) => ({ ...current, expenses: current.expenses.map((expense) => (expense.id === id ? { ...expense, receipt: uri } : expense)) }));
+    }, []);
+
+    const sendMessage = useCallback((groupId: string, text: string) => {
+        const message: Message = { id: nextId('m'), groupId, fromId: ME, text, at: new Date() };
+        setLedger((current) => ({ ...current, messages: [...current.messages, message] }));
+    }, []);
+
+    const value = useMemo(
+        () => ({ ledger, addExpense, recordPayment, deleteExpense, setReceipt, sendMessage }),
+        [ledger, addExpense, recordPayment, deleteExpense, setReceipt, sendMessage],
+    );
     return <Context.Provider value={value}>{children}</Context.Provider>;
 }
 

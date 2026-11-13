@@ -8,8 +8,9 @@
 import { COIN_FS } from '@shared/glass/shaders';
 
 /**
- * The liquid: the website's LIQUID_FS, without the theme ripple and the touch for now. `soft`
- * from 0 to 1 is frost: wider edges and less shine, which looks like blur and costs nothing.
+ * The liquid: the website's LIQUID_FS, with its touch ripple (a ring that bends the liquid as it
+ * spreads from a finger) and without the theme ripple for now. `soft` from 0 to 1 is frost: wider
+ * edges and less shine, which looks like blur and costs nothing.
  */
 const LIQUID_FN = `
 uniform float2 uView;
@@ -22,8 +23,14 @@ uniform float3 uC1;
 uniform float3 uC2;
 uniform float3 uGlow;
 uniform float3 uBl[7];
+uniform float3 uTouch;
+uniform float uTouchA;
 
 float3 liquid(float2 p, float soft) {
+  if (uTouchA > 0.) {
+    float q = (length(p - uTouch.xy) - uTouch.z)/22.;
+    p += normalize(p - uTouch.xy + 1e-3)*exp(-q*q)*13.*uTouchA;
+  }
   float2 uv = p / uView;
   float g = uv.y + .2*sin(uv.x*2.6 + uT*.13) + .12*sin(uv.y*3.4 - uT*.1 + uv.x*1.3);
   float3 c = mix(uA0, uA1, smoothstep(-.05, 1.05, g));

@@ -9,10 +9,10 @@ import { View, type LayoutChangeEvent, type StyleProp, type ViewProps, type View
 import { useDerivedValue } from 'react-native-reanimated';
 import { surfaceLook, type GlassKind, type GlassStyleId } from '@shared/glass/styles';
 import { useLook } from '~/theme/ThemeProvider';
+import { webDeps } from './deps';
 import { effects } from './effects';
 import { useGlass } from './GlassProvider';
 import { useScreenOrigin } from './origin';
-import { liquidUniforms } from './uniforms';
 
 /** Room around the glass for its shadow. */
 const MARGIN = 26;
@@ -28,7 +28,7 @@ export interface GlassSurfaceProps extends ViewProps {
 
 export function GlassSurface({ kind = 'reg', radius = 24, glassStyle, style, children, onLayout, ...rest }: GlassSurfaceProps) {
     const { pal, glassStyle: chosen } = useLook();
-    const { time, width, height } = useGlass();
+    const { liquid } = useGlass();
     const { ref, measure, origin } = useScreenOrigin();
     const [size, setSize] = useState({ w: 0, h: 0 });
     const look = useMemo(() => surfaceLook(kind, glassStyle ?? chosen), [kind, glassStyle, chosen]);
@@ -37,7 +37,7 @@ export function GlassSurface({ kind = 'reg', radius = 24, glassStyle, style, chi
     const uniforms = useDerivedValue(() => {
         const [x, y] = origin.value;
         return {
-            ...liquidUniforms(time.value, width, height, pal),
+            ...liquid.value,
             uOrigin: [x - MARGIN, y - MARGIN],
             uInset: [MARGIN, MARGIN],
             uSize: [size.w, size.h],
@@ -54,7 +54,7 @@ export function GlassSurface({ kind = 'reg', radius = 24, glassStyle, style, chi
             uRimC: pal.rim,
             uShadow: pal.shadow,
         };
-    }, [pal, width, height, size, r, look]);
+    }, webDeps([pal, size, r, look]));
 
     const laidOut = (event: LayoutChangeEvent) => {
         const { width: w, height: h } = event.nativeEvent.layout;

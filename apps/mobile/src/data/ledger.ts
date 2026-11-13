@@ -40,7 +40,19 @@ export interface Expense {
     payerId: string;
     splitType: SplitType;
     splits: { userId: string; amount: number }[];
+    /** Split by shares (2 for Ravi, 1 each for the rest): stored as exact amounts, with the shares kept to show. */
+    weights?: Record<string, number>;
+    /** A photo of the receipt, on this phone only until Phase 3 uploads it. */
+    receipt?: string | null;
     createdAt: Date;
+}
+
+export interface Message {
+    id: string;
+    groupId: string;
+    fromId: string;
+    text: string;
+    at: Date;
 }
 
 export interface Settlement {
@@ -58,6 +70,7 @@ export interface Ledger {
     groups: Group[];
     expenses: Expense[];
     settlements: Settlement[];
+    messages: Message[];
 }
 
 const daysAgo = (days: number, hour = 13) => {
@@ -122,7 +135,19 @@ export function seedLedger(): Ledger {
     const settlements: Settlement[] = [
         { id: 's1', groupId: 'goa', fromId: 'kabir', toId: ME, amount: 150_000, method: 'gpay', status: 'completed', createdAt: daysAgo(1, 20) },
     ];
-    return { groups: GROUPS, expenses, settlements };
+    const message = (id: string, groupId: string, fromId: string, text: string, at: Date): Message => ({ id, groupId, fromId, text, at });
+    const messages: Message[] = [
+        message('m1', 'goa', 'ravi', 'Villa is booked for both nights 🎉 added it here', daysAgo(2, 11)),
+        message('m2', 'goa', 'meera', 'Who has the scooter keys?', daysAgo(1, 10)),
+        message('m3', 'goa', ME, 'Me! Parked outside the shack', daysAgo(1, 10)),
+        message('m4', 'goa', 'kabir', 'Sent you ₹1,500 for the scooters Asha', daysAgo(1, 20)),
+        message('m5', 'goa', 'ravi', 'Dinner tonight was unreal. Asha you got this one?', daysAgo(0, 22)),
+        message('m6', 'flat', 'nisha', 'Groceries done, added them. We are out of coffee again ☕', daysAgo(1, 19)),
+        message('m7', 'flat', ME, 'Rent for November is in, split three ways', daysAgo(6, 9)),
+        message('m8', 'ladakh', 'kabir', 'Bikes paid for. Pangong camp next!', daysAgo(12, 18)),
+        message('m9', 'lunch', 'kabir', 'Thali for four, ₹265 each', daysAgo(0, 14)),
+    ];
+    return { groups: GROUPS, expenses, settlements, messages };
 }
 
 /** Each member's balance in one group. */

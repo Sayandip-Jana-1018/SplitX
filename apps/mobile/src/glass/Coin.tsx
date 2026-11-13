@@ -8,10 +8,10 @@ import { View, type StyleProp, type ViewStyle } from 'react-native';
 import { useDerivedValue } from 'react-native-reanimated';
 import { coinCode, coinPose, coinReach, type CoinKind } from '@shared/glass/coins';
 import { useLook } from '~/theme/ThemeProvider';
+import { webDeps } from './deps';
 import { effects } from './effects';
 import { useGlass } from './GlassProvider';
 import { useScreenOrigin } from './origin';
-import { liquidUniforms } from './uniforms';
 
 interface Props {
     kind: CoinKind;
@@ -25,7 +25,7 @@ interface Props {
 
 export function Coin({ kind, size, seed = 0, style, children }: Props) {
     const { pal } = useLook();
-    const { time, width, height } = useGlass();
+    const { time, liquid } = useGlass();
     const { ref, measure, origin } = useScreenOrigin();
     const radius = size / 2;
     // Room for a slice at its furthest, a tall bill, and the shadow.
@@ -39,7 +39,7 @@ export function Coin({ kind, size, seed = 0, style, children }: Props) {
         const cx = x + radius;
         const cy = y + radius;
         return {
-            ...liquidUniforms(t, width, height, pal),
+            ...liquid.value,
             uOrigin: [cx - reach, cy - reach],
             uC: [cx, cy, radius, pose.spin],
             uTilt: [pose.axisX, pose.axisY, pose.lean, pose.facing],
@@ -51,7 +51,7 @@ export function Coin({ kind, size, seed = 0, style, children }: Props) {
             uLight: pal.light,
             uRimC: pal.rim,
         };
-    }, [pal, width, height, kind, seed, radius, reach, code]);
+    }, webDeps([pal, kind, seed, radius, reach, code]));
 
     return (
         <View ref={ref} onLayout={measure} style={[{ width: size, height: size, alignItems: 'center', justifyContent: 'center', zIndex: 0 }, style]}>

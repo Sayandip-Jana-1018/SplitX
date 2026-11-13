@@ -1,8 +1,8 @@
 /** One group: where everyone stands, who pays whom, its expenses and its people. */
 import { router, useLocalSearchParams } from 'expo-router';
-import { Plus } from 'lucide-react-native';
+import { ChevronRight, MessageCircle, Plus } from 'lucide-react-native';
 import { useMemo, useState } from 'react';
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { activity, groupBalances, groupTransfers, ME, personById } from '~/data/ledger';
 import { useLedger } from '~/data/LedgerProvider';
 import { GlassSurface } from '~/glass/GlassSurface';
@@ -44,7 +44,15 @@ export default function GroupScreen() {
 
     return (
         <Screen tabBar={false}>
-            <Header title={`${group.emoji} ${group.name}`} eyebrow={`${group.memberIds.length} members`} />
+            <Header
+                title={`${group.emoji} ${group.name}`}
+                eyebrow={`${group.memberIds.length} members`}
+                right={
+                    <GlassButton kind="thin" contentStyle={{ width: 42, height: 42 }} accessibilityLabel="Group chat" onPress={() => router.push(`/chat/${group.id}`)}>
+                        <MessageCircle size={19} color={tokens.fg} strokeWidth={2.2} />
+                    </GlassButton>
+                }
+            />
 
             <GlassSurface kind="thick" style={{ paddingVertical: 20, gap: 6 }}>
                 <Text variant="eyebrow" tone="secondary">
@@ -54,6 +62,12 @@ export default function GroupScreen() {
                 <Text variant="caption" tone="secondary" tabular>
                     {rupees(spent)} spent together
                 </Text>
+                <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/journey', params: { group: group.id } })} hitSlop={8} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 }}>
+                    <Text variant="caption" weight="bold" tone="accent">
+                        See how you got here
+                    </Text>
+                    <ChevronRight size={14} color={tokens.accentText} strokeWidth={2.6} />
+                </Pressable>
             </GlassSurface>
 
             <GlassButton kind="accent" contentStyle={{ height: 54, flexDirection: 'row', gap: 8 }} onPress={() => router.push({ pathname: '/add', params: { group: group.id } })}>

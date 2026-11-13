@@ -63,7 +63,8 @@ export function tokensFor(paletteId: PaletteId, mode: GlassMode): Tokens {
             onAccent,
             moneyIn: ok(0.92, 0.09),
             moneyOut: 'rgba(255,255,255,0.82)',
-            danger: 'rgb(244,63,94)',
+            // Lighter than the website's rose, so it still reads on violet glass.
+            danger: 'rgb(255,128,148)',
             chip: 'rgba(255,255,255,0.08)',
             inkShadow: 'rgba(0,0,0,0.28)',
             swatch,
