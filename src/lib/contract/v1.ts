@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { MAX_EXPENSE_PAISE, SPLIT_TYPES } from '@/lib/expenseSplits';
+import { IDEMPOTENCY_KEY_PATTERN } from '@/lib/idempotency';
 
 /**
  * The phone app's API, version 1: what each request sends and each answer
@@ -136,3 +138,41 @@ export type ActivityQuery = z.infer<typeof ActivityQuery>;
 
 export const ActivityPage = z.object({ items: z.array(ActivityItem), nextBefore: z.string().nullable() });
 export type ActivityPage = z.infer<typeof ActivityPage>;
+
+// ── Writes ──────────────────────────────────────────────────
+
+const Share = z.object({ userId: z.string().max(64), amount: z.number().int().nonnegative() });
+
+export const NewExpense = z.object({
+    /** Made on the phone (a UUID), and the save's key: a retried save never makes a second expense. */
+    clientId: z.string().regex(IDEMPOTENCY_KEY_PATTERN),
+    groupId: z.string().max(64),
+    title: z.string().trim().min(1).max(100),
+    amount: z.number().int().positive().max(MAX_EXPENSE_PAISE),
+    category: z.string().min(1).max(40).default('general'),
+    /** Who paid; you, when left out. */
+    payerId: z.string().max(64).optional(),
+    splitType: z.enum(SPLIT_TYPES).default('equal'),
+    /** Equal splits: who shares it; everyone, when left out. */
+    splitAmong: z.array(z.string().max(64)).max(200).optional(),
+    /** Percentage and custom splits: each share, in paise. */
+    splits: z.array(Share).max(200).optional(),
+});
+export type NewExpense = z.infer<typeof NewExpense>;
+
+export const Expense = z.object({
+    id: z.string(),
+    groupId: z.string(),
+    title: z.string(),
+    amount: Paise,
+    category: z.string(),
+    payerId: z.string(),
+    splitType: z.string(),
+    splits: z.array(Share),
+    createdAt: z.string(),
+});
+export type Expense = z.infer<typeof Expense>;
+
+/** What saving an expense answers; `replayed` when it was saved before under the same clientId. */
+export const ExpenseSaved = z.object({ expense: Expense, replayed: z.boolean() });
+export type ExpenseSaved = z.infer<typeof ExpenseSaved>;

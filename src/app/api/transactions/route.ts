@@ -1,42 +1,17 @@
 import { NextResponse } from 'next/server';
-import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { z } from 'zod';
-import { createAuditLog } from '@/lib/auditLog';
-import { serializeTransactionAuditSnapshot } from '@/lib/auditPayloads';
-import { recordTransactionCreated } from '@/lib/metrics';
 import { withViewableReceipts } from '@/lib/receiptAccess';
-import { isOwnReceiptUrl, isTrustedReceiptUrl } from '@/lib/receiptUrl';
+import { isTrustedReceiptUrl } from '@/lib/receiptUrl';
 import { logger } from '@/lib/logger';
-import { MAX_EXPENSE_PAISE, resolveSplits, SPLIT_TYPES } from '@/lib/expenseSplits';
+import { MAX_EXPENSE_PAISE, SPLIT_TYPES } from '@/lib/expenseSplits';
 import { IDEMPOTENCY_KEY_PATTERN } from '@/lib/idempotency';
-import { formatCurrency } from '@/lib/utils';
-
-/** What a created expense is answered with, the first time and on any repeat. */
-const CREATED_INCLUDE = {
-    splits: { include: { user: { select: { id: true, name: true } } } },
-    payer: { select: { id: true, name: true } },
-    trip: { select: { id: true, title: true } },
-} as const;
+import { createExpense } from '@/lib/services/expenses';
 
 /** The expense an earlier save with this key made: answered as it was, nothing added. */
 const replay = (transaction: unknown) =>
     NextResponse.json(transaction, { status: 200, headers: { 'Idempotency-Replayed': 'true' } });
-
-// Category labels for notification messages
-const CATEGORY_LABELS: Record<string, string> = {
-    general: 'General',
-    food: 'Food & Drinks',
-    transport: 'Transport',
-    shopping: 'Shopping',
-    tickets: 'Tickets & Entry',
-    fuel: 'Fuel',
-    medical: 'Medical',
-    entertainment: 'Entertainment',
-    stay: 'Accommodation',
-    other: 'Other',
-};
 
 const CreateTransactionSchema = z.object({
     tripId: z.string().cuid(),
@@ -184,147 +159,14 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'Idempotency-Key must be 16 to 100 letters, digits, - or _' }, { status: 400 });
         }
         const idempotencyKey = clientKey === null ? null : `${user.id}:${clientKey}`;
-        if (idempotencyKey) {
-            const earlier = await prisma.transaction.findUnique({ where: { idempotencyKey }, include: CREATED_INCLUDE });
-            if (earlier) return replay(earlier);
-        }
 
-        // Uploads land in the uploader's own folder: a new expense can't borrow someone else's photo.
-        if (parsed.data.receiptUrl && !isOwnReceiptUrl(parsed.data.receiptUrl, user.id)) {
-            return NextResponse.json({ error: 'Attach a receipt photo you uploaded' }, { status: 400 });
-        }
-
-        // Verify trip exists and user has access
-        const trip = await prisma.trip.findFirst({
-            where: {
-                id: parsed.data.tripId,
-                group: {
-                    deletedAt: null,
-                    OR: [
-                        { ownerId: user.id },
-                        { members: { some: { userId: user.id } } },
-                    ],
-                },
-            },
-            include: {
-                group: { include: { members: true } },
-            },
-        });
-
-        if (!trip) {
-            return NextResponse.json({ error: 'Trip not found or access denied' }, { status: 404 });
-        }
-
-        const { title, amount, category, method, description, receiptUrl, splitType, splitAmong, splits, payerId: requestedPayerId } = parsed.data;
-
-        // The payer must be a member. An unknown payer is refused rather than
-        // quietly replaced by the person saving the expense.
-        const allMemberIds: string[] = trip.group.members.map((m: { userId: string }) => m.userId);
-        if (requestedPayerId && !allMemberIds.includes(requestedPayerId)) {
-            return NextResponse.json({ error: 'The payer must be a current member of the group' }, { status: 400 });
-        }
-        const actualPayerId = requestedPayerId ?? user.id;
-
-        // The same rules as editing (lib/expenseSplits.ts): members only, each
-        // once, adding up to the amount exactly.
-        const resolution = resolveSplits({ amount, splitType, splitAmong, splits }, allMemberIds);
-        if (!resolution.ok) {
-            return NextResponse.json({ error: resolution.error }, { status: 400 });
-        }
-        const splitData = resolution.splits;
-
-        // Create transaction + splits atomically
-        let transaction;
-        try {
-            transaction = await prisma.transaction.create({
-                data: {
-                    tripId: parsed.data.tripId,
-                    payerId: actualPayerId,
-                    title,
-                    amount,
-                    category,
-                    method,
-                    description,
-                    receiptUrl: receiptUrl ?? null,
-                    splitType,
-                    idempotencyKey,
-                    splits: {
-                        create: splitData.map((s) => ({
-                            userId: s.userId,
-                            amount: s.amount,
-                        })),
-                    },
-                },
-                include: CREATED_INCLUDE,
-            });
-        } catch (error) {
-            // Two saves with one key at the same moment: the key's unique
-            // index let the other one in first.
-            if (idempotencyKey && error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-                const earlier = await prisma.transaction.findUnique({ where: { idempotencyKey }, include: CREATED_INCLUDE });
-                if (earlier) return replay(earlier);
-            }
-            throw error;
-        }
-        // Expenses carrying a receipt come from the scan flow.
-        recordTransactionCreated(receiptUrl ? 'receipt' : 'manual', category, transaction.amount);
-
-        await createAuditLog({
-            userId: user.id,
-            action: 'create',
-            entityType: 'transaction',
-            entityId: transaction.id,
-            details: {
-                groupId: trip.group.id,
-                tripId: trip.id,
-                before: null,
-                after: serializeTransactionAuditSnapshot({
-                    id: transaction.id,
-                    tripId: transaction.trip.id,
-                    tripTitle: transaction.trip.title,
-                    title,
-                    amount: transaction.amount,
-                    splitType: transaction.splitType,
-                    payerId: transaction.payerId,
-                    payerName: transaction.payer.name,
-                    createdAt: transaction.createdAt,
-                    updatedAt: transaction.updatedAt,
-                    deletedAt: transaction.deletedAt,
-                    splits: transaction.splits,
-                }),
-            },
-        });
-
-        // Send notifications to other group members
-        try {
-            const otherMemberIds = trip.group.members
-                .map((m: { userId: string }) => m.userId)
-                .filter((id: string) => id !== user.id);
-
-            if (otherMemberIds.length > 0) {
-                const payerName = user.name || 'Someone';
-                const categoryLabel = CATEGORY_LABELS[category] || category;
-                const amountFormatted = formatCurrency(amount);
-
-                await prisma.notification.createMany({
-                    data: otherMemberIds.map((memberId: string) => ({
-                        userId: memberId,
-                        actorId: user.id,
-                        type: 'new_expense',
-                        title: `💰 ${payerName} added an expense`,
-                        body: `${payerName} added ${amountFormatted} for category: ${categoryLabel}`,
-                        link: `/groups/${trip.group.id}`,
-                    })),
-                });
-            }
-        } catch {
-            // Notification failure shouldn't block the transaction
-        }
-
-        return NextResponse.json(transaction, { status: 201 });
+        // The rules themselves are shared with the phone app (lib/services/expenses.ts).
+        const outcome = await createExpense(user, parsed.data, idempotencyKey);
+        if (!outcome.ok) return NextResponse.json({ error: outcome.error }, { status: outcome.status });
+        if (outcome.replayed) return replay(outcome.expense);
+        return NextResponse.json(outcome.expense, { status: 201 });
     } catch (error) {
         logger.error('Failed to create transaction', { err: error });
         return NextResponse.json({ error: 'Failed to create transaction' }, { status: 500 });
     }
 }
-

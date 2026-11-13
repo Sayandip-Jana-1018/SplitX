@@ -7,6 +7,7 @@ import { serializeTransactionAuditSnapshot } from '@/lib/auditPayloads';
 import { MAX_EXPENSE_PAISE, resolveSplits, SPLIT_TYPES, type SplitType } from '@/lib/expenseSplits';
 import { logger } from '@/lib/logger';
 import { withViewableReceipts } from '@/lib/receiptAccess';
+import { deleteExpense } from '@/lib/services/expenses';
 
 const UpdateTransactionSchema = z.object({
     title: z.string().trim().min(1).max(100).optional(),
@@ -323,102 +324,9 @@ export async function DELETE(
         const user = await prisma.user.findUnique({ where: { email: session.user.email } });
         if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
-        // Same rule as editing: a current member, and the payer or the owner.
-        const transaction = await prisma.transaction.findFirst({
-            where: {
-                id,
-                deletedAt: null,
-                AND: [
-                    {
-                        trip: {
-                            group: {
-                                deletedAt: null,
-                                OR: [{ ownerId: user.id }, { members: { some: { userId: user.id } } }],
-                            },
-                        },
-                    },
-                    { OR: [{ payerId: user.id }, { trip: { group: { ownerId: user.id } } }] },
-                ],
-            },
-            include: {
-                payer: { select: { id: true, name: true } },
-                splits: { include: { user: { select: { id: true, name: true } } } },
-                trip: {
-                    include: {
-                        group: {
-                            include: { members: true },
-                        },
-                    },
-                },
-            },
-        });
-
-        if (!transaction) {
-            return NextResponse.json({ error: 'Transaction not found or access denied' }, { status: 404 });
-        }
-
-        const amountFormatted = `₹${(transaction.amount / 100).toLocaleString('en-IN')}`;
-
-        // 1. Soft-delete the transaction (preserve data). Only one of two
-        // simultaneous deletes lands, so the history records one deletion.
-        const deleted = await prisma.transaction.updateMany({
-            where: { id, deletedAt: null },
-            data: { deletedAt: new Date() },
-        });
-        if (deleted.count !== 1) {
-            return NextResponse.json({ error: 'Transaction not found or access denied' }, { status: 404 });
-        }
-
-        await createAuditLog({
-            userId: user.id,
-            action: 'delete',
-            entityType: 'transaction',
-            entityId: transaction.id,
-            details: {
-                groupId: transaction.trip.group.id,
-                tripId: transaction.tripId,
-                before: serializeTransactionAuditSnapshot({
-                    id: transaction.id,
-                    tripId: transaction.tripId,
-                    tripTitle: transaction.trip.title,
-                    title: transaction.title,
-                    amount: transaction.amount,
-                    splitType: transaction.splitType,
-                    payerId: transaction.payerId,
-                    payerName: transaction.payer.name,
-                    createdAt: transaction.createdAt,
-                    updatedAt: transaction.updatedAt,
-                    deletedAt: transaction.deletedAt,
-                    splits: transaction.splits,
-                }),
-                after: null,
-            },
-        });
-
-        // 2. Notify members that it was removed. (The "added" notification stays:
-        // matching it by title text deleted unrelated notifications.)
-        try {
-            const otherMemberIds = transaction.trip.group.members
-                .map((m: { userId: string }) => m.userId)
-                .filter((mId: string) => mId !== user.id);
-
-            if (otherMemberIds.length > 0) {
-                const deleterName = user.name || 'Someone';
-                await prisma.notification.createMany({
-                    data: otherMemberIds.map((memberId: string) => ({
-                        userId: memberId,
-                        actorId: user.id,
-                        type: 'group_activity',
-                        title: `🗑️ ${deleterName} deleted an expense`,
-                        body: `${transaction.title} (${amountFormatted}) was removed from ${transaction.trip.group.name}.`,
-                        link: `/groups/${transaction.trip.group.id}`,
-                    })),
-                });
-            }
-        } catch {
-            // Notification failure shouldn't block the transaction removal
-        }
-
+        // The rules themselves are shared with the phone app (lib/services/expenses.ts).
+        const outcome = await deleteExpense(user, id);
+        if (!outcome.ok) return NextResponse.json({ error: outcome.error }, { status: outcome.status });
         return NextResponse.json({ message: 'Transaction deleted' });
     } catch (error) {
         logger.error('Failed to delete transaction', { err: error });
