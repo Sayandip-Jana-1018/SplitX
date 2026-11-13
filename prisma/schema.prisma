@@ -101,6 +101,10 @@ model User {
   chatMessages   ChatMessage[]
   groupMessages  GroupMessage[] @relation("GroupMessagesSent")
 
+  // The phone app (docs/mobile/ROADMAP.md, Phase 2)
+  devices        Device[]
+  refreshTokens  RefreshToken[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -354,4 +358,50 @@ model GroupMessage {
   createdAt DateTime @default(now())
 
   @@index([groupId, createdAt])
+}
+
+// ── The phone app: sign-in and devices ──────────────────────
+
+/// A phone signed in to an account: what its refresh tokens belong to, and,
+/// once push arrives, where its notifications go.
+model Device {
+  id         String   @id @default(cuid())
+  userId     String
+  /// "android" or "ios".
+  platform   String
+  /// What the phone calls itself, shown in "signed-in devices".
+  name       String?
+  appVersion String?
+  /// Firebase Cloud Messaging token; one phone holds one at a time.
+  pushToken  String?  @unique
+  lastSeenAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshTokens RefreshToken[]
+
+  @@index([userId])
+}
+
+/// A phone's refresh token, kept only as its SHA-256 hash. Each use retires it
+/// and issues the next one in the same family; a retired one coming back means
+/// it was copied, so the whole family is revoked (src/lib/mobileAuth.ts).
+model RefreshToken {
+  id           String    @id @default(cuid())
+  userId       String
+  deviceId     String?
+  familyId     String
+  tokenHash    String    @unique
+  /// The account's tokenVersion when issued: "sign out everywhere" ends it.
+  tokenVersion Int
+  expiresAt    DateTime
+  usedAt       DateTime?
+  revokedAt    DateTime?
+  createdAt    DateTime  @default(now())
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  device Device? @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([familyId])
 }

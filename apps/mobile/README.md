@@ -3,7 +3,28 @@
 The phone app: the website's Liquid Glass, drawn on the phone's GPU with Skia. The plan and its
 phases are in [docs/mobile/ROADMAP.md](../../docs/mobile/ROADMAP.md).
 
-## Run it
+## Install it on your phone
+
+SplitIT installs as an ordinary Android app; it needs no laptop, server or Expo Go once
+installed, and what you add is kept on the phone.
+
+1. **Get the APK.** Every push to `feat/app` that changes the app builds one on GitHub's
+   machines (the workflow `.github/workflows/app-apk.yml`). Open the repository's **Actions**
+   tab, then **App APK**, then the newest green run, and download **splitit-apk** at the bottom
+   (signed in to GitHub). It's a zip holding `app-release.apk`.
+2. **Install it.**
+   - **Over USB:** `adb install -r app-release.apk`.
+   - **On the phone:** open the APK from Files. Android asks once to allow installs from that app.
+3. **Update it** the same way: a newer build installs over the older one and keeps your data,
+   because each build's number is higher and every build is signed with the same key.
+
+The build is signed with React Native's standard debug key: fine for your own phone, not for a
+store. Building on the laptop isn't used, because a native build holds the CPU at full load for
+15-25 minutes and the laptop runs with one fan.
+
+## Run it while building
+
+The live preview, for seeing changes as they're made:
 
 ```bash
 cd apps/mobile

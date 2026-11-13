@@ -2,7 +2,9 @@
 
 **Status: started on 7 November 2026, on the `feat/app` branch.** The website got Liquid Glass first, and the app now brings the same design to the phone. Phase 0's code is written: the app's frame, its glass engine on the GPU, the theme and the first screens (section 9). You asked for code first and testing on a phone after a phase or two, so the first phone test is the end of Phase 1.
 
-**13 November:** Phase 1 is under way, and the app ran on a real phone for the first time: your Galaxy S23 Ultra over USB, in Expo Go. What's built and what's left is under Phase 1 in section 9.
+**13 November:** Phase 1 is under way, and the app ran on a real phone for the first time: your Galaxy S23 Ultra over USB, in Expo Go.
+
+**14 November: Phase 1 is done.** Every screen is built on made-up data, the glass engine scrolls Home at 9 ms a frame on the S23 Ultra, and the app installs as an ordinary APK built on GitHub (see `apps/mobile/README.md`), with no laptop or Expo Go needed. One exit test waits on you: 60 fps on a cheaper phone. Phase 2 starts when you say so.
 **Design boards:** [SplitIT Liquid Glass canvas](https://claude.ai/artifact/XSFNfEYYXmoVufit1w6w9B) (private to you).
 
 ## 1. The brief, as you decided it
@@ -282,7 +284,7 @@ I stop and report at the end of each phase, and start the next only when you say
 | Phase | Name | Ends with |
 |---|---|---|
 | 0 | Foundation | ✅ Code written: the app's frame, the glass engine and the first screens |
-| 1 | Design kit and every screen | All screens built on made-up data; **first test on your phone** |
+| 1 | Design kit and every screen | ✅ All screens built on made-up data; installed on your phone as an APK |
 | 2 | Backend for apps | Laptop stack pushes to your phone; restore drill passes |
 | 3 | Core loop, phone and web | A full pretend trip works, including offline |
 | 4 | Auto-capture and smart input | Real alerts become correct expenses |
@@ -341,9 +343,12 @@ I stop and report at the end of each phase, and start the next only when you say
     - **What did it:**
         - One canvas per layer alone only got to 31 ms.
         - Recording each layer's glass as one picture, and skipping hidden screens, got to 9 ms.
-- **Left:**
-    - **The theme ripple:** a colour change spreading through the liquid, as on the website.
-    - **Exit test:** 60 fps on a budget phone, and Calm checked on every screen.
+- **Done on 14 November:**
+    - **The theme ripple:** a new colour or mode spreads through the liquid from where it was chosen.
+    - **Calm on every screen:** every animation is off in Calm or only follows a finger, and the system's Reduce Motion turns Calm on. At rest in Calm the app draws nothing.
+    - **Installed as an app:** GitHub Actions builds an APK on every push to `feat/app`.
+    - **Kept on the phone:** what you add is saved there, Profile can start the preview over, and a failing screen offers Try again instead of closing.
+- **Still open:** 60 fps on a cheaper phone. It needs a second phone; the S23 Ultra is the only one tested.
 
 ### Phase 2: backend for apps
 
@@ -355,6 +360,28 @@ I stop and report at the end of each phase, and start the next only when you say
   - A push reaches your phone from the laptop.
   - All existing tests still pass.
 - **Your part:** create a free Firebase project.
+
+**In steps** (started 14 November; each step is committed and reported on its own):
+
+1. **Mobile sign-in on the server:**
+    - `Device` and `RefreshToken` tables.
+    - 15-minute access tokens, and refresh tokens that rotate on each use. A used one coming back revokes its whole family.
+    - Password and Google sign-in sharing the website's own rules (verified emails only), and sign-out.
+2. **API v1 and its contract:** zod schemas shared by the server and the app, the first reads (me, groups, balances, activity), and a typed client.
+3. **Writes through one service layer:** add and delete expenses with IDs made on the phone (so a retry never doubles one), settle-up checked by the server, and chat.
+4. **Sync:** `syncSeq` and tombstones, `GET /api/v1/sync?cursor=`, the phone's offline queue, and a clear choice when two edits clash.
+5. **The app on real data:**
+    - Sign-in screens, tokens in the phone's secure storage, and a client that refreshes them itself.
+    - The ledger saved on the phone first, then synced.
+    - The made-up preview stays as a demo mode.
+6. **Push:** the Firebase project, device registration, and the transactional outbox and worker, so a notification reaches the phone.
+7. **Control and operations:**
+    - Remote config, kill switches, and a minimum-version gate.
+    - Sentry.
+    - A backup and restore drill, with `ledger:audit`.
+8. **The exit tests above.**
+
+**Where it runs:** the website's dev server and a throwaway Postgres on the laptop, reached from your phone over USB. Nothing reaches splitsj.vercel.app or its database until you say yes at the end of the phase. The rollout then is the additive migrations through the production-database workflow, then the deploy.
 
 ### Phase 3: core loop, on phone and web
 
