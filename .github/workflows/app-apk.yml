@@ -17,6 +17,8 @@ on:
       - apps/mobile/**
       - src/lib/**
       - .github/workflows/app-apk.yml
+      # Notes don't change the app: a README edit shouldn't cost a 20-minute build.
+      - '!**/*.md'
 
 permissions:
   contents: read
