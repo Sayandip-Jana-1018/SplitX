@@ -42,7 +42,8 @@
           "cameraPermission": "SplitIT uses the camera only when you photograph a receipt.",
           "microphonePermission": false
         }
-      ]
+      ],
+      "expo-secure-store"
     ]
   }
 }

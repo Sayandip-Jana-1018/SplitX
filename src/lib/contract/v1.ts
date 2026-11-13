@@ -60,3 +60,79 @@ export type Me = z.infer<typeof Me>;
 /** What a successful sign-in answers. */
 export const Session = z.object({ tokens: TokenPair, me: Me });
 export type Session = z.infer<typeof Session>;
+
+/** What a refresh answers. */
+export const Refreshed = z.object({ tokens: TokenPair });
+export type Refreshed = z.infer<typeof Refreshed>;
+
+/** What GET /api/v1/me answers. */
+export const MeAnswer = z.object({ me: Me });
+export type MeAnswer = z.infer<typeof MeAnswer>;
+
+// ── Reads ───────────────────────────────────────────────────
+
+/** Amounts are whole paise, as the server stores them. Times are ISO 8601. */
+const Paise = z.number().int();
+
+const Person = z.object({ id: z.string(), name: z.string(), image: z.string().nullable() });
+
+export const GroupSummary = z.object({
+    id: z.string(),
+    name: z.string(),
+    emoji: z.string(),
+    members: z.array(Person),
+    /** Positive: the group owes you. Negative: you owe the group. */
+    myBalance: Paise,
+    totalSpent: Paise,
+    lastActivityAt: z.string().nullable(),
+});
+export type GroupSummary = z.infer<typeof GroupSummary>;
+
+export const GroupList = z.object({ groups: z.array(GroupSummary) });
+export type GroupList = z.infer<typeof GroupList>;
+
+const PersonBalance = Person.extend({
+    upiId: z.string().nullable(),
+    balance: Paise,
+    /** False for someone who has left but still owes or is owed. */
+    isMember: z.boolean(),
+});
+
+/** One payment of the fewest that settle the group. */
+const Transfer = z.object({ fromId: z.string(), toId: z.string(), amount: Paise, toUpiId: z.string().nullable() });
+
+export const GroupDetail = z.object({ group: GroupSummary, people: z.array(PersonBalance), transfers: z.array(Transfer) });
+export type GroupDetail = z.infer<typeof GroupDetail>;
+
+export const ActivityItem = z.object({
+    id: z.string(),
+    kind: z.enum(['expense', 'settlement']),
+    groupId: z.string(),
+    /** An expense's title; empty for a settlement, which the app words from the names. */
+    title: z.string(),
+    category: z.string(),
+    amount: Paise,
+    /** Who paid the expense, or who sent the settlement. */
+    actorId: z.string(),
+    actorName: z.string(),
+    /** Who received a settlement; null for an expense. */
+    otherId: z.string().nullable(),
+    otherName: z.string().nullable(),
+    /** What it did to your balance: an expense you paid for raises it, a payment you received lowers it. */
+    yours: Paise,
+    /** A settlement's status (pending ones don't move balances yet); null for an expense. */
+    status: z.string().nullable(),
+    at: z.string(),
+});
+export type ActivityItem = z.infer<typeof ActivityItem>;
+
+export const ActivityQuery = z.object({
+    groupId: z.string().max(64).optional(),
+    /** Where the previous page ended: its `nextBefore`, as given. */
+    before: z.string().max(160).optional(),
+    limit: z.coerce.number().int().min(1).max(100).default(50),
+});
+export type ActivityQuery = z.infer<typeof ActivityQuery>;
+
+export const ActivityPage = z.object({ items: z.array(ActivityItem), nextBefore: z.string().nullable() });
+export type ActivityPage = z.infer<typeof ActivityPage>;

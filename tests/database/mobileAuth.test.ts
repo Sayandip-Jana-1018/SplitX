@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ErrorBody, Session, TokenPair } from '@/lib/contract/v1';
+import { ErrorBody, MeAnswer, Refreshed, Session } from '@/lib/contract/v1';
 import { prisma } from '@/lib/db';
 import { hashSecretToken } from '@/lib/secretTokens';
 import { forgetTokenVersion } from '@/lib/sessionVersion';
@@ -141,12 +141,12 @@ describe('the routes, end to end', () => {
 
         const me = await meRoute.GET(new Request('https://splitit.test/api/v1/me', { headers: { authorization: `Bearer ${session.tokens.accessToken}` } }));
         expect(me.status).toBe(200);
-        expect((await me.json()).me.id).toBe(alice.id);
+        expect(MeAnswer.parse(await me.json()).me.id).toBe(alice.id);
         expect((await meRoute.GET(new Request('https://splitit.test/api/v1/me'))).status).toBe(401);
 
         const refreshed = await refreshRoute.POST(post({ refreshToken: session.tokens.refreshToken }));
         expect(refreshed.status).toBe(200);
-        const tokens = TokenPair.parse((await refreshed.json()).tokens);
+        const { tokens } = Refreshed.parse(await refreshed.json());
 
         expect((await signOutRoute.POST(post({ refreshToken: tokens.refreshToken }))).status).toBe(204);
         const after = await refreshRoute.POST(post({ refreshToken: tokens.refreshToken }));
