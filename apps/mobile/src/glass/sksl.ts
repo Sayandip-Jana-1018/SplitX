@@ -48,8 +48,13 @@ float3 liquid(float2 p, float soft) {
     p += normalize(p - uRip.xy + 1e-3)*exp(-q*q)*20.;
   }
   if (uTouchA > 0.) {
-    float q = (length(p - uTouch.xy) - uTouch.z)/22.;
-    p += normalize(p - uTouch.xy + 1e-3)*exp(-q*q)*13.*uTouchA;
+    // A short train of waves riding the spreading front: crests about 94 px apart (2 pi x 15)
+    // under a soft envelope, so two or three rings show at once, like a stone in still water.
+    float2 dv = p - uTouch.xy;
+    float rd = length(dv);
+    float x = rd - uTouch.z;
+    float wave = sin(x/15.)*exp(-x*x/4900.);
+    p += dv/(rd + 1e-3)*wave*18.*uTouchA;
   }
   float2 uv = p / uView;
   float g = uv.y + .2*sin(uv.x*2.6 + uT*.13) + .12*sin(uv.y*3.4 - uT*.1 + uv.x*1.3);

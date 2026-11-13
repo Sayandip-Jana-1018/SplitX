@@ -30,6 +30,9 @@ export const PACE: readonly (PacedLevel & { fps: number })[] = [
     { frameMs: 50, fps: 20 },
 ];
 
+/** While a ripple plays: every frame the screen offers, up to 120 a second. */
+const RIPPLE_FRAME_MS = 1000 / 120;
+
 /** Frames the governor judges at once, as on the website. */
 const WINDOW = 40;
 const LEVEL_KEY = 'splitit.glass.pace';
@@ -120,7 +123,8 @@ export function GlassProvider({ children }: { children: ReactNode }) {
         'worklet';
         const now = frame.timestamp;
         const rippling = (touch.value[2] >= 0 && time.value - touch.value[2] < TOUCH_S) || (rip.value[2] >= 0 && time.value - rip.value[2] < RIPPLE_S);
-        const pace = rippling ? PACE[0].frameMs : frameMs.value;
+        // A ripple plays at the screen's own rate (120 a second on a fast phone), so it glides.
+        const pace = rippling ? RIPPLE_FRAME_MS : frameMs.value;
         if (!frameIsDue(now, due.value)) return;
         due.set(nextFrameDue(now, due.value, pace));
         if (last.value > 0) {

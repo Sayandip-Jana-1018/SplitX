@@ -2,8 +2,11 @@
 import { floatBlobs, lightBase } from '@shared/glass/liquid';
 import type { GlassPalette } from '@shared/glass/palette';
 
-/** How long a touch's ring takes to spread and fade, in seconds, as on the website (TOUCH_MS). */
-export const TOUCH_S = 0.85;
+/** How long a touch's waves take to spread and settle, in seconds: slower than the website's 0.85, for a calmer, wider ripple. */
+export const TOUCH_S = 1.6;
+
+/** How far the waves travel from the finger, in points. */
+const TOUCH_REACH = 360;
 
 /** How long a new colour takes to spread across the screen, as on the website (RIPPLE_MS). */
 export const RIPPLE_S = 1.1;
@@ -37,8 +40,10 @@ export function liquidUniforms(t: number, width: number, height: number, pal: Gl
         uC2: pal.c2,
         uGlow: pal.glow,
         uBl: blobs,
-        uTouch: [touch[0], touch[1], touching ? (1 - (1 - p) ** 2) * 170 : 0],
-        uTouchA: touching ? 1 - p : 0,
+        // The front eases out (fast, then gliding to a stop); the waves fade in over the first
+        // tenth of a second rather than popping, then die away as they spread.
+        uTouch: [touch[0], touch[1], touching ? (1 - (1 - p) ** 3) * TOUCH_REACH : 0],
+        uTouchA: touching ? Math.min(1, p / 0.06) * (1 - p) ** 1.6 : 0,
         uRip: [rip[0], rip[1], rippling ? (1 - (1 - rp) ** 3) * reach : -1],
         uA0p: before.a0,
         uA1p: before.a1,
