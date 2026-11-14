@@ -117,15 +117,12 @@ export default function GroupScreen() {
                 ) : (
                     <GlassSurface style={{ paddingHorizontal: 16, paddingVertical: 4 }}>
                         {transfers.map((transfer, index) => (
-                            <View key={`${transfer.from}-${transfer.to}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 14, borderTopWidth: index === 0 ? 0 : 1, borderTopColor: tokens.border }}>
-                                <Avatar name={transfer.fromName} size={34} />
-                                <Text variant="caption" tone="muted">
-                                    pays
-                                </Text>
-                                <Avatar name={transfer.toName} size={34} />
+                            <View key={`${transfer.from}-${transfer.to}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, borderTopWidth: index === 0 ? 0 : 1, borderTopColor: tokens.border }}>
+                                {/* The other person in it (the payer when it isn't you), as on Settle up. */}
+                                <Avatar name={transfer.from === ME ? transfer.toName : transfer.fromName} size={40} />
                                 <View style={{ flex: 1 }}>
                                     <Text variant="label" align="left" numberOfLines={1}>
-                                        {transfer.from === ME ? 'You' : transfer.fromName.split(' ')[0]} → {transfer.to === ME ? 'you' : transfer.toName.split(' ')[0]}
+                                        {transfer.from === ME ? `You pay ${transfer.toName.split(' ')[0]}` : `${transfer.fromName.split(' ')[0]} pays ${transfer.to === ME ? 'you' : transfer.toName.split(' ')[0]}`}
                                     </Text>
                                 </View>
                                 <Text variant="label" tabular tone={transfer.to === ME ? 'in' : transfer.from === ME ? 'out' : 'secondary'}>

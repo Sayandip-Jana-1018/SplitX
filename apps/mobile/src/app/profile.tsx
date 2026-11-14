@@ -50,7 +50,10 @@ export default function Profile() {
     const [asking, setAsking] = useState<Asking>(null);
     const { busy, run } = useStep();
     const signedIn = auth.status === 'signed_in';
-    const paid = ledger.expenses.filter((expense) => expense.payerId === ME).reduce((sum, expense) => sum + expense.amount, 0);
+    // What you covered for other people: expenses you paid, less your own share of each.
+    const paid = ledger.expenses
+        .filter((expense) => expense.payerId === ME)
+        .reduce((sum, expense) => sum + expense.amount - (expense.splits.find((split) => split.userId === ME)?.amount ?? 0), 0);
 
     const soon = (message: string) => () => toast(message, 'info');
     const rows: Row[] = [

@@ -66,7 +66,7 @@ export default function Insights() {
                                 {label}
                             </Text>
                             <Text variant="caption" tone="muted" tabular>
-                                {Math.round(fraction * 100)}%
+                                {fraction > 0 && fraction < 0.01 ? '<1%' : `${Math.round(fraction * 100)}%`}
                             </Text>
                             <Text variant="label" tabular style={{ minWidth: 92 }} align="right">
                                 {rupees(amount)}
