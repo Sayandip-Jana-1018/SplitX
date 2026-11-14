@@ -379,7 +379,10 @@ I stop and report at the end of each phase, and start the next only when you say
     - **Google and GitHub** through the website's own sign-in page in a secure in-app browser that hands the session back to the app.
     - "Try the demo" keeps the made-up data.
     - Until step 6 the installed APK talks to the live site, which doesn't have these calls yet: its sign-in screens say "Accounts aren't open yet. Try the demo for now."
-5. **The app on real data:** your groups, expenses, settle-up and chat, saved on the phone first and synced, with a clear choice when two edits clash.
+5. **The app on real data:**
+    - ✅ **5a:** your groups, balances and activity from the server's sync (`POST /api/v1/sync`), kept on the phone per account and opened offline.
+    - ✅ **5b:** expenses, cash payments, chat and reminders saved on the phone first and sent in order (sent once, even after a retry); UPI payments, confirming payments, new groups, joining by link and inviting, online.
+    - **5c:** a clear choice when the server refuses a saved change (it is dropped with the reason today), and a visible "waiting to send" count.
 6. **Go live (your yes first):**
     - The additive migrations through the production-database workflow.
     - `MOBILE_TOKEN_SECRET` added to Vercel (by you).
