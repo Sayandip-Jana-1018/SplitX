@@ -9,6 +9,7 @@ import { useLook } from '~/theme/ThemeProvider';
 import { AvatarStack } from '~/ui/Avatar';
 import { EmptyState } from '~/ui/EmptyState';
 import { GroupActions } from '~/ui/GroupActions';
+import { SyncNote } from '~/ui/SyncNote';
 import { GlassButton } from '~/ui/GlassButton';
 import { members, rupees } from '~/ui/money';
 import { Screen } from '~/ui/Screen';
@@ -31,6 +32,7 @@ export default function Groups() {
                     {ledger.groups.length === 1 ? '1 group' : `${ledger.groups.length} groups`} · {rupees(total)} tracked together
                 </Text>
             </View>
+            <SyncNote />
             <GroupActions />
             {ledger.groups.length === 0 ? <EmptyState emoji="👥" title="No groups yet" hint="Make one for a trip, a flat or a dinner, or join one with the invite link someone sent you." /> : null}
             {ledger.groups.map((group, index) => {

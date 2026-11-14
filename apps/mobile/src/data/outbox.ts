@@ -22,6 +22,17 @@ export type Change =
     | { kind: 'payment'; id: string; body: NewSettlement; cash: boolean; local: Settlement }
     | { kind: 'message'; id: string; groupId: string; body: NewMessage; local: Message };
 
+/** A change the server refused, kept so you can try it again or let it go. */
+export interface Stuck {
+    change: Change;
+    why: string;
+    /** The group's name when it was refused (you may no longer be in it). */
+    groupName?: string;
+}
+
+/** The group a change belongs to. */
+export const groupOf = (change: Change) => (change.kind === 'expense' ? change.body.groupId : change.kind === 'payment' ? change.body.groupId : change.groupId);
+
 /** What became of sending one change. */
 export type Sent =
     | { outcome: 'saved'; patch: (groups: SyncGroup[]) => SyncGroup[]; message?: ChatMessage }

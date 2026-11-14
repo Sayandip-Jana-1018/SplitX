@@ -24,6 +24,7 @@ import { members, rupees } from '~/ui/money';
 import { RollingAmount } from '~/ui/RollingAmount';
 import { Screen, SectionTitle } from '~/ui/Screen';
 import { Text } from '~/ui/Text';
+import { SyncNote } from '~/ui/SyncNote';
 import { TopBar } from '~/ui/TopBar';
 
 function greeting(): string {
@@ -64,6 +65,8 @@ export default function Home() {
                     Hi, {you.first}
                 </Text>
             </Animated.View>
+
+            <SyncNote />
 
             <Animated.View entering={enter(1)} style={{ alignItems: 'center' }}>
                 <Coin kind="rim" size={coin}>

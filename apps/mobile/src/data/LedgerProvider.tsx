@@ -19,7 +19,7 @@ import { useAuth } from '~/auth/AuthProvider';
 import { useToast } from '~/ui/Toast';
 import { accountLedger, mergeSync, versionsOf } from './account';
 import { makeExpense, personIn, PEOPLE, seedLedger, ME, type Expense, type ExpenseInput, type Ledger, type Message, type Person, type Settlement } from './ledger';
-import { chatMessage, deleting, describe, reviveChanges, send, withChanges, type Change } from './outbox';
+import { chatMessage, deleting, describe, groupOf, reviveChanges, send, withChanges, type Change, type Stuck } from './outbox';
 
 export type NewExpense = Omit<ExpenseInput, 'id' | 'createdAt'>;
 
@@ -35,6 +35,10 @@ interface LedgerContext {
     sync: SyncState;
     /** Changes saved on the phone, not yet sent. */
     waiting: number;
+    /** Changes the server refused, each with why: yours to try again or let go. */
+    stuck: (Stuck & { label: string })[];
+    retryStuck: (id: string) => void;
+    discardStuck: (id: string) => void;
     /** Brings your groups up to date now; nothing in the demo. */
     refresh: () => Promise<void>;
     /** For a screen's pull-down: only your real groups have anywhere to refresh from. */
@@ -62,6 +66,21 @@ const SAVED = 'splitit.ledger.v1';
 const ACCOUNT = (userId: string) => `splitit.account.v1.${userId}`;
 const OUTBOX = (userId: string) => `splitit.outbox.v1.${userId}`;
 const RECEIPTS = (userId: string) => `splitit.receipts.v1.${userId}`;
+const STUCK = (userId: string) => `splitit.stuck.v1.${userId}`;
+const CHAT = (userId: string) => `splitit.chat.v1.${userId}`;
+
+/** The chats kept on the phone, so a chat opened offline shows what it had. */
+function reviveChat(text: string | null): Record<string, Message[]> {
+    try {
+        const raw: unknown = text ? JSON.parse(text) : null;
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+        return Object.fromEntries(
+            Object.entries(raw as Record<string, Message[]>).map(([groupId, list]) => [groupId, Array.isArray(list) ? list.map((message) => ({ ...message, at: new Date(message.at) })) : []]),
+        );
+    } catch {
+        return {};
+    }
+}
 const EVERY_MS = 60_000;
 const EMPTY: Ledger = { people: [], groups: [], expenses: [], settlements: [], messages: [] };
 
@@ -120,7 +139,22 @@ interface Account {
     userId: string;
     groups: SyncGroup[];
     changes: Change[];
+    stuck: Stuck[];
     receipts: Record<string, string>;
+}
+
+function reviveStuck(text: string | null): Stuck[] {
+    try {
+        const raw: unknown = text ? JSON.parse(text) : null;
+        if (!Array.isArray(raw)) return [];
+        const changes = reviveChanges(JSON.stringify(raw.map((item: Stuck) => item?.change)));
+        return changes.map((change) => {
+            const item = raw.find((entry: Stuck) => entry?.change?.id === change.id) as Stuck | undefined;
+            return { change, why: String(item?.why ?? ''), groupName: typeof item?.groupName === 'string' ? item.groupName : undefined };
+        });
+    } catch {
+        return [];
+    }
 }
 
 export function LedgerProvider({ children }: { children: ReactNode }) {
@@ -153,7 +187,14 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 
     // ── Your real groups ──
     const [account, setAccount] = useState<Account | null>(null);
-    const [messages, setMessages] = useState<Record<string, Message[]>>({});
+    // Whose chats these are: never saved or shown under another account.
+    const [chats, setChats] = useState<{ userId: string | null; byGroup: Record<string, Message[]> }>({ userId: null, byGroup: {} });
+    /** Changes one group's chat, if the chats loaded are this account's. */
+    const setChat = useCallback(
+        (forUser: string, groupId: string, change: (list: Message[]) => Message[]) =>
+            setChats((current) => (current.userId === forUser ? { ...current, byGroup: { ...current.byGroup, [groupId]: change(current.byGroup[groupId] ?? []) } } : current)),
+        [],
+    );
     const [sync, setSync] = useState<SyncState>('idle');
     const kept = useRef<Account | null>(null);
     const syncing = useRef<Promise<void> | null>(null);
@@ -170,6 +211,7 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
         if (next.groups !== current.groups) AsyncStorage.setItem(ACCOUNT(forUser), JSON.stringify(next.groups)).catch(() => undefined);
         if (next.changes !== current.changes) AsyncStorage.setItem(OUTBOX(forUser), JSON.stringify(next.changes)).catch(() => undefined);
         if (next.receipts !== current.receipts) AsyncStorage.setItem(RECEIPTS(forUser), JSON.stringify(next.receipts)).catch(() => undefined);
+        if (next.stuck !== current.stuck) AsyncStorage.setItem(STUCK(forUser), JSON.stringify(next.stuck)).catch(() => undefined);
     }, []);
 
     const refresh = useCallback(async () => {
@@ -209,19 +251,20 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
                     ...current,
                     changes: current.changes.filter((change) => change.id !== next.id),
                     groups: result.outcome === 'saved' ? result.patch(current.groups) : current.groups,
+                    stuck: result.outcome === 'refused' ? [...current.stuck, { change: next, why: result.why, groupName: current.groups.find((group) => group.id === groupOf(next))?.name }] : current.stuck,
                 }));
                 if (result.outcome === 'saved' && result.message && next.kind === 'message') {
                     const message = chatMessage(result.message, next.groupId, userId);
-                    if (message) setMessages((current) => ({ ...current, [next.groupId]: [...(current[next.groupId] ?? []).filter((m) => m.id !== message.id), message] }));
+                    if (message) setChat(userId, next.groupId, (list) => [...list.filter((m) => m.id !== message.id), message]);
                 }
-                if (result.outcome === 'refused') toast(`Couldn’t save ${describe(next)}: ${result.why}`, 'info');
+                if (result.outcome === 'refused') toast(`Couldn’t save ${describe(next)}. It’s kept on Home for you to decide.`, 'info');
             }
             if (sent) await refresh();
         })().finally(() => {
             flushing.current = null;
         });
         return flushing.current;
-    }, [userId, update, refresh, toast]);
+    }, [userId, update, refresh, toast, setChat]);
 
     /** Up to date both ways: what's waiting goes first, then the server's news comes. */
     const catchUp = useCallback(async () => {
@@ -239,9 +282,10 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
     useEffect(() => {
         if (!userId) return;
         let live = true;
-        Promise.all([ACCOUNT(userId), OUTBOX(userId), RECEIPTS(userId)].map((key) => AsyncStorage.getItem(key).catch(() => null))).then(([groups, changes, receipts]) => {
+        Promise.all([ACCOUNT(userId), OUTBOX(userId), RECEIPTS(userId), STUCK(userId), CHAT(userId)].map((key) => AsyncStorage.getItem(key).catch(() => null))).then(([groups, changes, receipts, stuck, chat]) => {
             if (!live) return;
-            const next = { userId, groups: reviveAccount(groups), changes: reviveChanges(changes), receipts: reviveReceipts(receipts) };
+            setChats({ userId, byGroup: reviveChat(chat) });
+            const next = { userId, groups: reviveAccount(groups), changes: reviveChanges(changes), receipts: reviveReceipts(receipts), stuck: reviveStuck(stuck) };
             kept.current = next;
             setAccount(next);
             void latestCatchUp.current();
@@ -250,6 +294,15 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
             live = false;
         };
     }, [userId]);
+
+    // The chats, kept on the phone a moment after each change.
+    useEffect(() => {
+        if (!userId || chats.userId !== userId) return;
+        const timer = setTimeout(() => {
+            AsyncStorage.setItem(CHAT(userId), JSON.stringify(chats.byGroup)).catch(() => undefined);
+        }, 600);
+        return () => clearTimeout(timer);
+    }, [userId, chats]);
 
     // Back in front: up to date again; while in front: every minute.
     useEffect(() => {
@@ -269,12 +322,13 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
         };
     }, [userId, catchUp]);
 
-    // Signed out: this phone forgets every account's groups, waiting changes and receipt photos.
+    // Signed out: this phone forgets every account's groups, waiting changes, chats and receipt photos.
+    // (Chats in memory are tagged with their account, so another account never sees them.)
     useEffect(() => {
         if (auth.status !== 'signed_out') return;
         kept.current = null;
         AsyncStorage.getAllKeys()
-            .then((keys) => AsyncStorage.multiRemove(keys.filter((key) => key.startsWith('splitit.account.') || key.startsWith('splitit.outbox.') || key.startsWith('splitit.receipts.'))))
+            .then((keys) => AsyncStorage.multiRemove(keys.filter((key) => key.startsWith('splitit.account.') || key.startsWith('splitit.outbox.') || key.startsWith('splitit.receipts.') || key.startsWith('splitit.stuck.') || key.startsWith('splitit.chat.'))))
             .catch(() => undefined);
     }, [auth.status]);
 
@@ -282,11 +336,11 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
     const accountView = useMemo(() => {
         if (!mine || !userId) return EMPTY;
         const synced = accountLedger(mine.groups, userId);
-        const withMessages = { ...synced, messages: Object.values(messages).flat() };
+        const withMessages = { ...synced, messages: chats.userId === userId ? Object.values(chats.byGroup).flat() : [] };
         const view = withChanges(withMessages, mine.changes);
         // Receipt photos stay on this phone until Phase 3 uploads them.
         return { ...view, expenses: view.expenses.map((expense) => (mine.receipts[expense.id] ? { ...expense, receipt: mine.receipts[expense.id] } : expense)) };
-    }, [mine, userId, messages]);
+    }, [mine, userId, chats]);
     const ledger = real ? accountView : demo;
 
     // ── Changes ──
@@ -408,12 +462,12 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
                     const mapped = chatMessage(message, groupId, userId);
                     return mapped ? [mapped] : [];
                 });
-                setMessages((current) => ({ ...current, [groupId]: loaded }));
+                setChat(userId, groupId, () => loaded);
             } catch {
                 // Offline: the chat shows what it had.
             }
         },
-        [userId],
+        [userId, setChat],
     );
 
     const confirmPayment = useCallback(
@@ -442,8 +496,30 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
         [refresh],
     );
 
+    /** Back in the queue, at its end, to be sent again. */
+    const retryStuck = useCallback(
+        (id: string) => {
+            if (!userId) return;
+            update(userId, (current) => {
+                const item = current.stuck.find((entry) => entry.change.id === id);
+                return item ? { ...current, stuck: current.stuck.filter((entry) => entry !== item), changes: [...current.changes, item.change] } : current;
+            });
+            void flush();
+        },
+        [userId, update, flush],
+    );
+
+    const discardStuck = useCallback(
+        (id: string) => {
+            if (!userId) return;
+            update(userId, (current) => ({ ...current, stuck: current.stuck.filter((entry) => entry.change.id !== id) }));
+        },
+        [userId, update],
+    );
+
     const personOf = useCallback((id: string) => personIn(ledger, id), [ledger]);
     const waiting = real ? (mine?.changes.length ?? 0) : 0;
+    const stuck = useMemo(() => (real && mine ? mine.stuck.map((entry) => ({ ...entry, label: entry.groupName ? `${describe(entry.change)} in ${entry.groupName}` : describe(entry.change) })) : []), [real, mine]);
 
     const value = useMemo(
         () => ({
@@ -452,6 +528,9 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
             real,
             sync: real ? sync : ('idle' as const),
             waiting,
+            stuck,
+            retryStuck,
+            discardStuck,
             refresh: catchUp,
             onRefresh: real ? catchUp : undefined,
             addExpense,
@@ -465,7 +544,7 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
             joinGroup,
             resetLedger,
         }),
-        [ledger, personOf, real, sync, waiting, catchUp, addExpense, recordPayment, deleteExpense, setReceipt, sendMessage, loadMessages, confirmPayment, createGroup, joinGroup, resetLedger],
+        [ledger, personOf, real, sync, waiting, stuck, retryStuck, discardStuck, catchUp, addExpense, recordPayment, deleteExpense, setReceipt, sendMessage, loadMessages, confirmPayment, createGroup, joinGroup, resetLedger],
     );
     return <Context.Provider value={value}>{children}</Context.Provider>;
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createApi, type StoredSession } from '../../apps/mobile/src/api/client';
 import { ME, seedLedger, type Expense, type Ledger } from '../../apps/mobile/src/data/ledger';
-import { deleting, reviveChanges, send, withChanges, type Change } from '../../apps/mobile/src/data/outbox';
+import { deleting, groupOf, reviveChanges, send, withChanges, type Change } from '../../apps/mobile/src/data/outbox';
 import type { SyncGroup } from '@/lib/contract/v1';
 
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
@@ -36,6 +36,11 @@ describe('what the screens show while changes wait', () => {
         expect(shown.expenses.find((e) => e.id === lunch.id)?.pending).toBe(true);
         expect(shown.expenses.find((e) => e.id === 'e1')).toBeUndefined();
         expect(withChanges(ledger, [])).toBe(ledger);
+    });
+
+    it('knows which group each change belongs to, to name it if refused', () => {
+        expect(groupOf(addLunch)).toBe('g1');
+        expect(groupOf({ kind: 'delete_expense', id: 'd', expenseId: 'e1', groupId: 'goa' })).toBe('goa');
     });
 
     it('forgets an expense deleted before it was ever sent, instead of sending both', () => {
