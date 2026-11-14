@@ -250,3 +250,55 @@ export type NewMessage = z.infer<typeof NewMessage>;
 
 export const MessageSent = z.object({ message: ChatMessage });
 export type MessageSent = z.infer<typeof MessageSent>;
+
+// ── Sign-in, like real apps (Phase 2 step 4) ────────────────
+
+const Email = z.string().trim().max(254).email('Enter a valid email address');
+const SixDigits = z.string().regex(/^\d{6}$/, 'The code is 6 digits');
+
+/** Emails a 6-digit code: to sign in without a password, to confirm a new account again, or to reset a password. */
+export const EmailCodeRequest = z.object({ email: Email, purpose: z.enum(['sign_in', 'confirm_sign_up', 'password_reset']).default('sign_in') });
+export type EmailCodeRequest = z.infer<typeof EmailCodeRequest>;
+
+export const EmailCodeSignIn = z.object({
+    email: Email,
+    code: SixDigits,
+    /** confirm_sign_up after creating an account; sign_in otherwise. */
+    purpose: z.enum(['sign_in', 'confirm_sign_up']).default('sign_in'),
+    device: DeviceDetails,
+});
+export type EmailCodeSignIn = z.infer<typeof EmailCodeSignIn>;
+
+/** A sign-in that may be the account's first: `isNew` means the app asks for a name. */
+export const CodeSession = Session.extend({ isNew: z.boolean() });
+export type CodeSession = z.infer<typeof CodeSession>;
+
+export const SignUp = z.object({
+    name: z.string().trim().min(2, 'Use at least 2 characters for your name').max(60, 'Use at most 60 characters for your name'),
+    email: Email,
+    password: z.string().min(1).max(1000),
+    device: DeviceDetails,
+});
+export type SignUp = z.infer<typeof SignUp>;
+
+/** `codeSent`: a confirmation code is on its way, then EmailCodeSignIn with confirm_sign_up. Else signed in already. */
+export const SignUpAnswer = z.object({ codeSent: z.boolean(), session: Session.nullable() });
+export type SignUpAnswer = z.infer<typeof SignUpAnswer>;
+
+export const PasswordResetWithCode = z.object({ email: Email, code: SixDigits, password: z.string().min(1).max(1000), device: DeviceDetails });
+export type PasswordResetWithCode = z.infer<typeof PasswordResetWithCode>;
+
+/** The code the website handed back after Google or GitHub, with the PKCE verifier only this phone holds. */
+export const HandoffExchange = z.object({
+    code: z.string().min(20).max(200),
+    verifier: z.string().regex(/^[A-Za-z0-9._~-]{43,128}$/),
+    device: DeviceDetails,
+});
+export type HandoffExchange = z.infer<typeof HandoffExchange>;
+
+/** The website's own profile rules (PATCH /api/me). */
+export const ProfileUpdate = z.object({
+    name: z.string().trim().min(1).max(100).optional(),
+    upiId: z.string().trim().max(100).regex(/^[\w.-]+@[\w]+$/, 'Invalid UPI ID format (e.g. name@bank)').optional().or(z.literal('')),
+});
+export type ProfileUpdate = z.infer<typeof ProfileUpdate>;

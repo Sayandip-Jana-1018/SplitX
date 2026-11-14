@@ -1,3 +1,7 @@
+import { beforeEach } from 'vitest';
+import { setRateLimitStore } from '@/lib/rateLimit';
+import { clearLocalLimits, hitLocally } from '@/lib/rateLimit/local';
+
 // The database tests empty the database they are given before each test. They
 // run only against a local database whose name ends in _test, and fail rather
 // than skip without one, so CI can't pass without running them.
@@ -12,3 +16,15 @@ const { hostname, pathname } = new URL(url);
 if (!['127.0.0.1', 'localhost', '[::1]'].includes(hostname) || !pathname.endsWith('_test')) {
     throw new Error('Database tests delete every row: DATABASE_URL must point at a local database whose name ends in _test.');
 }
+
+
+// Rate limits and allowances count in memory here, never in the Redis that .env
+// names: a test must not write to a shared, possibly production, store, and a
+// counter left over from an earlier run must not decide this one.
+await setRateLimitStore({
+    backend: 'redis',
+    hit: async (key: string, limit: number, windowMs: number, now: number) => ({ ...hitLocally(key, limit, windowMs, now), count: 0 }),
+    warm: async () => {},
+    close: async () => {},
+});
+beforeEach(() => clearLocalLimits());

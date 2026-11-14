@@ -104,6 +104,7 @@ model User {
   // The phone app (docs/mobile/ROADMAP.md, Phase 2)
   devices        Device[]
   refreshTokens  RefreshToken[]
+  authCodes      AuthCode[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -404,4 +405,31 @@ model RefreshToken {
 
   @@index([userId])
   @@index([familyId])
+}
+
+/// A short-lived code that proves something, kept only as a keyed hash
+/// (src/lib/authCodes.ts): a 6-digit code emailed to sign in, to confirm a new
+/// account or to reset a password; or the one-time code the website hands back
+/// to the phone after a Google or GitHub sign-in, which only the phone that
+/// asked can redeem (its PKCE verifier must match `challenge`).
+model AuthCode {
+  id        String    @id @default(cuid())
+  /// "sign_in", "confirm_sign_up", "password_reset" or "handoff".
+  purpose   String
+  /// The address an emailed code went to, in lower case.
+  email     String?
+  /// The account a hand-off code signs into.
+  userId    String?
+  codeHash  String    @unique
+  /// Hand-off only: base64url SHA-256 of the phone's PKCE verifier.
+  challenge String?
+  /// Wrong guesses so far; a code stops working after five.
+  attempts  Int       @default(0)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([purpose, email])
 }

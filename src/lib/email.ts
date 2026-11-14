@@ -203,3 +203,38 @@ export async function sendVerificationEmail(email: string, token: string) {
         }),
     });
 }
+
+const CODE_WORDING = {
+    sign_in: { subject: 'Your SplitIT sign-in code', title: 'Your sign-in code', body: 'Type this code in the SplitIT app to sign in.' },
+    confirm_sign_up: { subject: 'Confirm your email for SplitIT', title: 'Confirm your email', body: 'Type this code in the SplitIT app to finish creating your account.' },
+    password_reset: { subject: 'Your SplitIT password reset code', title: 'Reset your password', body: 'Type this code in the SplitIT app, then choose a new password.' },
+} as const;
+
+/** A 6-digit code for the phone app, valid for 10 minutes (lib/authCodes.ts). No link: the code is typed in the app. */
+export async function sendCodeEmail(email: string, code: string, purpose: keyof typeof CODE_WORDING) {
+    const words = CODE_WORDING[purpose];
+    const digits = code.split('').join('&#8202;');
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin:0;padding:0;background:#0a0a1a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+    <div style="max-width:480px;margin:40px auto;padding:0 20px;">
+        <div style="text-align:center;margin-bottom:32px;">
+            <span style="font-size:20px;font-weight:800;color:#fff;">SplitIT</span>
+        </div>
+        <div style="background:rgba(20,20,45,0.9);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:36px 32px;text-align:center;">
+            <h1 style="font-size:22px;font-weight:700;color:#fff;margin:0 0 8px;">${words.title}</h1>
+            <p style="font-size:14px;color:#94a3b8;line-height:1.6;margin:0 0 24px;">${words.body}</p>
+            <div style="font-size:36px;font-weight:800;letter-spacing:10px;color:#c4b5fd;font-family:ui-monospace,Menlo,Consolas,monospace;">${digits}</div>
+            <p style="font-size:12px;color:#64748b;margin:24px 0 0;line-height:1.5;">It works for 10 minutes. If you didn’t ask for it, ignore this email: nothing changes without the code.</p>
+        </div>
+        <p style="text-align:center;font-size:11px;color:#475569;margin-top:24px;">© ${new Date().getFullYear()} SplitIT · Expense splitting made easy</p>
+    </div>
+</body>
+</html>`;
+    const text = `${words.title}\n\n${words.body}\n\n${code}\n\nIt works for 10 minutes. If you didn’t ask for it, ignore this email.\n`;
+    await sendEmail({ to: email, subject: `${words.subject}: ${code}`, html, text });
+}
