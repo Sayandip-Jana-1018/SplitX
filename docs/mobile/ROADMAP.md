@@ -378,17 +378,18 @@ I stop and report at the end of each phase, and start the next only when you say
     - Sign-out, and sign-out of all devices.
     - **Google and GitHub** through the website's own sign-in page in a secure in-app browser that hands the session back to the app.
     - "Try the demo" keeps the made-up data.
-    - Until step 6 the installed APK talks to the live site, which doesn't have these calls yet: its sign-in screens say "Accounts aren't open yet. Try the demo for now."
+    - Before step 6 the installed APK talked to the live site, which didn't have these calls yet: its sign-in screens said "Accounts aren't open yet. Try the demo for now."
 5. **The app on real data:**
     - ✅ **5a:** your groups, balances and activity from the server's sync (`POST /api/v1/sync`), kept on the phone per account and opened offline.
     - ✅ **5b:** expenses, cash payments, chat and reminders saved on the phone first and sent in order (sent once, even after a retry); UPI payments, confirming payments, new groups, joining by link and inviting, online.
     - ✅ **5c:** a note when changes wait (and when you're offline), a refused change kept with the reason for you to try again or let go, and chats kept on the phone.
-6. **Go live (your yes first):**
-    - The additive migrations through the production-database workflow.
-    - `MOBILE_TOKEN_SECRET` added to Vercel (by you).
-    - The deploy, and the APK pointed at the live site.
+6. ✅ **Go live (15 November):**
+    - The two additive migrations (Device, RefreshToken, AuthCode) through the production-database workflow (report #7, apply #9; production matches the schema exactly).
+    - `MOBILE_TOKEN_SECRET` added to Vercel (by you), as a Production secret.
+    - main fast-forwarded to 2d31be9 and deployed; the live phone API checked without making accounts; APK build 15 installed.
+    - Sonar now counts the database tests' coverage too (the phone API is proven against a real Postgres). The unused native Google route was removed: Google signs in through the website.
 
-**Where it runs until step 6:** the website's dev server and a throwaway Postgres on the laptop, reached from your phone over USB. Nothing reaches splitsj.vercel.app or its database until you say yes. Push notifications, remote config, Sentry and the backup drill (the old Phase 2's rest) are Phase 3 now.
+**Where it runs:** since step 6, the installed app uses splitsj.vercel.app and its database. Development still uses the website's dev server and a throwaway Postgres on the laptop, reached from your phone over USB. Push notifications, remote config, Sentry and the backup drill (the old Phase 2's rest) are Phase 3 now.
 
 ### Phase 3: core loop, on phone and web
 
