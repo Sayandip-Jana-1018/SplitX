@@ -2,11 +2,13 @@
  * Welcome: the coin that splits into shares and comes back whole, which is the app in one picture,
  * with the promise on it. Get started shows what the app does; sign-in arrives in Phase 3, and for now its screen opens the app.
  */
-import { router } from 'expo-router';
+import { Redirect, router } from 'expo-router';
 import { ArrowRight } from 'lucide-react-native';
-import { useWindowDimensions, View } from 'react-native';
+import { Pressable, useWindowDimensions, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAuth } from '~/auth/AuthProvider';
+import { enterApp } from '~/auth/flow';
 import { Coin } from '~/glass/Coin';
 import { GlassLayer } from '~/glass/layer';
 import { GlassSurface } from '~/glass/GlassSurface';
@@ -17,10 +19,15 @@ import { Wordmark } from '~/ui/TopBar';
 
 export default function Welcome() {
     const { tokens, calm } = useLook();
+    const auth = useAuth();
     const insets = useSafeAreaInsets();
     const { width, height } = useWindowDimensions();
     const coin = Math.min(width * 1.08, height * 0.56, 520);
     const enter = (delay: number) => (calm ? undefined : FadeIn.delay(delay).duration(420));
+
+    // Signed in, or trying the demo: the app opens where it belongs. Still reading storage: nothing yet.
+    if (auth.status === 'signed_in' || auth.status === 'demo') return <Redirect href="/home" />;
+    if (auth.status === 'loading') return null;
 
     return (
         <GlassLayer style={{ flex: 1, paddingTop: insets.top + 14, paddingBottom: insets.bottom + 20, paddingHorizontal: 20, alignItems: 'center' }}>
@@ -57,9 +64,19 @@ export default function Welcome() {
                 <GlassButton kind="thin" radius={999} contentStyle={{ height: 54 }} onPress={() => router.push('/sign-in')}>
                     <Text variant="label">I already have an account</Text>
                 </GlassButton>
-                <Text variant="caption" tone="muted" style={{ marginTop: 4 }}>
-                    Preview build · the people and money in it are made up
-                </Text>
+                <Pressable
+                    accessibilityRole="button"
+                    hitSlop={8}
+                    style={{ alignSelf: 'center', marginTop: 4 }}
+                    onPress={async () => {
+                        await auth.startDemo();
+                        enterApp();
+                    }}
+                >
+                    <Text variant="label" tone="accent" onLiquid>
+                        Just looking? Try the demo
+                    </Text>
+                </Pressable>
             </Animated.View>
         </GlassLayer>
     );

@@ -1,92 +1,112 @@
 /**
- * Signing in, as it will look: Google, GitHub, or a link by email. The accounts connect in
- * Phase 3; until then every way in opens the preview with its made-up people, and nothing typed
- * here leaves the phone.
+ * Signing in: Google or GitHub (through the website's own sign-in page, in a secure in-app
+ * browser), or an email and password, or a 6-digit code by email instead of a password. Forgot
+ * the password? A code sets a new one. New here? Create an account, or just try the demo.
  */
-import { router } from 'expo-router';
-import { Mail } from 'lucide-react-native';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
+import { ApiError } from '~/api';
+import { useAuth } from '~/auth/AuthProvider';
+import { enterApp, LOOKS_LIKE_EMAIL, useStep } from '~/auth/flow';
 import { Coin } from '~/glass/Coin';
 import { useLook } from '~/theme/ThemeProvider';
 import { Field } from '~/ui/Field';
 import { GlassButton } from '~/ui/GlassButton';
 import { Header } from '~/ui/Header';
+import { PasswordField } from '~/ui/PasswordField';
+import { ProviderButtons } from '~/ui/ProviderButtons';
 import { Screen } from '~/ui/Screen';
 import { Text } from '~/ui/Text';
-import { useToast } from '~/ui/Toast';
-
-const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-/** A letter on a disc, standing in for a provider's mark until real sign-in arrives. */
-function Badge({ letter }: { letter: string }) {
-    const { tokens } = useLook();
-    return (
-        <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: tokens.chip, alignItems: 'center', justifyContent: 'center' }}>
-            <Text variant="label" weight="heavy">
-                {letter}
-            </Text>
-        </View>
-    );
-}
 
 export default function SignIn() {
+    const params = useLocalSearchParams<{ email?: string }>();
+    const auth = useAuth();
     const { tokens } = useLook();
-    const toast = useToast();
-    const [email, setEmail] = useState('');
+    const [email, setEmail] = useState(params.email ?? '');
+    const [password, setPassword] = useState('');
+    const { busy, error, setError, run } = useStep();
+    const ready = LOOKS_LIKE_EMAIL.test(email.trim()) && password.length > 0;
 
-    const enter = () => {
-        toast('Preview: signed in with a made-up account', 'info');
-        if (router.canDismiss()) router.dismissAll();
-        router.replace('/home');
-    };
+    const withPassword = () =>
+        run(async () => {
+            try {
+                await auth.signInWithPassword(email, password);
+                enterApp();
+            } catch (caught) {
+                // A password account whose address isn't confirmed yet: confirm it with a code instead of a link.
+                if (caught instanceof ApiError && caught.code === 'email_unverified') {
+                    await auth.sendCode(email, 'confirm_sign_up');
+                    router.push({ pathname: '/code', params: { email: email.trim(), purpose: 'confirm_sign_up' } });
+                    return;
+                }
+                throw caught;
+            }
+        });
+
+    const link = (label: string, onPress: () => void) => (
+        <Pressable accessibilityRole="button" hitSlop={8} onPress={onPress}>
+            <Text variant="label" tone="accent" onLiquid>
+                {label}
+            </Text>
+        </Pressable>
+    );
 
     return (
         <Screen tabBar={false}>
             <Header title="Sign in" />
 
-            <View style={{ alignItems: 'center', gap: 8, paddingVertical: 4 }}>
-                <Coin kind="coin" size={104} />
+            <View style={{ alignItems: 'center', gap: 8 }}>
+                <Coin kind="coin" size={92} />
                 <Text variant="display" onLiquid>
                     Welcome back
                 </Text>
                 <Text variant="body" tone="secondary" onLiquid style={{ maxWidth: 300 }}>
-                    Your groups and balances follow you to every phone and the website.
+                    Your groups and balances, on every phone and the website.
                 </Text>
             </View>
 
-            <View style={{ gap: 12 }}>
-                <GlassButton kind="reg" contentStyle={{ height: 56, flexDirection: 'row', gap: 12 }} onPress={enter}>
-                    <Badge letter="G" />
-                    <Text variant="label">Continue with Google</Text>
-                </GlassButton>
-                <GlassButton kind="reg" contentStyle={{ height: 56, flexDirection: 'row', gap: 12 }} onPress={enter}>
-                    <Badge letter="Gh" />
-                    <Text variant="label">Continue with GitHub</Text>
-                </GlassButton>
-            </View>
+            <ProviderButtons onError={setError} />
 
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                 <View style={{ flex: 1, height: 1, backgroundColor: tokens.border }} />
                 <Text variant="caption" tone="muted" onLiquid>
-                    or
+                    or with your email
                 </Text>
                 <View style={{ flex: 1, height: 1, backgroundColor: tokens.border }} />
             </View>
 
             <View style={{ gap: 12 }}>
-                <Field label="Your email" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" autoComplete="email" textContentType="emailAddress" returnKeyType="go" maxLength={254} />
-                <GlassButton kind="accent" contentStyle={{ height: 56, flexDirection: 'row', gap: 10 }} disabled={!EMAIL.test(email.trim())} onPress={enter}>
-                    <Mail size={19} color={tokens.onAccent} strokeWidth={2.4} />
+                <Field label="Your email" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" autoComplete="email" textContentType="username" maxLength={254} />
+                <PasswordField label="Password" value={password} onChangeText={setPassword} autoComplete="current-password" textContentType="password" returnKeyType="go" onSubmitEditing={() => ready && withPassword()} />
+                {error ? (
+                    <Text variant="label" tone="danger" onLiquid accessibilityLiveRegion="polite">
+                        {error}
+                    </Text>
+                ) : null}
+                <GlassButton kind="accent" contentStyle={{ height: 56 }} disabled={!ready || busy} onPress={withPassword}>
                     <Text variant="heading" tone="onAccent">
-                        Email me a sign-in link
+                        {busy ? 'Signing in…' : 'Sign in'}
                     </Text>
                 </GlassButton>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 6 }}>
+                    {link('Forgot password?', () => router.push({ pathname: '/email-code', params: { purpose: 'password_reset', email: email.trim() } }))}
+                    {link('Email me a code', () => router.push({ pathname: '/email-code', params: { purpose: 'sign_in', email: email.trim() } }))}
+                </View>
             </View>
 
-            <Text variant="caption" tone="muted" onLiquid style={{ maxWidth: 320, alignSelf: 'center' }}>
-                Real accounts connect in Phase 3. Until then, every way in opens the preview, and nothing you type here leaves your phone.
-            </Text>
+            <View style={{ alignItems: 'center', gap: 14, paddingTop: 4 }}>
+                <View style={{ flexDirection: 'row', gap: 6 }}>
+                    <Text variant="label" tone="secondary" onLiquid>
+                        New to SplitIT?
+                    </Text>
+                    {link('Create an account', () => router.replace('/sign-up'))}
+                </View>
+                {link('Just looking? Try the demo', () => run(async () => {
+                    await auth.startDemo();
+                    enterApp();
+                }))}
+            </View>
         </Screen>
     );
 }

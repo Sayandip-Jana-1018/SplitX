@@ -2,7 +2,7 @@
 import { router } from 'expo-router';
 import { Palette } from 'lucide-react-native';
 import { Image, View } from 'react-native';
-import { ME, personById } from '~/data/ledger';
+import { useYou } from '~/auth/AuthProvider';
 import { useLook } from '~/theme/ThemeProvider';
 import { Avatar } from './Avatar';
 import { GlassButton } from './GlassButton';
@@ -25,10 +25,11 @@ export function Wordmark({ size = 'label' }: { size?: 'label' | 'heading' }) {
 
 export function TopBar() {
     const { tokens } = useLook();
+    const you = useYou();
     return (
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <GlassButton kind="clear" contentStyle={{ width: 46, height: 46 }} accessibilityLabel="Your profile" onPress={() => router.push('/profile')}>
-                <Avatar name={personById(ME).name} size={34} />
+                <Avatar name={you.name} size={34} />
             </GlassButton>
             <Wordmark />
             <GlassButton kind="thin" contentStyle={{ width: 46, height: 46 }} accessibilityLabel="Appearance" onPress={() => router.push('/appearance')}>

@@ -5,7 +5,7 @@ import { CHALLENGE, finishPath, returnAllowed } from '@/lib/v1/handoff';
 const BROKEN = 'This sign-in link isn’t valid. Go back to SplitIT and try again.';
 
 /**
- * GET /api/v1/auth/handoff/start?challenge=&redirect=: the app's in-app browser
+ * GET /api/v1/auth/handoff/start?challenge=&redirect=&provider=: the app's in-app browser
  * starts here. Already signed in on the website: straight on. Otherwise: the
  * website's sign-in page, which comes back to finish (src/lib/v1/handoff.ts).
  */
@@ -18,6 +18,9 @@ export async function GET(request: Request) {
     }
     const finish = finishPath(challenge, back);
     const session = await auth();
-    const target = session?.user?.email ? finish : `/login?callbackUrl=${encodeURIComponent(finish)}`;
+    // "Continue with Google" in the app: the sign-in page starts that provider at once.
+    const provider = url.searchParams.get('provider');
+    const startWith = provider === 'google' || provider === 'github' ? `&provider=${provider}` : '';
+    const target = session?.user?.email ? finish : `/login?callbackUrl=${encodeURIComponent(finish)}${startWith}`;
     return NextResponse.redirect(new URL(target, request.url), { headers: { 'cache-control': 'no-store' } });
 }

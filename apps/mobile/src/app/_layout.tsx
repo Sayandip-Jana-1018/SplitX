@@ -16,6 +16,7 @@ import { LiquidWall } from '~/glass/LiquidWall';
 import { ThemeProvider, useLook } from '~/theme/ThemeProvider';
 import { FONT_FILES } from '~/theme/type';
 import { ToastProvider } from '~/ui/Toast';
+import { AuthProvider } from '~/auth/AuthProvider';
 
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
@@ -74,11 +75,16 @@ function Frame() {
             <TouchRipples style={{ flex: 1, backgroundColor: tokens.bg }}>
                 <LiquidWall />
                 <ToastProvider>
+                    <AuthProvider>
                     <NavigationTheme value={navigationTheme}>
                         <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' }, animation: 'fade' }}>
                             <Stack.Screen name="index" />
                             <Stack.Screen name="onboarding" />
                             <Stack.Screen name="sign-in" />
+                            <Stack.Screen name="sign-up" />
+                            <Stack.Screen name="email-code" />
+                            <Stack.Screen name="code" />
+                            <Stack.Screen name="your-name" />
                             <Stack.Screen name="(tabs)" />
                             <Stack.Screen name="group/[id]" />
                             <Stack.Screen name="chat/[id]" />
@@ -91,6 +97,7 @@ function Frame() {
                             <Stack.Screen name="pay" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
                         </Stack>
                     </NavigationTheme>
+                    </AuthProvider>
                 </ToastProvider>
                 <StatusBar style={mode === 'dark' ? 'light' : 'dark'} />
             </TouchRipples>

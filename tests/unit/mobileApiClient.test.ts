@@ -114,7 +114,7 @@ describe('the phone’s API client', () => {
     });
 
     it('signs out here at once even if the server can’t be told', async () => {
-        const { api, store } = setup((path) => {
+        const { api, store, onSignedOut } = setup((path) => {
             if (path === '/api/v1/auth/password') return json(200, { tokens: tokens(1), me });
             throw new TypeError('Network request failed');
         });
@@ -122,5 +122,48 @@ describe('the phone’s API client', () => {
         await api.signOut();
         expect(store.peek()).toBeNull();
         expect(await api.hasSession()).toBe(false);
+        // You signed out; the server didn't end it, so there's nothing to tell you.
+        expect(onSignedOut).not.toHaveBeenCalled();
+    });
+});
+
+describe('the phone’s sign-in calls', () => {
+    it('signs in with an emailed code and says whether the account is new', async () => {
+        const { api, store, calls } = setup((path, init) => {
+            if (path === '/api/v1/auth/email-code') {
+                expect(JSON.parse(String(init.body))).toEqual({ email: 'new@example.test', purpose: 'sign_in' });
+                return json(202, { sent: true });
+            }
+            return json(200, { tokens: tokens(1), me: { ...me, name: null }, isNew: true });
+        });
+        await api.requestEmailCode('new@example.test', 'sign_in');
+        expect(await api.signInWithEmailCode('new@example.test', '123456')).toEqual({ me: { ...me, name: null }, isNew: true });
+        expect(store.peek()?.refreshToken).toBe(tokens(1).refreshToken);
+        expect(calls).toEqual(['POST /api/v1/auth/email-code', 'POST /api/v1/auth/email-code/verify']);
+    });
+
+    it('says plainly when the server doesn’t have a call yet', async () => {
+        const { api } = setup(() => new Response('<html>Not found</html>', { status: 404, headers: { 'content-type': 'text/html' } }));
+        await expect(api.requestEmailCode('a@b.test', 'sign_in')).rejects.toMatchObject({ kind: 'bad_answer', status: 404, code: 'not_on_server' });
+        // A 404 the server explains is its own answer, kept as it is.
+        const known = setup(() => json(404, { error: 'No such group.', code: 'not_found' }));
+        await expect(known.api.requestEmailCode('a@b.test', 'sign_in')).rejects.toMatchObject({ kind: 'refused', code: 'not_found' });
+    });
+
+    it('keeps no session after a sign-up that still needs its code', async () => {
+        const { api, store } = setup(() => json(201, { codeSent: true, session: null }));
+        expect(await api.signUp('Asha', 'asha@example.test', 'a-good-password')).toEqual({ codeSent: true, me: null });
+        expect(store.peek()).toBeNull();
+    });
+
+    it('signs out everywhere, here too', async () => {
+        const { api, store, onSignedOut } = setup((path) => {
+            if (path === '/api/v1/auth/password') return json(200, { tokens: tokens(1), me });
+            return new Response(null, { status: 204 });
+        });
+        await api.signInWithPassword('a@b.test', 'pw');
+        await api.signOutEverywhere();
+        expect(store.peek()).toBeNull();
+        expect(onSignedOut).not.toHaveBeenCalled();
     });
 });

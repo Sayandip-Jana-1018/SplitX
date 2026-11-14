@@ -17,7 +17,9 @@ const signedOutListeners = new Set<(code: string | null) => void>();
 /** Called when the server ends the session, so the app can go back to sign-in. */
 export function onSignedOut(listener: (code: string | null) => void) {
     signedOutListeners.add(listener);
-    return () => signedOutListeners.delete(listener);
+    return () => {
+        signedOutListeners.delete(listener);
+    };
 }
 
 const model = (Platform.constants as { Model?: string }).Model;

@@ -9,6 +9,7 @@ import { Pressable, useWindowDimensions, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import type { GlassKind } from '@shared/glass/styles';
 import { activity, groupBalances, ME, personById, totals } from '~/data/ledger';
+import { useYou } from '~/auth/AuthProvider';
 import { useLedger } from '~/data/LedgerProvider';
 import { Coin } from '~/glass/Coin';
 import { GlassScrollView } from '~/glass/GlassScroll';
@@ -39,6 +40,7 @@ const ACTIONS: { label: string; icon: LucideIcon; kind: GlassKind; href: string 
 
 export default function Home() {
     const { tokens, calm } = useLook();
+    const you = useYou();
     const { ledger } = useLedger();
     const { width } = useWindowDimensions();
     const coin = Math.min(width - 56, 310);
@@ -57,7 +59,7 @@ export default function Home() {
                     {greeting()}
                 </Text>
                 <Text variant="display" onLiquid>
-                    Hi, {personById(ME).first}
+                    Hi, {you.first}
                 </Text>
             </Animated.View>
 

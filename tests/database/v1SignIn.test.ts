@@ -185,6 +185,17 @@ describe('Google and GitHub, through the website', () => {
         const location = new URL(answer.headers.get('location')!);
         expect(location.pathname).toBe('/login');
         expect(location.searchParams.get('callbackUrl')).toMatch(/^\/api\/v1\/auth\/handoff\/finish\?/);
+        expect(location.searchParams.get('provider')).toBeNull();
+    });
+
+    it('starts Google or GitHub at once when the app asked for it, and nothing else', async () => {
+        const started = async (provider: string) => {
+            const answer = await get(startRoute, `/api/v1/auth/handoff/start${query()}&provider=${encodeURIComponent(provider)}`);
+            return new URL(answer.headers.get('location')!).searchParams.get('provider');
+        };
+        expect(await started('github')).toBe('github');
+        expect(await started('google')).toBe('google');
+        expect(await started('credentials')).toBeNull();
     });
 
     it('hands the app a one-time code that only its verifier can redeem', async () => {

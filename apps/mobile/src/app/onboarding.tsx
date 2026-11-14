@@ -1,6 +1,6 @@
 /**
  * The first look after Welcome: four short pages, each with a coin, saying what the app does.
- * Swipe or tap Next; Skip goes straight in. Pages fade rather than slide, so the coins' glass
+ * Swipe or tap Next; the last page, and Skip, go to creating an account. Pages fade rather than slide, so the coins' glass
  * always knows where it is on screen.
  */
 import { router } from 'expo-router';
@@ -33,10 +33,8 @@ export default function Onboarding() {
     const last = page === PAGES.length - 1;
     const coin = Math.min(width * 0.78, height * 0.36, 320);
 
-    const enter = () => {
-        if (router.canDismiss()) router.dismissAll();
-        router.replace('/home');
-    };
+    // The pages end at creating an account; Skip goes there too.
+    const enter = () => router.replace('/sign-up');
     const go = (by: number) => {
         const next = page + by;
         if (next >= PAGES.length) return enter();
@@ -89,13 +87,15 @@ export default function Onboarding() {
                     <View style={{ width: '100%', maxWidth: 420, gap: 10 }}>
                         <GlassButton kind="accent" contentStyle={{ height: 58, flexDirection: 'row', gap: 10 }} onPress={() => go(1)}>
                             <Text variant="heading" tone="onAccent">
-                                {last ? 'Start splitting' : 'Next'}
+                                {last ? 'Create my account' : 'Next'}
                             </Text>
                             <ArrowRight size={20} color={tokens.onAccent} strokeWidth={2.4} />
                         </GlassButton>
-                        <Text variant="caption" tone="muted" onLiquid>
-                            Preview build · the people and money in it are made up
-                        </Text>
+                        <Pressable accessibilityRole="button" hitSlop={8} style={{ alignSelf: 'center' }} onPress={() => router.replace('/sign-in')}>
+                            <Text variant="label" tone="accent" onLiquid>
+                                I already have an account
+                            </Text>
+                        </Pressable>
                     </View>
                 </View>
             </GestureDetector>

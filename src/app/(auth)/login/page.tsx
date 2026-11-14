@@ -63,7 +63,7 @@ function LoginForm() {
             subtitle="Sign in to see who owes what and settle up in seconds."
             footer={<>New to SplitIT? <Link href={registerHref}>Create an account</Link></>}
         >
-            <SocialSignIn callbackUrl={callbackUrl} />
+            <SocialSignIn callbackUrl={callbackUrl} autoStart={searchParams.get('provider')} />
 
             <AnimatePresence initial={false}>
                 {error && (

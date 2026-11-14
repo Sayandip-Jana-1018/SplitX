@@ -11,16 +11,19 @@
  * Pure TypeScript: the phone's secure storage comes in as a SessionStore (session.ts), so the
  * website's test runner can test this file (tests/unit/mobileApiClient.test.ts).
  */
-import type { z } from 'zod';
+import { z } from 'zod';
 import {
     ActivityPage,
+    CodeSession,
     ErrorBody,
     GroupDetail,
     GroupList,
     MeAnswer,
     Refreshed,
     Session,
+    SignUpAnswer,
     type Me,
+    type ProfileUpdate,
     type TokenPair,
     type ActivityQuery,
     type DeviceDetails,
@@ -100,6 +103,8 @@ export function createApi(options: ApiOptions) {
             const message = error.success ? error.data.error : 'Something went wrong. Try again.';
             const code = error.success ? error.data.code : null;
             if (response.status === 401) throw new ApiError('signed_out', message, 401, code);
+            // A 404 without the contract's error body: this server doesn't have the call yet (it is older than the app).
+            if (response.status === 404 && !error.success) throw new ApiError('bad_answer', 'The server doesn’t have this yet. It needs an update.', 404, 'not_on_server');
             throw new ApiError(response.status >= 500 ? 'server' : 'refused', message, response.status, code);
         }
         const parsed = schema.safeParse(body);
@@ -112,10 +117,11 @@ export function createApi(options: ApiOptions) {
         return options.store.save({ refreshToken: tokens.refreshToken, deviceId: tokens.deviceId });
     }
 
-    async function endLocally(code: string | null) {
+    /** Forgets the session. `ended` means the server ended it (not you), so the app says so and goes to sign-in. */
+    async function endLocally(code: string | null, ended = true) {
         access = null;
         await options.store.clear();
-        options.onSignedOut?.(code);
+        if (ended) options.onSignedOut?.(code);
     }
 
     /** One refresh at a time. Signed out ends the session here; offline keeps it for later. */
@@ -148,10 +154,16 @@ export function createApi(options: ApiOptions) {
         return read(response, schema);
     }
 
+    /** A request made before signing in, carrying what this phone is (and its device id from before). */
+    async function open<T>(path: string, body: object, schema: z.ZodType<T>, withDevice = true): Promise<T> {
+        const stored = withDevice ? await options.store.load() : null;
+        const payload = withDevice ? { ...body, device: { ...options.device(), deviceId: stored?.deviceId ?? null } } : body;
+        const response = await request(path, { method: 'POST', body: JSON.stringify(payload) });
+        return read(response, schema);
+    }
+
     async function startWith(path: string, body: object): Promise<Me> {
-        const stored = await options.store.load();
-        const response = await request(path, { method: 'POST', body: JSON.stringify({ ...body, device: { ...options.device(), deviceId: stored?.deviceId ?? null } }) });
-        const session = await read(response, Session);
+        const session = await open(path, body, Session);
         await keep(session.tokens);
         return session.me;
     }
@@ -161,10 +173,38 @@ export function createApi(options: ApiOptions) {
         hasSession: async () => Boolean(await options.store.load()),
         signInWithPassword: (email: string, password: string) => startWith('/api/v1/auth/password', { email, password }),
         signInWithGoogle: (idToken: string) => startWith('/api/v1/auth/google', { idToken }),
+        /** Emails a 6-digit code: to sign in, to confirm a new account again, or to reset a password. */
+        requestEmailCode: (email: string, purpose: 'sign_in' | 'confirm_sign_up' | 'password_reset') =>
+            open('/api/v1/auth/email-code', { email, purpose }, z.object({ sent: z.boolean() }), false).then(() => undefined),
+        /** Signs in with an emailed code; `isNew` means the account has no name yet. */
+        async signInWithEmailCode(email: string, code: string, purpose: 'sign_in' | 'confirm_sign_up' = 'sign_in') {
+            const session = await open('/api/v1/auth/email-code/verify', { email, code, purpose }, CodeSession);
+            await keep(session.tokens);
+            return { me: session.me, isNew: session.isNew };
+        },
+        /** Creates an account; `codeSent` means confirm it with the emailed code next. */
+        async signUp(name: string, email: string, password: string): Promise<{ codeSent: boolean; me: Me | null }> {
+            const answer = await open('/api/v1/auth/sign-up', { name, email, password }, SignUpAnswer);
+            if (answer.session) await keep(answer.session.tokens);
+            return { codeSent: answer.codeSent, me: answer.session?.me ?? null };
+        },
+        /** Sets a new password with an emailed code; every other session ends and this phone is signed in. */
+        resetPassword: (email: string, code: string, password: string) => startWith('/api/v1/auth/password-reset', { email, code, password }),
+        /** Trades the website's one-time code (after Google or GitHub) and this phone's PKCE verifier for a session. */
+        exchangeHandoff: (code: string, verifier: string) => startWith('/api/v1/auth/handoff/exchange', { code, verifier }),
+        /** Ends every session of the account, this one too. */
+        async signOutEverywhere() {
+            // 204: no body, which the client reads as null.
+            await authed('/api/v1/auth/sign-out-everywhere', z.null(), { method: 'POST' });
+            await endLocally(null, false);
+        },
+        /** Your name and UPI ID. */
+        updateMe: (update: ProfileUpdate) =>
+            authed('/api/v1/me', MeAnswer, { method: 'PATCH', body: JSON.stringify(update) }).then((answer) => answer.me),
         /** Ends the session here at once; telling the server is best effort. */
         async signOut() {
             const stored = await options.store.load();
-            await endLocally(null);
+            await endLocally(null, false);
             if (stored) await request('/api/v1/auth/sign-out', { method: 'POST', body: JSON.stringify({ refreshToken: stored.refreshToken }) }).catch(() => undefined);
         },
         me: () => authed('/api/v1/me', MeAnswer).then((answer) => answer.me),

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import useSWR from 'swr';
 import { signIn } from 'next-auth/react';
 import { motion } from 'framer-motion';
@@ -157,11 +157,24 @@ async function providersFetcher(url: string): Promise<Record<string, ProviderInf
     return response.ok ? response.json() : {};
 }
 
-/** OAuth buttons for whichever providers the server actually has configured. */
-export function SocialSignIn({ callbackUrl }: { callbackUrl: string }) {
+/**
+ * OAuth buttons for whichever providers the server actually has configured.
+ * `autoStart` names one to start at once: the phone app's "Continue with
+ * Google" opens this page with ?provider=google (src/lib/v1/handoff.ts).
+ */
+export function SocialSignIn({ callbackUrl, autoStart }: { callbackUrl: string; autoStart?: string | null }) {
     const { data } = useSWR('/api/auth/providers', providersFetcher, { revalidateOnFocus: false });
     const [pending, setPending] = useState<string | null>(null);
+    const started = useRef(false);
     const providers = Object.values(data ?? {}).filter((provider) => provider.type === 'oauth' || provider.type === 'oidc');
+    const autoStarting = autoStart && providers.some((provider) => provider.id === autoStart) ? autoStart : null;
+    const busy = pending ?? autoStarting;
+
+    useEffect(() => {
+        if (started.current || !autoStarting) return;
+        started.current = true;
+        void signIn(autoStarting, { callbackUrl });
+    }, [autoStarting, callbackUrl]);
 
     if (providers.length === 0) return null;
 
@@ -180,13 +193,13 @@ export function SocialSignIn({ callbackUrl }: { callbackUrl: string }) {
                         type="button"
                         className={styles.socialButton}
                         data-glass="thin"
-                        disabled={pending !== null}
+                        disabled={busy !== null}
                         onClick={() => {
                             setPending(provider.id);
                             void signIn(provider.id, { callbackUrl });
                         }}
                     >
-                        {pending === provider.id ? <Spinner size={16} /> : PROVIDER_ICONS[provider.id]}
+                        {busy === provider.id ? <Spinner size={16} /> : PROVIDER_ICONS[provider.id]}
                         {provider.name}
                     </button>
                 ))}
