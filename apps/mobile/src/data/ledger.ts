@@ -54,6 +54,8 @@ export interface Expense {
     /** A photo of the receipt, on this phone only until Phase 3 uploads it. */
     receipt?: string | null;
     createdAt: Date;
+    /** Saved on the phone, waiting to reach the server. */
+    pending?: boolean;
 }
 
 export interface Message {
@@ -62,6 +64,7 @@ export interface Message {
     fromId: string;
     text: string;
     at: Date;
+    pending?: boolean;
 }
 
 export interface Settlement {
@@ -75,6 +78,7 @@ export interface Settlement {
     status: string;
     note?: string | null;
     createdAt: Date;
+    pending?: boolean;
 }
 
 export interface Ledger {
@@ -218,7 +222,7 @@ export function activity(ledger: Ledger, groupId?: string): ActivityItem[] {
         const share = expense.splits.find((split) => split.userId === ME)?.amount ?? 0;
         const paid = expense.payerId === ME ? expense.amount : 0;
         const payer = expense.payerId === ME ? 'You' : first(expense.payerId);
-        items.push({ id: expense.id, kind: 'expense', title: expense.title, groupId: expense.groupId, note: `${payer} paid`, category: expense.category, yours: paid - share, at: expense.createdAt });
+        items.push({ id: expense.id, kind: 'expense', title: expense.title, groupId: expense.groupId, note: expense.pending ? 'Sending…' : `${payer} paid`, category: expense.category, yours: paid - share, at: expense.createdAt });
     }
     for (const settlement of ledger.settlements) {
         if (groupId && settlement.groupId !== groupId) continue;
@@ -226,7 +230,7 @@ export function activity(ledger: Ledger, groupId?: string): ActivityItem[] {
         // A payment reads as money: what you received is positive, what you paid negative. One still on its way moves nothing yet.
         const yours = !done ? 0 : settlement.toId === ME ? settlement.amount : settlement.fromId === ME ? -settlement.amount : 0;
         const title = settlement.toId === ME ? `${first(settlement.fromId)} paid you back` : settlement.fromId === ME ? `You paid ${first(settlement.toId)}` : `${first(settlement.fromId)} paid ${first(settlement.toId)}`;
-        const note = done ? (settlement.method === 'cash' ? 'Settled in cash' : 'Settled by UPI') : 'Waiting to be confirmed';
+        const note = settlement.pending ? 'Sending…' : done ? (settlement.method === 'cash' ? 'Settled in cash' : 'Settled by UPI') : 'Waiting to be confirmed';
         items.push({ id: settlement.id, kind: 'settlement', title, groupId: settlement.groupId, note, category: 'settlement', yours, at: settlement.createdAt });
     }
     return items.sort((a, b) => b.at.getTime() - a.at.getTime());

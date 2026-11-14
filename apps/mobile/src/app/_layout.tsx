@@ -94,6 +94,8 @@ function Frame() {
                             <Stack.Screen name="appearance" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
                             <Stack.Screen name="add" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
                             <Stack.Screen name="pay" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+                            <Stack.Screen name="new-group" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+                            <Stack.Screen name="join" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
                         </Stack>
                     </NavigationTheme>
                     </LedgerProvider>

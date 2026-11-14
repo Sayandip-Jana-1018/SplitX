@@ -209,6 +209,7 @@ export function authErrorMessage(error: unknown): string {
     if (!(error instanceof ApiError)) return 'Something went wrong. Try again.';
     // Accounts reach the live server with the go-live step; until then only the demo works there.
     if (error.code === 'not_on_server') return 'Accounts aren’t open yet. Try the demo for now.';
+    if (error.code === 'invalid_invite') return 'That link doesn’t match any group. Check it, or ask for a new one.';
     if (error.kind === 'offline') return 'You’re offline. Connect and try again.';
     return error.message;
 }

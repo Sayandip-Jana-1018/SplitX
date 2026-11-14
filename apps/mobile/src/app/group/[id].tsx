@@ -1,8 +1,10 @@
 /** One group: where everyone stands, who pays whom, its expenses and its people. */
 import { router, useLocalSearchParams } from 'expo-router';
-import { ChevronRight, MessageCircle, Plus } from 'lucide-react-native';
+import { ChevronRight, MessageCircle, Plus, UserPlus } from 'lucide-react-native';
 import { useMemo, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { Pressable, Share, View } from 'react-native';
+import { api } from '~/api';
+import { authErrorMessage } from '~/auth/AuthProvider';
 import { activity, groupBalances, groupTransfers, ME } from '~/data/ledger';
 import { useLedger } from '~/data/LedgerProvider';
 import { GlassSurface } from '~/glass/GlassSurface';
@@ -12,18 +14,21 @@ import { Avatar } from '~/ui/Avatar';
 import { EmptyState } from '~/ui/EmptyState';
 import { GlassButton } from '~/ui/GlassButton';
 import { Header } from '~/ui/Header';
-import { rupees } from '~/ui/money';
+import { members, rupees } from '~/ui/money';
 import { RollingAmount } from '~/ui/RollingAmount';
 import { Screen } from '~/ui/Screen';
 import { Segmented } from '~/ui/Segmented';
 import { Text } from '~/ui/Text';
+import { useToast } from '~/ui/Toast';
 
 type Tab = 'overview' | 'expenses' | 'members';
 
 export default function GroupScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
     const { tokens } = useLook();
-    const { ledger, personOf, onRefresh } = useLedger();
+    const { ledger, personOf, onRefresh, real } = useLedger();
+    const toast = useToast();
+    const [inviting, setInviting] = useState(false);
     const [tab, setTab] = useState<Tab>('overview');
     const group = ledger.groups.find((candidate) => candidate.id === id);
     const balances = useMemo(() => (group ? groupBalances(ledger, group.id) : {}), [ledger, group]);
@@ -40,13 +45,34 @@ export default function GroupScreen() {
     }
 
     const spent = ledger.expenses.filter((expense) => expense.groupId === group.id).reduce((sum, expense) => sum + expense.amount, 0);
+
+    // The link already out is kept while it works (a new one would end it for everyone it was sent to).
+    const invite = async () => {
+        setInviting(true);
+        try {
+            const link = await api.inviteLink(group.id);
+            await Share.share({ message: `Join “${group.name}” on SplitIT to split what we spend: ${link.url}` });
+        } catch (error) {
+            toast(authErrorMessage(error), 'info');
+        } finally {
+            setInviting(false);
+        }
+    };
+    const inviteButton = real ? (
+        <GlassButton kind={group.memberIds.length === 1 ? 'accent' : 'thin'} contentStyle={{ height: 50, flexDirection: 'row', gap: 8 }} disabled={inviting} onPress={() => void invite()}>
+            <UserPlus size={18} color={group.memberIds.length === 1 ? tokens.onAccent : tokens.fg} strokeWidth={2.4} />
+            <Text variant="label" tone={group.memberIds.length === 1 ? 'onAccent' : 'primary'}>
+                {inviting ? 'Getting the link…' : 'Invite people'}
+            </Text>
+        </GlassButton>
+    ) : null;
     const mine = balances[ME] ?? 0;
 
     return (
         <Screen tabBar={false} onRefresh={onRefresh}>
             <Header
                 title={`${group.emoji} ${group.name}`}
-                eyebrow={`${group.memberIds.length} members`}
+                eyebrow={members(group.memberIds.length)}
                 right={
                     <GlassButton kind="thin" contentStyle={{ width: 42, height: 42 }} accessibilityLabel="Group chat" onPress={() => router.push(`/chat/${group.id}`)}>
                         <MessageCircle size={19} color={tokens.fg} strokeWidth={2.2} />
@@ -138,6 +164,7 @@ export default function GroupScreen() {
                     })}
                 </GlassSurface>
             )}
+            {tab === 'members' || group.memberIds.length === 1 ? inviteButton : null}
         </Screen>
     );
 }

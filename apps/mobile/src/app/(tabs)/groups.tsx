@@ -8,8 +8,9 @@ import { useLedger } from '~/data/LedgerProvider';
 import { useLook } from '~/theme/ThemeProvider';
 import { AvatarStack } from '~/ui/Avatar';
 import { EmptyState } from '~/ui/EmptyState';
+import { GroupActions } from '~/ui/GroupActions';
 import { GlassButton } from '~/ui/GlassButton';
-import { rupees } from '~/ui/money';
+import { members, rupees } from '~/ui/money';
 import { Screen } from '~/ui/Screen';
 import { Text } from '~/ui/Text';
 
@@ -30,7 +31,8 @@ export default function Groups() {
                     {ledger.groups.length === 1 ? '1 group' : `${ledger.groups.length} groups`} · {rupees(total)} tracked together
                 </Text>
             </View>
-            {ledger.groups.length === 0 ? <EmptyState emoji="👥" title="No groups yet" hint="Groups you make or join on splitsj.vercel.app show up here. Making and joining them in the app comes next." /> : null}
+            <GroupActions />
+            {ledger.groups.length === 0 ? <EmptyState emoji="👥" title="No groups yet" hint="Make one for a trip, a flat or a dinner, or join one with the invite link someone sent you." /> : null}
             {ledger.groups.map((group, index) => {
                 const mine = groupBalances(ledger, group.id)[ME] ?? 0;
                 return (
@@ -45,7 +47,7 @@ export default function Groups() {
                                         {group.name}
                                     </Text>
                                     <Text variant="caption" tone="secondary" align="left">
-                                        {group.memberIds.length} members
+                                        {members(group.memberIds.length)}
                                     </Text>
                                 </View>
                                 <ChevronRight size={20} color={tokens.muted} />

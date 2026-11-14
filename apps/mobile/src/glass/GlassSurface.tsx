@@ -72,7 +72,7 @@ function LayeredSurface({ kind = 'reg', radius = 24, glassStyle, scale, dimmed, 
         opacity.set(calm ? target : withTiming(target, { duration: 260 }));
     }, [dimmed, calm, opacity]);
 
-    useEffect(() => layer.add({ kind: 'surface', order, place, size, scale: scale ?? steady, opacity, radius, look }), [layer, order, place, size, scale, steady, opacity, radius, look]);
+    useEffect(() => layer.add({ kind: 'surface', order, place, measure, size, scale: scale ?? steady, opacity, radius, look }), [layer, order, place, measure, size, scale, steady, opacity, radius, look]);
 
     const laidOut = (event: LayoutChangeEvent) => {
         const { width, height } = event.nativeEvent.layout;

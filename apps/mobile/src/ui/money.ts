@@ -6,3 +6,6 @@ export function rupees(paise: number, options: { sign?: boolean } = {}): string 
     if (!options.sign || paise === 0) return `₹${value}`;
     return `${paise > 0 ? '+' : '−'}₹${value}`;
 }
+
+/** "1 member", "3 members". */
+export const members = (count: number) => (count === 1 ? '1 member' : `${count} members`);

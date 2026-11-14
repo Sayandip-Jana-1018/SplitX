@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
-import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
+import { joinGroup } from '@/lib/services/groups';
 import { inviteIsLive } from '@/lib/groupInvite';
 
 const JoinGroupSchema = z.object({
@@ -32,62 +32,10 @@ export async function POST(req: Request) {
         const user = await prisma.user.findUnique({ where: { email: session.user.email } });
         if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
-        // Find group by invite code (exclude deleted groups)
-        const group = await prisma.group.findFirst({
-            where: { inviteCode: parsed.data.inviteCode, deletedAt: null },
-            include: {
-                members: { select: { userId: true } },
-            },
-        });
-
-        if (!group) {
-            return NextResponse.json({ error: 'Invalid invite code' }, { status: 404 });
-        }
-
-        const alreadyMember = () => NextResponse.json({ message: 'Already a member', groupId: group.id });
-        // Someone already in the group is let through an old link: it opens nothing new.
-        if (group.members.some(m => m.userId === user.id)) return alreadyMember();
-        if (!inviteIsLive(group.inviteCodeIssuedAt)) return expired();
-
-        // A second tap can pass the check above before the first one's insert
-        // lands; the database's one-membership-per-person rule then refuses it,
-        // and that tap is answered as what it is: already a member.
-        try {
-            await prisma.groupMember.create({
-                data: {
-                    groupId: group.id,
-                    userId: user.id,
-                    role: 'member',
-                },
-            });
-        } catch (error) {
-            if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') return alreadyMember();
-            throw error;
-        }
-
-        // Notify all existing members about the new joiner
-        const existingMemberIds = group.members
-            .map(m => m.userId)
-            .filter(id => id !== user.id);
-
-        if (existingMemberIds.length > 0) {
-            const joinerName = user.name || user.email?.split('@')[0] || 'Someone';
-            await prisma.notification.createMany({
-                data: existingMemberIds.map(memberId => ({
-                    userId: memberId,
-                    actorId: user.id,
-                    type: 'member_joined',
-                    title: 'New member joined',
-                    body: `${joinerName} joined "${group.name}"`,
-                    link: `/groups/${group.id}`,
-                })),
-            });
-        }
-
-        return NextResponse.json({
-            message: 'Joined successfully',
-            groupId: group.id,
-        }, { status: 201 });
+        const outcome = await joinGroup(user, parsed.data.inviteCode);
+        if (!outcome.ok) return NextResponse.json({ error: outcome.error }, { status: outcome.status });
+        if (!outcome.value.joined) return NextResponse.json({ message: 'Already a member', groupId: outcome.value.groupId });
+        return NextResponse.json({ message: 'Joined successfully', groupId: outcome.value.groupId }, { status: 201 });
     } catch (error) {
         logger.error('Join group error', { err: error });
         return NextResponse.json({ error: 'Failed to join group' }, { status: 500 });

@@ -251,6 +251,28 @@ export type NewMessage = z.infer<typeof NewMessage>;
 export const MessageSent = z.object({ message: ChatMessage });
 export type MessageSent = z.infer<typeof MessageSent>;
 
+// ── Groups (Phase 2 step 5b) ────────────────────────────────
+
+export const NewGroup = z.object({
+    name: z.string().trim().min(1, 'Give the group a name').max(50),
+    emoji: z.string().min(1).max(16).default('✈️'),
+});
+export type NewGroup = z.infer<typeof NewGroup>;
+
+export const GroupMade = z.object({ groupId: z.string() });
+export type GroupMade = z.infer<typeof GroupMade>;
+
+export const JoinGroup = z.object({ inviteCode: z.string().trim().min(1).max(64) });
+export type JoinGroup = z.infer<typeof JoinGroup>;
+
+/** `joined` is false when you were already in it. */
+export const GroupJoined = z.object({ groupId: z.string(), joined: z.boolean() });
+export type GroupJoined = z.infer<typeof GroupJoined>;
+
+/** A link that works for 7 days; the one already out is kept while it still works. */
+export const InviteLink = z.object({ inviteCode: z.string(), url: z.string(), expiresAt: z.string() });
+export type InviteLink = z.infer<typeof InviteLink>;
+
 // ── Sync (Phase 2 step 5) ───────────────────────────────────
 
 /**

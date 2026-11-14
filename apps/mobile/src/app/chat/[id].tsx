@@ -5,7 +5,7 @@
  */
 import { router, useLocalSearchParams } from 'expo-router';
 import { SendHorizontal } from 'lucide-react-native';
-import { useMemo, useRef, useState, type ComponentRef } from 'react';
+import { useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
 import { KeyboardAvoidingView, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ME } from '~/data/ledger';
@@ -41,10 +41,18 @@ export default function Chat() {
     const { id } = useLocalSearchParams<{ id: string }>();
     const { tokens } = useLook();
     const insets = useSafeAreaInsets();
-    const { ledger, personOf, sendMessage } = useLedger();
+    const { ledger, personOf, sendMessage, loadMessages, real } = useLedger();
     const [draft, setDraft] = useState('');
     const list = useRef<ComponentRef<typeof ScrollView>>(null);
     const group = ledger.groups.find((candidate) => candidate.id === id);
+
+    // Your real groups: the chat comes from the server when it opens, and again every 15 s while it's open.
+    useEffect(() => {
+        if (!real || !id) return;
+        void loadMessages(id);
+        const timer = setInterval(() => void loadMessages(id), 15_000);
+        return () => clearInterval(timer);
+    }, [real, id, loadMessages]);
 
     const entries = useMemo((): Entry[] => {
         if (!group) return [];

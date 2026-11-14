@@ -16,6 +16,14 @@ import {
     ActivityPage,
     CodeSession,
     ErrorBody,
+    ExpenseSaved,
+    GroupJoined,
+    GroupMade,
+    InviteLink,
+    MessagePage,
+    MessageSent,
+    SettlementMoved,
+    SettlementSaved,
     GroupDetail,
     GroupList,
     MeAnswer,
@@ -28,6 +36,11 @@ import {
     type TokenPair,
     type ActivityQuery,
     type DeviceDetails,
+    type NewExpense,
+    type NewGroup,
+    type NewMessage,
+    type NewSettlement,
+    type SettlementMove,
 } from '@/lib/contract/v1';
 
 export type ApiErrorKind = 'offline' | 'timeout' | 'signed_out' | 'refused' | 'server' | 'bad_answer';
@@ -209,6 +222,19 @@ export function createApi(options: ApiOptions) {
             if (stored) void request('/api/v1/auth/sign-out', { method: 'POST', body: JSON.stringify({ refreshToken: stored.refreshToken }) }).catch(() => undefined);
         },
         me: () => authed('/api/v1/me', MeAnswer).then((answer) => answer.me),
+        /** Saves an expense; the same clientId again saves nothing new (`replayed`). */
+        saveExpense: (expense: NewExpense) => authed('/api/v1/expenses', ExpenseSaved, { method: 'POST', body: JSON.stringify(expense) }),
+        /** 204: no body, which the client reads as null. */
+        deleteExpense: (id: string) => authed(`/api/v1/expenses/${encodeURIComponent(id)}`, z.null(), { method: 'DELETE' }),
+        askSettlement: (settlement: NewSettlement) => authed('/api/v1/settlements', SettlementSaved, { method: 'POST', body: JSON.stringify(settlement) }),
+        moveSettlement: (id: string, move: SettlementMove) => authed(`/api/v1/settlements/${encodeURIComponent(id)}`, SettlementMoved, { method: 'POST', body: JSON.stringify(move) }),
+        /** A group's chat, oldest first; `cursor` asks for the page before. */
+        messages: (groupId: string, cursor?: string | null) =>
+            authed(`/api/v1/groups/${encodeURIComponent(groupId)}/messages${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`, MessagePage),
+        sendMessage: (groupId: string, message: NewMessage) => authed(`/api/v1/groups/${encodeURIComponent(groupId)}/messages`, MessageSent, { method: 'POST', body: JSON.stringify(message) }),
+        createGroup: (group: NewGroup) => authed('/api/v1/groups', GroupMade, { method: 'POST', body: JSON.stringify(group) }),
+        joinGroup: (inviteCode: string) => authed('/api/v1/groups/join', GroupJoined, { method: 'POST', body: JSON.stringify({ inviteCode }) }),
+        inviteLink: (groupId: string) => authed(`/api/v1/groups/${encodeURIComponent(groupId)}/invite`, InviteLink, { method: 'POST' }),
         /** Every group you're in, with the ones that changed since the versions given, in full. */
         sync: (known: Record<string, string>) => authed('/api/v1/sync', SyncAnswer, { method: 'POST', body: JSON.stringify({ known }) }),
         groups: () => authed('/api/v1/groups', GroupList).then((answer) => answer.groups),

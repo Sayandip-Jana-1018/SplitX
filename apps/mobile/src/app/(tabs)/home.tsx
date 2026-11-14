@@ -18,8 +18,9 @@ import { useLook } from '~/theme/ThemeProvider';
 import { ActivityList } from '~/ui/ActivityList';
 import { AvatarStack } from '~/ui/Avatar';
 import { EmptyState } from '~/ui/EmptyState';
+import { GroupActions } from '~/ui/GroupActions';
 import { GlassButton } from '~/ui/GlassButton';
-import { rupees } from '~/ui/money';
+import { members, rupees } from '~/ui/money';
 import { RollingAmount } from '~/ui/RollingAmount';
 import { Screen, SectionTitle } from '~/ui/Screen';
 import { Text } from '~/ui/Text';
@@ -128,7 +129,10 @@ export default function Home() {
                     </Text>
                 </SectionTitle>
                 {ledger.groups.length === 0 ? (
-                    <EmptyState emoji="👥" title="No groups yet" hint="Groups you make or join on splitsj.vercel.app show up here. Making and joining them in the app comes next." />
+                    <View style={{ gap: 12 }}>
+                        <EmptyState emoji="👥" title="No groups yet" hint="Make one for a trip, a flat or a dinner, or join one with the invite link someone sent you." />
+                        <GroupActions />
+                    </View>
                 ) : null}
                 <GlassScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -20, display: ledger.groups.length === 0 ? 'none' : 'flex' }} contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 14, gap: 12 }}>
                     {ledger.groups.map((group) => {
@@ -143,7 +147,7 @@ export default function Home() {
                                     {group.name}
                                 </Text>
                                 <Text variant="caption" tone="secondary" tabular>
-                                    {group.memberIds.length} members · {rupees(spent)}
+                                    {members(group.memberIds.length)} · {rupees(spent)}
                                 </Text>
                                 <AvatarStack names={group.memberIds.map((id) => personOf(id).name)} />
                                 <Text variant="label" tone={mine >= 0 ? 'in' : 'out'} tabular>

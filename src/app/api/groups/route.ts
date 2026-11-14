@@ -2,9 +2,9 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { z } from 'zod';
-import { createAuditLog } from '@/lib/auditLog';
 import { logger } from '@/lib/logger';
 import { invalidInput } from '@/lib/invalidInput';
+import { createGroup } from '@/lib/services/groups';
 
 const CreateGroupSchema = z.object({
     name: z.string().min(1).max(50),
@@ -72,36 +72,7 @@ export async function POST(req: Request) {
         const user = await prisma.user.findUnique({ where: { email: session.user.email } });
         if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
-        const group = await prisma.group.create({
-            data: {
-                name: parsed.data.name,
-                emoji: parsed.data.emoji,
-                ownerId: user.id,
-                members: {
-                    create: { userId: user.id, role: 'admin' },
-                },
-                // Auto-create a default trip so expenses can be added immediately
-                trips: {
-                    create: {
-                        title: parsed.data.name,
-                        isActive: true,
-                        currency: 'INR',
-                    },
-                },
-            },
-        });
-
-        await createAuditLog({
-            userId: user.id,
-            action: 'create',
-            entityType: 'group',
-            entityId: group.id,
-            details: {
-                groupId: group.id,
-                name: group.name,
-                emoji: group.emoji,
-            },
-        });
+        const group = await createGroup(user.id, parsed.data);
 
         return NextResponse.json(group, { status: 201 });
     } catch (error) {

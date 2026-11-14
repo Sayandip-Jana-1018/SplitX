@@ -54,6 +54,8 @@ interface PaneBase {
     /** Drawing order: a pane drawn later sits on top. Parents render before their children. */
     order: number;
     place: Place;
+    /** Measures the pane's place again (the layer asks after each render: see LayerCanvas). */
+    measure?: () => void;
     /** 0 to 1: a pane fades in when it appears, and a disabled button's glass is dimmed. */
     opacity: SharedValue<number>;
 }
@@ -128,6 +130,16 @@ function LayerCanvas({ active, style, children }: Omit<Props, 'always'> & { acti
     const { time, liquid } = useGlass();
     const { ref, measure, place } = useScreenPlace();
     const [entries, setEntries] = useState<Entry[]>([]);
+
+    // A pane measures itself when its own layout changes, but not when something around it moves it
+    // (rows of a list trading places, a banner appearing above): after every render of the screen,
+    // every pane is measured again, together, on the next frame. Scrolling needs none of this.
+    useEffect(() => {
+        const frameId = requestAnimationFrame(() => {
+            for (const entry of entries) entry.pane.measure?.();
+        });
+        return () => cancelAnimationFrame(frameId);
+    });
     const [blank] = useState(emptyPicture);
     const picture = useSharedValue<SkPicture>(blank);
     const signature = useSharedValue(Number.NaN);

@@ -45,8 +45,8 @@ function LayeredCoin({ kind, size, seed = 0, style, children }: Props) {
     }, [calm, opacity]);
 
     useEffect(
-        () => layer.add({ kind: 'coin', order, place, opacity, coin: kind, code: coinCode(kind), seed, radius, reach: reachOf(kind, radius), light: pal.light, rim: pal.rim }),
-        [layer, order, place, opacity, kind, seed, radius, pal],
+        () => layer.add({ kind: 'coin', order, place, measure, opacity, coin: kind, code: coinCode(kind), seed, radius, reach: reachOf(kind, radius), light: pal.light, rim: pal.rim }),
+        [layer, order, place, measure, opacity, kind, seed, radius, pal],
     );
 
     return (
