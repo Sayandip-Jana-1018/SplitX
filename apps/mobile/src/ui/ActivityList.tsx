@@ -6,6 +6,7 @@ import { useLedger } from '~/data/LedgerProvider';
 import { GlassSurface } from '~/glass/GlassSurface';
 import { useLook } from '~/theme/ThemeProvider';
 import { categoryEmoji } from './category';
+import { EmptyState } from './EmptyState';
 import { rupees } from './money';
 import { Text } from './Text';
 import { when } from './time';
@@ -14,6 +15,7 @@ export function ActivityList({ items, showGroup = true }: { items: ActivityItem[
     const { tokens } = useLook();
     const { ledger } = useLedger();
     const groupName = (id: string) => ledger.groups.find((group) => group.id === id)?.name ?? '';
+    if (items.length === 0) return <EmptyState emoji="🧾" title="Nothing here yet" hint="Expenses and payments show up here as soon as anyone adds one." />;
     return (
         <GlassSurface style={{ paddingHorizontal: 16, paddingVertical: 4 }}>
             {items.map((item, index) => (

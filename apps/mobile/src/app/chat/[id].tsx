@@ -8,7 +8,7 @@ import { SendHorizontal } from 'lucide-react-native';
 import { useMemo, useRef, useState, type ComponentRef } from 'react';
 import { KeyboardAvoidingView, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ME, personById } from '~/data/ledger';
+import { ME } from '~/data/ledger';
 import { useLedger } from '~/data/LedgerProvider';
 import { GlassSurface } from '~/glass/GlassSurface';
 import { GlassLayer } from '~/glass/layer';
@@ -41,14 +41,14 @@ export default function Chat() {
     const { id } = useLocalSearchParams<{ id: string }>();
     const { tokens } = useLook();
     const insets = useSafeAreaInsets();
-    const { ledger, sendMessage } = useLedger();
+    const { ledger, personOf, sendMessage } = useLedger();
     const [draft, setDraft] = useState('');
     const list = useRef<ComponentRef<typeof ScrollView>>(null);
     const group = ledger.groups.find((candidate) => candidate.id === id);
 
     const entries = useMemo((): Entry[] => {
         if (!group) return [];
-        const first = (who: string) => (who === ME ? 'You' : personById(who).first);
+        const first = (who: string) => (who === ME ? 'You' : personOf(who).first);
         const all: Entry[] = [
             ...ledger.messages.filter((message) => message.groupId === group.id).map((message) => ({ kind: 'message' as const, id: message.id, fromId: message.fromId, text: message.text, at: message.at })),
             ...ledger.expenses
@@ -56,7 +56,7 @@ export default function Chat() {
                 .map((expense) => ({ kind: 'expense' as const, id: expense.id, emoji: categoryEmoji(expense.category), text: `${first(expense.payerId)} added ${expense.title} · ${rupees(expense.amount)}`, at: expense.createdAt })),
             ...ledger.settlements
                 .filter((settlement) => settlement.groupId === group.id)
-                .map((settlement) => ({ kind: 'payment' as const, id: settlement.id, text: `${first(settlement.fromId)} paid ${settlement.toId === ME ? 'you' : personById(settlement.toId).first} ${rupees(settlement.amount)}`, at: settlement.createdAt })),
+                .map((settlement) => ({ kind: 'payment' as const, id: settlement.id, text: `${first(settlement.fromId)} paid ${settlement.toId === ME ? 'you' : personOf(settlement.toId).first} ${rupees(settlement.amount)}`, at: settlement.createdAt })),
         ];
         return all.sort((a, b) => a.at.getTime() - b.at.getTime());
     }, [ledger, group]);
@@ -111,7 +111,7 @@ export default function Chat() {
                         const mine = entry.fromId === ME;
                         const sameAsBefore = before?.kind === 'message' && before.fromId === entry.fromId && !newDay;
                         const sameAsAfter = after?.kind === 'message' && after.fromId === entry.fromId && dayOf(after.at) === dayOf(entry.at);
-                        const person = personById(entry.fromId);
+                        const person = personOf(entry.fromId);
                         return (
                             <View key={entry.id}>
                                 {day}

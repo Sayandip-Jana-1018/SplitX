@@ -251,6 +251,67 @@ export type NewMessage = z.infer<typeof NewMessage>;
 export const MessageSent = z.object({ message: ChatMessage });
 export type MessageSent = z.infer<typeof MessageSent>;
 
+// ── Sync (Phase 2 step 5) ───────────────────────────────────
+
+/**
+ * The phone keeps each of your groups whole and says which version it holds;
+ * the server answers with every group you're in now and, in full, only those
+ * that changed (or that the phone hasn't got). A group missing from `groupIds`
+ * is one you are no longer in.
+ */
+export const SyncRequest = z.object({
+    known: z.record(z.string().max(64), z.string().max(64)).default({}).refine((known) => Object.keys(known).length <= 500, 'Too many groups'),
+});
+export type SyncRequest = z.infer<typeof SyncRequest>;
+
+const SyncPerson = Person.extend({
+    upiId: z.string().nullable(),
+    /** False for someone who has left but appears in the group's history. */
+    isMember: z.boolean(),
+});
+
+const SyncExpense = z.object({
+    id: z.string(),
+    title: z.string(),
+    category: z.string(),
+    amount: Paise,
+    payerId: z.string(),
+    splitType: z.string(),
+    splits: z.array(Share),
+    receiptUrl: z.string().nullable(),
+    createdAt: z.string(),
+});
+
+const SyncSettlement = z.object({
+    id: z.string(),
+    fromId: z.string(),
+    toId: z.string(),
+    amount: Paise,
+    /** Only completed ones move balances; the rest are on their way. */
+    status: z.string(),
+    method: z.string().nullable(),
+    note: z.string().nullable(),
+    createdAt: z.string(),
+});
+
+export const SyncGroup = z.object({
+    id: z.string(),
+    /** Changes whenever anything below does. */
+    version: z.string(),
+    name: z.string(),
+    emoji: z.string(),
+    ownerId: z.string(),
+    people: z.array(SyncPerson),
+    /** Oldest first. */
+    expenses: z.array(SyncExpense),
+    /** Newest first, in any status. */
+    settlements: z.array(SyncSettlement),
+});
+export type SyncGroup = z.infer<typeof SyncGroup>;
+
+export const SyncAnswer = z.object({ groupIds: z.array(z.string()), changed: z.array(SyncGroup) });
+export type SyncAnswer = z.infer<typeof SyncAnswer>;
+
 // ── Sign-in, like real apps (Phase 2 step 4) ────────────────
 
 const Email = z.string().trim().max(254).email('Enter a valid email address');

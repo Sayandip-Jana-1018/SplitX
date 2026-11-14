@@ -7,7 +7,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { Camera, Image as ImageIcon, Receipt, Trash2 } from 'lucide-react-native';
 import { useState } from 'react';
 import { Image, View } from 'react-native';
-import { ME, personById, type Expense } from '~/data/ledger';
+import { ME, type Expense } from '~/data/ledger';
 import { useLedger } from '~/data/LedgerProvider';
 import { GlassSurface } from '~/glass/GlassSurface';
 import { useLook } from '~/theme/ThemeProvider';
@@ -34,7 +34,7 @@ function howSplit(expense: Expense, members: number): string {
 export default function ExpenseScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
     const { tokens } = useLook();
-    const { ledger, deleteExpense, setReceipt } = useLedger();
+    const { ledger, personOf, deleteExpense, setReceipt } = useLedger();
     const toast = useToast();
     const [asking, setAsking] = useState<'delete' | 'receipt' | null>(null);
     const [photoReady, setPhotoReady] = useState(false);
@@ -52,7 +52,7 @@ export default function ExpenseScreen() {
     }
 
     const group = ledger.groups.find((candidate) => candidate.id === expense.groupId);
-    const payer = expense.payerId === ME ? 'You' : personById(expense.payerId).first;
+    const payer = expense.payerId === ME ? 'You' : personOf(expense.payerId).first;
     const share = expense.splits.find((split) => split.userId === ME)?.amount ?? 0;
     const paid = expense.payerId === ME ? expense.amount : 0;
     const effect = paid - share;
@@ -137,7 +137,7 @@ export default function ExpenseScreen() {
                 </Text>
                 <GlassSurface style={{ paddingHorizontal: 16, paddingVertical: 4 }}>
                     {[...expense.splits].sort((a, b) => order(a.userId) - order(b.userId)).map((split, index) => {
-                        const person = personById(split.userId);
+                        const person = personOf(split.userId);
                         const weight = expense.weights?.[split.userId];
                         return (
                             <View key={split.userId} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 13, borderTopWidth: index === 0 ? 0 : 1, borderTopColor: tokens.border }}>

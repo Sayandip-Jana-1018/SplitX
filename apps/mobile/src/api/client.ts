@@ -22,6 +22,7 @@ import {
     Refreshed,
     Session,
     SignUpAnswer,
+    SyncAnswer,
     type Me,
     type ProfileUpdate,
     type TokenPair,
@@ -208,6 +209,8 @@ export function createApi(options: ApiOptions) {
             if (stored) void request('/api/v1/auth/sign-out', { method: 'POST', body: JSON.stringify({ refreshToken: stored.refreshToken }) }).catch(() => undefined);
         },
         me: () => authed('/api/v1/me', MeAnswer).then((answer) => answer.me),
+        /** Every group you're in, with the ones that changed since the versions given, in full. */
+        sync: (known: Record<string, string>) => authed('/api/v1/sync', SyncAnswer, { method: 'POST', body: JSON.stringify({ known }) }),
         groups: () => authed('/api/v1/groups', GroupList).then((answer) => answer.groups),
         group: (groupId: string) => authed(`/api/v1/groups/${encodeURIComponent(groupId)}`, GroupDetail),
         activity: (query: Partial<ActivityQuery> = {}) => {

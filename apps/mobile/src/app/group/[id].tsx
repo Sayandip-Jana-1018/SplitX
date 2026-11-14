@@ -3,7 +3,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { ChevronRight, MessageCircle, Plus } from 'lucide-react-native';
 import { useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
-import { activity, groupBalances, groupTransfers, ME, personById } from '~/data/ledger';
+import { activity, groupBalances, groupTransfers, ME } from '~/data/ledger';
 import { useLedger } from '~/data/LedgerProvider';
 import { GlassSurface } from '~/glass/GlassSurface';
 import { useLook } from '~/theme/ThemeProvider';
@@ -23,7 +23,7 @@ type Tab = 'overview' | 'expenses' | 'members';
 export default function GroupScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
     const { tokens } = useLook();
-    const { ledger } = useLedger();
+    const { ledger, personOf, onRefresh } = useLedger();
     const [tab, setTab] = useState<Tab>('overview');
     const group = ledger.groups.find((candidate) => candidate.id === id);
     const balances = useMemo(() => (group ? groupBalances(ledger, group.id) : {}), [ledger, group]);
@@ -43,7 +43,7 @@ export default function GroupScreen() {
     const mine = balances[ME] ?? 0;
 
     return (
-        <Screen tabBar={false}>
+        <Screen tabBar={false} onRefresh={onRefresh}>
             <Header
                 title={`${group.emoji} ${group.name}`}
                 eyebrow={`${group.memberIds.length} members`}
@@ -117,7 +117,7 @@ export default function GroupScreen() {
             {tab === 'members' && (
                 <GlassSurface style={{ paddingHorizontal: 16, paddingVertical: 4 }}>
                     {group.memberIds.map((memberId, index) => {
-                        const person = personById(memberId);
+                        const person = personOf(memberId);
                         const balance = balances[memberId] ?? 0;
                         return (
                             <View key={memberId} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, borderTopWidth: index === 0 ? 0 : 1, borderTopColor: tokens.border }}>

@@ -54,9 +54,7 @@ export default function RootLayout() {
         <GestureHandlerRootView style={{ flex: 1 }}>
             <SafeAreaProvider>
                 <ThemeProvider>
-                    <LedgerProvider>
-                        <Frame />
-                    </LedgerProvider>
+                    <Frame />
                 </ThemeProvider>
             </SafeAreaProvider>
         </GestureHandlerRootView>
@@ -76,6 +74,7 @@ function Frame() {
                 <LiquidWall />
                 <ToastProvider>
                     <AuthProvider>
+                    <LedgerProvider>
                     <NavigationTheme value={navigationTheme}>
                         <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' }, animation: 'fade' }}>
                             <Stack.Screen name="index" />
@@ -97,6 +96,7 @@ function Frame() {
                             <Stack.Screen name="pay" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
                         </Stack>
                     </NavigationTheme>
+                    </LedgerProvider>
                     </AuthProvider>
                 </ToastProvider>
                 <StatusBar style={mode === 'dark' ? 'light' : 'dark'} />

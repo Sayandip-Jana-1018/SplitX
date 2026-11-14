@@ -8,7 +8,7 @@ import { useMemo } from 'react';
 import { Pressable, useWindowDimensions, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import type { GlassKind } from '@shared/glass/styles';
-import { activity, groupBalances, ME, personById, totals } from '~/data/ledger';
+import { activity, groupBalances, ME, totals } from '~/data/ledger';
 import { useYou } from '~/auth/AuthProvider';
 import { useLedger } from '~/data/LedgerProvider';
 import { Coin } from '~/glass/Coin';
@@ -17,6 +17,7 @@ import { GlassSurface } from '~/glass/GlassSurface';
 import { useLook } from '~/theme/ThemeProvider';
 import { ActivityList } from '~/ui/ActivityList';
 import { AvatarStack } from '~/ui/Avatar';
+import { EmptyState } from '~/ui/EmptyState';
 import { GlassButton } from '~/ui/GlassButton';
 import { rupees } from '~/ui/money';
 import { RollingAmount } from '~/ui/RollingAmount';
@@ -41,7 +42,7 @@ const ACTIONS: { label: string; icon: LucideIcon; kind: GlassKind; href: string 
 export default function Home() {
     const { tokens, calm } = useLook();
     const you = useYou();
-    const { ledger } = useLedger();
+    const { ledger, personOf, onRefresh } = useLedger();
     const { width } = useWindowDimensions();
     const coin = Math.min(width - 56, 310);
     const sum = useMemo(() => totals(ledger), [ledger]);
@@ -51,7 +52,7 @@ export default function Home() {
     const Arrow = owed ? ArrowDownLeft : ArrowUpRight;
 
     return (
-        <Screen>
+        <Screen onRefresh={onRefresh}>
             <TopBar />
 
             <Animated.View entering={enter(0)} style={{ alignItems: 'center', gap: 2 }}>
@@ -126,7 +127,10 @@ export default function Home() {
                         Your groups
                     </Text>
                 </SectionTitle>
-                <GlassScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -20 }} contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 14, gap: 12 }}>
+                {ledger.groups.length === 0 ? (
+                    <EmptyState emoji="👥" title="No groups yet" hint="Groups you make or join on splitsj.vercel.app show up here. Making and joining them in the app comes next." />
+                ) : null}
+                <GlassScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -20, display: ledger.groups.length === 0 ? 'none' : 'flex' }} contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 14, gap: 12 }}>
                     {ledger.groups.map((group) => {
                         const mine = groupBalances(ledger, group.id)[ME] ?? 0;
                         const spent = ledger.expenses.filter((expense) => expense.groupId === group.id).reduce((total, expense) => total + expense.amount, 0);
@@ -141,7 +145,7 @@ export default function Home() {
                                 <Text variant="caption" tone="secondary" tabular>
                                     {group.memberIds.length} members · {rupees(spent)}
                                 </Text>
-                                <AvatarStack names={group.memberIds.map((id) => personById(id).name)} />
+                                <AvatarStack names={group.memberIds.map((id) => personOf(id).name)} />
                                 <Text variant="label" tone={mine >= 0 ? 'in' : 'out'} tabular>
                                     {mine === 0 ? 'Settled' : rupees(mine, { sign: true })}
                                 </Text>

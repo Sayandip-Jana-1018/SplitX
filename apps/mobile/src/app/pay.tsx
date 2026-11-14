@@ -5,7 +5,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { Check, Smartphone } from 'lucide-react-native';
 import { View } from 'react-native';
-import { personById } from '~/data/ledger';
 import { ME, useLedger } from '~/data/LedgerProvider';
 import { Coin } from '~/glass/Coin';
 import { GlassSurface } from '~/glass/GlassSurface';
@@ -20,11 +19,11 @@ import { useToast } from '~/ui/Toast';
 
 export default function Pay() {
     const { tokens } = useLook();
-    const { ledger, recordPayment } = useLedger();
+    const { ledger, personOf, recordPayment } = useLedger();
     const toast = useToast();
     const params = useLocalSearchParams<{ group: string; to: string; amount: string }>();
     const amount = Number(params.amount ?? 0);
-    const person = personById(params.to ?? '');
+    const person = personOf(params.to ?? '');
     const group = ledger.groups.find((candidate) => candidate.id === params.group);
 
     const markPaid = () => {

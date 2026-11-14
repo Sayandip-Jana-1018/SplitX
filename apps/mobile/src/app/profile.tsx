@@ -95,30 +95,24 @@ export default function Profile() {
                     </GlassSurface>
                 </View>
 
-                {signedIn ? (
-                    <Text variant="caption" tone="muted" onLiquid style={{ maxWidth: 320, alignSelf: 'center' }}>
-                        Your real groups and balances move into the app in the next update; until then it shows the made-up ones.
-                    </Text>
-                ) : (
-                    <View style={{ flexDirection: 'row', gap: 12 }}>
-                        <GlassSurface style={{ flex: 1, paddingVertical: 16, gap: 2 }}>
-                            <Text variant="title" tabular>
-                                {ledger.groups.length}
-                            </Text>
-                            <Text variant="caption" tone="secondary">
-                                groups
-                            </Text>
-                        </GlassSurface>
-                        <GlassSurface style={{ flex: 1.6, paddingVertical: 16, gap: 2 }}>
-                            <Text variant="title" tabular numberOfLines={1} adjustsFontSizeToFit>
-                                {rupees(paid)}
-                            </Text>
-                            <Text variant="caption" tone="secondary">
-                                you paid for others
-                            </Text>
-                        </GlassSurface>
-                    </View>
-                )}
+                <View style={{ flexDirection: 'row', gap: 12 }}>
+                    <GlassSurface style={{ flex: 1, paddingVertical: 16, gap: 2 }}>
+                        <Text variant="title" tabular>
+                            {ledger.groups.length}
+                        </Text>
+                        <Text variant="caption" tone="secondary">
+                            {ledger.groups.length === 1 ? 'group' : 'groups'}
+                        </Text>
+                    </GlassSurface>
+                    <GlassSurface style={{ flex: 1.6, paddingVertical: 16, gap: 2 }}>
+                        <Text variant="title" tabular numberOfLines={1} adjustsFontSizeToFit>
+                            {rupees(paid)}
+                        </Text>
+                        <Text variant="caption" tone="secondary">
+                            you paid for others
+                        </Text>
+                    </GlassSurface>
+                </View>
 
                 <GlassSurface style={{ paddingHorizontal: 10, paddingVertical: 4 }}>
                     {rows.map((row, index) => {

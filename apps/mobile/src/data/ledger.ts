@@ -1,11 +1,13 @@
 /**
  * The app's ledger, worked out by the website's own money engine (src/lib): splits by
  * resolveSplits, balances by computeGroupBalances, and who pays whom by the settlement planner.
- * Until Phase 2 connects the server, it starts from made-up people and expenses and lives on the
- * phone. Amounts are paise; a positive balance means the group owes that person.
+ * The demo starts from made-up people and expenses (below); a signed-in account's ledger is built
+ * from the server's sync (account.ts). Either way `ME` means you, and amounts are paise; a
+ * positive balance means the group owes that person.
  */
 import { resolveSplits, type SplitType } from '@/lib/expenseSplits';
 import { computeGroupBalances, simplifyGroupBalances, type FinanceMember, type SimplifiedTransfer } from '@/lib/groupFinance';
+import { isCompletedSettlementStatus } from '@/lib/settlementStatus';
 
 export const ME = 'me';
 
@@ -22,7 +24,14 @@ export const PEOPLE: Person[] = [
     { id: 'nisha', name: 'Nisha Rao', first: 'Nisha', image: null, upiId: 'nisha@demo' },
 ];
 
+/** Someone in the demo. */
 export const personById = (id: string): Person => PEOPLE.find((person) => person.id === id) ?? { id, name: 'Former member', first: 'Someone', image: null };
+
+/** Someone this ledger mentions, by id; a name the ledger has lost reads "Former member". */
+export const personIn = (ledger: Ledger, id: string): Person => ledger.people.find((person) => person.id === id) ?? { id, name: 'Former member', first: 'Someone', image: null };
+
+/** "Asha" from "Asha Sharma". */
+export const firstName = (name: string) => name.trim().split(/\s+/)[0] || name;
 
 export interface Group {
     id: string;
@@ -62,11 +71,15 @@ export interface Settlement {
     toId: string;
     amount: number;
     method: string;
-    status: 'completed';
+    /** Only completed payments move balances; the others are waiting for someone (as on the website). */
+    status: string;
+    note?: string | null;
     createdAt: Date;
 }
 
 export interface Ledger {
+    /** Everyone the ledger mentions, you (ME) included, and anyone who has left a group. */
+    people: Person[];
     groups: Group[];
     expenses: Expense[];
     settlements: Settlement[];
@@ -147,7 +160,7 @@ export function seedLedger(): Ledger {
         message('m8', 'ladakh', 'kabir', 'Bikes paid for. Pangong camp next!', daysAgo(12, 18)),
         message('m9', 'lunch', 'kabir', 'Thali for four, ₹265 each', daysAgo(0, 14)),
     ];
-    return { groups: GROUPS, expenses, settlements, messages };
+    return { people: PEOPLE, groups: GROUPS, expenses, settlements, messages };
 }
 
 /** Each member's balance in one group. */
@@ -163,7 +176,7 @@ export function groupBalances(ledger: Ledger, groupId: string): Record<string, n
 
 /** The fewest payments that clear one group. */
 export function groupTransfers(ledger: Ledger, groupId: string): SimplifiedTransfer[] {
-    return simplifyGroupBalances({ balances: groupBalances(ledger, groupId), people: PEOPLE });
+    return simplifyGroupBalances({ balances: groupBalances(ledger, groupId), people: ledger.people });
 }
 
 export interface Totals {
@@ -198,20 +211,23 @@ export interface ActivityItem {
 
 /** Expenses and payments, newest first, with what each meant for you. */
 export function activity(ledger: Ledger, groupId?: string): ActivityItem[] {
+    const first = (id: string) => personIn(ledger, id).first;
     const items: ActivityItem[] = [];
     for (const expense of ledger.expenses) {
         if (groupId && expense.groupId !== groupId) continue;
         const share = expense.splits.find((split) => split.userId === ME)?.amount ?? 0;
         const paid = expense.payerId === ME ? expense.amount : 0;
-        const payer = expense.payerId === ME ? 'You' : personById(expense.payerId).first;
+        const payer = expense.payerId === ME ? 'You' : first(expense.payerId);
         items.push({ id: expense.id, kind: 'expense', title: expense.title, groupId: expense.groupId, note: `${payer} paid`, category: expense.category, yours: paid - share, at: expense.createdAt });
     }
     for (const settlement of ledger.settlements) {
         if (groupId && settlement.groupId !== groupId) continue;
-        // A payment reads as money: what you received is positive, what you paid negative.
-        const yours = settlement.toId === ME ? settlement.amount : settlement.fromId === ME ? -settlement.amount : 0;
-        const title = settlement.toId === ME ? `${personById(settlement.fromId).first} paid you back` : settlement.fromId === ME ? `You paid ${personById(settlement.toId).first}` : `${personById(settlement.fromId).first} paid ${personById(settlement.toId).first}`;
-        items.push({ id: settlement.id, kind: 'settlement', title, groupId: settlement.groupId, note: 'Settled by UPI', category: 'settlement', yours, at: settlement.createdAt });
+        const done = isCompletedSettlementStatus(settlement.status);
+        // A payment reads as money: what you received is positive, what you paid negative. One still on its way moves nothing yet.
+        const yours = !done ? 0 : settlement.toId === ME ? settlement.amount : settlement.fromId === ME ? -settlement.amount : 0;
+        const title = settlement.toId === ME ? `${first(settlement.fromId)} paid you back` : settlement.fromId === ME ? `You paid ${first(settlement.toId)}` : `${first(settlement.fromId)} paid ${first(settlement.toId)}`;
+        const note = done ? (settlement.method === 'cash' ? 'Settled in cash' : 'Settled by UPI') : 'Waiting to be confirmed';
+        items.push({ id: settlement.id, kind: 'settlement', title, groupId: settlement.groupId, note, category: 'settlement', yours, at: settlement.createdAt });
     }
     return items.sort((a, b) => b.at.getTime() - a.at.getTime());
 }

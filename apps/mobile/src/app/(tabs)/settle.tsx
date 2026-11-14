@@ -17,7 +17,7 @@ import { useToast } from '~/ui/Toast';
 
 export default function Settle() {
     const { tokens } = useLook();
-    const { ledger } = useLedger();
+    const { ledger, onRefresh } = useLedger();
     const toast = useToast();
     const sum = useMemo(() => totals(ledger), [ledger]);
     const mine = useMemo(
@@ -31,7 +31,7 @@ export default function Settle() {
     );
 
     return (
-        <Screen>
+        <Screen onRefresh={onRefresh}>
             <View style={{ alignItems: 'center', gap: 4 }}>
                 <Text variant="eyebrow" tone="secondary" onLiquid>
                     Fewest payments

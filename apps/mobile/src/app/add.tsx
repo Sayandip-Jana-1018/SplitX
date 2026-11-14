@@ -12,7 +12,7 @@ import { useMemo, useState } from 'react';
 import { Platform, Pressable, TextInput, View } from 'react-native';
 import { inferCategory } from '@/lib/categoryInference';
 import { resolveSplits, type SplitRequest, type SplitType } from '@/lib/expenseSplits';
-import { ME, personById } from '~/data/ledger';
+import { ME } from '~/data/ledger';
 import { useLedger } from '~/data/LedgerProvider';
 import { GlassSurface } from '~/glass/GlassSurface';
 import { useLook } from '~/theme/ThemeProvider';
@@ -79,7 +79,7 @@ function evenly(memberIds: string[], amount: number, type: SplitMode): Record<st
 export default function AddExpense() {
     const params = useLocalSearchParams<{ group?: string }>();
     const { tokens } = useLook();
-    const { ledger, addExpense } = useLedger();
+    const { ledger, personOf, addExpense } = useLedger();
     const toast = useToast();
 
     const [groupId, setGroupId] = useState(() => (ledger.groups.some((candidate) => candidate.id === params.group) ? params.group! : ledger.groups[0].id));
@@ -96,7 +96,7 @@ export default function AddExpense() {
     const paise = toPaise(amount);
     const guessed = inferCategory(title);
     const category = picked ?? guessed ?? 'general';
-    const firstName = (id: string) => (id === ME ? 'You' : personById(id).first);
+    const firstName = (id: string) => (id === ME ? 'You' : personOf(id).first);
 
     const chooseGroup = (id: string) => {
         const next = ledger.groups.find((candidate) => candidate.id === id);
@@ -249,7 +249,7 @@ export default function AddExpense() {
                         const row = { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, paddingVertical: 12, borderTopWidth: index === 0 ? 0 : 1, borderTopColor: tokens.border };
                         const name = (
                             <>
-                                <Avatar name={personById(id).name} size={34} />
+                                <Avatar name={personOf(id).name} size={34} />
                                 <Text variant="label" align="left" style={{ flex: 1 }} numberOfLines={1}>
                                     {firstName(id)}
                                 </Text>

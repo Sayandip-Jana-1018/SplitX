@@ -3,10 +3,11 @@ import { router } from 'expo-router';
 import { ChevronRight } from 'lucide-react-native';
 import { View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
-import { groupBalances, ME, personById } from '~/data/ledger';
+import { groupBalances, ME } from '~/data/ledger';
 import { useLedger } from '~/data/LedgerProvider';
 import { useLook } from '~/theme/ThemeProvider';
 import { AvatarStack } from '~/ui/Avatar';
+import { EmptyState } from '~/ui/EmptyState';
 import { GlassButton } from '~/ui/GlassButton';
 import { rupees } from '~/ui/money';
 import { Screen } from '~/ui/Screen';
@@ -14,10 +15,10 @@ import { Text } from '~/ui/Text';
 
 export default function Groups() {
     const { tokens, calm } = useLook();
-    const { ledger } = useLedger();
+    const { ledger, personOf, onRefresh } = useLedger();
     const total = ledger.expenses.reduce((sum, expense) => sum + expense.amount, 0);
     return (
-        <Screen>
+        <Screen onRefresh={onRefresh}>
             <View style={{ alignItems: 'center', gap: 4 }}>
                 <Text variant="eyebrow" tone="secondary" onLiquid>
                     Shared spaces
@@ -26,9 +27,10 @@ export default function Groups() {
                     Your groups
                 </Text>
                 <Text variant="label" tone="secondary" onLiquid tabular>
-                    {ledger.groups.length} groups · {rupees(total)} tracked together
+                    {ledger.groups.length === 1 ? '1 group' : `${ledger.groups.length} groups`} · {rupees(total)} tracked together
                 </Text>
             </View>
+            {ledger.groups.length === 0 ? <EmptyState emoji="👥" title="No groups yet" hint="Groups you make or join on splitsj.vercel.app show up here. Making and joining them in the app comes next." /> : null}
             {ledger.groups.map((group, index) => {
                 const mine = groupBalances(ledger, group.id)[ME] ?? 0;
                 return (
@@ -49,7 +51,7 @@ export default function Groups() {
                                 <ChevronRight size={20} color={tokens.muted} />
                             </View>
                             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                                <AvatarStack names={group.memberIds.map((id) => personById(id).name)} size={28} />
+                                <AvatarStack names={group.memberIds.map((id) => personOf(id).name)} size={28} />
                                 <View style={{ alignItems: 'flex-end' }}>
                                     <Text variant="caption" tone="muted" align="right">
                                         {mine === 0 ? 'All square' : mine > 0 ? 'You get back' : 'You owe'}

@@ -8,10 +8,10 @@ import { Screen } from '~/ui/Screen';
 import { Text } from '~/ui/Text';
 
 export default function Activity() {
-    const { ledger } = useLedger();
+    const { ledger, onRefresh } = useLedger();
     const items = useMemo(() => activity(ledger), [ledger]);
     return (
-        <Screen>
+        <Screen onRefresh={onRefresh}>
             <View style={{ alignItems: 'center', gap: 4 }}>
                 <Text variant="eyebrow" tone="secondary" onLiquid>
                     Every rupee, accounted for

@@ -10,7 +10,7 @@ import { isCompletedSettlementStatus } from '@/lib/settlementStatus';
  */
 
 /** The live groups someone owns or belongs to. */
-async function groupIdsOf(userId: string): Promise<string[]> {
+export async function groupIdsOf(userId: string): Promise<string[]> {
     const groups = await prisma.group.findMany({
         where: { deletedAt: null, OR: [{ ownerId: userId }, { members: { some: { userId } } }] },
         select: { id: true },
