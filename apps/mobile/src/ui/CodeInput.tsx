@@ -3,7 +3,7 @@
  * Android's one-time-code autofill both work; the boxes only show it. When the sixth digit lands,
  * `onComplete` runs.
  */
-import { useRef, type ComponentRef } from 'react';
+import { useEffect, useRef, type ComponentRef } from 'react';
 import { Pressable, TextInput, View } from 'react-native';
 import { useLook } from '~/theme/ThemeProvider';
 import { FONT } from '~/theme/type';
@@ -14,6 +14,11 @@ const LENGTH = 6;
 export function CodeInput({ value, onChange, onComplete, autoFocus = true }: { value: string; onChange: (next: string) => void; onComplete?: (code: string) => void; autoFocus?: boolean }) {
     const { tokens } = useLook();
     const input = useRef<ComponentRef<typeof TextInput>>(null);
+    useEffect(() => {
+        if (!autoFocus) return;
+        const timer = setTimeout(() => input.current?.focus(), 450);
+        return () => clearTimeout(timer);
+    }, [autoFocus]);
     return (
         <Pressable accessibilityLabel="Six-digit code" onPress={() => input.current?.focus()} style={{ alignSelf: 'center' }}>
             <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -47,7 +52,6 @@ export function CodeInput({ value, onChange, onComplete, autoFocus = true }: { v
                     onChange(next);
                     if (next.length === LENGTH) onComplete?.(next);
                 }}
-                autoFocus={autoFocus}
                 keyboardType="number-pad"
                 textContentType="oneTimeCode"
                 autoComplete="one-time-code"

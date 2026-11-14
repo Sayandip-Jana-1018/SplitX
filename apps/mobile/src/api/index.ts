@@ -22,7 +22,8 @@ export function onSignedOut(listener: (code: string | null) => void) {
     };
 }
 
-const model = (Platform.constants as { Model?: string }).Model;
+// The phone's model ("SM-S918B"); the web preview has no Platform.constants.
+const model = (Platform.constants as { Model?: string } | undefined)?.Model;
 
 export const api = createApi({
     baseUrl: API_URL,

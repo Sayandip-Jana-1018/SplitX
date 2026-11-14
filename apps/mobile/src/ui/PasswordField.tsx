@@ -1,18 +1,20 @@
 /** A password on glass, with an eye to show or hide it. */
 import { Eye, EyeOff } from 'lucide-react-native';
-import { useState } from 'react';
+import { useState, type Ref } from 'react';
 import { Pressable, TextInput, View, type TextInputProps } from 'react-native';
 import { GlassSurface } from '~/glass/GlassSurface';
 import { useLook } from '~/theme/ThemeProvider';
 import { FONT } from '~/theme/type';
+import type { FieldRef } from './Field';
 import { tap } from './GlassButton';
 
-export function PasswordField({ label, ...rest }: TextInputProps & { label: string }) {
+export function PasswordField({ label, ref, ...rest }: TextInputProps & { label: string; ref?: Ref<FieldRef> }) {
     const { tokens } = useLook();
     const [shown, setShown] = useState(false);
     return (
         <GlassSurface kind="thin" radius={20} style={{ paddingLeft: 52, paddingRight: 8, flexDirection: 'row', alignItems: 'center' }}>
             <TextInput
+                ref={ref}
                 accessibilityLabel={label}
                 placeholder={label}
                 placeholderTextColor={tokens.muted}

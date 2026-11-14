@@ -142,6 +142,21 @@ describe('the phone’s sign-in calls', () => {
         expect(calls).toEqual(['POST /api/v1/auth/email-code', 'POST /api/v1/auth/email-code/verify']);
     });
 
+    it('signs out without waiting for the server', async () => {
+        let answer: (response: Response) => void = () => undefined;
+        const { api, store, calls } = setup((path) => {
+            if (path === '/api/v1/auth/password') return json(200, { tokens: tokens(1), me });
+            return new Promise<Response>((resolve) => {
+                answer = resolve;
+            });
+        });
+        await api.signInWithPassword('a@b.test', 'pw');
+        await api.signOut();
+        expect(store.peek()).toBeNull();
+        expect(calls).toContain('POST /api/v1/auth/sign-out');
+        answer(new Response(null, { status: 204 }));
+    });
+
     it('says plainly when the server doesn’t have a call yet', async () => {
         const { api } = setup(() => new Response('<html>Not found</html>', { status: 404, headers: { 'content-type': 'text/html' } }));
         await expect(api.requestEmailCode('a@b.test', 'sign_in')).rejects.toMatchObject({ kind: 'bad_answer', status: 404, code: 'not_on_server' });

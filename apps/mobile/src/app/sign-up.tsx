@@ -3,12 +3,12 @@
  * Or Google or GitHub, which need no password at all.
  */
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { useAuth } from '~/auth/AuthProvider';
 import { enterApp, LOOKS_LIKE_EMAIL, useStep } from '~/auth/flow';
 import { useLook } from '~/theme/ThemeProvider';
-import { Field } from '~/ui/Field';
+import { Field, type FieldRef } from '~/ui/Field';
 import { GlassButton } from '~/ui/GlassButton';
 import { Header } from '~/ui/Header';
 import { PasswordField } from '~/ui/PasswordField';
@@ -22,6 +22,8 @@ export default function SignUp() {
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const emailField = useRef<FieldRef>(null);
+    const passwordField = useRef<FieldRef>(null);
     const { busy, error, setError, run } = useStep();
     const ready = name.trim().length >= 2 && LOOKS_LIKE_EMAIL.test(email.trim()) && password.length >= 8;
 
@@ -56,9 +58,9 @@ export default function SignUp() {
             </View>
 
             <View style={{ gap: 12 }}>
-                <Field label="Your name" value={name} onChangeText={setName} autoComplete="name" textContentType="name" autoCapitalize="words" maxLength={60} />
-                <Field label="Your email" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" autoComplete="email" textContentType="emailAddress" maxLength={254} />
-                <PasswordField label="Choose a password" value={password} onChangeText={setPassword} autoComplete="new-password" textContentType="newPassword" />
+                <Field label="Your name" value={name} onChangeText={setName} autoComplete="name" textContentType="name" autoCapitalize="words" maxLength={60} returnKeyType="next" submitBehavior="submit" onSubmitEditing={() => emailField.current?.focus()} />
+                <Field ref={emailField} label="Your email" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" autoComplete="email" textContentType="emailAddress" maxLength={254} returnKeyType="next" submitBehavior="submit" onSubmitEditing={() => passwordField.current?.focus()} />
+                <PasswordField ref={passwordField} label="Choose a password" value={password} onChangeText={setPassword} autoComplete="new-password" textContentType="newPassword" returnKeyType="go" onSubmitEditing={() => ready && !busy && create()} />
                 <Text variant="caption" tone="muted" onLiquid>
                     At least 8 characters. We’ll email you a code to confirm it’s you.
                 </Text>

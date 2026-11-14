@@ -201,11 +201,11 @@ export function createApi(options: ApiOptions) {
         /** Your name and UPI ID. */
         updateMe: (update: ProfileUpdate) =>
             authed('/api/v1/me', MeAnswer, { method: 'PATCH', body: JSON.stringify(update) }).then((answer) => answer.me),
-        /** Ends the session here at once; telling the server is best effort. */
+        /** Ends the session here at once; telling the server is best effort, and nobody waits for it. */
         async signOut() {
             const stored = await options.store.load();
             await endLocally(null, false);
-            if (stored) await request('/api/v1/auth/sign-out', { method: 'POST', body: JSON.stringify({ refreshToken: stored.refreshToken }) }).catch(() => undefined);
+            if (stored) void request('/api/v1/auth/sign-out', { method: 'POST', body: JSON.stringify({ refreshToken: stored.refreshToken }) }).catch(() => undefined);
         },
         me: () => authed('/api/v1/me', MeAnswer).then((answer) => answer.me),
         groups: () => authed('/api/v1/groups', GroupList).then((answer) => answer.groups),

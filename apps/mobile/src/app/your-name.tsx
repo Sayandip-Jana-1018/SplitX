@@ -3,11 +3,11 @@
  * and from Profile to change them. The UPI ID is what friends pay you back with.
  */
 import { router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { View } from 'react-native';
 import { useAuth } from '~/auth/AuthProvider';
 import { enterApp, useStep } from '~/auth/flow';
-import { Field } from '~/ui/Field';
+import { Field, type FieldRef } from '~/ui/Field';
 import { GlassButton } from '~/ui/GlassButton';
 import { Header } from '~/ui/Header';
 import { Screen } from '~/ui/Screen';
@@ -23,6 +23,7 @@ export default function YourName() {
     const toast = useToast();
     const [name, setName] = useState(auth.me?.name ?? '');
     const [upiId, setUpiId] = useState(auth.me?.upiId ?? '');
+    const upiField = useRef<FieldRef>(null);
     const { busy, error, run } = useStep();
     const upiOk = upiId.trim() === '' || UPI.test(upiId.trim());
     const ready = name.trim().length > 0 && upiOk;
@@ -45,8 +46,8 @@ export default function YourName() {
                 </Text>
             )}
             <View style={{ gap: 12 }}>
-                <Field label="Your name" value={name} onChangeText={setName} autoComplete="name" textContentType="name" autoCapitalize="words" maxLength={60} autoFocus={!editing} />
-                <Field label="UPI ID (optional), like name@okbank" value={upiId} onChangeText={setUpiId} autoCapitalize="none" autoCorrect={false} keyboardType="email-address" maxLength={100} />
+                <Field label="Your name" value={name} onChangeText={setName} autoComplete="name" textContentType="name" autoCapitalize="words" maxLength={60} autoFocus={!editing} returnKeyType="next" submitBehavior="submit" onSubmitEditing={() => upiField.current?.focus()} />
+                <Field ref={upiField} label="UPI ID (optional), like name@okbank" value={upiId} onChangeText={setUpiId} autoCapitalize="none" autoCorrect={false} keyboardType="email-address" maxLength={100} returnKeyType="done" onSubmitEditing={() => ready && !busy && save()} />
                 {!upiOk ? (
                     <Text variant="caption" tone="danger" onLiquid>
                         A UPI ID looks like name@bank.

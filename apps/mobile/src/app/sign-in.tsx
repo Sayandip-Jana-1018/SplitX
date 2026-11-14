@@ -4,14 +4,14 @@
  * the password? A code sets a new one. New here? Create an account, or just try the demo.
  */
 import { router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { ApiError } from '~/api';
 import { useAuth } from '~/auth/AuthProvider';
 import { enterApp, LOOKS_LIKE_EMAIL, useStep } from '~/auth/flow';
 import { Coin } from '~/glass/Coin';
 import { useLook } from '~/theme/ThemeProvider';
-import { Field } from '~/ui/Field';
+import { Field, type FieldRef } from '~/ui/Field';
 import { GlassButton } from '~/ui/GlassButton';
 import { Header } from '~/ui/Header';
 import { PasswordField } from '~/ui/PasswordField';
@@ -25,6 +25,7 @@ export default function SignIn() {
     const { tokens } = useLook();
     const [email, setEmail] = useState(params.email ?? '');
     const [password, setPassword] = useState('');
+    const passwordField = useRef<FieldRef>(null);
     const { busy, error, setError, run } = useStep();
     const ready = LOOKS_LIKE_EMAIL.test(email.trim()) && password.length > 0;
 
@@ -77,8 +78,8 @@ export default function SignIn() {
             </View>
 
             <View style={{ gap: 12 }}>
-                <Field label="Your email" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" autoComplete="email" textContentType="username" maxLength={254} />
-                <PasswordField label="Password" value={password} onChangeText={setPassword} autoComplete="current-password" textContentType="password" returnKeyType="go" onSubmitEditing={() => ready && withPassword()} />
+                <Field label="Your email" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" autoComplete="email" textContentType="username" maxLength={254} returnKeyType="next" submitBehavior="submit" onSubmitEditing={() => passwordField.current?.focus()} />
+                <PasswordField ref={passwordField} label="Password" value={password} onChangeText={setPassword} autoComplete="current-password" textContentType="password" returnKeyType="go" onSubmitEditing={() => ready && !busy && withPassword()} />
                 {error ? (
                     <Text variant="label" tone="danger" onLiquid accessibilityLiveRegion="polite">
                         {error}

@@ -4,11 +4,12 @@
  * asked for after 30 seconds.
  */
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { useAuth } from '~/auth/AuthProvider';
 import { enterApp, useStep } from '~/auth/flow';
 import { CodeInput } from '~/ui/CodeInput';
+import type { FieldRef } from '~/ui/Field';
 import { GlassButton } from '~/ui/GlassButton';
 import { Header } from '~/ui/Header';
 import { PasswordField } from '~/ui/PasswordField';
@@ -28,6 +29,7 @@ export default function Code() {
     const toast = useToast();
     const [code, setCode] = useState('');
     const [password, setPassword] = useState('');
+    const passwordField = useRef<FieldRef>(null);
     const [wait, setWait] = useState(RESEND_AFTER_S);
     const { busy, error, run } = useStep();
 
@@ -63,14 +65,27 @@ export default function Code() {
     return (
         <Screen tabBar={false}>
             <Header title="Check your email" />
-            <Text variant="body" tone="secondary" onLiquid style={{ maxWidth: 320, alignSelf: 'center' }}>
-                We sent a 6-digit code to {email}. It works for 10 minutes.
-            </Text>
+            <View style={{ alignItems: 'center', gap: 2 }}>
+                <Text variant="body" tone="secondary" onLiquid>
+                    We sent a 6-digit code to
+                </Text>
+                <Text variant="body" weight="bold" onLiquid numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                    {email}
+                </Text>
+                <Text variant="body" tone="secondary" onLiquid>
+                    It works for 10 minutes.
+                </Text>
+            </View>
 
-            <CodeInput value={code} onChange={setCode} onComplete={(typed) => !resetting && !busy && submit(typed)} />
+            <CodeInput value={code} onChange={setCode} onComplete={(typed) => (resetting ? passwordField.current?.focus() : !busy && submit(typed))} />
 
             {resetting ? (
-                <PasswordField label="New password (8 or more characters)" value={password} onChangeText={setPassword} autoComplete="new-password" textContentType="newPassword" />
+                <View style={{ gap: 8 }}>
+                    <PasswordField ref={passwordField} label="New password" value={password} onChangeText={setPassword} autoComplete="new-password" textContentType="newPassword" returnKeyType="go" onSubmitEditing={() => code.length === 6 && password.length >= 8 && !busy && submit()} />
+                    <Text variant="caption" tone="muted" onLiquid>
+                        At least 8 characters.
+                    </Text>
+                </View>
             ) : null}
 
             {error ? (
@@ -98,8 +113,8 @@ export default function Code() {
                     </Pressable>
                 )}
             </View>
-            <Text variant="caption" tone="muted" onLiquid style={{ maxWidth: 300, alignSelf: 'center' }}>
-                Not there? Check spam, or that the address is right.
+            <Text variant="caption" tone="muted" onLiquid>
+                Not in your inbox? Check spam.
             </Text>
         </Screen>
     );

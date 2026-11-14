@@ -32,6 +32,9 @@ export function Text({ variant = 'body', tone = 'primary', weight, align = 'cent
     return (
         <NativeText
             maxFontSizeMultiplier={1.6}
+            // Lines of even length, so a wrapped sentence never leaves one word alone on its last line.
+            textBreakStrategy="balanced"
+            lineBreakStrategyIOS="standard"
             {...rest}
             style={[
                 {
