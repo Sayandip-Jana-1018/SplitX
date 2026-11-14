@@ -53,7 +53,7 @@ export default function Groups() {
                             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                                 <AvatarStack names={group.memberIds.map((id) => personOf(id).name)} size={28} />
                                 <View style={{ alignItems: 'flex-end' }}>
-                                    <Text variant="caption" tone="muted" align="right">
+                                    <Text variant="caption" tone="muted" align="right" numberOfLines={1} style={{ alignSelf: 'stretch', minWidth: 80 }}>
                                         {mine === 0 ? 'All square' : mine > 0 ? 'You get back' : 'You owe'}
                                     </Text>
                                     <Text variant="heading" tone={mine >= 0 ? 'in' : 'out'} align="right" tabular>

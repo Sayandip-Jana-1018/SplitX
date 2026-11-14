@@ -59,7 +59,7 @@ export default function Chat() {
                 .map((settlement) => ({ kind: 'payment' as const, id: settlement.id, text: `${first(settlement.fromId)} paid ${settlement.toId === ME ? 'you' : personOf(settlement.toId).first} ${rupees(settlement.amount)}`, at: settlement.createdAt })),
         ];
         return all.sort((a, b) => a.at.getTime() - b.at.getTime());
-    }, [ledger, group]);
+    }, [ledger, group, personOf]);
 
     const send = () => {
         const text = draft.trim();

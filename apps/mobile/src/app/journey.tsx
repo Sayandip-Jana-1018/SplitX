@@ -197,7 +197,7 @@ export default function Journey() {
                                         <Text variant="label" tabular tone={entry.delta > 0 ? 'in' : 'out'}>
                                             {rupees(entry.delta, { sign: true })}
                                         </Text>
-                                        <Text variant="caption" tone="muted" tabular>
+                                        <Text variant="caption" tone="muted" tabular align="right" numberOfLines={1} style={{ alignSelf: 'stretch', minWidth: 80 }}>
                                             then {rupees(entry.after, { sign: true })}
                                         </Text>
                                     </View>
