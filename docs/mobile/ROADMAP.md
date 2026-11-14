@@ -382,7 +382,7 @@ I stop and report at the end of each phase, and start the next only when you say
 5. **The app on real data:**
     - ✅ **5a:** your groups, balances and activity from the server's sync (`POST /api/v1/sync`), kept on the phone per account and opened offline.
     - ✅ **5b:** expenses, cash payments, chat and reminders saved on the phone first and sent in order (sent once, even after a retry); UPI payments, confirming payments, new groups, joining by link and inviting, online.
-    - **5c:** a clear choice when the server refuses a saved change (it is dropped with the reason today), and a visible "waiting to send" count.
+    - ✅ **5c:** a note when changes wait (and when you're offline), a refused change kept with the reason for you to try again or let go, and chats kept on the phone.
 6. **Go live (your yes first):**
     - The additive migrations through the production-database workflow.
     - `MOBILE_TOKEN_SECRET` added to Vercel (by you).
