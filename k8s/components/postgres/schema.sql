@@ -544,3 +544,118 @@ INSERT INTO "_prisma_migrations" ("id", "checksum", "finished_at", "migration_na
 VALUES (gen_random_uuid()::text, '976328d8cda1378d3660be4869e94b1fac266a7c72817b88bd1f1c9061de4918', now(), '20260925165652_group_invite_issued_at', now(), 1);
 COMMIT;
 \endif
+
+-- ─── 20261113193315_mobile_sign_in ─────────────────────────────────────
+SELECT NOT EXISTS (
+    SELECT 1 FROM "_prisma_migrations"
+    WHERE "migration_name" = '20261113193315_mobile_sign_in' AND "finished_at" IS NOT NULL AND "rolled_back_at" IS NULL
+) AS pending \gset
+\if :pending
+\echo 'applying 20261113193315_mobile_sign_in'
+BEGIN;
+
+-- The phone app's sign-in (docs/mobile/ROADMAP.md, Phase 2 step 1): the phones
+-- signed in to an account, and their refresh tokens, kept only as hashes.
+-- Two new tables and nothing else, so the website runs on either side of it.
+
+-- CreateTable
+CREATE TABLE "Device" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "platform" TEXT NOT NULL,
+    "name" TEXT,
+    "appVersion" TEXT,
+    "pushToken" TEXT,
+    "lastSeenAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "Device_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "RefreshToken" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "deviceId" TEXT,
+    "familyId" TEXT NOT NULL,
+    "tokenHash" TEXT NOT NULL,
+    "tokenVersion" INTEGER NOT NULL,
+    "expiresAt" TIMESTAMP(3) NOT NULL,
+    "usedAt" TIMESTAMP(3),
+    "revokedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "RefreshToken_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Device_pushToken_key" ON "Device"("pushToken");
+
+-- CreateIndex
+CREATE INDEX "Device_userId_idx" ON "Device"("userId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "RefreshToken_tokenHash_key" ON "RefreshToken"("tokenHash");
+
+-- CreateIndex
+CREATE INDEX "RefreshToken_userId_idx" ON "RefreshToken"("userId");
+
+-- CreateIndex
+CREATE INDEX "RefreshToken_familyId_idx" ON "RefreshToken"("familyId");
+
+-- AddForeignKey
+ALTER TABLE "Device" ADD CONSTRAINT "Device_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "RefreshToken" ADD CONSTRAINT "RefreshToken_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "RefreshToken" ADD CONSTRAINT "RefreshToken_deviceId_fkey" FOREIGN KEY ("deviceId") REFERENCES "Device"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+INSERT INTO "_prisma_migrations" ("id", "checksum", "finished_at", "migration_name", "started_at", "applied_steps_count")
+VALUES (gen_random_uuid()::text, '4a6fd76df875d4b126fff2f8a50e4342f2dab17c0b6e2ebd6be13e173383e61d', now(), '20261113193315_mobile_sign_in', now(), 1);
+COMMIT;
+\endif
+
+-- ─── 20261114072248_auth_codes ─────────────────────────────────────────
+SELECT NOT EXISTS (
+    SELECT 1 FROM "_prisma_migrations"
+    WHERE "migration_name" = '20261114072248_auth_codes' AND "finished_at" IS NOT NULL AND "rolled_back_at" IS NULL
+) AS pending \gset
+\if :pending
+\echo 'applying 20261114072248_auth_codes'
+BEGIN;
+
+-- Short-lived codes for the phone app's sign-in (docs/mobile/ROADMAP.md, Phase 2
+-- step 4): emailed 6-digit codes and the website's Google/GitHub hand-off.
+-- One new table and nothing else, so the website runs on either side of it.
+
+-- CreateTable
+CREATE TABLE "AuthCode" (
+    "id" TEXT NOT NULL,
+    "purpose" TEXT NOT NULL,
+    "email" TEXT,
+    "userId" TEXT,
+    "codeHash" TEXT NOT NULL,
+    "challenge" TEXT,
+    "attempts" INTEGER NOT NULL DEFAULT 0,
+    "expiresAt" TIMESTAMP(3) NOT NULL,
+    "usedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "AuthCode_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "AuthCode_codeHash_key" ON "AuthCode"("codeHash");
+
+-- CreateIndex
+CREATE INDEX "AuthCode_purpose_email_idx" ON "AuthCode"("purpose", "email");
+
+-- AddForeignKey
+ALTER TABLE "AuthCode" ADD CONSTRAINT "AuthCode_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+INSERT INTO "_prisma_migrations" ("id", "checksum", "finished_at", "migration_name", "started_at", "applied_steps_count")
+VALUES (gen_random_uuid()::text, '9bd585d3901557ef6752b7c56e55560226c904f208f629f76cf9e29158d93a66', now(), '20261114072248_auth_codes', now(), 1);
+COMMIT;
+\endif
