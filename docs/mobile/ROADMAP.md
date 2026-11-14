@@ -368,16 +368,17 @@ I stop and report at the end of each phase, and start the next only when you say
 
 1. ✅ **Phone sign-in on the server:** `Device` and `RefreshToken`, 15-minute access tokens, rotating refresh tokens with copy detection, password and Google sign-in by the website's rules.
 2. ✅ **Reads and the app's client:** groups, balances and activity from the website's own ledger; a typed client that refreshes itself and words every failure.
-3. **Writes through one service layer:**
+3. ✅ **Writes through one service layer:**
     - ✅ **3a:** adding and deleting expenses (the website's routes call the same service).
-    - **3b:** settling up (every safeguard kept) and group chat.
-4. **Sign-in like real apps:**
+    - ✅ **3b:** settling up (every safeguard kept) and group chat.
+4. ✅ **Sign-in like real apps** (server 6582b7b, app f8c1a9c; to be tried on your phone against the laptop's server):
     - Sign-up with email confirmation, and sign-in with email and password.
     - **A 6-digit code by email** instead of a password: free, and it replaces phone-number codes.
     - **Forgot password**, with the new password set in the app.
     - Sign-out, and sign-out of all devices.
     - **Google and GitHub** through the website's own sign-in page in a secure in-app browser that hands the session back to the app.
     - "Try the demo" keeps the made-up data.
+    - Until step 6 the installed APK talks to the live site, which doesn't have these calls yet: its sign-in screens say "Accounts aren't open yet. Try the demo for now."
 5. **The app on real data:** your groups, expenses, settle-up and chat, saved on the phone first and synced, with a clear choice when two edits clash.
 6. **Go live (your yes first):**
     - The additive migrations through the production-database workflow.
