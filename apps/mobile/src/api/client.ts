@@ -187,7 +187,6 @@ export function createApi(options: ApiOptions) {
         /** Whether this phone holds a session (it may still turn out to have ended). */
         hasSession: async () => Boolean(await options.store.load()),
         signInWithPassword: (email: string, password: string) => startWith('/api/v1/auth/password', { email, password }),
-        signInWithGoogle: (idToken: string) => startWith('/api/v1/auth/google', { idToken }),
         /** Emails a 6-digit code: to sign in, to confirm a new account again, or to reset a password. */
         requestEmailCode: (email: string, purpose: 'sign_in' | 'confirm_sign_up' | 'password_reset') =>
             open('/api/v1/auth/email-code', { email, purpose }, z.object({ sent: z.boolean() }), false).then(() => undefined),

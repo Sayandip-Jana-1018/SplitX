@@ -19,6 +19,7 @@
     "test:coverage": "vitest run --project unit --coverage",
     "test:integration": "vitest run --project integration",
     "test:db": "vitest run --project database",
+    "test:db:coverage": "vitest run --project database --coverage --coverage.reportsDirectory=coverage-database",
     "test:alerts": "node scripts/test-alerts.mjs",
     "ledger:audit": "node --env-file=.env scripts/ledger-audit.mjs",
     "email:test": "node --env-file=.env scripts/email-test.mjs",

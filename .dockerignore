@@ -12,6 +12,7 @@ apps
 .next
 node_modules
 coverage
+coverage-database
 tsconfig.tsbuildinfo
 npm-debug.log
 .buildx-cache

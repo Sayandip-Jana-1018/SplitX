@@ -14,6 +14,7 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Generated test coverage reports.
     "coverage/**",
+    "coverage-database/**",
     // The phone app (apps/mobile) has its own TypeScript, lint and packages.
     "apps/**",
     // The OCR engine, minified, copied from node_modules at build (scripts/tesseract-assets.mjs).

@@ -5,7 +5,7 @@ vi.mock('@/lib/db', () => ({ prisma: {} }));
 vi.mock('@/lib/sessionVersion', () => ({ currentTokenVersion: vi.fn() }));
 
 const { currentTokenVersion } = await import('@/lib/sessionVersion');
-const { mobileCaller, verifyAccessToken, verifyGoogleIdToken, ACCESS_TTL_SECONDS } = await import('@/lib/mobileAuth');
+const { mobileCaller, verifyAccessToken, ACCESS_TTL_SECONDS } = await import('@/lib/mobileAuth');
 
 const SECRET = 'a-test-secret-that-is-at-least-32-characters-long';
 const key = new TextEncoder().encode(SECRET);
@@ -68,13 +68,5 @@ describe('an access token', () => {
         expect(await call(signed)).toBeNull();
         expect(await call(`Basic ${signed}`)).toBeNull();
         expect(await call()).toBeNull();
-    });
-});
-
-describe('a Google ID token', () => {
-    it('is refused without asking Google when no Google client is set up', async () => {
-        vi.stubEnv('GOOGLE_CLIENT_ID', '');
-        vi.stubEnv('GOOGLE_MOBILE_CLIENT_IDS', '');
-        expect(await verifyGoogleIdToken('header.payload.signature-that-is-long-enough')).toBeNull();
     });
 });

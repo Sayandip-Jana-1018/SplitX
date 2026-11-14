@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { createRemoteJWKSet, jwtVerify, SignJWT } from 'jose';
+import { jwtVerify, SignJWT } from 'jose';
 import type { DeviceDetails } from '@/lib/contract/v1';
 import { prisma } from '@/lib/db';
 import { hashSecretToken, newSecretToken } from '@/lib/secretTokens';
@@ -178,45 +178,4 @@ export async function mobileCaller(request: Request): Promise<MobileCaller | nul
     const header = request.headers.get('authorization') ?? '';
     const match = /^Bearer\s+([A-Za-z0-9._-]{20,4096})$/.exec(header.trim());
     return match ? verifyAccessToken(match[1]) : null;
-}
-
-// ── Google ──────────────────────────────────────────────────
-
-const GOOGLE_KEYS = createRemoteJWKSet(new URL('https://www.googleapis.com/oauth2/v3/certs'));
-
-/**
- * The Google clients whose ID tokens are accepted: the website's (native Google
- * sign-in on Android asks for a token for the web client), and any listed in
- * GOOGLE_MOBILE_CLIENT_IDS.
- */
-function googleAudiences(): string[] {
-    const extra = (process.env.GOOGLE_MOBILE_CLIENT_IDS ?? '').split(',').map((id) => id.trim());
-    return [process.env.GOOGLE_CLIENT_ID ?? '', ...extra].filter(Boolean);
-}
-
-export interface GoogleIdentity {
-    subject: string;
-    email: string;
-    emailVerified: boolean;
-    name: string | null;
-    picture: string | null;
-}
-
-/** What Google's signed ID token says about the person, or null if Google didn't sign it for us. */
-export async function verifyGoogleIdToken(idToken: string): Promise<GoogleIdentity | null> {
-    const audience = googleAudiences();
-    if (audience.length === 0) return null;
-    try {
-        const { payload } = await jwtVerify(idToken, GOOGLE_KEYS, { issuer: ['https://accounts.google.com', 'accounts.google.com'], audience });
-        if (typeof payload.sub !== 'string' || typeof payload.email !== 'string') return null;
-        return {
-            subject: payload.sub,
-            email: payload.email,
-            emailVerified: payload.email_verified === true,
-            name: typeof payload.name === 'string' ? payload.name : null,
-            picture: typeof payload.picture === 'string' ? payload.picture : null,
-        };
-    } catch {
-        return null;
-    }
 }

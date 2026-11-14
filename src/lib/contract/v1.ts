@@ -31,12 +31,6 @@ export const PasswordSignIn = z.object({
 });
 export type PasswordSignIn = z.infer<typeof PasswordSignIn>;
 
-export const GoogleSignIn = z.object({
-    /** The ID token Google's sign-in gave the phone, for the website's Google client. */
-    idToken: z.string().min(20).max(8192),
-    device: DeviceDetails,
-});
-export type GoogleSignIn = z.infer<typeof GoogleSignIn>;
 
 export const RefreshRequest = z.object({ refreshToken: z.string().min(20).max(200) });
 export type RefreshRequest = z.infer<typeof RefreshRequest>;
