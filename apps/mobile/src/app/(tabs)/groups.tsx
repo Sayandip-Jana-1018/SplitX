@@ -14,6 +14,7 @@ import { GlassButton } from '~/ui/GlassButton';
 import { members, rupees } from '~/ui/money';
 import { Screen } from '~/ui/Screen';
 import { Text } from '~/ui/Text';
+import { TopBar } from '~/ui/TopBar';
 
 export default function Groups() {
     const { tokens, calm } = useLook();
@@ -21,6 +22,7 @@ export default function Groups() {
     const total = ledger.expenses.reduce((sum, expense) => sum + expense.amount, 0);
     return (
         <Screen onRefresh={onRefresh}>
+            <TopBar />
             <View style={{ alignItems: 'center', gap: 4 }}>
                 <Text variant="eyebrow" tone="secondary" onLiquid>
                     Shared spaces

@@ -18,9 +18,9 @@
 import { Canvas, Picture, Skia, type SkPicture } from '@shopify/react-native-skia';
 import { useIsFocused } from 'expo-router';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { View, type StyleProp, type ViewStyle } from 'react-native';
+import { Keyboard, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useFrameCallback, useSharedValue, type SharedValue } from 'react-native-reanimated';
-import { coinPose, type CoinKind } from '@shared/glass/coins';
+import { blendPose, coinPose, restingPose, type CoinKind } from '@shared/glass/coins';
 import { effects } from './effects';
 import { useGlass } from './GlassProvider';
 import { useScreenPlace, type Place } from './origin';
@@ -127,7 +127,7 @@ function ScreenLayer(props: Omit<Props, 'always'>) {
 }
 
 function LayerCanvas({ active, style, children }: Omit<Props, 'always'> & { active: boolean }) {
-    const { time, liquid } = useGlass();
+    const { time, liquid, still } = useGlass();
     const { ref, measure, place } = useScreenPlace();
     const [entries, setEntries] = useState<Entry[]>([]);
 
@@ -140,6 +140,22 @@ function LayerCanvas({ active, style, children }: Omit<Props, 'always'> & { acti
         });
         return () => cancelAnimationFrame(frameId);
     });
+
+    // The keyboard moves things without a render (a chat's message box rides up on it and back down):
+    // once it has opened or closed, and again when its slide has settled, every pane is measured again.
+    useEffect(() => {
+        const timers: ReturnType<typeof setTimeout>[] = [];
+        const again = () => {
+            for (const delay of [16, 120, 320]) timers.push(setTimeout(() => entries.forEach((entry) => entry.pane.measure?.()), delay));
+        };
+        const shown = Keyboard.addListener('keyboardDidShow', again);
+        const hidden = Keyboard.addListener('keyboardDidHide', again);
+        return () => {
+            shown.remove();
+            hidden.remove();
+            timers.forEach(clearTimeout);
+        };
+    }, [entries]);
     const [blank] = useState(emptyPicture);
     const picture = useSharedValue<SkPicture>(blank);
     const signature = useSharedValue(Number.NaN);
@@ -181,12 +197,13 @@ function LayerCanvas({ active, style, children }: Omit<Props, 'always'> & { acti
             return;
         }
         const t = time.value;
+        const rest = still.value;
         // The canvas's own top-left in window points: the layer's, less the margin it reaches past it.
         const lx = place.baseX.value - MARGIN - (place.scrollX ? place.scrollX.value : 0);
         const ly = place.baseY.value - MARGIN - (place.scrollY ? place.scrollY.value : 0);
 
         // Draw again only when something moved: the liquid, a scroll, a press, a fade.
-        let sig = t * 7.13 + lx * 1.7 + ly * 2.3;
+        let sig = t * 7.13 + lx * 1.7 + ly * 2.3 + rest * 11.9;
         for (const { pane } of entries) {
             const p = pane.place;
             sig += p.baseX.value * 0.37 + p.baseY.value * 0.53 + (p.scrollX ? p.scrollX.value * 0.71 : 0) + (p.scrollY ? p.scrollY.value * 0.91 : 0) + pane.opacity.value * 3.1;
@@ -237,7 +254,8 @@ function LayerCanvas({ active, style, children }: Omit<Props, 'always'> & { acti
                 canvas.drawRect(Skia.XYWHRect(ax, ay, sw + MARGIN * 2, sh + MARGIN * 2), paint);
             } else {
                 const r = pane.radius;
-                const pose = coinPose(pane.coin, pane.seed, t);
+                const moving = coinPose(pane.coin, pane.seed, t);
+                const pose = rest > 0 ? blendPose(moving, restingPose(pane.coin, pane.seed), rest) : moving;
                 for (const i of kit.coinLiquid) u[i] = liquidCoin[i];
                 // The coin shader adds uOrigin to the canvas point to find the window point.
                 u[C.uOrigin.slot] = lx;
@@ -258,7 +276,7 @@ function LayerCanvas({ active, style, children }: Omit<Props, 'always'> & { acti
             }
         }
         picture.set(recorder.finishRecordingAsPicture());
-    }, [entries, kit, liquid, time, place, picture, signature]);
+    }, [entries, kit, liquid, time, still, place, picture, signature]);
 
     const frame = useFrameCallback(draw, false);
     useEffect(() => {

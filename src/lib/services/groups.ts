@@ -77,6 +77,24 @@ export async function joinGroup(user: { id: string; name: string | null; email: 
 }
 
 /**
+ * What an invite code opens, before joining: the group's name, emoji and size.
+ * An expired link shows nothing of the group, not even its name. `alreadyIn`
+ * when `userId` is in it already.
+ */
+export async function previewInvite(inviteCode: string, userId?: string): Promise<GroupOutcome<{ groupId: string; name: string; emoji: string; members: number; alreadyIn: boolean }>> {
+    const group = await prisma.group.findFirst({
+        where: { inviteCode, deletedAt: null },
+        select: { id: true, name: true, emoji: true, inviteCodeIssuedAt: true, _count: { select: { members: true } }, members: userId ? { where: { userId }, select: { userId: true } } : false },
+    });
+    if (!group) return { ok: false, status: 404, error: 'That link doesn’t match any group. Check it, or ask for a new one.', code: 'invalid_invite' };
+    const alreadyIn = Array.isArray(group.members) && group.members.length > 0;
+    if (!alreadyIn && !inviteIsLive(group.inviteCodeIssuedAt)) {
+        return { ok: false, status: 410, error: 'This invite link has expired. Ask someone in the group for a new one.', code: 'invite_expired' };
+    }
+    return { ok: true, value: { groupId: group.id, name: group.name, emoji: group.emoji, members: group._count.members, alreadyIn } };
+}
+
+/**
  * A link that works (D-112), or null if the group doesn't exist or you aren't
  * in it. A link still working may be in many people's messages, so it is kept,
  * unless `adminMakesNew` and you are the owner or an admin: the website's

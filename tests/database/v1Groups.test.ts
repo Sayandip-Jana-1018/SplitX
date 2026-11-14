@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { ErrorBody, GroupJoined, GroupMade, InviteLink, SyncAnswer } from '@/lib/contract/v1';
+import { ErrorBody, GroupJoined, GroupMade, InviteLink, InvitePreview, SyncAnswer } from '@/lib/contract/v1';
 import { prisma } from '@/lib/db';
 import { startSession } from '@/lib/mobileAuth';
 import { emptyDatabase, groupOf, person } from './fixtures';
@@ -94,5 +94,32 @@ describe('a link to share', () => {
         const mallory = await person('Mallory');
         const { group } = await groupOf(asha, []);
         expect((await inviteRoute.POST(await post(mallory, `/api/v1/groups/${group.id}/invite`), params(group.id))).status).toBe(404);
+    });
+});
+
+describe('a link’s preview, before joining', () => {
+    const get = async (user: { id: string }, code: string) => {
+        const { authorization } = await headersFor(user);
+        return joinRoute.GET(new Request(`https://splitit.test/api/v1/groups/join?code=${encodeURIComponent(code)}`, { headers: { authorization } }));
+    };
+
+    it('shows the group’s name and size, and whether you’re in it', async () => {
+        const asha = await person('Asha');
+        const ravi = await person('Ravi');
+        const { group } = await groupOf(asha, []);
+        const seen = InvitePreview.parse(await (await get(ravi, group.inviteCode)).json());
+        expect(seen).toMatchObject({ groupId: group.id, name: 'Goa', members: 1, alreadyIn: false });
+        expect(InvitePreview.parse(await (await get(asha, group.inviteCode)).json()).alreadyIn).toBe(true);
+    });
+
+    it('shows nothing of a group whose link expired, and 404 for no group', async () => {
+        const asha = await person('Asha');
+        const ravi = await person('Ravi');
+        const { group } = await groupOf(asha, []);
+        expect((await get(ravi, 'nope-nope')).status).toBe(404);
+        await prisma.group.update({ where: { id: group.id }, data: { inviteCodeIssuedAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000) } });
+        const old = await get(ravi, group.inviteCode);
+        expect(old.status).toBe(410);
+        expect(JSON.stringify(await old.json())).not.toContain('Goa');
     });
 });

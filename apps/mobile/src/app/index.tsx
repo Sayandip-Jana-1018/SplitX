@@ -15,7 +15,7 @@ import { GlassSurface } from '~/glass/GlassSurface';
 import { useLook } from '~/theme/ThemeProvider';
 import { GlassButton } from '~/ui/GlassButton';
 import { Text } from '~/ui/Text';
-import { Wordmark } from '~/ui/TopBar';
+import { ThemeButton, Wordmark } from '~/ui/TopBar';
 
 export default function Welcome() {
     const { tokens, calm } = useLook();
@@ -31,10 +31,13 @@ export default function Welcome() {
 
     return (
         <GlassLayer style={{ flex: 1, paddingTop: insets.top + 14, paddingBottom: insets.bottom + 20, paddingHorizontal: 20, alignItems: 'center' }}>
-            <Animated.View entering={calm ? undefined : FadeIn.duration(500)}>
+            <Animated.View entering={calm ? undefined : FadeIn.duration(500)} style={{ width: '100%', maxWidth: 560, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
                 <GlassSurface kind="thin" radius={999} style={{ paddingVertical: 8, paddingHorizontal: 16 }}>
                     <Wordmark />
                 </GlassSurface>
+                <View style={{ position: 'absolute', right: 0 }}>
+                    <ThemeButton size={42} />
+                </View>
             </Animated.View>
 
             <View style={{ flex: 1, width: '100%', alignItems: 'center', justifyContent: 'center' }}>

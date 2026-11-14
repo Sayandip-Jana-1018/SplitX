@@ -6,12 +6,14 @@ import { useLedger } from '~/data/LedgerProvider';
 import { ActivityList } from '~/ui/ActivityList';
 import { Screen } from '~/ui/Screen';
 import { Text } from '~/ui/Text';
+import { TopBar } from '~/ui/TopBar';
 
 export default function Activity() {
     const { ledger, onRefresh } = useLedger();
     const items = useMemo(() => activity(ledger), [ledger]);
     return (
         <Screen onRefresh={onRefresh}>
+            <TopBar />
             <View style={{ alignItems: 'center', gap: 4 }}>
                 <Text variant="eyebrow" tone="secondary" onLiquid>
                     Every rupee, accounted for

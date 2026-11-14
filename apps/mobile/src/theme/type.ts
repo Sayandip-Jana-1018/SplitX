@@ -38,14 +38,16 @@ export const TYPE = {
     display: { fontSize: 34, lineHeight: 43, letterSpacing: -1.1, weight: 'heavy' },
     title: { fontSize: 26, lineHeight: 33, letterSpacing: -0.6, weight: 'bold' },
     heading: { fontSize: 19, lineHeight: 24, letterSpacing: -0.3, weight: 'bold' },
-    body: { fontSize: 16, lineHeight: 22, letterSpacing: 0, weight: 'medium' },
-    label: { fontSize: 14, lineHeight: 18, letterSpacing: 0, weight: 'semibold' },
-    caption: { fontSize: 12.5, lineHeight: 16, letterSpacing: 0, weight: 'medium' },
+    // A hair of letter spacing, never exactly 0: with 0, Android measures a line and draws it slightly
+    // differently, and a short label shrunk to its width loses its last word ("You pay" drew as "You").
+    body: { fontSize: 16, lineHeight: 22, letterSpacing: -0.01, weight: 'medium' },
+    label: { fontSize: 14, lineHeight: 18, letterSpacing: -0.01, weight: 'semibold' },
+    caption: { fontSize: 12.5, lineHeight: 16, letterSpacing: -0.01, weight: 'medium' },
     eyebrow: { fontSize: 11.5, lineHeight: 15, letterSpacing: 1.2, weight: 'bold' },
 } as const;
 
 export type Variant = keyof typeof TYPE;
 
-// On Android a short right-aligned label shrunk to its own width can lose its last word ("You get back"
-// drew as "You get"). Give such a label its column's width: `style={{ alignSelf: 'stretch' }}` with
-// numberOfLines={1}, as ActivityList and the Groups tab do.
+// On Android a short label shrunk to its own width lost its last word ("You get back" drew as "You get")
+// while its letter spacing was exactly 0; the scale above never uses 0. Labels in a right-hand column
+// also take the column's width (`alignSelf: 'stretch'`), as ActivityList and the Groups tab do.

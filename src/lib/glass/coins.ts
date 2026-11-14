@@ -113,3 +113,39 @@ export function coinPose(kind: CoinKind, seed: number, t: number): CoinPose {
     const axis = Math.atan2(leanY, leanX);
     return posed(axis, Math.hypot(leanX, leanY), axis, splitAmount(t), t * 0.02 + SPLIT_TWIST * splitOpen(t));
 }
+
+/**
+ * How a piece rests when motion is calm: a coin faces you square on, upright; a note lies flat at its
+ * own slant; the split coin is whole. The phone app turns each piece here as calm comes on, instead
+ * of freezing it mid-turn (blendPose).
+ */
+export function restingPose(kind: CoinKind, seed: number): CoinPose {
+    'worklet';
+    if (kind === 'note' || kind === 'bill') {
+        const axis = seed * 2.2;
+        return posed(axis, 0, axis + (seed % 2 === 0 ? -0.3 : 0.26));
+    }
+    if (kind === 'coin' || kind === 'rim') return posed(0, 0, 0);
+    return posed(-Math.PI / 2, 0.3, -Math.PI / 2);
+}
+
+/** From `a` (k = 0) to `b` (k = 1), turning the short way round. */
+export function blendPose(a: CoinPose, b: CoinPose, k: number): CoinPose {
+    'worklet';
+    const mix = (x: number, y: number) => x + (y - x) * k;
+    let turn = (b.spin - a.spin) % (2 * Math.PI);
+    if (turn > Math.PI) turn -= 2 * Math.PI;
+    if (turn < -Math.PI) turn += 2 * Math.PI;
+    const ax = mix(a.axisX, b.axisX);
+    const ay = mix(a.axisY, b.axisY);
+    const length = Math.hypot(ax, ay) || 1;
+    return {
+        axisX: ax / length,
+        axisY: ay / length,
+        lean: mix(a.lean, b.lean),
+        facing: mix(a.facing, b.facing),
+        spin: a.spin + turn * k,
+        cut: mix(a.cut, b.cut),
+        cutAt: mix(a.cutAt, b.cutAt),
+    };
+}

@@ -269,6 +269,10 @@ export type JoinGroup = z.infer<typeof JoinGroup>;
 export const GroupJoined = z.object({ groupId: z.string(), joined: z.boolean() });
 export type GroupJoined = z.infer<typeof GroupJoined>;
 
+/** What a link opens, before joining. */
+export const InvitePreview = z.object({ groupId: z.string(), name: z.string(), emoji: z.string(), members: z.number().int(), alreadyIn: z.boolean() });
+export type InvitePreview = z.infer<typeof InvitePreview>;
+
 /** A link that works for 7 days; the one already out is kept while it still works. */
 export const InviteLink = z.object({ inviteCode: z.string(), url: z.string(), expiresAt: z.string() });
 export type InviteLink = z.infer<typeof InviteLink>;

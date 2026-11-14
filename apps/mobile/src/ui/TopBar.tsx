@@ -23,8 +23,17 @@ export function Wordmark({ size = 'label' }: { size?: 'label' | 'heading' }) {
     );
 }
 
-export function TopBar() {
+/** The way to Appearance (colour, mode, glass, motion), on every screen: a colour can be changed anywhere. */
+export function ThemeButton({ size = 46 }: { size?: number }) {
     const { tokens } = useLook();
+    return (
+        <GlassButton kind="thin" contentStyle={{ width: size, height: size }} accessibilityLabel="Appearance: colour, mode and glass" onPress={() => router.push('/appearance')}>
+            <Palette size={20} color={tokens.fg} strokeWidth={2} />
+        </GlassButton>
+    );
+}
+
+export function TopBar() {
     const you = useYou();
     return (
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -32,9 +41,7 @@ export function TopBar() {
                 <Avatar name={you.name} size={34} />
             </GlassButton>
             <Wordmark />
-            <GlassButton kind="thin" contentStyle={{ width: 46, height: 46 }} accessibilityLabel="Appearance" onPress={() => router.push('/appearance')}>
-                <Palette size={20} color={tokens.fg} strokeWidth={2} />
-            </GlassButton>
+            <ThemeButton />
         </View>
     );
 }

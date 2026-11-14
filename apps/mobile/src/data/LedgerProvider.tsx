@@ -129,7 +129,7 @@ function reviveReceipts(text: string | null): Record<string, string> {
 }
 
 /** An invite link (…/join/<code>) or the code alone. */
-const inviteCodeOf = (text: string) => text.trim().split('/join/').pop()?.split(/[?#\s]/)[0] ?? '';
+export const inviteCodeOf = (text: string) => text.trim().split('/join/').pop()?.split(/[?#\s]/)[0] ?? '';
 
 const Context = createContext<LedgerContext | null>(null);
 let sequence = 0;

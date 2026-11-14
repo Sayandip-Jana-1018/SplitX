@@ -70,15 +70,7 @@ export default function GroupScreen() {
 
     return (
         <Screen tabBar={false} onRefresh={onRefresh}>
-            <Header
-                title={`${group.emoji} ${group.name}`}
-                eyebrow={members(group.memberIds.length)}
-                right={
-                    <GlassButton kind="thin" contentStyle={{ width: 42, height: 42 }} accessibilityLabel="Group chat" onPress={() => router.push(`/chat/${group.id}`)}>
-                        <MessageCircle size={19} color={tokens.fg} strokeWidth={2.2} />
-                    </GlassButton>
-                }
-            />
+            <Header title={`${group.emoji} ${group.name}`} eyebrow={members(group.memberIds.length)} />
 
             <GlassSurface kind="thick" style={{ paddingVertical: 20, gap: 6 }}>
                 <Text variant="eyebrow" tone="secondary">
@@ -96,12 +88,18 @@ export default function GroupScreen() {
                 </Pressable>
             </GlassSurface>
 
-            <GlassButton kind="accent" contentStyle={{ height: 54, flexDirection: 'row', gap: 8 }} onPress={() => router.push({ pathname: '/add', params: { group: group.id } })}>
-                <Plus size={20} color={tokens.onAccent} strokeWidth={2.6} />
-                <Text variant="heading" tone="onAccent">
-                    Add an expense
-                </Text>
-            </GlassButton>
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+                <GlassButton kind="accent" style={{ flex: 1.6 }} contentStyle={{ height: 54, flexDirection: 'row', gap: 8 }} onPress={() => router.push({ pathname: '/add', params: { group: group.id } })}>
+                    <Plus size={20} color={tokens.onAccent} strokeWidth={2.6} />
+                    <Text variant="heading" tone="onAccent">
+                        Add expense
+                    </Text>
+                </GlassButton>
+                <GlassButton kind="thin" style={{ flex: 1 }} contentStyle={{ height: 54, flexDirection: 'row', gap: 8 }} accessibilityLabel="Group chat" onPress={() => router.push(`/chat/${group.id}`)}>
+                    <MessageCircle size={19} color={tokens.fg} strokeWidth={2.2} />
+                    <Text variant="heading">Chat</Text>
+                </GlassButton>
+            </View>
 
             <Segmented<Tab>
                 options={[

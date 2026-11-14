@@ -89,14 +89,12 @@ export default function Pay() {
                     {rupees(amount)}
                 </Text>
             </View>
-            <GlassSurface style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16 }}>
-                <Avatar name={person.name} size={46} />
-                <View style={{ flex: 1, gap: 2 }}>
-                    <Text variant="heading" align="left">
-                        {person.name}
-                    </Text>
-                    <Text variant="caption" tone="secondary" align="left">
-                        UPI · {person.upiId ?? 'no UPI ID yet'}
+            <GlassSurface style={{ alignItems: 'center', gap: 8, paddingVertical: 18, paddingHorizontal: 16 }}>
+                <Avatar name={person.name} size={52} />
+                <View style={{ alignItems: 'center', gap: 2 }}>
+                    <Text variant="heading">{person.name}</Text>
+                    <Text variant="caption" tone="secondary" numberOfLines={1}>
+                        {person.upiId ? `UPI · ${person.upiId}` : 'No UPI ID yet'}
                     </Text>
                 </View>
             </GlassSurface>

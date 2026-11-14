@@ -15,7 +15,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useWindowDimensions, View, type StyleProp, type ViewStyle } from 'react-native';
-import { useDerivedValue, useFrameCallback, useSharedValue, type DerivedValue, type SharedValue } from 'react-native-reanimated';
+import { Easing, useDerivedValue, useFrameCallback, useSharedValue, withTiming, type DerivedValue, type SharedValue } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 import { frameIsDue, Governor, nextFrameDue, type PacedLevel } from '@shared/glass/governor';
 import { useLook } from '~/theme/ThemeProvider';
@@ -50,6 +50,8 @@ interface Glass {
     height: number;
     /** How many times a second the liquid moves on now. */
     fps: number;
+    /** 0 moving, 1 at rest: eases to 1 as calm comes on, so the coins turn to face you (coins.ts restingPose). */
+    still: SharedValue<number>;
 }
 
 const GlassContext = createContext<Glass | null>(null);
@@ -64,6 +66,10 @@ export function GlassProvider({ children }: { children: ReactNode }) {
     const touch = useSharedValue<number[]>([0, 0, -1]);
     const before = useSharedValue(pal);
     const rip = useSharedValue<number[]>([0, 0, -1]);
+    const still = useSharedValue(calm ? 1 : 0);
+    useEffect(() => {
+        still.set(withTiming(calm ? 1 : 0, { duration: 700, easing: Easing.inOut(Easing.cubic) }));
+    }, [calm, still]);
     const liquid = useDerivedValue(() => liquidUniforms(time.value, width, height, pal, touch.value, before.value, rip.value), webDeps([pal, width, height]));
 
     // A new colour or mode spreads from where it was chosen: the last touch, if it was just now.
@@ -155,7 +161,7 @@ export function GlassProvider({ children }: { children: ReactNode }) {
         [calm, touch, time],
     );
 
-    const value = useMemo(() => ({ time, touch, liquid, ripple, width, height, fps: PACE[level].fps }), [time, touch, liquid, ripple, width, height, level]);
+    const value = useMemo(() => ({ time, touch, liquid, ripple, width, height, fps: PACE[level].fps, still }), [time, touch, liquid, ripple, width, height, level, still]);
     return <GlassContext.Provider value={value}>{children}</GlassContext.Provider>;
 }
 

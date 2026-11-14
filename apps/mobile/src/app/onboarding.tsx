@@ -17,6 +17,7 @@ import { GlassLayer } from '~/glass/layer';
 import { useLook } from '~/theme/ThemeProvider';
 import { GlassButton, tap } from '~/ui/GlassButton';
 import { Text } from '~/ui/Text';
+import { ThemeButton } from '~/ui/TopBar';
 
 const PAGES: { coin: CoinKind; title: string; body: string }[] = [
     { coin: 'split', title: 'Split anything', body: 'Trips, flats, dinners. Add it once, and everyone’s share is worked out to the paisa.' },
@@ -61,13 +62,16 @@ export default function Onboarding() {
                                 <View key={entry.title} style={{ width: index === page ? 22 : 8, height: 8, borderRadius: 4, backgroundColor: index === page ? tokens.accentText : tokens.borderStrong }} />
                             ))}
                         </View>
-                        {last ? null : (
-                            <Pressable accessibilityRole="button" onPress={enter} hitSlop={12}>
-                                <Text variant="label" tone="secondary" onLiquid>
-                                    Skip
-                                </Text>
-                            </Pressable>
-                        )}
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+                            {last ? null : (
+                                <Pressable accessibilityRole="button" onPress={enter} hitSlop={12}>
+                                    <Text variant="label" tone="secondary" onLiquid>
+                                        Skip
+                                    </Text>
+                                </Pressable>
+                            )}
+                            <ThemeButton size={40} />
+                        </View>
                     </View>
 
                     <View style={{ flex: 1, width: '100%' }}>

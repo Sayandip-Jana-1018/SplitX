@@ -7,7 +7,7 @@ import { Canvas, Fill, Shader } from '@shopify/react-native-skia';
 import { useEffect, useState, type ReactNode } from 'react';
 import { View, type StyleProp, type ViewStyle } from 'react-native';
 import { useDerivedValue, useSharedValue, withTiming } from 'react-native-reanimated';
-import { coinCode, coinPose, coinReach, type CoinKind } from '@shared/glass/coins';
+import { blendPose, coinCode, coinPose, coinReach, restingPose, type CoinKind } from '@shared/glass/coins';
 import { useLook } from '~/theme/ThemeProvider';
 import { webDeps } from './deps';
 import { effects } from './effects';
@@ -58,7 +58,7 @@ function LayeredCoin({ kind, size, seed = 0, style, children }: Props) {
 
 function StandaloneCoin({ kind, size, seed = 0, style, children }: Props) {
     const { pal } = useLook();
-    const { time, liquid } = useGlass();
+    const { time, liquid, still } = useGlass();
     const { ref, measure, origin } = useScreenOrigin();
     const radius = size / 2;
     const reach = reachOf(kind, radius);
@@ -67,7 +67,8 @@ function StandaloneCoin({ kind, size, seed = 0, style, children }: Props) {
     const uniforms = useDerivedValue(() => {
         const t = time.value;
         const [x, y] = origin.value;
-        const pose = coinPose(kind, seed, t);
+        const moving = coinPose(kind, seed, t);
+        const pose = still.value > 0 ? blendPose(moving, restingPose(kind, seed), still.value) : moving;
         const cx = x + radius;
         const cy = y + radius;
         return {

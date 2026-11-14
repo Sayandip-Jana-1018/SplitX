@@ -20,6 +20,7 @@ import {
     GroupJoined,
     GroupMade,
     InviteLink,
+    InvitePreview,
     MessagePage,
     MessageSent,
     SettlementMoved,
@@ -234,6 +235,8 @@ export function createApi(options: ApiOptions) {
         sendMessage: (groupId: string, message: NewMessage) => authed(`/api/v1/groups/${encodeURIComponent(groupId)}/messages`, MessageSent, { method: 'POST', body: JSON.stringify(message) }),
         createGroup: (group: NewGroup) => authed('/api/v1/groups', GroupMade, { method: 'POST', body: JSON.stringify(group) }),
         joinGroup: (inviteCode: string) => authed('/api/v1/groups/join', GroupJoined, { method: 'POST', body: JSON.stringify({ inviteCode }) }),
+        /** What an invite code opens, before joining. */
+        previewInvite: (inviteCode: string) => authed(`/api/v1/groups/join?code=${encodeURIComponent(inviteCode)}`, InvitePreview),
         inviteLink: (groupId: string) => authed(`/api/v1/groups/${encodeURIComponent(groupId)}/invite`, InviteLink, { method: 'POST' }),
         /** Every group you're in, with the ones that changed since the versions given, in full. */
         sync: (known: Record<string, string>) => authed('/api/v1/sync', SyncAnswer, { method: 'POST', body: JSON.stringify({ known }) }),

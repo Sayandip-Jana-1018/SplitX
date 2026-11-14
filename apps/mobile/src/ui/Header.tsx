@@ -1,4 +1,4 @@
-/** A screen's title, centred, with a way back or a way out beside it. */
+/** A screen's title, centred, with a way back or a way out on its left and the theme button (or `right`) on its right. */
 import { router } from 'expo-router';
 import { ChevronLeft, X } from 'lucide-react-native';
 import type { ReactNode } from 'react';
@@ -6,6 +6,7 @@ import { View } from 'react-native';
 import { useLook } from '~/theme/ThemeProvider';
 import { GlassButton } from './GlassButton';
 import { Text } from './Text';
+import { ThemeButton } from './TopBar';
 
 export function Header({ title, eyebrow, close, right }: { title: string; eyebrow?: string; close?: boolean; right?: ReactNode }) {
     const { tokens } = useLook();
@@ -23,11 +24,12 @@ export function Header({ title, eyebrow, close, right }: { title: string; eyebro
                         {eyebrow}
                     </Text>
                 ) : null}
-                <Text variant="title" onLiquid numberOfLines={1}>
+                {/* A long name shrinks to fit rather than losing its end. */}
+                <Text variant="title" onLiquid numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
                     {title}
                 </Text>
             </View>
-            {right ? <View style={{ position: 'absolute', right: 0 }}>{right}</View> : null}
+            <View style={{ position: 'absolute', right: 0 }}>{right ?? <ThemeButton size={42} />}</View>
         </View>
     );
 }

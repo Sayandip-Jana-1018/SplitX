@@ -1,9 +1,9 @@
 /**
  * Where your changes stand, shown only when there's something to say: how many are waiting to be
  * sent (and that you're offline, if you are), and each change the server refused, with why and a
- * choice: try it again, or let it go.
+ * choice: try it again, or let it go. Centred, like the rest of the app.
  */
-import { CloudOff, RefreshCw } from 'lucide-react-native';
+import { CloudOff, RefreshCw, TriangleAlert } from 'lucide-react-native';
 import { View } from 'react-native';
 import { useLedger } from '~/data/LedgerProvider';
 import { GlassSurface } from '~/glass/GlassSurface';
@@ -18,37 +18,46 @@ export function SyncNote() {
     const offline = sync === 'offline';
 
     return (
-        <GlassSurface kind="thin" style={{ paddingVertical: 12, paddingHorizontal: 16, gap: 12 }}>
+        <GlassSurface kind="thin" style={{ paddingVertical: 16, paddingHorizontal: 18, gap: 14, alignItems: 'center' }}>
             {waiting > 0 ? (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                    {offline ? <CloudOff size={18} color={tokens.fg2} strokeWidth={2.2} /> : <RefreshCw size={18} color={tokens.fg2} strokeWidth={2.2} />}
-                    <Text variant="caption" tone="secondary" align="left" style={{ flex: 1 }}>
-                        {offline ? (waiting === 1 ? 'You’re offline. 1 change is saved here and goes when you’re back.' : `You’re offline. ${waiting} changes are saved here and go when you’re back.`) : waiting === 1 ? 'Sending 1 change…' : `Sending ${waiting} changes…`}
-                    </Text>
+                <View style={{ alignItems: 'center', gap: 8 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        {offline ? <CloudOff size={17} color={tokens.fg2} strokeWidth={2.2} /> : <RefreshCw size={17} color={tokens.fg2} strokeWidth={2.2} />}
+                        <Text variant="label">{offline ? 'You’re offline' : waiting === 1 ? 'Sending 1 change…' : `Sending ${waiting} changes…`}</Text>
+                    </View>
                     {offline ? (
-                        <GlassButton kind="thin" contentStyle={{ paddingHorizontal: 14, height: 34 }} onPress={() => void refresh()}>
-                            <Text variant="caption" weight="bold">
-                                Retry
+                        <>
+                            <Text variant="caption" tone="secondary" style={{ maxWidth: 280 }}>
+                                {waiting === 1 ? '1 change is saved on your phone and goes when you’re back.' : `${waiting} changes are saved on your phone and go when you’re back.`}
                             </Text>
-                        </GlassButton>
+                            <GlassButton kind="thin" contentStyle={{ paddingHorizontal: 22, height: 36, flexDirection: 'row', gap: 6 }} onPress={() => void refresh()}>
+                                <RefreshCw size={14} color={tokens.fg} strokeWidth={2.4} />
+                                <Text variant="caption" weight="bold">
+                                    Try now
+                                </Text>
+                            </GlassButton>
+                        </>
                     ) : null}
                 </View>
             ) : null}
             {stuck.map((entry, index) => (
-                <View key={entry.change.id} style={{ gap: 8, paddingTop: index === 0 && waiting === 0 ? 0 : 12, borderTopWidth: index === 0 && waiting === 0 ? 0 : 1, borderTopColor: tokens.border }}>
-                    <Text variant="label" align="left">
-                        Couldn’t save {entry.label}
-                    </Text>
-                    <Text variant="caption" tone="secondary" align="left">
+                <View key={entry.change.id} style={{ alignSelf: 'stretch', alignItems: 'center', gap: 6, paddingTop: index === 0 && waiting === 0 ? 0 : 14, borderTopWidth: index === 0 && waiting === 0 ? 0 : 1, borderTopColor: tokens.border }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <TriangleAlert size={17} color={tokens.danger} strokeWidth={2.2} />
+                        <Text variant="label" style={{ flexShrink: 1 }}>
+                            Couldn’t save {entry.label}
+                        </Text>
+                    </View>
+                    <Text variant="caption" tone="secondary" style={{ maxWidth: 280 }}>
                         {entry.why}
                     </Text>
-                    <View style={{ flexDirection: 'row', gap: 10 }}>
-                        <GlassButton kind="accent" style={{ flex: 1 }} contentStyle={{ height: 38 }} onPress={() => retryStuck(entry.change.id)}>
+                    <View style={{ flexDirection: 'row', gap: 10, marginTop: 6, alignSelf: 'stretch' }}>
+                        <GlassButton kind="accent" style={{ flex: 1 }} contentStyle={{ height: 40 }} onPress={() => retryStuck(entry.change.id)}>
                             <Text variant="caption" weight="bold" tone="onAccent">
                                 Try again
                             </Text>
                         </GlassButton>
-                        <GlassButton kind="thin" style={{ flex: 1 }} contentStyle={{ height: 38 }} onPress={() => discardStuck(entry.change.id)}>
+                        <GlassButton kind="thin" style={{ flex: 1 }} contentStyle={{ height: 40 }} onPress={() => discardStuck(entry.change.id)}>
                             <Text variant="caption" weight="bold">
                                 Let it go
                             </Text>

@@ -1,5 +1,6 @@
 /** The fewest payments that clear every group, worked out by the settlement planner. */
 import { router } from 'expo-router';
+import { Check } from 'lucide-react-native';
 import { useMemo } from 'react';
 import { isAwaitingReceiverApproval, isPendingSettlementStatus } from '@/lib/settlementStatus';
 import { authErrorMessage } from '~/auth/AuthProvider';
@@ -15,7 +16,11 @@ import { rupees } from '~/ui/money';
 import { RollingAmount } from '~/ui/RollingAmount';
 import { Screen } from '~/ui/Screen';
 import { Text } from '~/ui/Text';
+import { TopBar } from '~/ui/TopBar';
 import { useToast } from '~/ui/Toast';
+
+/** The action column's width: fits "Confirm" and "Remind" with room either side. */
+const ACTION_WIDTH = 92;
 
 export default function Settle() {
     const { tokens } = useLook();
@@ -56,6 +61,7 @@ export default function Settle() {
 
     return (
         <Screen onRefresh={onRefresh}>
+            <TopBar />
             <View style={{ alignItems: 'center', gap: 4 }}>
                 <Text variant="eyebrow" tone="secondary" onLiquid>
                     Fewest payments
@@ -94,30 +100,36 @@ export default function Settle() {
                                         {youPay ? `You pay ${other.split(' ')[0]}` : `${other.split(' ')[0]} pays you`}
                                     </Text>
                                     <Text variant="caption" tone="secondary" align="left" tabular numberOfLines={1}>
-                                        {transfer.open && youPay ? `Waiting for ${other.split(' ')[0]} to confirm` : toConfirm ? `Says they paid ${rupees(toConfirm.amount)}` : `${transfer.groupName} · ${rupees(transfer.amount)}`}
+                                        {transfer.open && youPay ? `Waiting for ${other.split(' ')[0]} to confirm` : toConfirm ? `Says they paid ${rupees(toConfirm.amount)}` : `${rupees(transfer.amount)} · ${transfer.groupName}`}
                                     </Text>
                                 </View>
-                                {transfer.open && youPay ? (
-                                    <Text variant="caption" tone="muted">
-                                        Sent
-                                    </Text>
-                                ) : toConfirm ? (
-                                    <GlassButton kind="accent" contentStyle={{ paddingHorizontal: 16, height: 38 }} onPress={() => void confirm(toConfirm.id, other.split(' ')[0])}>
-                                        <Text variant="caption" weight="bold" tone="onAccent">
-                                            Confirm
-                                        </Text>
-                                    </GlassButton>
-                                ) : (
-                                    <GlassButton
-                                        kind={youPay ? 'accent' : 'thin'}
-                                        contentStyle={{ paddingHorizontal: 16, height: 38 }}
-                                        onPress={() => (youPay ? router.push({ pathname: '/pay', params: { group: transfer.groupId, to: transfer.to, amount: String(transfer.amount) } }) : remind(transfer))}
-                                    >
-                                        <Text variant="caption" weight="bold" tone={youPay ? 'onAccent' : 'primary'}>
-                                            {youPay ? 'Pay' : 'Remind'}
-                                        </Text>
-                                    </GlassButton>
-                                )}
+                                {/* One column, one width, for every row's action, so they line up whatever they say. */}
+                                <View style={{ width: ACTION_WIDTH }}>
+                                    {transfer.open && youPay ? (
+                                        <GlassSurface kind="clear" radius={999} style={{ height: 38, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                                            <Check size={14} color={tokens.muted} strokeWidth={2.6} />
+                                            <Text variant="caption" weight="bold" tone="muted">
+                                                Sent
+                                            </Text>
+                                        </GlassSurface>
+                                    ) : toConfirm ? (
+                                        <GlassButton kind="accent" contentStyle={{ height: 38 }} onPress={() => void confirm(toConfirm.id, other.split(' ')[0])}>
+                                            <Text variant="caption" weight="bold" tone="onAccent">
+                                                Confirm
+                                            </Text>
+                                        </GlassButton>
+                                    ) : (
+                                        <GlassButton
+                                            kind={youPay ? 'accent' : 'thin'}
+                                            contentStyle={{ height: 38 }}
+                                            onPress={() => (youPay ? router.push({ pathname: '/pay', params: { group: transfer.groupId, to: transfer.to, amount: String(transfer.amount) } }) : remind(transfer))}
+                                        >
+                                            <Text variant="caption" weight="bold" tone={youPay ? 'onAccent' : 'primary'}>
+                                                {youPay ? 'Pay' : 'Remind'}
+                                            </Text>
+                                        </GlassButton>
+                                    )}
+                                </View>
                             </View>
                         );
                     })}

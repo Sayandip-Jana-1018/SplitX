@@ -134,9 +134,12 @@ export default function Appearance() {
                                 }}
                                 style={{ width: '47%' }}
                             >
-                                <GlassSurface glassStyle={id} radius={22} style={{ paddingVertical: 18, paddingHorizontal: 10, gap: 4, borderWidth: selected ? 2 : 0, borderColor: tokens.accentText }}>
-                                    <Text variant="heading">{GLASS_LABELS[id].name}</Text>
-                                    <Text variant="caption" tone="secondary">
+                                {/* One size for every card, whatever its hint's length: two lines are kept for each. */}
+                                <GlassSurface glassStyle={id} radius={22} style={{ height: 108, paddingHorizontal: 12, gap: 4, alignItems: 'center', justifyContent: 'center', borderWidth: selected ? 2 : 0, borderColor: tokens.accentText }}>
+                                    <Text variant="heading" numberOfLines={1}>
+                                        {GLASS_LABELS[id].name}
+                                    </Text>
+                                    <Text variant="caption" tone="secondary" numberOfLines={2} style={{ minHeight: 32 }}>
                                         {GLASS_LABELS[id].hint}
                                     </Text>
                                 </GlassSurface>
