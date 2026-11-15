@@ -84,7 +84,13 @@ jobs:
           docker exec "$PG" createdb -U postgres restored
           # The dump creates the public schema itself.
           docker exec "$PG" psql -U postgres -d restored -X -q -c 'DROP SCHEMA public CASCADE'
-          docker exec "$PG" pg_restore -U postgres -d restored --no-owner --no-privileges --exit-on-error /tmp/production.dump
+          # As SQL, less one thing only Neon understands: the storage option it puts on every
+          # column ("ALTER TABLE ONLY … ALTER COLUMN … SET (pg_attver=…)"), which plain
+          # Postgres refuses. Everything else must restore, or the step fails.
+          docker exec "$PG" pg_restore --no-owner --no-privileges --file=/tmp/restore.sql /tmp/production.dump
+          docker exec "$PG" sh -c 'grep -cE "^ALTER TABLE ONLY .+ ALTER COLUMN .+ SET \(pg_attver=[0-9]+\);$" /tmp/restore.sql || true' | sed 's/^/Neon column options left out: /'
+          docker exec "$PG" sh -c 'grep -vE "^ALTER TABLE ONLY .+ ALTER COLUMN .+ SET \(pg_attver=[0-9]+\);$" /tmp/restore.sql > /tmp/restore-plain.sql'
+          docker exec "$PG" psql -U postgres -d restored -X -q -v ON_ERROR_STOP=1 -f /tmp/restore-plain.sql
 
       - name: Fingerprint the copy
         run: docker exec "$PG" psql -U postgres -d restored -X -q -At -v ON_ERROR_STOP=1 -f /tmp/drill.sql > "$RUNNER_TEMP/restored.txt"
@@ -95,5 +101,5 @@ jobs:
       - name: Delete the dump and the fingerprints
         if: ${{ always() }}
         run: |
-          docker exec "$PG" rm -f /tmp/production.dump || true
+          docker exec "$PG" rm -f /tmp/production.dump /tmp/restore.sql /tmp/restore-plain.sql || true
           rm -f "$RUNNER_TEMP/before.txt" "$RUNNER_TEMP/after.txt" "$RUNNER_TEMP/restored.txt"
