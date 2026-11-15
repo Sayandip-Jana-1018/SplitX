@@ -14,7 +14,10 @@ const HSTS_MIN_SECONDS = 31_536_000;
  * Every check, in the order the report lists them. The database check wakes
  * Neon's compute when it sleeps, so the workflow asks it once an hour, not
  * every 15 minutes: a check that kept the database awake would spend the free
- * plan's compute hours on itself.
+ * plan's compute hours on itself. The storage check, also hourly, is what keeps
+ * the free Supabase project (receipt and profile photos) from pausing after a
+ * week without requests. The phone app's API is asked without a token: it must
+ * answer with its own 401, which proves /api/v1 is deployed and reachable.
  */
 export const CHECKS = [
     { name: 'live', what: 'The app answers, without the database', path: '/api/health/live' },
@@ -22,7 +25,9 @@ export const CHECKS = [
     { name: 'scripts', what: 'The page\'s own JavaScript is served', path: null },
     { name: 'headers', what: 'HSTS, nosniff and a Content Security Policy', path: null },
     { name: 'sign-in', what: 'The sign-in page', path: '/login' },
+    { name: 'phone-api', what: 'The phone app’s API answers', path: '/api/v1/groups' },
     { name: 'database', what: 'The database answers', path: '/api/health/ready', hourly: true },
+    { name: 'storage', what: 'Photos can be reached (and Supabase stays awake)', path: '/api/health/storage', hourly: true },
 ];
 
 const json = (body) => {
@@ -76,6 +81,17 @@ export function judge(name, answer) {
             if (!enforced && !headers['content-security-policy-report-only']) problems.push('no Content Security Policy');
             if (problems.length) return { ok: false, detail: problems.join(', ') };
             return { ok: true, detail: 'HSTS, nosniff, CSP ' + (enforced ? 'enforced' : 'report-only') };
+        }
+        case 'phone-api': {
+            if (status !== 401) return wrongStatus(401);
+            return json(body)?.code === 'unauthenticated'
+                ? { ok: true, detail: 'asks for sign-in, as it should' }
+                : { ok: false, detail: 'HTTP 401, but not the API’s own answer' };
+        }
+        case 'storage': {
+            const answerBody = json(body);
+            if (status === 200 && answerBody?.checks?.storage === 'ok') return { ok: true, detail: 'ready' };
+            return { ok: false, detail: 'HTTP ' + status + (answerBody?.checks?.storage ? ', storage ' + answerBody.checks.storage : '') };
         }
         case 'database': {
             const answerBody = json(body);

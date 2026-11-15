@@ -60,9 +60,20 @@ describe('what each check accepts', () => {
         expect(() => judge('uptime', { status: 200 })).toThrow('no such check');
     });
 
-    it('asks the database hourly only, and nothing else of it', () => {
-        expect(CHECKS.filter((check) => check.hourly).map((check) => check.name)).toEqual(['database']);
+    it('asks the database and storage hourly only: often enough to keep Supabase awake, rarely enough to let Neon sleep', () => {
+        expect(CHECKS.filter((check) => check.hourly).map((check) => check.name)).toEqual(['database', 'storage']);
         expect(PRODUCTION).toBe('https://splitsj.vercel.app');
+    });
+
+    it('wants the phone app’s API to ask for sign-in in its own words', () => {
+        expect(judge('phone-api', { status: 401, body: '{"error":"Your session has ended. Sign in again.","code":"unauthenticated"}' }).ok).toBe(true);
+        expect(judge('phone-api', { status: 404, body: '<html>Not found</html>' })).toEqual({ ok: false, detail: 'HTTP 404, expected 401' });
+        expect(judge('phone-api', { status: 401, body: 'Unauthorized' }).ok).toBe(false);
+    });
+
+    it('reads photo storage as up only when the app says so', () => {
+        expect(judge('storage', { status: 200, body: '{"status":"ready","checks":{"storage":"ok"}}' })).toEqual({ ok: true, detail: 'ready' });
+        expect(judge('storage', { status: 503, body: '{"status":"not_ready","checks":{"storage":"unreachable"}}' })).toEqual({ ok: false, detail: 'HTTP 503, storage unreachable' });
     });
 });
 
