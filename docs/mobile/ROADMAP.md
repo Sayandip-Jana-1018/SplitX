@@ -285,8 +285,8 @@ I stop and report at the end of each phase, and start the next only when you say
 |---|---|---|
 | 0 | Foundation | ✅ Code written: the app's frame, the glass engine and the first screens |
 | 1 | Design kit and every screen | ✅ All screens built on made-up data; installed on your phone as an APK |
-| 2 | Accounts and real data | You use the real app, with real friends, on the live site |
-| 3 | Notifications and reliability | A push reaches your phone; restore drill passes |
+| 2 | Accounts and real data | ✅ You use the real app, with real friends, on the live site (live 15 November) |
+| 3 | Notifications and reliability | ✅ A push reached your phone; the restore drill passed (15 November) |
 | 4 | The full app: every website screen, the core loop | Settle-up mind map and every web screen on the phone; a pretend trip works offline |
 | 5 | Smart input and auto-capture | Real alerts become correct expenses; receipt scans work |
 | 6 | Missing money features | Ledger tests hold for every new case |
@@ -391,7 +391,17 @@ I stop and report at the end of each phase, and start the next only when you say
 
 **Where it runs:** since step 6, the installed app uses splitsj.vercel.app and its database. Development still uses the website's dev server and a throwaway Postgres on the laptop, reached from your phone over USB. Push notifications, remote config, Sentry and the backup drill (the old Phase 2's rest) are Phase 3 now.
 
-### Phase 3: core loop, on phone and web
+### Phase 3: notifications and reliability (done 15 November)
+
+1. ✅ **Live checks** (4ae69c0): the phone API is checked every 15 minutes, and storage every hour, which also keeps the free Supabase project from pausing. A failing check opens an issue and closes it when it recovers.
+2. ✅ **Restore drill** (e16deaa, fixed in 42467b2 and 258fa99): a manual workflow behind the production-database approval dumps production read-only, restores it into an empty Postgres of the same version, and compares every table and every balance. Run #4 passed: 22 tables restored whole, every balance the same, no group out of balance. Its logs print only same or different, because this repository's logs are public.
+3. ✅ **Crash and error reports** (f8475ee): the installed app reports errors to Sentry's free plan (project splitit-app). Errors only, no personal data: an account is known by its id. The website's Sentry waits for Phase 8, because its OpenTelemetry setup clashes with Sentry's.
+4. ✅ **Push notifications** (94cd404, b3b2012): Firebase Cloud Messaging, sent straight from the server with the project's service account (FIREBASE_SERVICE_ACCOUNT in Vercel, entered by you). Every in-app notification also goes to the phones of the people it's for, but only phones still signed in. A Home card offers notifications once, and Profile shows On, Off or Blocked. A tap opens the right screen. The first time a phone turns them on, that phone alone gets "Notifications are on". It reached your phone at 6:38 pm.
+5. ✅ **A layout fix found on the way** (de0b46b): when the notifications card left Home, the coin, the totals and the four buttons stayed 236 points low under their glass. Reanimated's entering animations had kept the native views from moving. In-flow content now fades in with an opacity-only `<Appear>`, a lint rule keeps layout animations out, and the APK build type-checks and lints the app first, in a job of its own (b8b2dd4). APK build 20 has it, installed and checked on your phone.
+
+**Your part, done:** the Firebase project (splitit-4e694) and its Android app, the service account key in Vercel, `google-services.json` as a GitHub secret, the Sentry project, and approving the drill.
+
+### The old plan's Phase 3: core loop (now part of Phase 4)
 
 - Sign-in, onboarding, groups and trips, add expense, settle-up with UPI, approvals, feed, chat, notifications, search, contacts, invites with deep links, offline, the Dial and Deck with classic fallback. Web pages rebuilt in the same slices.
 - **Exit test:**
