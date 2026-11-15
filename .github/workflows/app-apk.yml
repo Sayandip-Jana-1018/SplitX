@@ -29,8 +29,45 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  check:
+    # An app that doesn't type-check or breaks its own lint rules isn't built. The app's types
+    # reach into the website code it shares (src/lib, which uses zod), so this job installs the
+    # website's packages as well as the app's. The build below doesn't: its environment stays
+    # exactly as it was.
+    name: Type-check and lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            apps/mobile/package-lock.json
+
+      - name: Install the website's packages (types only, no scripts)
+        run: npm ci --ignore-scripts
+
+      - name: Install the app's packages
+        working-directory: apps/mobile
+        run: npm ci
+
+      - name: Type-check
+        working-directory: apps/mobile
+        run: npm run typecheck
+
+      - name: Lint
+        working-directory: apps/mobile
+        run: npx eslint . --max-warnings 0
+
   apk:
     name: Android APK
+    needs: check
     runs-on: ubuntu-latest
     timeout-minutes: 60
     defaults:
@@ -55,12 +92,6 @@ jobs:
 
       - name: Install
         run: npm ci
-
-      # An app that doesn't type-check or breaks its own lint rules isn't built.
-      - name: Type-check and lint
-        run: |
-          npm run typecheck
-          npx eslint . --max-warnings 0
 
       - name: Number this build
         run: |
