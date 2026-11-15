@@ -1,0 +1,100 @@
+name: Restore drill
+
+# Proves a backup of production can be restored whole (docs/mobile/ROADMAP.md,
+# Phase 3): production (Neon) is dumped, the dump is restored into an empty
+# Postgres of the same version on this runner, and the two are compared table
+# by table and balance by balance (scripts/restore-drill.sql), with production
+# fingerprinted before and after the dump so a save during the drill can't be
+# mistaken for a broken restore.
+#
+# Read only on production: pg_dump reads one consistent snapshot, and the
+# fingerprints run in READ ONLY transactions the database itself enforces.
+# The dump never leaves the runner, which is wiped when the job ends: it is not
+# uploaded anywhere. This repository is public and so are its logs, so the job
+# prints table names and same or different, never data (scripts/lib/restoreDrill.mjs).
+#
+# Manual, like a migration, and behind the same approval: the
+# production-database environment holds the database's address.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # Never while a migration runs (production-database.yml shares this group).
+  group: production-database
+  cancel-in-progress: false
+
+jobs:
+  drill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production-database
+    services:
+      copy:
+        # Where the dump is restored: empty, the version production runs, gone when the job ends.
+        image: postgres:17.11-alpine3.24@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      # The copy's container: its pg_dump, pg_restore and psql are production's version (17).
+      PG: ${{ job.services.copy.id }}
+
+    steps:
+      - name: Keep the database's address out of the log
+        env:
+          DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::The production-database environment has no PRODUCTION_DATABASE_URL secret."
+            exit 1
+          fi
+          host="$(node -e 'console.log(new URL(process.env.DATABASE_URL).hostname)')"
+          echo "::add-mask::$host"
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: The fingerprint script, in the copy's container
+        run: docker cp scripts/restore-drill.sql "$PG":/tmp/drill.sql
+
+      - name: Fingerprint production, before the dump
+        env:
+          DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+        run: docker exec -e DATABASE_URL "$PG" sh -c 'psql "$DATABASE_URL" -X -q -At -v ON_ERROR_STOP=1 -f /tmp/drill.sql' > "$RUNNER_TEMP/before.txt"
+
+      - name: Dump production (one consistent snapshot, read only)
+        env:
+          DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+        run: docker exec -e DATABASE_URL "$PG" sh -c 'pg_dump --format=custom --schema=public --no-owner --no-privileges --file=/tmp/production.dump "$DATABASE_URL"'
+
+      - name: Fingerprint production, after the dump
+        env:
+          DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+        run: docker exec -e DATABASE_URL "$PG" sh -c 'psql "$DATABASE_URL" -X -q -At -v ON_ERROR_STOP=1 -f /tmp/drill.sql' > "$RUNNER_TEMP/after.txt"
+
+      - name: Restore the dump into an empty database
+        run: |
+          docker exec "$PG" createdb -U postgres restored
+          # The dump creates the public schema itself.
+          docker exec "$PG" psql -U postgres -d restored -X -q -c 'DROP SCHEMA public CASCADE'
+          docker exec "$PG" pg_restore -U postgres -d restored --no-owner --no-privileges --exit-on-error /tmp/production.dump
+
+      - name: Fingerprint the copy
+        run: docker exec "$PG" psql -U postgres -d restored -X -q -At -v ON_ERROR_STOP=1 -f /tmp/drill.sql > "$RUNNER_TEMP/restored.txt"
+
+      - name: Compare (prints table names and same or different, never data)
+        run: node scripts/restore-drill-compare.mjs "$RUNNER_TEMP/before.txt" "$RUNNER_TEMP/after.txt" "$RUNNER_TEMP/restored.txt"
+
+      - name: Delete the dump and the fingerprints
+        if: ${{ always() }}
+        run: |
+          docker exec "$PG" rm -f /tmp/production.dump || true
+          rm -f "$RUNNER_TEMP/before.txt" "$RUNNER_TEMP/after.txt" "$RUNNER_TEMP/restored.txt"
