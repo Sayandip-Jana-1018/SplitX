@@ -237,6 +237,8 @@ export function createApi(options: ApiOptions) {
         /** What an invite code opens, before joining. */
         previewInvite: (inviteCode: string) => authed(`/api/v1/groups/join?code=${encodeURIComponent(inviteCode)}`, InvitePreview),
         inviteLink: (groupId: string) => authed(`/api/v1/groups/${encodeURIComponent(groupId)}/invite`, InviteLink, { method: 'POST' }),
+        /** Where this phone's push notifications go; null stops them. 204: no body. */
+        setPushToken: (token: string | null) => authed('/api/v1/devices/push-token', z.null(), { method: 'PUT', body: JSON.stringify({ token }) }),
         /** Every group you're in, with the ones that changed since the versions given, in full. */
         sync: (known: Record<string, string>) => authed('/api/v1/sync', SyncAnswer, { method: 'POST', body: JSON.stringify({ known }) }),
         groups: () => authed('/api/v1/groups', GroupList).then((answer) => answer.groups),

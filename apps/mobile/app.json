@@ -44,7 +44,15 @@
         }
       ],
       "expo-secure-store",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#E8A317",
+          "defaultChannel": "activity"
+        }
+      ]
     ]
   }
 }

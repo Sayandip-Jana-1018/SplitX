@@ -8,6 +8,7 @@ import { balanceOf, loadGroupLedger, pendingSettlementsOf } from '@/lib/ledger';
 import { newInviteCode } from '@/lib/groupInvite';
 import { logger } from '@/lib/logger';
 import { formatCurrency } from '@/lib/utils';
+import { pushToPhones } from '@/lib/notifications';
 
 const RemoveMemberSchema = z.object({ userId: z.string().min(1).max(64) });
 
@@ -144,7 +145,7 @@ export async function DELETE(
                 },
             });
 
-            await prisma.notification.create({
+            const removed = await prisma.notification.create({
                 data: {
                     user: { connect: { id: userId } },
                     actor: { connect: { id: currentUser.id } },
@@ -154,6 +155,7 @@ export async function DELETE(
                     link: '/groups',
                 },
             });
+            pushToPhones([removed]);
         } catch {
             // non-fatal
         }
@@ -165,16 +167,16 @@ export async function DELETE(
                 .filter((id) => id !== userId && id !== currentUser.id);
 
             if (remainingMemberIds.length > 0) {
-                await prisma.notification.createMany({
-                    data: remainingMemberIds.map((memberId) => ({
-                        userId: memberId,
-                        actorId: currentUser.id,
-                        type: 'group_activity',
-                        title: '🚪 Member removed',
-                        body: `${removedName} was removed from "${group.name}" by ${currentUser.name || 'an admin'}. Their past expenses stay in the history.`,
-                        link: `/groups/${groupId}`,
-                    })),
-                });
+                const rows = remainingMemberIds.map((memberId) => ({
+                    userId: memberId,
+                    actorId: currentUser.id,
+                    type: 'group_activity',
+                    title: '🚪 Member removed',
+                    body: `${removedName} was removed from "${group.name}" by ${currentUser.name || 'an admin'}. Their past expenses stay in the history.`,
+                    link: `/groups/${groupId}`,
+                }));
+                await prisma.notification.createMany({ data: rows });
+                pushToPhones(rows);
             }
         } catch {
             // non-fatal

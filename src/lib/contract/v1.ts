@@ -271,6 +271,12 @@ export type InvitePreview = z.infer<typeof InvitePreview>;
 export const InviteLink = z.object({ inviteCode: z.string(), url: z.string(), expiresAt: z.string() });
 export type InviteLink = z.infer<typeof InviteLink>;
 
+// ── Push notifications (Phase 3) ────────────────────────────
+
+/** This phone's Firebase Cloud Messaging token; null stops pushes to it. */
+export const PushTokenUpdate = z.object({ token: z.string().min(20).max(4096).regex(/^[\w:.-]+$/).nullable() });
+export type PushTokenUpdate = z.infer<typeof PushTokenUpdate>;
+
 // ── Sync (Phase 2 step 5) ───────────────────────────────────
 
 /**

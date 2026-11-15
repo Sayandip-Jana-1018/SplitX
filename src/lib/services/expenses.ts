@@ -6,6 +6,7 @@ import { resolveSplits, type SplitType } from '@/lib/expenseSplits';
 import { recordTransactionCreated } from '@/lib/metrics';
 import { isOwnReceiptUrl } from '@/lib/receiptUrl';
 import { formatCurrency } from '@/lib/utils';
+import { pushToPhones } from '@/lib/notifications';
 
 /**
  * Adding an expense, for every caller: the website (POST /api/transactions)
@@ -180,16 +181,16 @@ export async function createExpense(actor: { id: string; name: string | null }, 
             const categoryLabel = CATEGORY_LABELS[category] || category;
             const amountFormatted = formatCurrency(amount);
 
-            await prisma.notification.createMany({
-                data: otherMemberIds.map((memberId: string) => ({
-                    userId: memberId,
-                    actorId: actor.id,
-                    type: 'new_expense',
-                    title: `💰 ${payerName} added an expense`,
-                    body: `${payerName} added ${amountFormatted} for category: ${categoryLabel}`,
-                    link: `/groups/${trip.group.id}`,
-                })),
-            });
+            const rows = otherMemberIds.map((memberId: string) => ({
+                userId: memberId,
+                actorId: actor.id,
+                type: 'new_expense',
+                title: `💰 ${payerName} added an expense`,
+                body: `${payerName} added ${amountFormatted} for category: ${categoryLabel}`,
+                link: `/groups/${trip.group.id}`,
+            }));
+            await prisma.notification.createMany({ data: rows });
+            pushToPhones(rows);
         }
     } catch {
         // Notification failure shouldn't block the transaction
@@ -286,16 +287,16 @@ export async function deleteExpense(actor: { id: string; name: string | null }, 
 
         if (otherMemberIds.length > 0) {
             const deleterName = actor.name || 'Someone';
-            await prisma.notification.createMany({
-                data: otherMemberIds.map((memberId: string) => ({
-                    userId: memberId,
-                    actorId: actor.id,
-                    type: 'group_activity',
-                    title: `🗑️ ${deleterName} deleted an expense`,
-                    body: `${transaction.title} (${amountFormatted}) was removed from ${transaction.trip.group.name}.`,
-                    link: `/groups/${transaction.trip.group.id}`,
-                })),
-            });
+            const rows = otherMemberIds.map((memberId: string) => ({
+                userId: memberId,
+                actorId: actor.id,
+                type: 'group_activity',
+                title: `🗑️ ${deleterName} deleted an expense`,
+                body: `${transaction.title} (${amountFormatted}) was removed from ${transaction.trip.group.name}.`,
+                link: `/groups/${transaction.trip.group.id}`,
+            }));
+            await prisma.notification.createMany({ data: rows });
+            pushToPhones(rows);
         }
     } catch {
         // Notification failure shouldn't block the transaction removal

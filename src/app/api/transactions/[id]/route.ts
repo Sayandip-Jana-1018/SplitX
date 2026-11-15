@@ -8,6 +8,7 @@ import { MAX_EXPENSE_PAISE, resolveSplits, SPLIT_TYPES, type SplitType } from '@
 import { logger } from '@/lib/logger';
 import { withViewableReceipts } from '@/lib/receiptAccess';
 import { deleteExpense } from '@/lib/services/expenses';
+import { pushToPhones } from '@/lib/notifications';
 
 const UpdateTransactionSchema = z.object({
     title: z.string().trim().min(1).max(100).optional(),
@@ -285,16 +286,16 @@ export async function PUT(
                     .filter((mId: string) => mId !== user.id);
 
                 if (otherIds.length > 0) {
-                    await prisma.notification.createMany({
-                        data: otherIds.map((memberId: string) => ({
-                            userId: memberId,
-                            actorId: user.id,
-                            type: 'group_activity',
-                            title: `✏️ ${editorName} edited an expense`,
-                            body: `"${full.title}" updated to ${amountStr} in ${full.trip.group.name}.`,
-                            link: `/groups/${full.trip.group.id}`,
-                        })),
-                    });
+                    const rows = otherIds.map((memberId: string) => ({
+                        userId: memberId,
+                        actorId: user.id,
+                        type: 'group_activity',
+                        title: `✏️ ${editorName} edited an expense`,
+                        body: `"${full.title}" updated to ${amountStr} in ${full.trip.group.name}.`,
+                        link: `/groups/${full.trip.group.id}`,
+                    }));
+                    await prisma.notification.createMany({ data: rows });
+                    pushToPhones(rows);
                 }
             } catch {
                 // Notification failure shouldn't block the response

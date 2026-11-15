@@ -65,6 +65,22 @@ jobs:
             fs.writeFileSync('app.json', JSON.stringify(app, null, 2));
           "
 
+      # Firebase's Android config, for push notifications (Phase 3). Kept out of the
+      # public repository: the GOOGLE_SERVICES_JSON secret holds the file the
+      # Firebase console gives. Without it the APK builds the same, without pushes
+      # (app.config.js adds the file only when it is there).
+      - name: Firebase config for push notifications
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+            printf '%s' "$GOOGLE_SERVICES_JSON" > google-services.json
+            node -e "const c = JSON.parse(require('fs').readFileSync('google-services.json', 'utf8')); if (!c.client?.some((x) => x.client_info?.android_client_info?.package_name === 'app.splitit')) { console.error('google-services.json has no app.splitit client'); process.exit(1); }"
+            echo "Push notifications: on"
+          else
+            echo "::notice::No GOOGLE_SERVICES_JSON secret: this APK has no push notifications."
+          fi
+
       - name: Generate the Android project
         run: npx expo prebuild --platform android --no-install
 

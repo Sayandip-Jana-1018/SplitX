@@ -8,6 +8,7 @@ import { isLedgerSettled, loadGroupLedger } from '@/lib/ledger';
 import { inviteExpiresAt, inviteIsLive } from '@/lib/groupInvite';
 import { formatCurrency } from '@/lib/utils';
 import { logger } from '@/lib/logger';
+import { pushToPhones } from '@/lib/notifications';
 
 class DeletionRefused extends Error {
     constructor(message: string, readonly status: number) {
@@ -221,16 +222,16 @@ export async function DELETE(
                 .filter(id => id !== user.id);
 
             if (otherMemberIds.length > 0) {
-                await prisma.notification.createMany({
-                    data: otherMemberIds.map(memberId => ({
-                        userId: memberId,
-                        actorId: user.id,
-                        type: 'group_activity',
-                        title: '🗑️ Group deleted',
-                        body: `${user.name || 'The owner'} deleted the group "${group.name}". Everyone was settled up.`,
-                        link: '/groups',
-                    })),
-                });
+                const rows = otherMemberIds.map(memberId => ({
+                    userId: memberId,
+                    actorId: user.id,
+                    type: 'group_activity',
+                    title: '🗑️ Group deleted',
+                    body: `${user.name || 'The owner'} deleted the group "${group.name}". Everyone was settled up.`,
+                    link: '/groups',
+                }));
+                await prisma.notification.createMany({ data: rows });
+                pushToPhones(rows);
             }
         } catch {
             // Notification failure shouldn't block the deletion

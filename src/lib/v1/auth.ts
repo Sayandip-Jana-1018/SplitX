@@ -168,6 +168,8 @@ export async function resetPasswordWithCode(rawEmail: string, code: string, pass
 export async function signOutEverywhere(userId: string) {
     await prisma.user.update({ where: { id: userId }, data: { tokenVersion: { increment: 1 } } });
     forgetTokenVersion(userId);
+    // No phone of this account gets pushes until it signs in again.
+    await prisma.device.updateMany({ where: { userId }, data: { pushToken: null } });
 }
 
 /** Your name and UPI ID, by the website's profile rules. */

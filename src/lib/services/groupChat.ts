@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
+import { pushToPhones } from '@/lib/notifications';
 
 /**
  * A group's chat, for every caller: the website's /api/groups/:groupId/messages
@@ -113,7 +114,7 @@ export async function sendGroupMessage(actor: { id: string; name: string | null 
 
     // For payment_reminder type → also create a notification for the target user
     if (input.type === 'payment_reminder' && input.targetUserId) {
-        await prisma.notification.create({
+        const reminder = await prisma.notification.create({
             data: {
                 user: { connect: { id: input.targetUserId } },
                 type: 'payment_reminder',
@@ -122,6 +123,7 @@ export async function sendGroupMessage(actor: { id: string; name: string | null 
                 link: `/groups/${groupId}`,
             },
         });
+        pushToPhones([reminder]);
     }
     return message;
 }

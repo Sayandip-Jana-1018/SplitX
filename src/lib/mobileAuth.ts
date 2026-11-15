@@ -145,8 +145,23 @@ export async function rotateRefreshToken(refreshToken: string, now = new Date())
 
 /** Signs the phone out: its refresh token, and every one before or after it, stops working. */
 export async function endSession(refreshToken: string, now = new Date()) {
-    const stored = await prisma.refreshToken.findUnique({ where: { tokenHash: hashSecretToken(refreshToken) }, select: { familyId: true } });
-    if (stored) await revokeFamily(stored.familyId, now);
+    const stored = await prisma.refreshToken.findUnique({ where: { tokenHash: hashSecretToken(refreshToken) }, select: { familyId: true, deviceId: true } });
+    if (!stored) return;
+    await revokeFamily(stored.familyId, now);
+    // A signed-out phone gets no more pushes.
+    if (stored.deviceId) await prisma.device.update({ where: { id: stored.deviceId }, data: { pushToken: null } }).catch(() => undefined);
+}
+
+/**
+ * Where this phone's pushes go. A token can belong to one device only: if
+ * another account signed in on this phone before, it stops getting pushes
+ * here. Null stops pushes to this phone.
+ */
+export async function setPushToken(caller: MobileCaller, token: string | null) {
+    await prisma.$transaction(async (tx) => {
+        if (token) await tx.device.updateMany({ where: { pushToken: token, NOT: { id: caller.deviceId } }, data: { pushToken: null } });
+        await tx.device.update({ where: { id: caller.deviceId, userId: caller.userId }, data: { pushToken: token, lastSeenAt: new Date() } });
+    });
 }
 
 export interface MobileCaller {

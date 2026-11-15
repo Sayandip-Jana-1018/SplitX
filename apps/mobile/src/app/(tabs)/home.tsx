@@ -24,6 +24,7 @@ import { members, rupees } from '~/ui/money';
 import { RollingAmount } from '~/ui/RollingAmount';
 import { Screen, SectionTitle } from '~/ui/Screen';
 import { Text } from '~/ui/Text';
+import { PushPrompt } from '~/ui/PushPrompt';
 import { SyncNote } from '~/ui/SyncNote';
 import { TopBar } from '~/ui/TopBar';
 
@@ -67,6 +68,7 @@ export default function Home() {
             </Animated.View>
 
             <SyncNote />
+            <PushPrompt />
 
             <Animated.View entering={enter(1)} style={{ alignItems: 'center' }}>
                 <Coin kind="rim" size={coin}>

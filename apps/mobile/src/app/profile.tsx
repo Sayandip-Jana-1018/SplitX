@@ -11,6 +11,7 @@ import { useAuth, useYou } from '~/auth/AuthProvider';
 import { useStep } from '~/auth/flow';
 import { ME } from '~/data/ledger';
 import { useLedger } from '~/data/LedgerProvider';
+import { usePush } from '~/notifications/PushProvider';
 import { GlassSurface } from '~/glass/GlassSurface';
 import { useLook } from '~/theme/ThemeProvider';
 import { Avatar } from '~/ui/Avatar';
@@ -27,6 +28,8 @@ interface Row {
     label: string;
     onPress: () => void;
     soon?: boolean;
+    /** A word on the right, such as On or Off. */
+    detail?: string;
 }
 
 type Asking = 'sign_out' | 'everywhere' | 'restart' | null;
@@ -56,10 +59,20 @@ export default function Profile() {
         .reduce((sum, expense) => sum + expense.amount - (expense.splits.find((split) => split.userId === ME)?.amount ?? 0), 0);
 
     const soon = (message: string) => () => toast(message, 'info');
+    const push = usePush();
+    const notifications = () => {
+        if (push.state === 'unsupported') return toast('Notifications work in the installed app, not in this preview', 'info');
+        if (push.state === 'off')
+            return void push.turnOn().then((now) => toast(now === 'on' ? 'Notifications are on' : now === 'asked-no' ? 'Allow them in your phone’s settings' : 'Notifications stay off', now === 'on' ? 'done' : 'info'));
+        // On, or refused before: only the phone's own settings change it now.
+        push.openSettings();
+    };
     const rows: Row[] = [
         ...(signedIn ? [{ icon: PenLine, label: 'Name and UPI ID', onPress: () => router.push({ pathname: '/your-name', params: { edit: '1' } }) }] : []),
         { icon: Palette, label: 'Appearance', onPress: () => router.push('/appearance') },
-        { icon: Bell, label: 'Notifications', onPress: soon('Reminders and payment alerts arrive in Phase 3'), soon: true },
+        signedIn
+            ? { icon: Bell, label: 'Notifications', onPress: notifications, detail: push.state === 'on' ? 'On' : push.state === 'asked-no' ? 'Blocked' : push.state === 'unsupported' ? 'In the app' : 'Off' }
+            : { icon: Bell, label: 'Notifications', onPress: soon('Notifications come with your own account: sign in to turn them on'), detail: 'Off' },
         { icon: ShieldCheck, label: 'Privacy and data', onPress: soon('Export and delete your data arrive with your real groups'), soon: true },
         { icon: CircleHelp, label: 'Help', onPress: soon('Help arrives before the store release'), soon: true },
         ...(signedIn ? [] : [{ icon: RotateCcw, label: 'Start the demo over', onPress: () => setAsking('restart') }]),
@@ -136,9 +149,9 @@ export default function Profile() {
                                 <Text variant="label" align="left" style={{ flex: 1 }}>
                                     {row.label}
                                 </Text>
-                                {row.soon ? (
-                                    <Text variant="caption" tone="muted">
-                                        Soon
+                                {row.soon || row.detail ? (
+                                    <Text variant="caption" tone={row.detail === 'On' ? 'accent' : 'muted'} weight={row.detail === 'On' ? 'bold' : undefined}>
+                                        {row.detail ?? 'Soon'}
                                     </Text>
                                 ) : null}
                                 <ChevronRight size={18} color={tokens.muted} />

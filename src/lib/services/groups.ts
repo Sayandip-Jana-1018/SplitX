@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import { createAuditLog } from '@/lib/auditLog';
 import { prisma } from '@/lib/db';
 import { inviteExpiresAt, inviteIsLive, replaceInviteCode } from '@/lib/groupInvite';
+import { pushToPhones } from '@/lib/notifications';
 
 /**
  * Making, joining and inviting to a group, for the website and the phone app
@@ -62,16 +63,16 @@ export async function joinGroup(user: { id: string; name: string | null; email: 
     const others = group.members.map((member) => member.userId).filter((id) => id !== user.id);
     if (others.length > 0) {
         const joinerName = user.name || user.email?.split('@')[0] || 'Someone';
-        await prisma.notification.createMany({
-            data: others.map((memberId) => ({
-                userId: memberId,
-                actorId: user.id,
-                type: 'member_joined',
-                title: 'New member joined',
-                body: `${joinerName} joined "${group.name}"`,
-                link: `/groups/${group.id}`,
-            })),
-        });
+        const rows = others.map((memberId) => ({
+            userId: memberId,
+            actorId: user.id,
+            type: 'member_joined',
+            title: 'New member joined',
+            body: `${joinerName} joined "${group.name}"`,
+            link: `/groups/${group.id}`,
+        }));
+        await prisma.notification.createMany({ data: rows });
+        pushToPhones(rows);
     }
     return { ok: true, value: { groupId: group.id, joined: true } };
 }

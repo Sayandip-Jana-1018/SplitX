@@ -17,6 +17,7 @@ import { ThemeProvider, useLook } from '~/theme/ThemeProvider';
 import { FONT_FILES } from '~/theme/type';
 import { ToastProvider } from '~/ui/Toast';
 import { AuthProvider } from '~/auth/AuthProvider';
+import { PushProvider } from '~/notifications/PushProvider';
 
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
@@ -75,6 +76,7 @@ function Frame() {
                 <ToastProvider>
                     <AuthProvider>
                     <LedgerProvider>
+                    <PushProvider>
                     <NavigationTheme value={navigationTheme}>
                         <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' }, animation: 'fade' }}>
                             <Stack.Screen name="index" />
@@ -98,6 +100,7 @@ function Frame() {
                             <Stack.Screen name="join" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
                         </Stack>
                     </NavigationTheme>
+                    </PushProvider>
                     </LedgerProvider>
                     </AuthProvider>
                 </ToastProvider>

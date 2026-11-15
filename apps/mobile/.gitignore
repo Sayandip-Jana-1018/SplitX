@@ -45,3 +45,6 @@ public/canvaskit.wasm
 
 # Agent settings from the Expo template
 .claude/
+
+# Firebase config (written by the APK build from a secret; see app.config.js)
+google-services.json

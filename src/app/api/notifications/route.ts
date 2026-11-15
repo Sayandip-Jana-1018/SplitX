@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { loadGroupLedger, planLedgerTransfers } from '@/lib/ledger';
 import { formatCurrency } from '@/lib/utils';
 import { logger } from '@/lib/logger';
+import { pushToPhones } from '@/lib/notifications';
 
 /**
  * A person can send one kind of notification: a reminder to someone who owes
@@ -232,6 +233,7 @@ export async function POST(req: Request) {
                 link: '/settlements',
             },
         });
+        pushToPhones([notification]);
 
         return NextResponse.json(notification, { status: 201 });
     } catch (error) {
