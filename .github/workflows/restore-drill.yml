@@ -43,11 +43,10 @@ jobs:
           --health-interval 5s
           --health-timeout 3s
           --health-retries 10
-    env:
-      # The copy's container: its pg_dump, pg_restore and psql are production's version (17).
-      PG: ${{ job.services.copy.id }}
-
     steps:
+      - name: The copy's container (its pg_dump, pg_restore and psql are production's version)
+        run: echo "PG=${{ job.services.copy.id }}" >> "$GITHUB_ENV"
+
       - name: Keep the database's address out of the log
         env:
           DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
