@@ -6,11 +6,12 @@
 #   package, so the cluster's signature policy covers it too (D-060).
 # ═══════════════════════════════════════════════════════════════
 # The same Node and Alpine the application's image is built from (Dockerfile,
-# checked by tests/unit/infra/opsApi.test.ts), and k6 2.3.0, whose Go 1.27.1
-# and modules pass the release scan (2.2.0's did not), all by digest.
+# checked by tests/unit/infra/opsApi.test.ts), and k6 2.4.0, all by digest: 2.4.0
+# carries golang.org/x/net 0.62.0, which fixes CVE-2026-78661 (2.3.0's 0.58.0 failed
+# the release scan on 2026-11-15).
 ARG NODE_IMAGE=node:24.21.0-alpine3.24@sha256:be80f76cf40ec8e42b9bec49f60a55e0660f30af58d3e5a25530785b30ea67e2
 ARG RUNTIME_IMAGE=alpine:3.24.1@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
-ARG K6_IMAGE=grafana/k6:2.3.0@sha256:9c2dee7f8ed74d317e4027c06a10f169b625638189de8d4555d0b3486a5aeb34
+ARG K6_IMAGE=grafana/k6:2.4.0@sha256:d41bb79cd8de5a7ad619b53570e3712633e8bff0937010a5c6c57a4747e7a276
 
 FROM ${K6_IMAGE} AS k6
 
