@@ -2,6 +2,10 @@ import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
+    // One TypeScript config for every file the tests load, the phone app's included: by default each
+    // file gets its nearest tsconfig, and apps/mobile's extends expo/tsconfig.base, which only exists
+    // where the app's own packages are installed (the laptop, not CI).
+    tsconfig: './tsconfig.json',
     resolve: {
         alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
     },
