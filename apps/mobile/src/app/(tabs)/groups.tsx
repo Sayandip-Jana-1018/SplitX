@@ -2,10 +2,10 @@
 import { router } from 'expo-router';
 import { ChevronRight } from 'lucide-react-native';
 import { View } from 'react-native';
-import Animated, { FadeIn } from 'react-native-reanimated';
 import { groupBalances, ME } from '~/data/ledger';
 import { useLedger } from '~/data/LedgerProvider';
 import { useLook } from '~/theme/ThemeProvider';
+import { Appear } from '~/ui/Appear';
 import { AvatarStack } from '~/ui/Avatar';
 import { EmptyState } from '~/ui/EmptyState';
 import { GroupActions } from '~/ui/GroupActions';
@@ -17,7 +17,7 @@ import { Text } from '~/ui/Text';
 import { TopBar } from '~/ui/TopBar';
 
 export default function Groups() {
-    const { tokens, calm } = useLook();
+    const { tokens } = useLook();
     const { ledger, personOf, onRefresh } = useLedger();
     const total = ledger.expenses.reduce((sum, expense) => sum + expense.amount, 0);
     return (
@@ -40,7 +40,7 @@ export default function Groups() {
             {ledger.groups.map((group, index) => {
                 const mine = groupBalances(ledger, group.id)[ME] ?? 0;
                 return (
-                    <Animated.View key={group.id} entering={calm ? undefined : FadeIn.delay(60 + index * 70).duration(380)}>
+                    <Appear key={group.id} delay={60 + index * 70}>
                         <GlassButton kind="reg" radius={24} contentStyle={{ padding: 16, gap: 14, alignItems: 'stretch' }} onPress={() => router.push(`/group/${group.id}`)}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                                 <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: tokens.chip, alignItems: 'center', justifyContent: 'center' }}>
@@ -68,7 +68,7 @@ export default function Groups() {
                                 </View>
                             </View>
                         </GlassButton>
-                    </Animated.View>
+                    </Appear>
                 );
             })}
         </Screen>

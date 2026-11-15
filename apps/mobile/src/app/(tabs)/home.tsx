@@ -6,7 +6,6 @@ import { router } from 'expo-router';
 import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, ChartPie, ChevronRight, Plus, ScanLine, type LucideIcon } from 'lucide-react-native';
 import { useMemo } from 'react';
 import { Pressable, useWindowDimensions, View } from 'react-native';
-import Animated, { FadeIn } from 'react-native-reanimated';
 import type { GlassKind } from '@shared/glass/styles';
 import { activity, groupBalances, ME, totals } from '~/data/ledger';
 import { useYou } from '~/auth/AuthProvider';
@@ -16,6 +15,7 @@ import { GlassScrollView } from '~/glass/GlassScroll';
 import { GlassSurface } from '~/glass/GlassSurface';
 import { useLook } from '~/theme/ThemeProvider';
 import { ActivityList } from '~/ui/ActivityList';
+import { Appear } from '~/ui/Appear';
 import { AvatarStack } from '~/ui/Avatar';
 import { EmptyState } from '~/ui/EmptyState';
 import { GroupActions } from '~/ui/GroupActions';
@@ -43,14 +43,14 @@ const ACTIONS: { label: string; icon: LucideIcon; kind: GlassKind; href: string 
 ];
 
 export default function Home() {
-    const { tokens, calm } = useLook();
+    const { tokens } = useLook();
     const you = useYou();
     const { ledger, personOf, onRefresh } = useLedger();
     const { width } = useWindowDimensions();
     const coin = Math.min(width - 56, 310);
     const sum = useMemo(() => totals(ledger), [ledger]);
     const lately = useMemo(() => activity(ledger).slice(0, 3), [ledger]);
-    const enter = (index: number) => (calm ? undefined : FadeIn.delay(60 + index * 70).duration(380));
+    const enter = (index: number) => 60 + index * 70;
     const owed = sum.net >= 0;
     const Arrow = owed ? ArrowDownLeft : ArrowUpRight;
 
@@ -58,19 +58,19 @@ export default function Home() {
         <Screen onRefresh={onRefresh}>
             <TopBar />
 
-            <Animated.View entering={enter(0)} style={{ alignItems: 'center', gap: 2 }}>
+            <Appear delay={enter(0)} style={{ alignItems: 'center', gap: 2 }}>
                 <Text variant="label" tone="secondary" onLiquid>
                     {greeting()}
                 </Text>
                 <Text variant="display" onLiquid>
                     Hi, {you.first}
                 </Text>
-            </Animated.View>
+            </Appear>
 
             <SyncNote />
             <PushPrompt />
 
-            <Animated.View entering={enter(1)} style={{ alignItems: 'center' }}>
+            <Appear delay={enter(1)} style={{ alignItems: 'center' }}>
                 <Coin kind="rim" size={coin}>
                     <View style={{ alignItems: 'center', gap: 6, paddingHorizontal: 24 }}>
                         <Text variant="eyebrow" tone="secondary" onLiquid>
@@ -91,9 +91,9 @@ export default function Home() {
                         </Pressable>
                     </View>
                 </Coin>
-            </Animated.View>
+            </Appear>
 
-            <Animated.View entering={enter(2)} style={{ flexDirection: 'row', gap: 12 }}>
+            <Appear delay={enter(2)} style={{ flexDirection: 'row', gap: 12 }}>
                 <GlassSurface style={{ flex: 1, paddingVertical: 16, gap: 4 }}>
                     <Text variant="caption" tone="secondary">
                         Owed to you
@@ -106,9 +106,9 @@ export default function Home() {
                     </Text>
                     <RollingAmount paise={-sum.youOwe} sign variant="heading" tone="out" />
                 </GlassSurface>
-            </Animated.View>
+            </Appear>
 
-            <Animated.View entering={enter(3)} style={{ flexDirection: 'row', gap: 10 }}>
+            <Appear delay={enter(3)} style={{ flexDirection: 'row', gap: 10 }}>
                 {ACTIONS.map(({ label, icon: Icon, kind, href }) => (
                     <GlassButton key={label} kind={kind} radius={22} style={{ flex: 1 }} contentStyle={{ height: 78, gap: 6 }} onPress={() => router.push(href as never)}>
                         <Icon size={22} color={kind === 'accent' ? tokens.onAccent : tokens.fg} strokeWidth={2.2} />
@@ -117,9 +117,9 @@ export default function Home() {
                         </Text>
                     </GlassButton>
                 ))}
-            </Animated.View>
+            </Appear>
 
-            <Animated.View entering={enter(4)} style={{ gap: 14 }}>
+            <Appear delay={enter(4)} style={{ gap: 14 }}>
                 <SectionTitle
                     action={
                         <Pressable onPress={() => router.push('/groups')} hitSlop={12}>
@@ -162,16 +162,16 @@ export default function Home() {
                         );
                     })}
                 </GlassScrollView>
-            </Animated.View>
+            </Appear>
 
-            <Animated.View entering={enter(5)} style={{ gap: 14 }}>
+            <Appear delay={enter(5)} style={{ gap: 14 }}>
                 <SectionTitle>
                     <Text variant="heading" onLiquid>
                         Lately
                     </Text>
                 </SectionTitle>
                 <ActivityList items={lately} />
-            </Animated.View>
+            </Appear>
         </Screen>
     );
 }

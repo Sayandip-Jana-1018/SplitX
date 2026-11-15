@@ -56,6 +56,12 @@ jobs:
       - name: Install
         run: npm ci
 
+      # An app that doesn't type-check or breaks its own lint rules isn't built.
+      - name: Type-check and lint
+        run: |
+          npm run typecheck
+          npx eslint . --max-warnings 0
+
       - name: Number this build
         run: |
           node -e "

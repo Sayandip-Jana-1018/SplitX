@@ -5,7 +5,6 @@
 import { Redirect, router } from 'expo-router';
 import { ArrowRight } from 'lucide-react-native';
 import { Pressable, useWindowDimensions, View } from 'react-native';
-import Animated, { FadeIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '~/auth/AuthProvider';
 import { enterApp } from '~/auth/flow';
@@ -13,17 +12,17 @@ import { Coin } from '~/glass/Coin';
 import { GlassLayer } from '~/glass/layer';
 import { GlassSurface } from '~/glass/GlassSurface';
 import { useLook } from '~/theme/ThemeProvider';
+import { Appear } from '~/ui/Appear';
 import { GlassButton } from '~/ui/GlassButton';
 import { Text } from '~/ui/Text';
 import { ThemeButton, Wordmark } from '~/ui/TopBar';
 
 export default function Welcome() {
-    const { tokens, calm } = useLook();
+    const { tokens } = useLook();
     const auth = useAuth();
     const insets = useSafeAreaInsets();
     const { width, height } = useWindowDimensions();
     const coin = Math.min(width * 1.08, height * 0.56, 520);
-    const enter = (delay: number) => (calm ? undefined : FadeIn.delay(delay).duration(420));
 
     // Signed in, or trying the demo: the app opens where it belongs. Still reading storage: nothing yet.
     if (auth.status === 'signed_in' || auth.status === 'demo') return <Redirect href="/home" />;
@@ -31,20 +30,20 @@ export default function Welcome() {
 
     return (
         <GlassLayer style={{ flex: 1, paddingTop: insets.top + 14, paddingBottom: insets.bottom + 20, paddingHorizontal: 20, alignItems: 'center' }}>
-            <Animated.View entering={calm ? undefined : FadeIn.duration(500)} style={{ width: '100%', maxWidth: 560, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+            <Appear duration={500} style={{ width: '100%', maxWidth: 560, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
                 <GlassSurface kind="thin" radius={999} style={{ paddingVertical: 8, paddingHorizontal: 16 }}>
                     <Wordmark />
                 </GlassSurface>
                 <View style={{ position: 'absolute', right: 0 }}>
                     <ThemeButton size={42} />
                 </View>
-            </Animated.View>
+            </Appear>
 
             <View style={{ flex: 1, width: '100%', alignItems: 'center', justifyContent: 'center' }}>
-                <Animated.View entering={calm ? undefined : FadeIn.duration(1200)} style={{ position: 'absolute' }}>
+                <Appear duration={1200} style={{ position: 'absolute' }}>
                     <Coin kind="split" size={coin} />
-                </Animated.View>
-                <Animated.View entering={enter(150)} style={{ alignItems: 'center', gap: 6, paddingHorizontal: 12 }}>
+                </Appear>
+                <Appear delay={150} duration={420} style={{ alignItems: 'center', gap: 6, paddingHorizontal: 12 }}>
                     <Text variant="hero" onLiquid>
                         Split expenses
                     </Text>
@@ -54,10 +53,10 @@ export default function Welcome() {
                     <Text variant="body" tone="secondary" onLiquid style={{ marginTop: 10, maxWidth: 300 }}>
                         One shared memory deserves one calm money story.
                     </Text>
-                </Animated.View>
+                </Appear>
             </View>
 
-            <Animated.View entering={enter(320)} style={{ width: '100%', maxWidth: 420, gap: 12 }}>
+            <Appear delay={320} duration={420} style={{ width: '100%', maxWidth: 420, gap: 12 }}>
                 <GlassButton kind="accent" radius={999} contentStyle={{ height: 58, flexDirection: 'row', gap: 10 }} onPress={() => router.push('/onboarding')}>
                     <Text variant="heading" tone="onAccent">
                         Get started
@@ -80,7 +79,7 @@ export default function Welcome() {
                         Just looking? Try the demo
                     </Text>
                 </Pressable>
-            </Animated.View>
+            </Appear>
         </GlassLayer>
     );
 }
