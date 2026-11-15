@@ -52,6 +52,14 @@
           "color": "#E8A317",
           "defaultChannel": "activity"
         }
+      ],
+      [
+        "@sentry/react-native/expo",
+        {
+          "organization": "amazon-h6",
+          "project": "splitit-app",
+          "url": "https://sentry.io/"
+        }
       ]
     ]
   }

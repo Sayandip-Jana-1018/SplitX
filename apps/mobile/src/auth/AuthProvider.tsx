@@ -16,6 +16,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import type { Me, ProfileUpdate } from '@/lib/contract/v1';
 import { api, API_URL, ApiError, onSignedOut } from '~/api';
 import { ME, personById } from '~/data/ledger';
+import { identify } from '~/monitoring';
 import { useToast } from '~/ui/Toast';
 
 export type AuthStatus = 'loading' | 'signed_out' | 'demo' | 'signed_in';
@@ -109,6 +110,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             alive = false;
         };
     }, [remember]);
+
+    // Crash reports name the account by its id alone, and nothing when signed out or in the demo.
+    useEffect(() => identify(status === 'signed_in' ? (me?.id ?? null) : null), [status, me?.id]);
 
     // The server ended the session.
     useEffect(

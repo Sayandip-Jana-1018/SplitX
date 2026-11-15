@@ -18,6 +18,9 @@ import { FONT_FILES } from '~/theme/type';
 import { ToastProvider } from '~/ui/Toast';
 import { AuthProvider } from '~/auth/AuthProvider';
 import { PushProvider } from '~/notifications/PushProvider';
+import { reportError, startMonitoring, wrapRoot } from '~/monitoring';
+
+startMonitoring();
 
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
@@ -26,6 +29,7 @@ SplashScreen.preventAutoHideAsync().catch(() => undefined);
  * colours: the theme and the glass above it may be what failed.
  */
 export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+    useEffect(() => reportError(error), [error]);
     return (
         <View style={{ flex: 1, backgroundColor: '#130B26', alignItems: 'center', justifyContent: 'center', padding: 28, gap: 12 }}>
             <PlainText style={{ color: '#ffffff', fontSize: 24, fontWeight: '700', textAlign: 'center' }}>Something went wrong</PlainText>
@@ -42,7 +46,9 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
     );
 }
 
-export default function RootLayout() {
+export default wrapRoot(RootLayout);
+
+function RootLayout() {
     const [fontsLoaded, fontError] = useFonts(FONT_FILES);
     const ready = fontsLoaded || Boolean(fontError);
 
