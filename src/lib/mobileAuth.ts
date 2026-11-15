@@ -157,10 +157,13 @@ export async function endSession(refreshToken: string, now = new Date()) {
  * another account signed in on this phone before, it stops getting pushes
  * here. Null stops pushes to this phone.
  */
-export async function setPushToken(caller: MobileCaller, token: string | null) {
-    await prisma.$transaction(async (tx) => {
+export async function setPushToken(caller: MobileCaller, token: string | null): Promise<{ turnedOn: boolean }> {
+    return prisma.$transaction(async (tx) => {
+        const before = await tx.device.findFirst({ where: { id: caller.deviceId, userId: caller.userId }, select: { pushToken: true } });
         if (token) await tx.device.updateMany({ where: { pushToken: token, NOT: { id: caller.deviceId } }, data: { pushToken: null } });
         await tx.device.update({ where: { id: caller.deviceId, userId: caller.userId }, data: { pushToken: token, lastSeenAt: new Date() } });
+        // A token this phone didn't hold before: notifications were just turned on (or Firebase gave it a new one).
+        return { turnedOn: Boolean(token) && before?.pushToken !== token };
     });
 }
 

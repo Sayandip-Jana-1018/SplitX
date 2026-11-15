@@ -81,13 +81,17 @@ function tokenGone(status: number, body: string) {
     return status === 404 || /UNREGISTERED|registration-token-not-registered|INVALID_ARGUMENT.*token/i.test(body);
 }
 
-/** Sends one message to every signed-in phone of each user. Returns how many were sent. */
-export async function sendPush(userIds: readonly string[], message: PushMessage, now = new Date()): Promise<number> {
+/**
+ * Sends one message to every signed-in phone of each user (or, with `onlyDevice`, to that one
+ * phone). Returns how many were sent.
+ */
+export async function sendPush(userIds: readonly string[], message: PushMessage, now = new Date(), onlyDevice?: string): Promise<number> {
     const account = serviceAccount();
     if (!account || userIds.length === 0) return 0;
     try {
         const devices = await prisma.device.findMany({
             where: {
+                ...(onlyDevice ? { id: onlyDevice } : {}),
                 userId: { in: [...new Set(userIds)] },
                 pushToken: { not: null },
                 refreshTokens: { some: { usedAt: null, revokedAt: null, expiresAt: { gt: now } } },

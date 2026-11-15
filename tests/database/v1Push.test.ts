@@ -92,15 +92,39 @@ describe('where a phone’s pushes go', () => {
     });
 });
 
+describe('turning notifications on', () => {
+    it('confirms on that phone alone, once: the same token again sends nothing', async () => {
+        const asha = await person('Asha');
+        await signedInPhone(asha, TOKEN(1));
+        await vi.waitFor(() => expect(sent).toHaveLength(1));
+        expect(sent[0]).toMatchObject({ token: TOKEN(1), title: 'Notifications are on' });
+
+        // Another phone of hers turning on is confirmed there, not on the first.
+        await signedInPhone(asha, TOKEN(2));
+        await vi.waitFor(() => expect(sent).toHaveLength(2));
+        expect(sent[1].token).toBe(TOKEN(2));
+
+        // The app sends its token on every open: nothing new, nothing sent.
+        const again = await prisma.device.findFirstOrThrow({ where: { pushToken: TOKEN(1) } });
+        const { accessToken } = await startSession(asha.id, { platform: 'android', deviceId: again.id });
+        await pushTokenRoute.PUT(new Request('https://splitit.test/api/v1/devices/push-token', { method: 'PUT', headers: { authorization: `Bearer ${accessToken}`, 'content-type': 'application/json' }, body: JSON.stringify({ token: TOKEN(1) }) }));
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        expect(sent).toHaveLength(2);
+    });
+});
+
 describe('sending', () => {
     it('reaches only phones still signed in, and forgets a token Firebase says is gone', async () => {
         const asha = await person('Asha');
         await signedInPhone(asha, TOKEN(1));
         const old = await signedInPhone(asha, TOKEN(2));
+        await vi.waitFor(() => expect(sent).toHaveLength(2));
+        sent.length = 0;
         // The second phone's session ended without the app saying so (it expired).
         await prisma.refreshToken.updateMany({ where: { deviceId: old.deviceId }, data: { expiresAt: new Date(Date.now() - 1000) } });
         await signedInPhone(asha, TOKEN(3));
         gone.add(TOKEN(3));
+        await new Promise((resolve) => setTimeout(resolve, 200));
 
         const count = await sendPush([asha.id], { title: 'Ravi added an expense', body: '₹600 for lunch', link: '/groups/g1' });
         expect(count).toBe(1);
@@ -122,6 +146,8 @@ describe('sending', () => {
         const { group } = await groupOf(asha, [ravi]);
         const ashaPhone = await signedInPhone(asha, TOKEN(1));
         await signedInPhone(ravi, TOKEN(2));
+        await vi.waitFor(() => expect(sent).toHaveLength(2));
+        sent.length = 0;
         const saved = await expensesRoute.POST(new Request('https://splitit.test/api/v1/expenses', {
             method: 'POST',
             headers: ashaPhone.headers,
