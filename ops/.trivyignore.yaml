@@ -6,6 +6,7 @@
 #   the gate refuses the image again unless a fixed release has replaced it.
 #   tests/unit/infra/opsApi.test.ts refuses an entry without all four.
 #   Checked again on 2026-11-04 (D-124): 2.3.0 is still k6's newest release.
+#   Checked again on 2026-11-20: 2.4.0 (built with Go 1.27.3) is k6's newest release.
 # ═══════════════════════════════════════════════════════════════
 vulnerabilities:
   - id: CVE-2026-84445
@@ -71,4 +72,19 @@ vulnerabilities:
       plan. So someone who could misuse one of those certificates would see only
       load-test traffic and could only skew one run's numbers; the lab accepts
       connections from ops-api only.
+    expired_at: 2026-12-15
+  - id: CVE-2026-97054
+    paths:
+      - usr/local/bin/k6
+    statement: >-
+      Go net/http: an HTTP/1 server that uses MaxBytesReader or
+      MaxBytesHandler can crash (a runtime panic) when its handler reads the
+      request body while writing the response header, because the
+      "Connection: close" header is set without synchronization once the
+      limit is exceeded. Fixed in Go 1.27.4 (advisory of 2026-11-11); k6 2.4.0,
+      the newest release, is built with Go 1.27.3. The lab runs k6 as an HTTP
+      client of SplitIT's own edge (`k6 run`, ops/lab/server.mjs). The only Go
+      server in it is k6's own control API, which listens on localhost inside
+      the lab's container, where nothing else connects; the lab itself accepts
+      connections from ops-api only. The worst case is one run ending early.
     expired_at: 2026-12-15
