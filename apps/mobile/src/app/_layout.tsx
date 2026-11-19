@@ -97,6 +97,7 @@ function Frame() {
                             <Stack.Screen name="chat/[id]" />
                             <Stack.Screen name="expense/[id]" />
                             <Stack.Screen name="journey" />
+                            <Stack.Screen name="receipts/[id]" />
                             <Stack.Screen name="insights" />
                             <Stack.Screen name="profile" />
                             <Stack.Screen name="appearance" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />

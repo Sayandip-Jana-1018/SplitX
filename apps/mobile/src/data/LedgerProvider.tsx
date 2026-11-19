@@ -66,6 +66,10 @@ interface LedgerContext {
     receivedCash: (input: { groupId: string; fromId: string; amount: number }) => void;
     /** Online only: a new group, with you as its admin. Its id. */
     createGroup: (name: string, emoji: string) => Promise<string>;
+    /** Online only: removes someone square from a group you own or run; refused, with why, otherwise. */
+    removeMember: (groupId: string, memberId: string) => Promise<void>;
+    /** Online only: deletes a group you own, once everyone in it is square. */
+    deleteGroup: (groupId: string) => Promise<void>;
     /** Online only: joins by an invite code or link. The group's id. */
     joinGroup: (codeOrLink: string) => Promise<string>;
     /** Back to the made-up starting data. */
@@ -535,6 +539,24 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
         [refresh],
     );
 
+    const removeMember = useCallback(
+        async (groupId: string, memberId: string) => {
+            if (!real) throw new Error('The demo’s people are made up, so nobody leaves');
+            await api.removeMember(groupId, serverId(memberId));
+            await refresh();
+        },
+        [real, serverId, refresh],
+    );
+
+    const deleteGroup = useCallback(
+        async (groupId: string) => {
+            if (!real) throw new Error('The demo’s groups are made up, so nothing is deleted');
+            await api.deleteGroup(groupId);
+            await refresh();
+        },
+        [real, refresh],
+    );
+
     const joinGroup = useCallback(
         async (codeOrLink: string) => {
             const { groupId } = await api.joinGroup(inviteCodeOf(codeOrLink));
@@ -590,11 +612,13 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
             answerPayment,
             receivedCash,
             editExpense,
+            removeMember,
+            deleteGroup,
             createGroup,
             joinGroup,
             resetLedger,
         }),
-        [ledger, personOf, real, sync, waiting, stuck, retryStuck, discardStuck, catchUp, addExpense, recordPayment, deleteExpense, setReceipt, sendMessage, loadMessages, answerPayment, receivedCash, createGroup, editExpense, joinGroup, resetLedger],
+        [ledger, personOf, real, sync, waiting, stuck, retryStuck, discardStuck, catchUp, addExpense, recordPayment, deleteExpense, setReceipt, sendMessage, loadMessages, answerPayment, receivedCash, createGroup, editExpense, removeMember, deleteGroup, joinGroup, resetLedger],
     );
     return <Context.Provider value={value}>{children}</Context.Provider>;
 }

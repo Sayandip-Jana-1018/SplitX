@@ -2,6 +2,9 @@
  * Balance Journey: how your balance got to where it is, one expense or payment at a time. The
  * line draws itself in; tap anywhere on it to see which expense moved it and by how much. Across
  * every group, or one group with ?group=.
+ *
+ * As on the website: all time, or the last 30 or 7 days (the line then starts where your balance
+ * stood when that began), and the steps underneath can be only expenses or only payments.
  */
 import { Canvas, Circle, DashPathEffect, Group, LinearGradient, Path, Skia, vec } from '@shopify/react-native-skia';
 import { useLocalSearchParams } from 'expo-router';
@@ -19,6 +22,7 @@ import { Header } from '~/ui/Header';
 import { rupees } from '~/ui/money';
 import { RollingAmount } from '~/ui/RollingAmount';
 import { Screen } from '~/ui/Screen';
+import { Segmented } from '~/ui/Segmented';
 import { Text } from '~/ui/Text';
 import { when } from '~/ui/time';
 
@@ -28,6 +32,10 @@ interface Step extends ActivityItem {
     /** Your balance just after it. */
     after: number;
 }
+
+type Period = 'all' | '30d' | '7d';
+type Kind = 'all' | 'expense' | 'settlement';
+const DAYS: Record<Period, number> = { all: 0, '30d': 30, '7d': 7 };
 
 const CHART_H = 210;
 const PAD_X = 14;
@@ -42,8 +50,12 @@ export default function Journey() {
     const { ledger } = useLedger();
     const group = ledger.groups.find((candidate) => candidate.id === params.group);
     const [width, setWidth] = useState(0);
+    const [period, setPeriod] = useState<Period>('all');
+    // When the chosen period began, worked out as it is chosen.
+    const [since, setSince] = useState(0);
+    const [kind, setKind] = useState<Kind>('all');
 
-    const steps = useMemo(
+    const allSteps = useMemo(
         () =>
             activity(ledger, group?.id)
                 .slice()
@@ -55,13 +67,21 @@ export default function Journey() {
                 }, []),
         [ledger, group],
     );
-    const now = steps.at(-1)?.after ?? 0;
+    const now = allSteps.at(-1)?.after ?? 0;
+    // The period's steps, and the balance just before the first of them.
+    const { steps, start } = useMemo(() => {
+        if (period === 'all') return { steps: allSteps, start: 0 };
+        const first = allSteps.findIndex((entry) => entry.at.getTime() >= since);
+        if (first === -1) return { steps: [], start: now };
+        return { steps: allSteps.slice(first), start: first === 0 ? 0 : allSteps[first - 1].after };
+    }, [allSteps, period, since, now]);
+    const listed = kind === 'all' ? steps : steps.filter((entry) => entry.kind === kind);
     const [selected, setSelected] = useState<number | null>(null);
     const chosen = selected === null ? steps.length : Math.min(selected, steps.length);
 
     // The points: where it started (nothing), then the balance after each step.
     const chart = useMemo(() => {
-        const values = [0, ...steps.map((step) => step.after)];
+        const values = [start, ...steps.map((step) => step.after)];
         let low = Math.min(0, ...values);
         let high = Math.max(0, ...values);
         if (high === low) high = low + 1;
@@ -90,7 +110,7 @@ export default function Journey() {
         const area = curve(Skia.PathBuilder.Make()).lineTo(points.at(-1)!.x, CHART_H).lineTo(points[0].x, CHART_H).close().detach();
         const zero = Skia.PathBuilder.Make().moveTo(PAD_X, y(0)).lineTo(width - PAD_X, y(0)).detach();
         return { points, line, area, zero };
-    }, [steps, width]);
+    }, [steps, start, width]);
 
     const progress = useSharedValue(calm ? 1 : 0);
     useEffect(() => {
@@ -123,17 +143,35 @@ export default function Journey() {
                 <RollingAmount paise={now} sign variant="display" weight="semibold" onLiquid />
             </View>
 
-            {steps.length === 0 ? (
+            {allSteps.length > 0 ? (
+                <Segmented
+                    options={[
+                        { id: 'all', label: 'All time' },
+                        { id: '30d', label: '30 days' },
+                        { id: '7d', label: '7 days' },
+                    ]}
+                    value={period}
+                    onChange={(next) => {
+                        setPeriod(next);
+                        setSince(Date.now() - DAYS[next] * 86_400_000);
+                        setSelected(null);
+                    }}
+                />
+            ) : null}
+
+            {allSteps.length === 0 ? (
                 <EmptyState emoji="🧭" title="Your journey starts here" hint="Add an expense or a payment, and every one of them moves this line." />
+            ) : steps.length === 0 ? (
+                <EmptyState emoji="🌙" title={`Nothing in the last ${DAYS[period]} days`} hint="No expense or payment moved your balance in that time." />
             ) : (
                 <>
                     <GlassSurface style={{ paddingTop: 14, paddingBottom: 8, paddingHorizontal: 6, gap: 6 }}>
                         <View style={{ minHeight: 40, paddingHorizontal: 10, gap: 2 }} accessibilityLiveRegion="polite">
                             <Text variant="label" numberOfLines={1}>
-                                {step ? `${categoryEmoji(step.category)} ${step.title}` : 'Where it started'}
+                                {step ? `${categoryEmoji(step.category)} ${step.title}` : period === 'all' ? 'Where it started' : `${DAYS[period]} days ago`}
                             </Text>
                             <Text variant="caption" tone="secondary" tabular>
-                                {step ? `${rupees(step.delta, { sign: true })} → ${rupees(step.after, { sign: true })} · ${when(step.at)}` : 'Nothing owed either way'}
+                                {step ? `${rupees(step.delta, { sign: true })} → ${rupees(step.after, { sign: true })} · ${when(step.at)}` : start === 0 ? 'Nothing owed either way' : `${start > 0 ? 'You were owed' : 'You owed'} ${rupees(Math.abs(start))}`}
                             </Text>
                         </View>
                         <View
@@ -178,8 +216,21 @@ export default function Journey() {
                     <Text variant="eyebrow" tone="secondary" onLiquid>
                         Every step, newest first
                     </Text>
-                    <GlassSurface style={{ paddingHorizontal: 16, paddingVertical: 4 }}>
-                        {steps
+                    <Segmented
+                        compact
+                        options={[
+                            { id: 'all', label: 'All' },
+                            { id: 'expense', label: 'Expenses' },
+                            { id: 'settlement', label: 'Payments' },
+                        ]}
+                        value={kind}
+                        onChange={setKind}
+                    />
+                    {listed.length === 0 ? (
+                        <EmptyState emoji="🧾" title={kind === 'expense' ? 'No expenses in this time' : 'No payments in this time'} hint="Try All, or a longer time." />
+                    ) : null}
+                    <GlassSurface style={{ paddingHorizontal: 16, paddingVertical: 4, display: listed.length === 0 ? 'none' : 'flex' }}>
+                        {listed
                             .slice()
                             .reverse()
                             .map((entry, index) => (

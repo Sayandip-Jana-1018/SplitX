@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
-import { withViewableReceipts } from '@/lib/receiptAccess';
 import { logger } from '@/lib/logger';
+import { groupReceipts } from '@/lib/services/receipts';
 
-// GET /api/groups/[groupId]/receipts — get all transactions with receipt images for a group
+// GET /api/groups/[groupId]/receipts — every expense with a receipt photo in a group, and its
+// members (shared with the phone app's GET /api/v1/groups/:groupId/receipts).
 export async function GET(
     _req: Request,
     { params }: { params: Promise<{ groupId: string }> }
@@ -16,85 +17,14 @@ export async function GET(
         }
 
         const { groupId } = await params;
-
-        // Verify user is a member/owner of the group
         const user = await prisma.user.findUnique({ where: { email: session.user.email } });
         if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
-        const groupAccess = await prisma.group.findFirst({
-            where: {
-                id: groupId,
-                deletedAt: null,
-                OR: [
-                    { ownerId: user.id },
-                    { members: { some: { userId: user.id } } },
-                ],
-            },
-            select: { id: true },
-        });
-        if (!groupAccess) {
+        const found = await groupReceipts(user.id, groupId);
+        if (!found) {
             return NextResponse.json({ error: 'Group not found or access denied' }, { status: 404 });
         }
-
-        // Get all trips for this group
-        const trips = await prisma.trip.findMany({
-            where: { groupId },
-            select: { id: true },
-        });
-
-        if (trips.length === 0) {
-            return NextResponse.json({ receipts: [], members: [] });
-        }
-
-        const tripIds = trips.map(t => t.id);
-
-        // Get transactions with receipt URLs (non-deleted)
-        const transactions = await prisma.transaction.findMany({
-            where: {
-                tripId: { in: tripIds },
-                deletedAt: null,
-                receiptUrl: { not: null },
-            },
-            select: {
-                id: true,
-                title: true,
-                amount: true,
-                category: true,
-                receiptUrl: true,
-                date: true,
-                payer: {
-                    select: { id: true, name: true, image: true },
-                },
-            },
-            orderBy: { date: 'desc' },
-        });
-
-        // Get group members for filter
-        const membersRaw = await prisma.groupMember.findMany({
-            where: { groupId },
-            include: { user: { select: { id: true, name: true, image: true } } },
-        });
-
-        const members = membersRaw.map(m => ({
-            id: m.user.id,
-            name: m.user.name || 'Unknown',
-            image: m.user.image,
-        }));
-
-        // Photos in the private bucket become signed links; any that can't be shown are left out.
-        const receipts = (await withViewableReceipts(transactions))
-            .filter((t): t is typeof t & { receiptUrl: string } => typeof t.receiptUrl === 'string')
-            .map(t => ({
-                id: t.id,
-                title: t.title,
-                amount: t.amount,
-                category: t.category,
-                receiptUrl: t.receiptUrl,
-                date: t.date.toISOString(),
-                payer: t.payer,
-            }));
-
-        return NextResponse.json({ receipts, members });
+        return NextResponse.json(found);
     } catch (error) {
         logger.error('Failed to fetch receipts', { err: error });
         return NextResponse.json({ error: 'Failed to fetch receipts' }, { status: 500 });

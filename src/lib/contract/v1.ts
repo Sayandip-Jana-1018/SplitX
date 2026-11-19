@@ -192,6 +192,10 @@ export type ExpenseEdit = z.infer<typeof ExpenseEdit>;
 export const ExpenseEdited = z.object({ expense: Expense });
 export type ExpenseEdited = z.infer<typeof ExpenseEdited>;
 
+/** A group's receipt photos: for each expense with one, a link that works for an hour. */
+export const GroupReceipts = z.object({ receipts: z.array(z.object({ expenseId: z.string(), url: z.string().url() })) });
+export type GroupReceipts = z.infer<typeof GroupReceipts>;
+
 export const NewSettlement = z.object({
     groupId: z.string().max(64),
     toUserId: z.string().max(64),

@@ -9,6 +9,7 @@ import { useState } from 'react';
 import { Image, View } from 'react-native';
 import { ME, type Expense } from '~/data/ledger';
 import { useLedger } from '~/data/LedgerProvider';
+import { onPhone, useReceiptLinks } from '~/data/receipts';
 import { GlassSurface } from '~/glass/GlassSurface';
 import { useLook } from '~/theme/ThemeProvider';
 import { Avatar } from '~/ui/Avatar';
@@ -41,6 +42,9 @@ export default function ExpenseScreen() {
     // The phone may clear a picked photo from its cache; then say so rather than show an empty box.
     const [photoGone, setPhotoGone] = useState(false);
     const expense = ledger.expenses.find((candidate) => candidate.id === id);
+    // A photo from this phone opens as it is; one saved on the server needs its signed link.
+    const links = useReceiptLinks(expense?.groupId);
+    const photo = onPhone(expense?.receipt) ? expense?.receipt : expense ? links[expense.id] : undefined;
 
     if (!expense) {
         return (
@@ -169,9 +173,9 @@ export default function ExpenseScreen() {
                     <GlassSurface style={{ padding: 10, gap: 10 }}>
                         {photoGone ? (
                             <View style={{ height: 120, borderRadius: 18, alignItems: 'center', justifyContent: 'center', gap: 4, backgroundColor: tokens.chip }}>
-                                <Text variant="label">This photo isn’t on your phone any more</Text>
+                                <Text variant="label">{onPhone(expense.receipt) ? 'This photo isn’t on your phone any more' : 'This photo can’t be opened'}</Text>
                                 <Text variant="caption" tone="secondary">
-                                    Replace it, or remove it.
+                                    {onPhone(expense.receipt) ? 'Replace it, or remove it.' : 'Try again later, or replace it.'}
                                 </Text>
                             </View>
                         ) : (
@@ -181,7 +185,7 @@ export default function ExpenseScreen() {
                                         <Skeleton height={260} radius={18} />
                                     </View>
                                 )}
-                                <Image source={{ uri: expense.receipt }} accessibilityLabel={`Receipt for ${expense.title}`} resizeMode="cover" onLoad={() => setPhotoReady(true)} onError={() => setPhotoGone(true)} style={{ width: '100%', height: '100%' }} />
+                                {photo ? <Image source={{ uri: photo }} accessibilityLabel={`Receipt for ${expense.title}`} resizeMode="cover" onLoad={() => setPhotoReady(true)} onError={() => setPhotoGone(true)} style={{ width: '100%', height: '100%' }} /> : null}
                             </View>
                         )}
                         <View style={{ flexDirection: 'row', gap: 10 }}>

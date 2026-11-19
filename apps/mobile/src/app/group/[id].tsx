@@ -1,8 +1,13 @@
-/** One group: where everyone stands, who pays whom, its expenses and its people. */
+/**
+ * One group: where everyone stands, who pays whom, its expenses and its people, with the way to its
+ * Balance Journey and its receipts. Its admin can remove someone who is square, and delete the
+ * group once everyone is (the server checks both again).
+ */
 import { router, useLocalSearchParams } from 'expo-router';
-import { ChevronRight, MessageCircle, Plus, UserPlus } from 'lucide-react-native';
+import { ChevronRight, MessageCircle, Plus, Trash2, UserPlus } from 'lucide-react-native';
 import { useMemo, useState } from 'react';
-import { Pressable, Share, View } from 'react-native';
+import { Alert, Pressable, Share, View } from 'react-native';
+import { isPendingSettlementStatus } from '@/lib/settlementStatus';
 import { api } from '~/api';
 import { authErrorMessage } from '~/auth/AuthProvider';
 import { activity, groupBalances, groupTransfers, ME } from '~/data/ledger';
@@ -26,7 +31,7 @@ type Tab = 'overview' | 'expenses' | 'members';
 export default function GroupScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
     const { tokens } = useLook();
-    const { ledger, personOf, onRefresh, real } = useLedger();
+    const { ledger, personOf, onRefresh, real, removeMember, deleteGroup } = useLedger();
     const toast = useToast();
     const [inviting, setInviting] = useState(false);
     const [tab, setTab] = useState<Tab>('overview');
@@ -67,6 +72,45 @@ export default function GroupScreen() {
         </GlassButton>
     ) : null;
     const mine = balances[ME] ?? 0;
+    // Yours to run: a group you made (the demo's made-up groups count as yours).
+    const yours = !group.ownerId || group.ownerId === ME;
+    const waiting = ledger.settlements.some((s) => s.groupId === group.id && isPendingSettlementStatus(s.status));
+    const allSquare = Object.values(balances).every((amount) => amount === 0) && !waiting;
+    const receipts = ledger.expenses.filter((expense) => expense.groupId === group.id && expense.receipt).length;
+
+    const remove = (memberId: string) => {
+        const first = personOf(memberId).first;
+        Alert.alert(`Remove ${first} from ${group.name}?`, `${first} is all square here. Their past expenses stay in the group’s history, and the old invite link stops working.`, [
+            { text: 'Cancel', style: 'cancel' },
+            {
+                text: 'Remove',
+                style: 'destructive',
+                onPress: () => {
+                    removeMember(group.id, memberId)
+                        .then(() => toast(`${first} was removed`))
+                        .catch((error: unknown) => toast(error instanceof Error && !real ? error.message : authErrorMessage(error), 'info'));
+                },
+            },
+        ]);
+    };
+
+    const deleteIt = () => {
+        Alert.alert(`Delete ${group.name}?`, 'Everyone is square, so nothing owed is lost. The group and its expenses go for everyone, and they are told.', [
+            { text: 'Cancel', style: 'cancel' },
+            {
+                text: 'Delete',
+                style: 'destructive',
+                onPress: () => {
+                    deleteGroup(group.id)
+                        .then(() => {
+                            toast(`${group.name} was deleted`);
+                            router.replace('/groups');
+                        })
+                        .catch((error: unknown) => toast(error instanceof Error && !real ? error.message : authErrorMessage(error), 'info'));
+                },
+            },
+        ]);
+    };
 
     return (
         <Screen tabBar={false} onRefresh={onRefresh}>
@@ -80,12 +124,20 @@ export default function GroupScreen() {
                 <Text variant="caption" tone="secondary" tabular>
                     {rupees(spent)} spent together
                 </Text>
-                <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/journey', params: { group: group.id } })} hitSlop={8} style={{ alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 }}>
-                    <Text variant="caption" weight="bold" tone="accent">
-                        See how you got here
-                    </Text>
-                    <ChevronRight size={14} color={tokens.accentText} strokeWidth={2.6} />
-                </Pressable>
+                <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 18, marginTop: 6 }}>
+                    <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/journey', params: { group: group.id } })} hitSlop={8} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <Text variant="caption" weight="bold" tone="accent">
+                            How you got here
+                        </Text>
+                        <ChevronRight size={14} color={tokens.accentText} strokeWidth={2.6} />
+                    </Pressable>
+                    <Pressable accessibilityRole="button" onPress={() => router.push(`/receipts/${group.id}`)} hitSlop={8} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <Text variant="caption" weight="bold" tone="accent">
+                            {receipts > 0 ? `Receipts · ${receipts}` : 'Receipts'}
+                        </Text>
+                        <ChevronRight size={14} color={tokens.accentText} strokeWidth={2.6} />
+                    </Pressable>
+                </View>
             </GlassSurface>
 
             <View style={{ flexDirection: 'row', gap: 12 }}>
@@ -151,15 +203,38 @@ export default function GroupScreen() {
                                         {balance === 0 ? 'All square' : balance > 0 ? 'Gets back' : 'Owes'}
                                     </Text>
                                 </View>
-                                <Text variant="label" tabular tone={balance >= 0 ? 'in' : 'out'}>
-                                    {rupees(Math.abs(balance))}
-                                </Text>
+                                {yours && memberId !== ME && memberId !== group.ownerId && balance === 0 ? (
+                                    <GlassButton kind="thin" contentStyle={{ height: 34, paddingHorizontal: 14 }} accessibilityLabel={`Remove ${person.name}`} onPress={() => remove(memberId)}>
+                                        <Text variant="caption" weight="bold" tone="danger">
+                                            Remove
+                                        </Text>
+                                    </GlassButton>
+                                ) : (
+                                    <Text variant="label" tabular tone={balance >= 0 ? 'in' : 'out'}>
+                                        {rupees(Math.abs(balance))}
+                                    </Text>
+                                )}
                             </View>
                         );
                     })}
                 </GlassSurface>
             )}
             {tab === 'members' || group.memberIds.length === 1 ? inviteButton : null}
+            {tab === 'members' && yours ? (
+                <View style={{ gap: 8 }}>
+                    <GlassButton kind="thin" disabled={!allSquare} contentStyle={{ height: 50, flexDirection: 'row', gap: 8 }} onPress={deleteIt}>
+                        <Trash2 size={17} color={tokens.danger} strokeWidth={2.2} />
+                        <Text variant="label" tone="danger">
+                            Delete group
+                        </Text>
+                    </GlassButton>
+                    {allSquare ? null : (
+                        <Text variant="caption" tone="secondary" onLiquid>
+                            {waiting ? 'A payment here is still waiting. Once it’s done, the group can be deleted.' : 'Once everyone here is square, the group can be deleted.'}
+                        </Text>
+                    )}
+                </View>
+            ) : null}
         </Screen>
     );
 }

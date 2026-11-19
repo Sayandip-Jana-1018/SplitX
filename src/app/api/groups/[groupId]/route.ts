@@ -1,20 +1,10 @@
 import { NextResponse } from 'next/server';
-import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
-import { createAuditLog } from '@/lib/auditLog';
 import { computeGroupBalances } from '@/lib/groupFinance';
-import { isLedgerSettled, loadGroupLedger } from '@/lib/ledger';
 import { inviteExpiresAt, inviteIsLive } from '@/lib/groupInvite';
-import { formatCurrency } from '@/lib/utils';
 import { logger } from '@/lib/logger';
-import { pushToPhones } from '@/lib/notifications';
-
-class DeletionRefused extends Error {
-    constructor(message: string, readonly status: number) {
-        super(message);
-    }
-}
+import { deleteGroup } from '@/lib/services/groups';
 
 // GET /api/groups/:groupId — full group detail
 export async function GET(
@@ -121,126 +111,17 @@ export async function DELETE(
         }
 
         const { groupId } = await params;
-
         const user = await prisma.user.findUnique({ where: { email: session.user.email } });
         if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
-        // Fetch group — only owner can delete
-        const group = await prisma.group.findFirst({
-            where: { id: groupId, deletedAt: null },
-            include: {
-                members: { include: { user: { select: { id: true, name: true } } } },
-                trips: { select: { id: true } },
-            },
-        });
-
-        if (!group) {
-            return NextResponse.json({ error: 'Group not found' }, { status: 404 });
-        }
-
-        if (group.ownerId !== user.id) {
-            return NextResponse.json(
-                { error: 'Only the group owner can delete this group' },
-                { status: 403 }
-            );
-        }
-
-        const tripIds = group.trips.map(t => t.id);
-
-        // A group is deleted only once everyone is square: deleting it used to
-        // wipe out what members still owed each other, and cancel payments on
-        // their way. The check and the delete share one serializable
-        // transaction, so an expense saved at the same moment can't slip past.
-        try {
-            await prisma.$transaction(async (tx) => {
-                const ledger = await loadGroupLedger(groupId, tx);
-                if (!ledger) throw new DeletionRefused('Group not found', 404);
-                if (!isLedgerSettled(ledger)) {
-                    const open = Object.values(ledger.balances).filter((amount) => amount !== 0).length;
-                    const outstanding = Object.values(ledger.balances).reduce((sum, amount) => sum + Math.max(0, amount), 0);
-                    throw new DeletionRefused(
-                        outstanding > 0
-                            ? `${open} people still owe or are owed ${formatCurrency(outstanding)} in this group. Settle up first, then delete it.`
-                            : 'Some payments in this group are still waiting. Complete or cancel them first, then delete it.',
-                        409
-                    );
-                }
-
-                // 1. Soft-delete the group
-                await tx.group.update({
-                    where: { id: groupId },
-                    data: { deletedAt: new Date() },
-                });
-
-                // 2. Soft-delete all transactions in group trips
-                if (tripIds.length > 0) {
-                    await tx.transaction.updateMany({
-                        where: { tripId: { in: tripIds }, deletedAt: null },
-                        data: { deletedAt: new Date() },
-                    });
-                }
-
-                await tx.notification.deleteMany({
-                    where: {
-                        OR: [
-                            { link: `/groups/${groupId}` },
-                            { link: { startsWith: `/groups/${groupId}/` } },
-                        ],
-                    },
-                });
-            }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
-        } catch (error) {
-            if (error instanceof DeletionRefused) {
-                return NextResponse.json({ error: error.message }, { status: error.status });
-            }
-            if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034') {
-                return NextResponse.json(
-                    { error: 'The group changed while deleting it. Please try again.' },
-                    { status: 409 }
-                );
-            }
-            throw error;
-        }
-
-        await createAuditLog({
-            userId: user.id,
-            action: 'delete',
-            entityType: 'group',
-            entityId: group.id,
-            details: {
-                groupId: group.id,
-                name: group.name,
-                memberCount: group.members.length,
-                tripIds,
-            },
-        });
-
-        // 4. Notify all members (non-blocking)
-        try {
-            const otherMemberIds = group.members
-                .map(m => m.userId)
-                .filter(id => id !== user.id);
-
-            if (otherMemberIds.length > 0) {
-                const rows = otherMemberIds.map(memberId => ({
-                    userId: memberId,
-                    actorId: user.id,
-                    type: 'group_activity',
-                    title: '🗑️ Group deleted',
-                    body: `${user.name || 'The owner'} deleted the group "${group.name}". Everyone was settled up.`,
-                    link: '/groups',
-                }));
-                await prisma.notification.createMany({ data: rows });
-                pushToPhones(rows);
-            }
-        } catch {
-            // Notification failure shouldn't block the deletion
-        }
-
+        // Only the owner, and only once everyone is square: the rules live in the shared
+        // service (deleteGroup), which the phone app's DELETE /api/v1/groups/:groupId calls too.
+        const outcome = await deleteGroup(user, groupId);
+        if (!outcome.ok) return NextResponse.json({ error: outcome.error }, { status: outcome.status });
         return NextResponse.json({
             message: 'Group deleted successfully',
             groupId,
-            groupName: group.name,
+            groupName: outcome.value.name,
         });
     } catch (error) {
         logger.error('Group delete error', { err: error });

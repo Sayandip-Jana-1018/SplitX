@@ -19,6 +19,7 @@ import {
     ExpenseEdited,
     ExpenseSaved,
     GroupJoined,
+    GroupReceipts,
     GroupMade,
     InviteLink,
     InvitePreview,
@@ -239,6 +240,9 @@ export function createApi(options: ApiOptions) {
         joinGroup: (inviteCode: string) => authed('/api/v1/groups/join', GroupJoined, { method: 'POST', body: JSON.stringify({ inviteCode }) }),
         /** What an invite code opens, before joining. */
         previewInvite: (inviteCode: string) => authed(`/api/v1/groups/join?code=${encodeURIComponent(inviteCode)}`, InvitePreview),
+        removeMember: (groupId: string, userId: string) => authed(`/api/v1/groups/${encodeURIComponent(groupId)}/members/${encodeURIComponent(userId)}`, z.null(), { method: 'DELETE' }),
+        deleteGroup: (groupId: string) => authed(`/api/v1/groups/${encodeURIComponent(groupId)}`, z.null(), { method: 'DELETE' }),
+        groupReceipts: (groupId: string) => authed(`/api/v1/groups/${encodeURIComponent(groupId)}/receipts`, GroupReceipts),
         inviteLink: (groupId: string) => authed(`/api/v1/groups/${encodeURIComponent(groupId)}/invite`, InviteLink, { method: 'POST' }),
         /** Where this phone's push notifications go; null stops them. 204: no body. */
         setPushToken: (token: string | null) => authed('/api/v1/devices/push-token', z.null(), { method: 'PUT', body: JSON.stringify({ token }) }),

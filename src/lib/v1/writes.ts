@@ -2,6 +2,7 @@ import { prisma } from '@/lib/db';
 import type { ChatMessage, Expense, ExpenseEdit, MessagePage, NewExpense, NewMessage, NewSettlement, Settlement, SettlementMove } from '@/lib/contract/v1';
 import { createExpense, deleteExpense, updateExpense } from '@/lib/services/expenses';
 import { ChatRefused, listGroupMessages, sendGroupMessage, type ChatMessageRow } from '@/lib/services/groupChat';
+import { deleteGroup, removeMember } from '@/lib/services/groups';
 import { decideApproval, markPaid, openUpi, receiverRecords, requestSettlement } from '@/lib/services/settlements';
 import { TransitionRefused } from '@/lib/settlementTransitions';
 
@@ -85,6 +86,26 @@ export async function removeExpense(userId: string, expenseId: string): Promise<
     if (!actor) return { ok: false, status: 401, error: 'Your session has ended. Sign in again.', code: 'unauthenticated' };
     const outcome = await deleteExpense(actor, expenseId);
     return outcome.ok ? { ok: true, value: null } : { ok: false, status: 404, error: 'That expense isn’t here, or isn’t yours to delete.', code: 'not_found' };
+}
+
+// ── A group's people, and the group ─────────────────────────
+
+const SIGNED_OUT = { ok: false, status: 401, error: 'Your session has ended. Sign in again.', code: 'unauthenticated' } as const;
+
+/** Removes someone square in a group you own or administer (removeMember: the website's rules). */
+export async function removeFromGroup(userId: string, groupId: string, memberId: string): Promise<WriteOutcome<null>> {
+    const actor = await actorOf(userId);
+    if (!actor) return SIGNED_OUT;
+    const outcome = await removeMember(actor, groupId, memberId);
+    return outcome.ok ? { ok: true, value: null } : outcome;
+}
+
+/** Deletes a group you own once everyone in it is square (deleteGroup: the website's rules). */
+export async function deleteGroupAs(userId: string, groupId: string): Promise<WriteOutcome<null>> {
+    const actor = await actorOf(userId);
+    if (!actor) return SIGNED_OUT;
+    const outcome = await deleteGroup(actor, groupId);
+    return outcome.ok ? { ok: true, value: null } : outcome;
 }
 
 // ── Settling up ─────────────────────────────────────────────

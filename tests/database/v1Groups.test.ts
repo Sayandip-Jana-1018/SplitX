@@ -1,13 +1,16 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { ErrorBody, GroupJoined, GroupMade, InviteLink, InvitePreview, SyncAnswer } from '@/lib/contract/v1';
+import { ErrorBody, GroupJoined, GroupMade, GroupReceipts, InviteLink, InvitePreview, SyncAnswer } from '@/lib/contract/v1';
 import { prisma } from '@/lib/db';
 import { startSession } from '@/lib/mobileAuth';
-import { emptyDatabase, groupOf, person } from './fixtures';
+import { emptyDatabase, expense, groupOf, person } from './fixtures';
 
 const groupsRoute = await import('@/app/api/v1/groups/route');
 const joinRoute = await import('@/app/api/v1/groups/join/route');
 const inviteRoute = await import('@/app/api/v1/groups/[groupId]/invite/route');
 const syncRoute = await import('@/app/api/v1/sync/route');
+const groupRoute = await import('@/app/api/v1/groups/[groupId]/route');
+const memberRoute = await import('@/app/api/v1/groups/[groupId]/members/[userId]/route');
+const receiptsRoute = await import('@/app/api/v1/groups/[groupId]/receipts/route');
 
 beforeAll(() => {
     process.env.MOBILE_TOKEN_SECRET = 'a-database-test-secret-of-32-characters-or-more';
@@ -121,5 +124,82 @@ describe('a link’s preview, before joining', () => {
         const old = await get(ravi, group.inviteCode);
         expect(old.status).toBe(410);
         expect(JSON.stringify(await old.json())).not.toContain('Goa');
+    });
+});
+
+const removing = async (by: { id: string }, groupId: string, userId: string) =>
+    memberRoute.DELETE(new Request(`https://splitit.test/api/v1/groups/${groupId}/members/${userId}`, { method: 'DELETE', headers: await headersFor(by) }), { params: Promise.resolve({ groupId, userId }) });
+const deleting = async (by: { id: string }, groupId: string) =>
+    groupRoute.DELETE(new Request(`https://splitit.test/api/v1/groups/${groupId}`, { method: 'DELETE', headers: await headersFor(by) }), params(groupId));
+
+describe('removing someone from a group', () => {
+    it('lets the owner remove someone square, and changes the invite code', async () => {
+        const asha = await person('Asha');
+        const ravi = await person('Ravi');
+        const { group } = await groupOf(asha, [ravi]);
+        expect((await removing(asha, group.id, ravi.id)).status).toBe(204);
+        expect(await prisma.groupMember.count({ where: { groupId: group.id, userId: ravi.id } })).toBe(0);
+        expect((await prisma.group.findUniqueOrThrow({ where: { id: group.id } })).inviteCode).not.toBe(group.inviteCode);
+    });
+
+    it('refuses while they owe or are owed, says how much, and keeps them', async () => {
+        const asha = await person('Asha');
+        const ravi = await person('Ravi');
+        const { group, trip } = await groupOf(asha, [ravi]);
+        await expense(trip.id, asha, 1000, [asha, ravi]);
+        const answer = await removing(asha, group.id, ravi.id);
+        expect(answer.status).toBe(409);
+        const body = ErrorBody.parse(await answer.json());
+        expect(body.code).toBe('not_settled');
+        expect(body.error).toContain('Ravi still owes');
+        expect(await prisma.groupMember.count({ where: { groupId: group.id, userId: ravi.id } })).toBe(1);
+    });
+
+    it('lets no ordinary member remove anyone, and nobody the owner', async () => {
+        const asha = await person('Asha');
+        const ravi = await person('Ravi');
+        const meera = await person('Meera');
+        const { group } = await groupOf(asha, [ravi, meera]);
+        expect((await removing(ravi, group.id, meera.id)).status).toBe(403);
+        expect(ErrorBody.parse(await (await removing(asha, group.id, asha.id)).json()).code).toBe('owner');
+    });
+});
+
+describe('deleting a group from the phone', () => {
+    it('lets the owner delete a group where everyone is square', async () => {
+        const asha = await person('Asha');
+        const ravi = await person('Ravi');
+        const { group } = await groupOf(asha, [ravi]);
+        expect((await deleting(ravi, group.id)).status).toBe(403);
+        expect((await deleting(asha, group.id)).status).toBe(204);
+        expect((await prisma.group.findUniqueOrThrow({ where: { id: group.id } })).deletedAt).not.toBeNull();
+        expect((await deleting(asha, group.id)).status).toBe(404);
+    });
+
+    it('refuses while anyone owes anyone, and keeps everything', async () => {
+        const asha = await person('Asha');
+        const ravi = await person('Ravi');
+        const { group, trip } = await groupOf(asha, [ravi]);
+        await expense(trip.id, ravi, 600, [asha, ravi]);
+        const answer = await deleting(asha, group.id);
+        expect(answer.status).toBe(409);
+        expect(ErrorBody.parse(await answer.json()).code).toBe('not_settled');
+        expect((await prisma.group.findUniqueOrThrow({ where: { id: group.id } })).deletedAt).toBeNull();
+    });
+});
+
+describe('a group’s receipts', () => {
+    it('answers the people in it, with nothing when no expense has a photo, and nobody else', async () => {
+        const asha = await person('Asha');
+        const ravi = await person('Ravi');
+        const stranger = await person('Stranger');
+        const { group, trip } = await groupOf(asha, [ravi]);
+        await expense(trip.id, asha, 600, [asha, ravi]);
+        const read = async (who: { id: string }) => receiptsRoute.GET(new Request(`https://splitit.test/api/v1/groups/${group.id}/receipts`, { headers: await headersFor(who) }), params(group.id));
+
+        const mine = await read(ravi);
+        expect(mine.status).toBe(200);
+        expect(GroupReceipts.parse(await mine.json())).toEqual({ receipts: [] });
+        expect((await read(stranger)).status).toBe(404);
     });
 });
