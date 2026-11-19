@@ -343,6 +343,25 @@ const sameMembers = (a: readonly string[], b: readonly string[]) => {
     return setA.size === a.length && a.length === b.length && b.every((userId) => setA.has(userId));
 };
 
+/** Whether the expense already holds everything the edit asks for. */
+function alreadyAsAsked(
+    existing: { title: string; category: string; method: string | null; description: string | null; amount: number; splitType: string; splits: { userId: string; amount: number }[] },
+    edit: ExpenseEdit,
+): boolean {
+    const same = (a: { userId: string; amount: number }[], b: { userId: string; amount: number }[]) => {
+        const key = (shares: { userId: string; amount: number }[]) => shares.map((share) => `${share.userId}:${share.amount}`).sort().join(',');
+        return key(a) === key(b);
+    };
+    return (edit.title === undefined || edit.title === existing.title)
+        && (edit.category === undefined || edit.category === existing.category)
+        && (edit.method === undefined || edit.method === existing.method)
+        && (edit.description === undefined || edit.description === existing.description)
+        && (edit.amount === undefined || edit.amount === existing.amount)
+        && (edit.splitType === undefined || edit.splitType === existing.splitType)
+        && (edit.splitAmong === undefined || sameMembers(edit.splitAmong, existing.splits.map((split) => split.userId)))
+        && (edit.splits === undefined || same(edit.splits.filter((share) => share.amount > 0), existing.splits));
+}
+
 const CONFLICT = { ok: false, status: 409, error: 'Someone else changed this expense while you were editing. Reload it and try again.', code: 'conflict' } as const;
 const NOT_FOUND = { ok: false, status: 404, error: 'Transaction not found or access denied', code: 'not_found' } as const;
 
@@ -382,7 +401,13 @@ export async function updateExpense(actor: { id: string; name: string | null }, 
     });
     if (!existing) return NOT_FOUND;
 
-    if (edit.expectedUpdatedAt && new Date(edit.expectedUpdatedAt).getTime() !== existing.updatedAt.getTime()) return CONFLICT;
+    if (edit.expectedUpdatedAt && new Date(edit.expectedUpdatedAt).getTime() !== existing.updatedAt.getTime()) {
+        // A retry of an edit that already landed (its answer was lost on the way to the phone)
+        // finds the expense just as it asked: that is done, not a conflict. Anything else is.
+        if (!alreadyAsAsked(existing, edit)) return CONFLICT;
+        const current = await prisma.transaction.findUnique({ where: { id }, include: EDITED_INCLUDE });
+        return current ? { ok: true, expense: current } : NOT_FOUND;
+    }
 
     // Any change to the amount or to who shares it recomputes the shares
     // under the same rules as creating an expense (lib/expenseSplits.ts), so

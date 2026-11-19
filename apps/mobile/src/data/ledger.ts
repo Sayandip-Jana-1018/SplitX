@@ -109,11 +109,21 @@ export interface ExpenseInput extends Omit<Expense, 'splits' | 'splitType'> {
     shares?: { userId: string; amount: number }[];
 }
 
-/** An expense, split by the website's rules; an invalid split throws, which a seed should. */
-export function makeExpense({ among, shares, splitType = 'equal', ...rest }: ExpenseInput, group: Group): Expense {
-    const resolved = resolveSplits({ amount: rest.amount, splitType, splitAmong: among, splits: shares }, group.memberIds);
+/**
+ * An expense, split by the website's rules; an invalid split throws, which a seed should.
+ *
+ * `serverId` names people as the server does (your own id where the phone says ME): leftover paise
+ * of an equal split go by id order, so splitting with the server's ids gives exactly the shares the
+ * server will save, rather than a paisa or two moving when the expense comes back from it.
+ */
+export function makeExpense({ among, shares, splitType = 'equal', ...rest }: ExpenseInput, group: Group, serverId: (id: string) => string = (id) => id): Expense {
+    const back = new Map(group.memberIds.map((id) => [serverId(id), id]));
+    const resolved = resolveSplits(
+        { amount: rest.amount, splitType, splitAmong: among?.map(serverId), splits: shares?.map((share) => ({ ...share, userId: serverId(share.userId) })) },
+        group.memberIds.map(serverId),
+    );
     if (!resolved.ok) throw new Error(resolved.error);
-    return { ...rest, splitType, splits: resolved.splits };
+    return { ...rest, splitType, splits: resolved.splits.map((share) => ({ ...share, userId: back.get(share.userId) ?? share.userId })) };
 }
 
 const GROUPS: Group[] = [

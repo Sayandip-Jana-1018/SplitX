@@ -385,7 +385,7 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
                 return expense;
             }
             const clientId = Crypto.randomUUID();
-            const expense = makeExpense({ ...input, id: clientId, createdAt: new Date() }, target);
+            const expense = makeExpense({ ...input, id: clientId, createdAt: new Date() }, target, serverId);
             queue({ kind: 'expense', id: clientId, local: expense, body: { clientId, groupId: target.id, payerId: serverId(expense.payerId), ...sharesBody(expense, input.among ?? target.memberIds, serverId) } });
             return expense;
         },
@@ -414,7 +414,7 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
             const target = ledger.groups.find((group) => group.id === before?.groupId);
             if (!before || !target) throw new Error('That expense is gone');
             // Who paid and the group stay as they are; the rest is split again by the same rules.
-            const after: Expense = { ...makeExpense({ ...input, id, groupId: before.groupId, payerId: before.payerId, createdAt: before.createdAt }, target), receipt: before.receipt, updatedAt: before.updatedAt };
+            const after: Expense = { ...makeExpense({ ...input, id, groupId: before.groupId, payerId: before.payerId, createdAt: before.createdAt }, target, real ? serverId : undefined), receipt: before.receipt, updatedAt: before.updatedAt };
             if (!real) {
                 setDemo((current) => ({ ...current, expenses: current.expenses.map((expense) => (expense.id === id ? after : expense)) }));
                 return after;

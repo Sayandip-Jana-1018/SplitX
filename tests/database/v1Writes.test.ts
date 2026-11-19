@@ -149,6 +149,23 @@ describe('editing an expense from the phone', () => {
         expect((await prisma.transaction.findUniqueOrThrow({ where: { id: expense.id } })).title).toBe('First edit');
     });
 
+    it('takes a retried edit whose first answer was lost as done, but still refuses a different one', async () => {
+        const { alice, group } = await threeFriends();
+        const headers = await bearerFor(alice);
+        const { expense } = ExpenseSaved.parse(await (await save(headers, { clientId: randomUUID(), groupId: group.id, title: 'Cab', amount: 900 })).json());
+        const edit = { title: 'Cab to the airport', amount: 1200, expectedUpdatedAt: expense.updatedAt };
+        expect((await change(headers, expense.id, edit)).status).toBe(200);
+
+        // The phone never heard back, so it sends the same edit again: already so, so done.
+        const again = await change(headers, expense.id, edit);
+        expect(again.status).toBe(200);
+        expect(ExpenseEdited.parse(await again.json()).expense).toMatchObject({ title: 'Cab to the airport', amount: 1200 });
+        expect(await prisma.auditLog.count({ where: { entityId: expense.id, action: 'update' } })).toBe(1);
+
+        const different = await change(headers, expense.id, { ...edit, amount: 1300 });
+        expect(ErrorBody.parse(await different.json()).code).toBe('conflict');
+    });
+
     it('lets only the payer or the group’s owner edit, and refuses an edit that changes nothing', async () => {
         const { alice, bob, carol, group } = await threeFriends();
         const { expense } = ExpenseSaved.parse(await (await save(await bearerFor(bob), { clientId: randomUUID(), groupId: group.id, title: 'Snacks', amount: 300 })).json());
