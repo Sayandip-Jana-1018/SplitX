@@ -88,6 +88,9 @@ export async function deleteAccount(userId: string): Promise<DeletionOutcome> {
         await tx.notification.deleteMany({ where: { userId } });
         await tx.account.deleteMany({ where: { userId } });
         await tx.session.deleteMany({ where: { userId } });
+        // The phone app's devices (their names and push tokens) and every refresh token.
+        await tx.refreshToken.deleteMany({ where: { userId } });
+        await tx.device.deleteMany({ where: { userId } });
         if (user.email) {
             await tx.verificationToken.deleteMany({ where: { identifier: { equals: user.email, mode: 'insensitive' } } });
             await tx.passwordResetToken.deleteMany({ where: { email: { equals: user.email, mode: 'insensitive' } } });

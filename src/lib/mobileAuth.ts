@@ -153,6 +153,16 @@ export async function endSession(refreshToken: string, now = new Date()) {
 }
 
 /**
+ * Every phone of an account signed out, alongside raising its tokenVersion (which already stops
+ * their tokens working): their refresh tokens are marked revoked and their push tokens cleared, so
+ * nothing counts them as signed in, and no push reaches a signed-out phone.
+ */
+export async function endPhoneSessions(userId: string, now = new Date()) {
+    await prisma.refreshToken.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: now } });
+    await prisma.device.updateMany({ where: { userId }, data: { pushToken: null } });
+}
+
+/**
  * Where this phone's pushes go. A token can belong to one device only: if
  * another account signed in on this phone before, it stops getting pushes
  * here. Null stops pushes to this phone.

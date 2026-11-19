@@ -99,6 +99,8 @@ function Frame() {
                             <Stack.Screen name="journey" />
                             <Stack.Screen name="receipts/[id]" />
                             <Stack.Screen name="contacts" />
+                            <Stack.Screen name="privacy" />
+                            <Stack.Screen name="devices" />
                             <Stack.Screen name="insights" />
                             <Stack.Screen name="profile" />
                             <Stack.Screen name="appearance" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />

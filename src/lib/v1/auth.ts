@@ -7,7 +7,7 @@ import { prisma } from '@/lib/db';
 import { emailTransport, sendCodeEmail } from '@/lib/email';
 import { noticeRepeatSignUp, verificationRequired } from '@/lib/emailVerification';
 import { logger } from '@/lib/logger';
-import { startSession } from '@/lib/mobileAuth';
+import { endPhoneSessions, startSession } from '@/lib/mobileAuth';
 import { normalizeEmail, passwordProblem } from '@/lib/password';
 import { forgetTokenVersion } from '@/lib/sessionVersion';
 import type { WriteOutcome } from '@/lib/v1/writes';
@@ -168,8 +168,8 @@ export async function resetPasswordWithCode(rawEmail: string, code: string, pass
 export async function signOutEverywhere(userId: string) {
     await prisma.user.update({ where: { id: userId }, data: { tokenVersion: { increment: 1 } } });
     forgetTokenVersion(userId);
-    // No phone of this account gets pushes until it signs in again.
-    await prisma.device.updateMany({ where: { userId }, data: { pushToken: null } });
+    // No phone of this account counts as signed in, or gets pushes, until it signs in again.
+    await endPhoneSessions(userId);
 }
 
 /** Your name and UPI ID, by the website's profile rules. */

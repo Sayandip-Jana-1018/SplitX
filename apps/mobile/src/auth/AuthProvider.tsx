@@ -35,6 +35,8 @@ interface Auth {
     signInWithProvider: (provider: 'google' | 'github') => Promise<'done' | 'cancelled'>;
     signOut: () => Promise<void>;
     signOutEverywhere: () => Promise<void>;
+    /** Closes the account for good (refused, with why, while you owe or are owed); this phone is signed out. */
+    deleteAccount: () => Promise<void>;
     startDemo: () => Promise<void>;
     leaveDemo: () => Promise<void>;
     saveProfile: (update: ProfileUpdate) => Promise<void>;
@@ -170,6 +172,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             },
             async signOutEverywhere() {
                 await api.signOutEverywhere();
+                await remember(null);
+                setStatus('signed_out');
+            },
+            async deleteAccount() {
+                await api.deleteAccount();
                 await remember(null);
                 setStatus('signed_out');
             },

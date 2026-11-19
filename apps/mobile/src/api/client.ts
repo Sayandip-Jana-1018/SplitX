@@ -18,6 +18,7 @@ import {
     ContactAdded,
     ContactInviteLink,
     ContactList,
+    DeviceList,
     ErrorBody,
     ExpenseEdited,
     ExpenseSaved,
@@ -221,6 +222,17 @@ export function createApi(options: ApiOptions) {
             await authed('/api/v1/auth/sign-out-everywhere', z.null(), { method: 'POST' });
             await endLocally(null, false);
         },
+        /** Closes the account (refused, with why, while you owe or are owed); every session ends, this one too. */
+        async deleteAccount() {
+            await authed('/api/v1/me', z.null(), { method: 'DELETE' });
+            await endLocally(null, false);
+        },
+        /** Everything the app holds about you, as one JSON document. */
+        exportData: () => authed('/api/v1/me/export', z.record(z.string(), z.unknown())),
+        /** The phones signed in to your account, this one first. */
+        devices: () => authed('/api/v1/devices', DeviceList),
+        /** Signs one of your other phones out and forgets it. */
+        forgetDevice: (id: string) => authed(`/api/v1/devices/${encodeURIComponent(id)}`, z.null(), { method: 'DELETE' }),
         /** Your name and UPI ID. */
         updateMe: (update: ProfileUpdate) =>
             authed('/api/v1/me', MeAnswer, { method: 'PATCH', body: JSON.stringify(update) }).then((answer) => answer.me),
@@ -233,8 +245,8 @@ export function createApi(options: ApiOptions) {
         me: () => authed('/api/v1/me', MeAnswer).then((answer) => answer.me),
         /** Saves an expense; the same clientId again saves nothing new (`replayed`). */
         saveExpense: (expense: NewExpense) => authed('/api/v1/expenses', ExpenseSaved, { method: 'POST', body: JSON.stringify(expense) }),
-        /** 204: no body, which the client reads as null. */
         editExpense: (id: string, edit: ExpenseEdit) => authed(`/api/v1/expenses/${encodeURIComponent(id)}`, ExpenseEdited, { method: 'PATCH', body: JSON.stringify(edit) }),
+        /** 204: no body, which the client reads as null. */
         deleteExpense: (id: string) => authed(`/api/v1/expenses/${encodeURIComponent(id)}`, z.null(), { method: 'DELETE' }),
         askSettlement: (settlement: NewSettlement) => authed('/api/v1/settlements', SettlementSaved, { method: 'POST', body: JSON.stringify(settlement) }),
         moveSettlement: (id: string, move: SettlementMove) => authed(`/api/v1/settlements/${encodeURIComponent(id)}`, SettlementMoved, { method: 'POST', body: JSON.stringify(move) }),

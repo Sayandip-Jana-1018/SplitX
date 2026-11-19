@@ -4,10 +4,8 @@ import { auth } from '@/lib/auth';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { invalidInput } from '@/lib/invalidInput';
-import { deleteAccount, DeletionRefused } from '@/lib/accountDeletion';
-import { forgetTokenVersion } from '@/lib/sessionVersion';
-import { removeAvatars } from '@/lib/storage';
-import { RECEIPTS_BUCKET } from '@/lib/receiptUrl';
+import { DeletionRefused } from '@/lib/accountDeletion';
+import { closeAccount } from '@/lib/services/account';
 
 // GET /api/me — returns current authenticated user
 export async function GET() {
@@ -128,15 +126,8 @@ export async function DELETE() {
             return NextResponse.json({ error: 'User not found' }, { status: 404 });
         }
 
-        const outcome = await deleteAccount(user.id);
-        forgetTokenVersion(user.id);
-
-        try {
-            await removeAvatars(user.id, RECEIPTS_BUCKET);
-        } catch (error) {
-            // The account is gone either way; a photo left behind is logged to clear by hand.
-            logger.warn('Could not remove the profile photos of a deleted account', { err: error });
-        }
+        // Shared with the phone app's DELETE /api/v1/me (src/lib/services/account.ts).
+        const outcome = await closeAccount(user.id);
 
         return NextResponse.json({ message: 'Your account was deleted.', ...outcome });
     } catch (error) {

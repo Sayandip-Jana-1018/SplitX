@@ -74,7 +74,7 @@ export default function Profile() {
         signedIn
             ? { icon: Bell, label: 'Notifications', onPress: notifications, detail: push.state === 'on' ? 'On' : push.state === 'asked-no' ? 'Blocked' : push.state === 'unsupported' ? 'In the app' : 'Off' }
             : { icon: Bell, label: 'Notifications', onPress: soon('Notifications come with your own account: sign in to turn them on'), detail: 'Off' },
-        { icon: ShieldCheck, label: 'Privacy and data', onPress: soon('Export and delete your data arrive with your real groups'), soon: true },
+        { icon: ShieldCheck, label: 'Privacy and data', onPress: () => router.push('/privacy') },
         { icon: CircleHelp, label: 'Help', onPress: soon('Help arrives before the store release'), soon: true },
         ...(signedIn ? [] : [{ icon: RotateCcw, label: 'Start the demo over', onPress: () => setAsking('restart') }]),
     ];

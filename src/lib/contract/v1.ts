@@ -239,6 +239,23 @@ export type InvitationAnswer = z.infer<typeof InvitationAnswer>;
 export const InvitationAnswered = z.object({ status: z.string(), groupId: z.string().nullable() });
 export type InvitationAnswered = z.infer<typeof InvitationAnswered>;
 
+// ── You: your phones (Phase 4 step 5) ───────────────────────
+
+/** A phone signed in to your account. `current` is the one asking; `signedIn` while a session on it is live. */
+const DeviceInfo = z.object({
+    id: z.string(),
+    platform: z.string(),
+    name: z.string().nullable(),
+    appVersion: z.string().nullable(),
+    lastSeenAt: z.string(),
+    current: z.boolean(),
+    signedIn: z.boolean(),
+});
+export type DeviceInfo = z.infer<typeof DeviceInfo>;
+
+export const DeviceList = z.object({ devices: z.array(DeviceInfo) });
+export type DeviceList = z.infer<typeof DeviceList>;
+
 /** A group's receipt photos: for each expense with one, a link that works for an hour. */
 export const GroupReceipts = z.object({ receipts: z.array(z.object({ expenseId: z.string(), url: z.string().url() })) });
 export type GroupReceipts = z.infer<typeof GroupReceipts>;

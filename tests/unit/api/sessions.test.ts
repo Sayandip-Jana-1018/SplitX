@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Prisma } from '@prisma/client';
 
 const { prisma, auth, forgetTokenVersion } = vi.hoisted(() => ({
-    prisma: { user: { update: vi.fn() } },
+    prisma: { user: { update: vi.fn() }, refreshToken: { updateMany: vi.fn() }, device: { updateMany: vi.fn() } },
     auth: vi.fn(),
     forgetTokenVersion: vi.fn(),
 }));
@@ -28,6 +28,9 @@ describe('DELETE /api/me/sessions (sign out of all devices)', () => {
             select: { id: true },
         });
         expect(forgetTokenVersion).toHaveBeenCalledWith('u1');
+        // The phone app's sessions too: none counts as signed in, and none gets pushes.
+        expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({ where: { userId: 'u1', revokedAt: null }, data: { revokedAt: expect.any(Date) } });
+        expect(prisma.device.updateMany).toHaveBeenCalledWith({ where: { userId: 'u1' }, data: { pushToken: null } });
     });
 
     it('needs a session, and says so when the account is gone', async () => {

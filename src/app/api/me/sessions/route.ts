@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
+import { endPhoneSessions } from '@/lib/mobileAuth';
 import { forgetTokenVersion } from '@/lib/sessionVersion';
 import { logger } from '@/lib/logger';
 
@@ -22,7 +23,8 @@ export async function DELETE() {
             select: { id: true },
         });
         forgetTokenVersion(user.id);
-
+        // The phone app's sessions too: none counts as signed in, and none gets pushes.
+        await endPhoneSessions(user.id);
         return NextResponse.json({ message: 'Signed out of every device.' });
     } catch (error) {
         if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
