@@ -114,6 +114,7 @@ uniform float uTint;
 uniform float uTintK;
 uniform float3 uTintC;
 uniform float3 uAcc;
+uniform float3 uAcc2;
 uniform float uRefract;
 uniform float uRim;
 uniform float uWobble;
@@ -132,10 +133,11 @@ float2 nRR(float2 q, float2 hs, float r) {
                     sdRR(q + float2(0., e), hs, r) - sdRR(q - float2(0., e), hs, r));
   return g/(length(g) + 1e-4);
 }
-float3 tintOf(float3 c, float z) {
+// g: how far across the pane, for a filled button's run from uAcc to uAcc2 (the same colour, but in a blend).
+float3 tintOf(float3 c, float z, float g) {
   float l = dot(c, float3(.2126, .7152, .0722));
   c = mix(float3(l), c, 1.26);
-  return z < 0. ? mix(c, uAcc, -z) : mix(c, uTintC, min(z*uTintK, .94));
+  return z < 0. ? mix(c, mix(uAcc, uAcc2, g), -z) : mix(c, uTintC, min(z*uTintK, .94));
 }
 half4 main(float2 at) {
   // A layer draws many panes in one canvas: uAt is where this one's box starts in it.
@@ -154,7 +156,8 @@ half4 main(float2 at) {
   float2 n = nRR(q, hs, r);
   float2 o = float2(sin(q.y*.045 + uT*.9 + uOrigin.x*.02), cos(q.x*.04 - uT*.7))*(1.6 + k*5.)*uWobble;
   float disp = (k*k*k*.92 + k*.08)*bev*2.25*uRefract;
-  float3 c = tintOf(liquid(uOrigin + xy + o - n*disp, uFrost), uTint);
+  float g = clamp(.5 + q.x/(hs.x*2.2) - q.y/(hs.y*6.), 0., 1.);
+  float3 c = tintOf(liquid(uOrigin + xy + o - n*disp, uFrost), uTint, g);
   float dn = dot(n, uL);
   float line = 1. - smoothstep(.1, 1.6, d);
   float top = pow(max(dn, 0.), 1.4);

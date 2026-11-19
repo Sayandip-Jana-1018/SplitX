@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { COLOR_PALETTES } from '@/hooks/useTheme';
-import { DEFAULT_GLASS_PALETTE, GLASS_THEMES, glassPalette, isGlassPalette, oklchToSrgb } from '@/lib/glass/palette';
+import { DEFAULT_GLASS_PALETTE, GLASS_THEMES, glassPalette, isBlend, isGlassPalette, oklchToSrgb, type PaletteId } from '@/lib/glass/palette';
 
 describe('the glass palette', () => {
     it('knows every palette a person can have saved, and nothing else', () => {
@@ -44,5 +44,20 @@ describe('the glass palette', () => {
         expect(isGlassPalette('toString')).toBe(false);
         expect(isGlassPalette(null)).toBe(false);
         expect(glassPalette('pastel-dreams', 'dark')).toEqual(glassPalette(DEFAULT_GLASS_PALETTE, 'dark'));
+    });
+
+    it('tells the blends apart, each with a page and floating colours of its own, and a sheen on its buttons', () => {
+        const blends = (Object.keys(GLASS_THEMES) as PaletteId[]).filter(isBlend);
+        expect(blends).toEqual(['noir-gold', 'royal', 'emerald-gold', 'rose-gold', 'ocean', 'berry', 'ember', 'peach']);
+        const same = (a: number[], b: number[]) => a.every((v, i) => Math.abs(v - b[i]) < 1e-9);
+        for (const id of blends) {
+            const dark = glassPalette(id, 'dark');
+            expect(same(dark.c1, dark.c2), id).toBe(false);
+            expect(same(dark.acc, dark.acc2), id).toBe(false);
+        }
+        // A single colour's buttons are one colour.
+        const plain = glassPalette('amethyst-haze', 'dark');
+        expect(plain.acc2).toEqual(plain.acc);
+        expect(isBlend('amethyst-haze')).toBe(false);
     });
 });

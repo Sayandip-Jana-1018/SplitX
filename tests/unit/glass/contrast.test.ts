@@ -34,6 +34,14 @@ const ON_ACCENT: Record<string, string> = {
     'lime-fusion': '#162407',
     'amber-minimal': '#2b1b02',
     'solar-dusk': '#2a1002',
+    matcha: '#12180b',
+    ice: '#09191c',
+    champagne: '#1a150d',
+    'noir-gold': '#1d1504',
+    'royal': '#1d1504',
+    'emerald-gold': '#1d1504',
+    'rose-gold': '#1f120f',
+    'peach': '#250e0a',
 };
 
 const NORMAL_TEXT = 4.5;

@@ -6,6 +6,7 @@
  * you, sending it back when it hasn't arrived, and cash handed to you. A payment you make opens Pay.
  */
 import { router } from 'expo-router';
+import { Banknote, Check, Undo2 } from 'lucide-react-native';
 import { useMemo, useState } from 'react';
 import { Alert, View } from 'react-native';
 import { isAwaitingReceiverApproval, isCompletedSettlementStatus, isPendingSettlementStatus } from '@/lib/settlementStatus';
@@ -146,7 +147,7 @@ export default function Settle() {
 
             <SyncNote />
 
-            {ledger.groups.length > 1 ? <Chips label="Which group" options={chips} value={scope} onChange={setPicked} /> : null}
+            {ledger.groups.length > 1 ? <Chips rail label="Which group" options={chips} value={scope} onChange={setPicked} /> : null}
 
             <View style={{ flexDirection: 'row', gap: 12 }}>
                 <GlassSurface style={{ flex: 1, paddingVertical: 18, gap: 4 }}>
@@ -186,63 +187,61 @@ export default function Settle() {
                 mine.length === 0 ? (
                     <EmptyState emoji="🎉" title="All settled up" hint={scope === ALL ? 'Nobody owes anybody in your groups. Enjoy it.' : 'Nothing between you and anyone here. Enjoy it.'} />
                 ) : (
-                    mine.map((transfer) => {
-                        const youPay = transfer.from === ME;
-                        const other = youPay ? transfer.toName : transfer.fromName;
-                        const first = firstName(other);
-                        const sent = youPay && transfer.open && isAwaitingReceiverApproval(transfer.open.status) ? transfer.open : null;
-                        const toConfirm = !youPay && transfer.open && !transfer.open.pending && isAwaitingReceiverApproval(transfer.open.status) ? transfer.open : null;
-                        return (
-                            <GlassSurface key={`${transfer.groupId}-${transfer.from}-${transfer.to}`} style={{ padding: 16, gap: 14 }}>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                    <GlassSurface style={{ paddingHorizontal: 14, paddingVertical: 4 }}>
+                        {mine.map((transfer, index) => {
+                            const youPay = transfer.from === ME;
+                            const other = youPay ? transfer.toName : transfer.fromName;
+                            const first = firstName(other);
+                            const sent = youPay && transfer.open && isAwaitingReceiverApproval(transfer.open.status) ? transfer.open : null;
+                            const toConfirm = !youPay && transfer.open && !transfer.open.pending && isAwaitingReceiverApproval(transfer.open.status) ? transfer.open : null;
+                            return (
+                                <View key={`${transfer.groupId}-${transfer.from}-${transfer.to}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, borderTopWidth: index === 0 ? 0 : 1, borderTopColor: tokens.border }}>
                                     <Avatar name={other} size={42} />
                                     <View style={{ flex: 1, gap: 2 }}>
                                         <Text variant="label" align="left" numberOfLines={1}>
                                             {youPay ? `You pay ${first}` : `${first} pays you`}
                                         </Text>
                                         <Text variant="caption" tone="secondary" align="left" numberOfLines={1}>
-                                            {sent ? `Waiting for ${first} to confirm` : toConfirm ? `${first} says they paid` : transfer.groupName}
+                                            <Text variant="caption" weight="bold" tone={youPay ? 'out' : 'in'} tabular>
+                                                {rupees(transfer.amount)}
+                                            </Text>
+                                            {sent ? ' · sent, waiting' : toConfirm ? ' · says they paid' : scope === ALL ? ` · ${transfer.groupName}` : ''}
                                         </Text>
                                     </View>
-                                    <Text variant="heading" tone={youPay ? 'out' : 'in'} tabular>
-                                        {rupees(transfer.amount)}
-                                    </Text>
+                                    {sent ? (
+                                        <GlassSurface kind="clear" radius={999} style={{ height: 36, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                            <Check size={14} color={tokens.muted} strokeWidth={2.6} />
+                                            <Text variant="caption" weight="bold" tone="muted">
+                                                Sent
+                                            </Text>
+                                        </GlassSurface>
+                                    ) : youPay ? (
+                                        <GlassButton kind="accent" contentStyle={{ height: 36, paddingHorizontal: 20 }} onPress={() => router.push({ pathname: '/pay', params: { group: transfer.groupId, to: transfer.to, amount: String(transfer.amount) } })}>
+                                            <Text variant="caption" weight="bold" tone="onAccent">
+                                                Pay
+                                            </Text>
+                                        </GlassButton>
+                                    ) : (
+                                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                                            <GlassButton kind={toConfirm ? 'accent' : 'thin'} contentStyle={{ height: 36, paddingHorizontal: 16 }} onPress={() => (toConfirm ? confirm(toConfirm, first) : remind(transfer))}>
+                                                <Text variant="caption" weight="bold" tone={toConfirm ? 'onAccent' : 'primary'}>
+                                                    {toConfirm ? 'Confirm' : 'Remind'}
+                                                </Text>
+                                            </GlassButton>
+                                            <GlassButton
+                                                kind="thin"
+                                                contentStyle={{ width: 36, height: 36 }}
+                                                accessibilityLabel={toConfirm ? `Not yet: send ${first}'s payment back` : `${first} paid you in cash`}
+                                                onPress={() => (toConfirm ? notYet(toConfirm, first) : gotCash(transfer))}
+                                            >
+                                                {toConfirm ? <Undo2 size={17} color={tokens.fg} strokeWidth={2.2} /> : <Banknote size={17} color={tokens.fg} strokeWidth={2.2} />}
+                                            </GlassButton>
+                                        </View>
+                                    )}
                                 </View>
-
-                                {sent ? null : youPay ? (
-                                    <GlassButton kind="accent" contentStyle={{ height: 44 }} onPress={() => router.push({ pathname: '/pay', params: { group: transfer.groupId, to: transfer.to, amount: String(transfer.amount) } })}>
-                                        <Text variant="label" tone="onAccent">
-                                            Pay {first}
-                                        </Text>
-                                    </GlassButton>
-                                ) : (
-                                    <View style={{ flexDirection: 'row', gap: 10 }}>
-                                        {toConfirm ? (
-                                            <>
-                                                <GlassButton kind="accent" style={{ flex: 1 }} contentStyle={{ height: 44 }} onPress={() => confirm(toConfirm, first)}>
-                                                    <Text variant="label" tone="onAccent">
-                                                        Confirm
-                                                    </Text>
-                                                </GlassButton>
-                                                <GlassButton kind="thin" style={{ flex: 1 }} contentStyle={{ height: 44 }} onPress={() => notYet(toConfirm, first)}>
-                                                    <Text variant="label">Not yet</Text>
-                                                </GlassButton>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <GlassButton kind="thin" style={{ flex: 1 }} contentStyle={{ height: 44 }} onPress={() => remind(transfer)}>
-                                                    <Text variant="label">Remind</Text>
-                                                </GlassButton>
-                                                <GlassButton kind="thin" style={{ flex: 1 }} contentStyle={{ height: 44 }} onPress={() => gotCash(transfer)}>
-                                                    <Text variant="label">Got cash</Text>
-                                                </GlassButton>
-                                            </>
-                                        )}
-                                    </View>
-                                )}
-                            </GlassSurface>
-                        );
-                    })
+                            );
+                        })}
+                    </GlassSurface>
                 )
             ) : settled.length === 0 ? (
                 <EmptyState emoji="🧾" title="Nothing settled yet" hint="Payments you make and confirm show here, with how and when." />

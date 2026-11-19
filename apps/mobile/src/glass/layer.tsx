@@ -42,6 +42,7 @@ export interface SurfaceLook {
     uTintK: number;
     uTintC: number[];
     uAcc: number[];
+    uAcc2: number[];
     uRefract: number;
     uRim: number;
     uWobble: number;

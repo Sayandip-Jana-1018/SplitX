@@ -2,7 +2,8 @@
 import { router } from 'expo-router';
 import { Check, X } from 'lucide-react-native';
 import { Pressable, View } from 'react-native';
-import { GLASS_THEMES, PALETTE_NAMES, type PaletteId } from '@shared/glass/palette';
+import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
+import { GLASS_THEMES, isBlend, PALETTE_NAMES, type PaletteId } from '@shared/glass/palette';
 import { GLASS_LABELS, GLASS_STYLE_IDS } from '@shared/glass/styles';
 import { useGlass } from '~/glass/GlassProvider';
 import { GlassSurface } from '~/glass/GlassSurface';
@@ -49,6 +50,70 @@ function Choice<T extends string>({ options, value, onChange }: { options: { id:
     );
 }
 
+/** One colour's circle: flat, or a blend's three hues running into each other. */
+function Swatch({ id, selected }: { id: PaletteId; selected: boolean }) {
+    const { tokens } = useLook();
+    const stops = tokens.swatchStops(id);
+    return (
+        <View
+            style={{
+                width: 46,
+                height: 46,
+                borderRadius: 23,
+                backgroundColor: stops[0],
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderWidth: selected ? 3 : 1,
+                borderColor: selected ? tokens.fg : tokens.border,
+                overflow: 'hidden',
+            }}
+        >
+            {stops.length > 1 ? (
+                <Svg width={46} height={46} style={{ position: 'absolute', left: -1, top: -1 }}>
+                    <Defs>
+                        <LinearGradient id={`swatch-${id}`} x1="0" y1="0" x2="1" y2="1">
+                            {stops.map((colour, index) => (
+                                <Stop key={index} offset={index / (stops.length - 1)} stopColor={colour} />
+                            ))}
+                        </LinearGradient>
+                    </Defs>
+                    <Circle cx={23} cy={23} r={23} fill={`url(#swatch-${id})`} />
+                </Svg>
+            ) : null}
+            {selected ? <Check size={20} color={tokens.swatchInk(id)} strokeWidth={3} /> : null}
+        </View>
+    );
+}
+
+function Palettes({ ids }: { ids: PaletteId[] }) {
+    const look = useLook();
+    return (
+        <GlassSurface style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', paddingVertical: 14, paddingHorizontal: 6, rowGap: 14 }}>
+            {ids.map((id) => {
+                const selected = id === look.paletteId;
+                return (
+                    <Pressable
+                        key={id}
+                        accessibilityRole="radio"
+                        accessibilityLabel={PALETTE_NAMES[id]}
+                        accessibilityState={{ selected }}
+                        onPress={() => {
+                            tap();
+                            look.setPalette(id);
+                        }}
+                        style={{ width: '25%', alignItems: 'center', gap: 6 }}
+                    >
+                        <Swatch id={id} selected={selected} />
+                        <Text variant="caption" weight={selected ? 'bold' : 'medium'} tone={selected ? 'primary' : 'secondary'} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={{ paddingHorizontal: 2 }}>
+                            {PALETTE_NAMES[id]}
+                        </Text>
+                    </Pressable>
+                );
+            })}
+        </GlassSurface>
+    );
+}
+
 export default function Appearance() {
     const look = useLook();
     const { fps } = useGlass();
@@ -78,42 +143,17 @@ export default function Appearance() {
                 <Text variant="eyebrow" tone="secondary" onLiquid>
                     Colour
                 </Text>
-                <GlassSurface style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', paddingVertical: 14, paddingHorizontal: 6, rowGap: 14 }}>
-                    {palettes.map((id) => {
-                        const selected = id === look.paletteId;
-                        return (
-                            <Pressable
-                                key={id}
-                                accessibilityRole="radio"
-                                accessibilityLabel={PALETTE_NAMES[id]}
-                                accessibilityState={{ selected }}
-                                onPress={() => {
-                                    tap();
-                                    look.setPalette(id);
-                                }}
-                                style={{ width: '25%', alignItems: 'center', gap: 6 }}
-                            >
-                                <View
-                                    style={{
-                                        width: 46,
-                                        height: 46,
-                                        borderRadius: 23,
-                                        backgroundColor: tokens.swatch(id),
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        borderWidth: selected ? 3 : 1,
-                                        borderColor: selected ? tokens.fg : tokens.border,
-                                    }}
-                                >
-                                    {selected ? <Check size={20} color="#ffffff" strokeWidth={3} /> : null}
-                                </View>
-                                <Text variant="caption" weight={selected ? 'bold' : 'medium'} tone={selected ? 'primary' : 'secondary'}>
-                                    {PALETTE_NAMES[id]}
-                                </Text>
-                            </Pressable>
-                        );
-                    })}
-                </GlassSurface>
+                <Palettes ids={palettes.filter((id) => !isBlend(id))} />
+            </View>
+
+            <View style={{ gap: 10 }}>
+                <Text variant="eyebrow" tone="secondary" onLiquid>
+                    Blends
+                </Text>
+                <Text variant="caption" tone="secondary" onLiquid style={{ maxWidth: 300, alignSelf: 'center' }}>
+                    Two or three colours drifting into each other behind the glass. Words stay in one colour, so everything still reads.
+                </Text>
+                <Palettes ids={palettes.filter((id) => isBlend(id))} />
             </View>
 
             <View style={{ gap: 10 }}>

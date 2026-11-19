@@ -161,6 +161,132 @@
     --accent-500-rgb: 79, 88, 106;
 }
 
+/* Coral */
+[data-palette="coral"] {
+    --h: 30;
+    --c: 1;
+    --fill-l: 0.53;
+    --on-accent: #ffffff;
+    --accent-500-rgb: 197, 32, 18;
+}
+
+/* Matcha */
+[data-palette="matcha"] {
+    --h: 128;
+    --c: 0.55;
+    --fill-l: 0.8;
+    --on-accent: #12180b;
+    --accent-500-rgb: 169, 203, 125;
+}
+
+/* Ice */
+[data-palette="ice"] {
+    --h: 210;
+    --c: 0.45;
+    --fill-l: 0.82;
+    --on-accent: #09191c;
+    --accent-500-rgb: 121, 212, 228;
+}
+
+/* Champagne */
+[data-palette="champagne"] {
+    --h: 80;
+    --c: 0.35;
+    --fill-l: 0.8;
+    --on-accent: #1a150d;
+    --accent-500-rgb: 214, 185, 138;
+}
+
+/* Slate */
+[data-palette="slate"] {
+    --h: 245;
+    --c: 0.3;
+    --fill-l: 0.52;
+    --on-accent: #ffffff;
+    --accent-500-rgb: 75, 109, 138;
+}
+
+/* Midnight */
+[data-palette="midnight"] {
+    --h: 268;
+    --c: 0.3;
+    --fill-l: 0.5;
+    --on-accent: #ffffff;
+    --accent-500-rgb: 84, 98, 134;
+}
+
+/* Noir Gold (a blend: its page and floating colours come from src/lib/glass/palette.ts) */
+[data-palette="noir-gold"] {
+    --h: 85;
+    --c: 0.65;
+    --fill-l: 0.8;
+    --on-accent: #1d1504;
+    --accent-500-rgb: 228, 183, 80;
+}
+
+/* Royal (a blend: its page and floating colours come from src/lib/glass/palette.ts) */
+[data-palette="royal"] {
+    --h: 85;
+    --c: 0.65;
+    --fill-l: 0.8;
+    --on-accent: #1d1504;
+    --accent-500-rgb: 228, 183, 80;
+}
+
+/* Emerald Gold (a blend: its page and floating colours come from src/lib/glass/palette.ts) */
+[data-palette="emerald-gold"] {
+    --h: 85;
+    --c: 0.65;
+    --fill-l: 0.8;
+    --on-accent: #1d1504;
+    --accent-500-rgb: 228, 183, 80;
+}
+
+/* Rose Gold (a blend: its page and floating colours come from src/lib/glass/palette.ts) */
+[data-palette="rose-gold"] {
+    --h: 35;
+    --c: 0.45;
+    --fill-l: 0.76;
+    --on-accent: #1f120f;
+    --accent-500-rgb: 228, 157, 138;
+}
+
+/* Ocean (a blend: its page and floating colours come from src/lib/glass/palette.ts) */
+[data-palette="ocean"] {
+    --h: 228;
+    --c: 0.9;
+    --fill-l: 0.5;
+    --on-accent: #ffffff;
+    --accent-500-rgb: 0, 113, 178;
+}
+
+/* Berry (a blend: its page and floating colours come from src/lib/glass/palette.ts) */
+[data-palette="berry"] {
+    --h: 318;
+    --c: 1;
+    --fill-l: 0.52;
+    --on-accent: #ffffff;
+    --accent-500-rgb: 150, 52, 177;
+}
+
+/* Ember (a blend: its page and floating colours come from src/lib/glass/palette.ts) */
+[data-palette="ember"] {
+    --h: 22;
+    --c: 1;
+    --fill-l: 0.53;
+    --on-accent: #ffffff;
+    --accent-500-rgb: 197, 27, 50;
+}
+
+/* Peach (a blend: its page and floating colours come from src/lib/glass/palette.ts) */
+[data-palette="peach"] {
+    --h: 32;
+    --c: 0.8;
+    --fill-l: 0.74;
+    --on-accent: #250e0a;
+    --accent-500-rgb: 255, 128, 104;
+}
+
 /* The scale pages already use, now all one hue. 500 is the filled colour itself. */
 :root,
 [data-palette] {

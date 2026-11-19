@@ -29,8 +29,8 @@ export default function Activity() {
     const [category, setCategory] = useState<string>(ALL);
 
     const items = useMemo(() => activity(ledger), [ledger]);
-    // The five most used fit two rows; any other is found by searching its name.
-    const used = useMemo(() => categoriesUsed(items, knownCategory).slice(0, 5), [items]);
+    // Every category used, most used first, in one row that scrolls.
+    const used = useMemo(() => categoriesUsed(items, knownCategory), [items]);
     // A category no expense uses any more (the last one was deleted) stops being a filter.
     const chosen = category !== ALL && used.includes(category) ? category : null;
     const groupName = useMemo(() => {
@@ -69,7 +69,7 @@ export default function Activity() {
                         onChange={setOrder}
                     />
                     {used.length > 1 ? (
-                        <Chips label="Category" options={[{ id: ALL, label: 'All' }, ...used.map((id) => ({ id, label: categoryLabel(id), emoji: categoryEmoji(id) }))]} value={chosen ?? ALL} onChange={setCategory} />
+                        <Chips rail label="Category" options={[{ id: ALL, label: 'All' }, ...used.map((id) => ({ id, label: categoryLabel(id), emoji: categoryEmoji(id) }))]} value={chosen ?? ALL} onChange={setCategory} />
                     ) : null}
                     {filtering ? (
                         <Text variant="caption" tone="secondary" onLiquid tabular accessibilityLiveRegion="polite">
@@ -79,7 +79,7 @@ export default function Activity() {
                 </>
             ) : null}
 
-            {filtering && found.length === 0 ? <EmptyState emoji="🔍" title="Nothing matches" hint="Try another word, or another category." /> : <ActivityList items={found} />}
+            {filtering && found.length === 0 ? <EmptyState emoji="🔍" title="Nothing matches" hint="Try another word, or another category." /> : <ActivityList items={found} byDay={order === 'recent'} />}
         </Screen>
     );
 }

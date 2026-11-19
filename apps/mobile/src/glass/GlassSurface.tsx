@@ -42,6 +42,7 @@ function useSurfaceLook(kind: GlassKind, glassStyle?: GlassStyleId): SurfaceLook
             uTintK: pal.tintK,
             uTintC: look.colored ? pal.tinted : pal.tint,
             uAcc: pal.acc,
+            uAcc2: pal.acc2,
             uRefract: look.refract,
             uRim: look.rim,
             uWobble: look.wobble,

@@ -17,6 +17,8 @@ export interface Tokens {
     accentText: string;
     /** A filled button's colour, and the words on it. */
     accent: string;
+    /** Where a filled button's colour runs to: the accent itself, or a blend's second hue. */
+    accent2: string;
     onAccent: string;
     moneyIn: string;
     moneyOut: string;
@@ -25,6 +27,10 @@ export interface Tokens {
     /** A soft shadow behind words that sit straight on the liquid. */
     inkShadow: string;
     swatch: (paletteId: PaletteId) => string;
+    /** A swatch's colours: one, or a blend's three. */
+    swatchStops: (paletteId: PaletteId) => string[];
+    /** A tick that shows on that swatch. */
+    swatchInk: (paletteId: PaletteId) => string;
 }
 
 export function rgbString([r, g, b]: Rgb, alpha = 1): string {
@@ -47,6 +53,18 @@ export function tokensFor(paletteId: PaletteId, mode: GlassMode): Tokens {
         const theme = GLASS_THEMES[id];
         return rgbString(oklchToSrgb(theme.l, 0.2 * theme.c, theme.h));
     };
+    const swatchStops = (id: PaletteId) => {
+        const theme = GLASS_THEMES[id];
+        if (!theme.blend) return [swatch(id)];
+        const { base, blobs } = theme.blend;
+        return [rgbString(oklchToSrgb(0.3, base.c, base.h)), swatch(id), rgbString(oklchToSrgb(blobs[0].l, blobs[0].c, blobs[0].h))];
+    };
+    const swatchInk = (id: PaletteId) => {
+        const theme = GLASS_THEMES[id];
+        return luminance(oklchToSrgb(theme.l, 0.2 * theme.c, theme.h)) > 0.36 ? '#1b1b22' : '#ffffff';
+    };
+    // The same sheen the glass gives a blend's filled buttons (glassPalette's acc2).
+    const accent2 = GLASS_THEMES[paletteId].blend ? rgbString(oklchToSrgb(l - 0.07, 0.2 * c, h - 14)) : rgbString(fill);
 
     if (mode === 'dark') {
         return {
@@ -60,6 +78,7 @@ export function tokensFor(paletteId: PaletteId, mode: GlassMode): Tokens {
             borderStrong: 'rgba(255,255,255,0.24)',
             accentText: ok(0.82, 0.13),
             accent: rgbString(fill),
+            accent2,
             onAccent,
             moneyIn: ok(0.92, 0.09),
             moneyOut: 'rgba(255,255,255,0.82)',
@@ -68,6 +87,8 @@ export function tokensFor(paletteId: PaletteId, mode: GlassMode): Tokens {
             chip: 'rgba(255,255,255,0.08)',
             inkShadow: 'rgba(0,0,0,0.28)',
             swatch,
+            swatchStops,
+            swatchInk,
         };
     }
     return {
@@ -81,6 +102,7 @@ export function tokensFor(paletteId: PaletteId, mode: GlassMode): Tokens {
         borderStrong: ok(0.25, 0.04, 0.26),
         accentText: ok(0.45, 0.2),
         accent: rgbString(fill),
+        accent2,
         onAccent,
         moneyIn: ok(0.42, 0.17),
         moneyOut: ok(0.3, 0.05, 0.88),
@@ -88,5 +110,7 @@ export function tokensFor(paletteId: PaletteId, mode: GlassMode): Tokens {
         chip: 'rgba(255,255,255,0.42)',
         inkShadow: 'rgba(255,255,255,0.0)',
         swatch,
+        swatchStops,
+        swatchInk,
     };
 }

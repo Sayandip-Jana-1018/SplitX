@@ -15,7 +15,7 @@ import { useLedger } from '~/data/LedgerProvider';
 import { GlassSurface } from '~/glass/GlassSurface';
 import { useLook } from '~/theme/ThemeProvider';
 import { ActivityList } from '~/ui/ActivityList';
-import { Avatar } from '~/ui/Avatar';
+import { Avatar, AvatarStack } from '~/ui/Avatar';
 import { EmptyState } from '~/ui/EmptyState';
 import { GlassButton } from '~/ui/GlassButton';
 import { Header } from '~/ui/Header';
@@ -114,9 +114,15 @@ export default function GroupScreen() {
 
     return (
         <Screen tabBar={false} onRefresh={onRefresh}>
-            <Header title={`${group.emoji} ${group.name}`} eyebrow={members(group.memberIds.length)} />
+            <Header title={group.name} eyebrow={members(group.memberIds.length)} />
 
             <GlassSurface kind="thick" style={{ paddingVertical: 20, gap: 6 }}>
+                <View style={{ alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                    <View style={{ width: 68, height: 68, borderRadius: 34, backgroundColor: tokens.chip, borderWidth: 1, borderColor: tokens.border, alignItems: 'center', justifyContent: 'center' }}>
+                        <Text style={{ fontSize: 34, lineHeight: 42 }}>{group.emoji}</Text>
+                    </View>
+                    <AvatarStack names={group.memberIds.map((id) => personOf(id).name)} size={26} />
+                </View>
                 <Text variant="eyebrow" tone="secondary">
                     {mine === 0 ? 'You are all square' : mine > 0 ? 'You get back' : 'You owe'}
                 </Text>

@@ -3,6 +3,7 @@
  * today's first. Tapping one marks it read and opens what it's about; Mark all read clears the dot.
  */
 import { router } from 'expo-router';
+import { ArrowLeftRight, Bell, BellRing, CircleCheck, CircleX, Mail, Receipt, UserMinus, UserPlus, type LucideIcon } from 'lucide-react-native';
 import { useEffect } from 'react';
 import { Pressable, View } from 'react-native';
 import type { AppNotification } from '@/lib/contract/v1';
@@ -20,6 +21,19 @@ import { Text } from '~/ui/Text';
 import { when } from '~/ui/time';
 
 const sameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString();
+
+/** Each kind of notification's mark: an expense, a payment, a reminder, an invitation… */
+function iconOf(type: string): LucideIcon {
+    if (type === 'payment_reminder') return BellRing;
+    if (type === 'settlement_completed') return CircleCheck;
+    if (type === 'settlement_rejected') return CircleX;
+    if (type.startsWith('settlement')) return ArrowLeftRight;
+    if (type === 'group_invite' || type === 'group_invite_accepted') return Mail;
+    if (type === 'member_joined') return UserPlus;
+    if (type === 'member_removed') return UserMinus;
+    if (type === 'group_activity' || type === 'new_expense') return Receipt;
+    return Bell;
+}
 
 export default function Notifications() {
     const { tokens } = useLook();
@@ -64,7 +78,15 @@ export default function Notifications() {
                             onPress={() => open(notification)}
                             style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingVertical: 14, borderTopWidth: index === 0 ? 0 : 1, borderTopColor: tokens.border }}
                         >
-                            <View style={{ width: 8, height: 8, borderRadius: 4, marginTop: 7, backgroundColor: notification.read ? 'transparent' : tokens.accent }} />
+                            {(() => {
+                                const Icon = iconOf(notification.type);
+                                // Unread ones are filled with your colour; read ones sit back.
+                                return (
+                                    <View style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: notification.read ? tokens.chip : tokens.accent }}>
+                                        <Icon size={18} color={notification.read ? tokens.fg2 : tokens.onAccent} strokeWidth={2.2} />
+                                    </View>
+                                );
+                            })()}
                             <View style={{ flex: 1, gap: 3 }}>
                                 <Text variant="label" align="left" weight={notification.read ? 'semibold' : 'bold'}>
                                     {notification.title}

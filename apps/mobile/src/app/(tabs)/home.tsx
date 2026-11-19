@@ -4,10 +4,10 @@
  */
 import { router } from 'expo-router';
 import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, ChartPie, ChevronRight, Plus, ScanLine, type LucideIcon } from 'lucide-react-native';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, useWindowDimensions, View } from 'react-native';
 import type { GlassKind } from '@shared/glass/styles';
-import { activity, groupBalances, ME, totals } from '~/data/ledger';
+import { activity, groupBalances, groupTransfers, ME, totals } from '~/data/ledger';
 import { useYou } from '~/auth/AuthProvider';
 import { useLedger } from '~/data/LedgerProvider';
 import { Coin } from '~/glass/Coin';
@@ -49,6 +49,28 @@ export default function Home() {
     const { width } = useWindowDimensions();
     const coin = Math.min(width - 56, 310);
     const sum = useMemo(() => totals(ledger), [ledger]);
+    // The month as the screen opened, for "your share this month".
+    const [month] = useState(() => {
+        const now = new Date();
+        return { m: now.getMonth(), y: now.getFullYear() };
+    });
+    const thisMonth = useMemo(
+        () =>
+            ledger.expenses
+                .filter((expense) => expense.createdAt.getMonth() === month.m && expense.createdAt.getFullYear() === month.y)
+                .reduce((total, expense) => total + (expense.splits.find((split) => split.userId === ME)?.amount ?? 0), 0),
+        [ledger.expenses, month],
+    );
+    // The biggest payment you're part of: the one most worth settling next.
+    const next = useMemo(
+        () =>
+            ledger.groups
+                .flatMap((group) => groupTransfers(ledger, group.id).filter((transfer) => transfer.from === ME || transfer.to === ME))
+                .sort((a, b) => b.amount - a.amount)[0],
+        [ledger],
+    );
+    // Both cards only say something new when money goes both ways; otherwise one would repeat the coin.
+    const bothWays = sum.owedToYou > 0 && sum.youOwe > 0;
     const lately = useMemo(() => activity(ledger).slice(0, 3), [ledger]);
     const enter = (index: number) => 60 + index * 70;
     const owed = sum.net >= 0;
@@ -94,18 +116,44 @@ export default function Home() {
             </Appear>
 
             <Appear delay={enter(2)} style={{ flexDirection: 'row', gap: 12 }}>
-                <GlassSurface style={{ flex: 1, paddingVertical: 16, gap: 4 }}>
-                    <Text variant="caption" tone="secondary">
-                        Owed to you
-                    </Text>
-                    <RollingAmount paise={sum.owedToYou} sign variant="heading" tone="in" />
-                </GlassSurface>
-                <GlassSurface style={{ flex: 1, paddingVertical: 16, gap: 4 }}>
-                    <Text variant="caption" tone="secondary">
-                        You owe
-                    </Text>
-                    <RollingAmount paise={-sum.youOwe} sign variant="heading" tone="out" />
-                </GlassSurface>
+                {bothWays ? (
+                    <>
+                        <GlassSurface style={{ flex: 1, paddingVertical: 16, gap: 4 }}>
+                            <Text variant="caption" tone="secondary">
+                                Owed to you
+                            </Text>
+                            <RollingAmount paise={sum.owedToYou} sign variant="heading" tone="in" />
+                        </GlassSurface>
+                        <GlassSurface style={{ flex: 1, paddingVertical: 16, gap: 4 }}>
+                            <Text variant="caption" tone="secondary">
+                                You owe
+                            </Text>
+                            <RollingAmount paise={-sum.youOwe} sign variant="heading" tone="out" />
+                        </GlassSurface>
+                    </>
+                ) : (
+                    <>
+                        <GlassSurface style={{ flex: 1, paddingVertical: 16, gap: 4 }}>
+                            <Text variant="caption" tone="secondary">
+                                Your share this month
+                            </Text>
+                            <RollingAmount paise={thisMonth} variant="heading" />
+                        </GlassSurface>
+                        <GlassButton style={{ flex: 1 }} contentStyle={{ paddingVertical: 16, gap: 4 }} accessibilityLabel={next ? 'Next to settle. Opens Settle up' : 'Settle up'} onPress={() => router.push('/settle')}>
+                            <Text variant="caption" tone="secondary">
+                                {next ? 'Next to settle' : 'Settle up'}
+                            </Text>
+                            <Text variant="heading" tone={next ? (next.to === ME ? 'in' : 'out') : 'primary'} tabular numberOfLines={1}>
+                                {next ? rupees(next.amount) : 'All square'}
+                            </Text>
+                            {next ? (
+                                <Text variant="caption" tone="secondary" numberOfLines={1}>
+                                    {next.to === ME ? `${next.fromName.split(' ')[0]} pays you` : `You pay ${next.toName.split(' ')[0]}`}
+                                </Text>
+                            ) : null}
+                        </GlassButton>
+                    </>
+                )}
             </Appear>
 
             <Appear delay={enter(3)} style={{ flexDirection: 'row', gap: 10 }}>

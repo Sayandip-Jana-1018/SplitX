@@ -13,7 +13,7 @@ export type { PaletteId };
 export interface ColorPalette {
     id: PaletteId;
     name: string;
-    /** Three depths of the palette's one hue, for its swatch. */
+    /** Three depths of the palette's one hue (a blend's page, accent and floating colour), for its swatch. */
     swatches: string[];
 }
 
@@ -25,11 +25,14 @@ const DEFAULT_PALETTE: PaletteId = 'amethyst-haze';
 
 /** The palettes on offer. The colours themselves come from one hue each (lib/glass/palette.ts). */
 export const COLOR_PALETTES: ColorPalette[] = (Object.keys(PALETTE_NAMES) as PaletteId[]).map((id) => {
-    const { h, c, l } = GLASS_THEMES[id];
+    const { h, c, l, blend } = GLASS_THEMES[id];
     return {
         id,
         name: PALETTE_NAMES[id],
-        swatches: [`oklch(0.8 ${0.13 * c} ${h})`, `oklch(${l} ${0.2 * c} ${h})`, `oklch(0.5 ${0.2 * c} ${h})`],
+        // A blend shows its page, its accent and a floating colour; a single colour, three depths of its one.
+        swatches: blend
+            ? [`oklch(0.3 ${blend.base.c} ${blend.base.h})`, `oklch(${l} ${0.2 * c} ${h})`, `oklch(${blend.blobs[0].l} ${blend.blobs[0].c} ${blend.blobs[0].h})`]
+            : [`oklch(0.8 ${0.13 * c} ${h})`, `oklch(${l} ${0.2 * c} ${h})`, `oklch(0.5 ${0.2 * c} ${h})`],
     };
 });
 
