@@ -349,7 +349,7 @@ function alreadyAsAsked(
     edit: ExpenseEdit,
 ): boolean {
     const same = (a: { userId: string; amount: number }[], b: { userId: string; amount: number }[]) => {
-        const key = (shares: { userId: string; amount: number }[]) => shares.map((share) => `${share.userId}:${share.amount}`).sort().join(',');
+        const key = (shares: { userId: string; amount: number }[]) => shares.map((share) => `${share.userId}:${share.amount}`).sort((a, b) => a.localeCompare(b)).join(',');
         return key(a) === key(b);
     };
     return (edit.title === undefined || edit.title === existing.title)

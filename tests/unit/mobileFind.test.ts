@@ -48,4 +48,11 @@ describe('finding things in Activity', () => {
         expect(all.every((entry) => entry.amount > 0 && entry.who.length > 0)).toBe(true);
         expect(all.find((entry) => entry.title === 'Villa, two nights')?.who).toContain('Ravi');
     });
+
+    it('counts and filters a category the app doesn’t know as General, so General shows once', () => {
+        const odd = [...items, item({ id: 'f', title: 'Misc thing', category: 'misc', amount: 50, at: at(1) }), item({ id: 'g', title: 'Plain', category: 'general', amount: 70, at: at(1) })];
+        const canonical = (id: string) => (['food', 'transport', 'bills', 'general'].includes(id) ? id : 'general');
+        expect(categoriesUsed(odd, canonical)).toEqual(['general', 'food', 'bills', 'transport']);
+        expect(findActivity(odd, { query: '', category: 'general', order: 'recent' }, () => '', (id) => id, canonical).map((found) => found.id).sort((a, b) => a.localeCompare(b))).toEqual(['f', 'g']);
+    });
 });

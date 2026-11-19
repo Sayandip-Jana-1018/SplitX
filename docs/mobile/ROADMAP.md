@@ -287,7 +287,7 @@ I stop and report at the end of each phase, and start the next only when you say
 | 1 | Design kit and every screen | ✅ All screens built on made-up data; installed on your phone as an APK |
 | 2 | Accounts and real data | ✅ You use the real app, with real friends, on the live site (live 15 November) |
 | 3 | Notifications and reliability | ✅ A push reached your phone; the restore drill passed (15 November) |
-| 4 | The full app: every website screen, the core loop | Settle-up mind map and every web screen on the phone; a pretend trip works offline |
+| 4 | The full app: every website screen, the core loop | Code done 19 November: settle-up map and every web screen on the phone; the pretend trip passes as a test. Left: the trip by hand on your phone |
 | 5 | Smart input and auto-capture | Real alerts become correct expenses; receipt scans work |
 | 6 | Missing money features | Ledger tests hold for every new case |
 | 7 | The delight layer | Gamification and the last moments, inside budget |

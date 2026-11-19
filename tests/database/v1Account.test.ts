@@ -43,6 +43,15 @@ describe('your phones', () => {
         expect(pixel.deviceId).toBe(pixelId);
     });
 
+    it('leaves out a phone that signed out', async () => {
+        const asha = await person('Asha');
+        const old = await phone(asha, 'Old phone');
+        const galaxy = await phone(asha, 'Galaxy');
+        await prisma.refreshToken.updateMany({ where: { deviceId: old.deviceId }, data: { revokedAt: new Date() } });
+        const { devices } = DeviceList.parse(await (await devicesRoute.GET(get(galaxy.headers, '/api/v1/devices'))).json());
+        expect(devices.map((d) => d.name)).toEqual(['Galaxy']);
+    });
+
     it('won’t sign out the phone asking, nor anyone else’s', async () => {
         const asha = await person('Asha');
         const ravi = await person('Ravi');

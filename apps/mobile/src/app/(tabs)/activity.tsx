@@ -9,7 +9,7 @@ import { activity } from '~/data/ledger';
 import { categoriesUsed, findActivity, type Order } from '~/data/find';
 import { useLedger } from '~/data/LedgerProvider';
 import { ActivityList } from '~/ui/ActivityList';
-import { categoryEmoji, categoryLabel } from '~/ui/category';
+import { categoryEmoji, categoryLabel, knownCategory } from '~/ui/category';
 import { Chips } from '~/ui/Chips';
 import { EmptyState } from '~/ui/EmptyState';
 import { Field } from '~/ui/Field';
@@ -30,14 +30,14 @@ export default function Activity() {
 
     const items = useMemo(() => activity(ledger), [ledger]);
     // The five most used fit two rows; any other is found by searching its name.
-    const used = useMemo(() => categoriesUsed(items).slice(0, 5), [items]);
+    const used = useMemo(() => categoriesUsed(items, knownCategory).slice(0, 5), [items]);
     // A category no expense uses any more (the last one was deleted) stops being a filter.
     const chosen = category !== ALL && used.includes(category) ? category : null;
     const groupName = useMemo(() => {
         const names = new Map(ledger.groups.map((group) => [group.id, group.name]));
         return (id: string) => names.get(id) ?? '';
     }, [ledger.groups]);
-    const found = useMemo(() => findActivity(items, { query, category: chosen, order }, groupName, categoryLabel), [items, query, chosen, order, groupName]);
+    const found = useMemo(() => findActivity(items, { query, category: chosen, order }, groupName, categoryLabel, knownCategory), [items, query, chosen, order, groupName]);
 
     const filtering = query.trim() !== '' || chosen !== null;
     const expenses = found.filter((item) => item.kind === 'expense');

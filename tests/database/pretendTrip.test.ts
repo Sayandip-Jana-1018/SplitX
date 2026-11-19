@@ -160,7 +160,7 @@ describe('the pretend trip', () => {
         const saved = await prisma.transaction.findMany({ where: { deletedAt: null }, select: { title: true, splits: { select: { userId: true, amount: true } } } });
         for (const expense of made.filter((e) => e.title !== 'Thing 7' && e.title !== 'Thing 12')) {
             const row = saved.find((candidate) => candidate.title === expense.title)!;
-            expect(row.splits.map((split) => `${split.userId}:${split.amount}`).sort()).toEqual(expense.splits.map((split) => `${toServer(split.userId)}:${split.amount}`).sort());
+            expect(row.splits.map((split) => `${split.userId}:${split.amount}`).sort((a, b) => a.localeCompare(b))).toEqual(expense.splits.map((split) => `${toServer(split.userId)}:${split.amount}`).sort((a, b) => a.localeCompare(b)));
         }
 
         // The independent sum: what each paid, less each one's share, over what should be saved.

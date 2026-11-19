@@ -208,7 +208,11 @@ export async function closeAccount(userId: string) {
 
 // ── The phones signed in ────────────────────────────────────
 
-/** Your phones, the one asking first, then by when each was last seen; `signedIn` while a session on it is live. */
+/**
+ * Your phones still signed in (and the one asking), the one asking first, then by when each was
+ * last seen. A phone signed out leaves its record behind; it isn't listed, as there is nothing to
+ * sign out there.
+ */
 export async function listDevices(userId: string, currentDeviceId: string, now = new Date()) {
     const devices = await prisma.device.findMany({
         where: { userId },
@@ -225,6 +229,7 @@ export async function listDevices(userId: string, currentDeviceId: string, now =
     });
     return devices
         .map(({ refreshTokens, ...device }) => ({ ...device, current: device.id === currentDeviceId, signedIn: refreshTokens.length > 0 }))
+        .filter((device) => device.signedIn || device.current)
         .sort((a, b) => Number(b.current) - Number(a.current));
 }
 

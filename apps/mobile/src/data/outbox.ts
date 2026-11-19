@@ -87,7 +87,7 @@ export function sharesBody(expense: Expense, among: string[], serverId: ServerId
 }
 
 const sameShares = (a: Expense['splits'], b: Expense['splits']) => {
-    const key = (shares: Expense['splits']) => shares.map((share) => `${share.userId}:${share.amount}`).sort().join(',');
+    const key = (shares: Expense['splits']) => shares.map((share) => `${share.userId}:${share.amount}`).sort((a, b) => a.localeCompare(b)).join(',');
     return key(a) === key(b);
 };
 

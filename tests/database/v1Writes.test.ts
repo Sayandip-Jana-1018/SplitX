@@ -133,7 +133,7 @@ describe('editing an expense from the phone', () => {
         const headers = await bearerFor(alice);
         const { expense } = ExpenseSaved.parse(await (await save(headers, { clientId: randomUUID(), groupId: group.id, title: 'Cab', amount: 900 })).json());
         const { expense: edited } = ExpenseEdited.parse(await (await change(headers, expense.id, { splitAmong: [alice.id, bob.id] })).json());
-        expect(edited.splits.map((split) => split.amount).sort()).toEqual([450, 450]);
+        expect(edited.splits.map((split) => split.amount)).toEqual([450, 450]);
         expect(await balances(headers, group.id)).toEqual({ Alice: 450, Bob: -450, Carol: 0 });
     });
 

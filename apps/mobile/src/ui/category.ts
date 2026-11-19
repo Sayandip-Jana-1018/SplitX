@@ -8,6 +8,9 @@ export function categoryEmoji(id: string): string {
     return CATEGORIES[id]?.emoji ?? CATEGORIES.general.emoji;
 }
 
+/** The category as one the app knows: an unknown id is General, as it is shown. */
+export const knownCategory = (id: string) => (CATEGORIES[id] ? id : 'general');
+
 export function categoryLabel(id: string): string {
     return CATEGORIES[id]?.label ?? CATEGORIES.general.label;
 }

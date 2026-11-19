@@ -3,7 +3,7 @@ import type { DeviceInfo, DeviceList } from '@/lib/contract/v1';
 import { logger } from '@/lib/logger';
 import { listDevices } from '@/lib/services/account';
 
-/** GET /api/v1/devices: the phones signed in to your account, this one first. */
+/** GET /api/v1/devices: the phones signed in to your account (signed-out ones aren't listed), this one first. */
 export async function GET(request: Request) {
     const auth = await requireCaller(request);
     if (!auth.ok) return auth.response;

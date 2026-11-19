@@ -15,6 +15,10 @@ export interface ActivityFilter {
     order: Order;
 }
 
+/** A category as one of the known ones: any other id (older data, another app's) is shown as, and counts as, General. */
+export type Canonical = (category: string) => string;
+const asIs: Canonical = (category) => category;
+
 /** Lower case, without accents, so "cafe" finds "Café". */
 const plain = (text: string) => text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
@@ -22,10 +26,10 @@ const plain = (text: string) => text.normalize('NFD').replace(/[̀-ͯ]/g, '').to
  * The items that match every word searched for, in the order asked: newest first, or the biggest
  * amount first (newest first among equals).
  */
-export function findActivity(items: ActivityItem[], filter: ActivityFilter, groupName: (id: string) => string, categoryName: (id: string) => string): ActivityItem[] {
+export function findActivity(items: ActivityItem[], filter: ActivityFilter, groupName: (id: string) => string, categoryName: (id: string) => string, canonical: Canonical = asIs): ActivityItem[] {
     const words = plain(filter.query).split(/\s+/).filter(Boolean);
     const found = items.filter((item) => {
-        if (filter.category && item.category !== filter.category) return false;
+        if (filter.category && (item.kind !== 'expense' || canonical(item.category) !== filter.category)) return false;
         if (words.length === 0) return true;
         const text = plain([item.title, groupName(item.groupId), item.kind === 'expense' ? categoryName(item.category) : '', ...item.who].join(' '));
         return words.every((word) => text.includes(word));
@@ -35,8 +39,8 @@ export function findActivity(items: ActivityItem[], filter: ActivityFilter, grou
 }
 
 /** The categories your expenses use, most used first (the first used first among equals). */
-export function categoriesUsed(items: ActivityItem[]): string[] {
+export function categoriesUsed(items: ActivityItem[], canonical: Canonical = asIs): string[] {
     const counts = new Map<string, number>();
-    for (const item of [...items].reverse()) if (item.kind === 'expense') counts.set(item.category, (counts.get(item.category) ?? 0) + 1);
+    for (const item of [...items].reverse()) if (item.kind === 'expense') counts.set(canonical(item.category), (counts.get(canonical(item.category)) ?? 0) + 1);
     return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([category]) => category);
 }
