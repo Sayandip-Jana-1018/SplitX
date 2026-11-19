@@ -47,10 +47,13 @@ check('trip-scoped settlement reads verify the caller can access the trip group'
 });
 
 check('invite notifications carry a resolvable invitation link and the panel parses it safely', () => {
-  const inviteRoute = read('src/app/api/invitations/route.ts');
+  // The invitation is made in the contacts service the website's and the phone's routes share.
+  const service = read('src/lib/services/contacts.ts');
   const panel = read('src/components/features/NotificationPanel.tsx');
 
-  assert.match(inviteRoute, /link:\s*`\/invitations\/\$\{invitation\.id\}`/);
+  assert.match(service, /link:\s*`\/invitations\/\$\{invitation\.id\}`/);
+  // And the website's route still sends through it.
+  assert.match(read('src/app/api/invitations/route.ts'), /inviteToGroup\(/);
   assert.match(panel, /const match = notif\.link\.match\(\/\\\/invitations\\\/\(\[\^\/\?\#\]\+\)\/\)/);
   assert.match(panel, /if \(notif\.type === 'group_invite'\)/);
 });
