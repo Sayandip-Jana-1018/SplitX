@@ -89,4 +89,39 @@ describe('sending one change', () => {
         expect(calls).toEqual(['POST /api/v1/settlements', 'POST /api/v1/settlements/s1']);
         if (sent.outcome === 'saved') expect(sent.patch([group])[0].settlements[0]).toMatchObject({ id: 's1', status: 'paid_pending' });
     });
+
+    it('records cash handed to you: the payment from them, then accepting it, each step once', async () => {
+        const settlement = { id: 's2', groupId: 'g1', fromId: 'u2', toId: 'u1', amount: 500, status: 'pending', method: 'cash', note: null, createdAt: '2026-11-14T10:00:00.000Z' };
+        const bodies: unknown[] = [];
+        const { api, calls } = apiWith((path, init) => {
+            bodies.push(JSON.parse(String(init.body)));
+            return path === '/api/v1/settlements' ? json(201, { settlement, reused: false }) : json(200, { settlement: { ...settlement, status: 'completed' }, upiUrl: null });
+        });
+        const change: Change = { kind: 'payment', id: 'p2', cash: true, received: true, local: { id: 'p2', groupId: 'g1', fromId: 'u2', toId: ME, amount: 500, method: 'cash', status: 'completed', createdAt: new Date() }, body: { groupId: 'g1', toUserId: 'u1', fromUserId: 'u2', amount: 500, method: 'cash' } };
+        const sent = await send(api, change);
+        expect(calls).toEqual(['POST /api/v1/settlements', 'POST /api/v1/settlements/s2']);
+        expect(bodies[1]).toEqual({ action: 'accept_cash' });
+        if (sent.outcome === 'saved') expect(sent.patch([group])[0].settlements[0]).toMatchObject({ id: 's2', status: 'completed' });
+
+        // Sent again after the first try got through: already completed, so nothing more is asked.
+        const again = apiWith(() => json(200, { settlement: { ...settlement, status: 'completed' }, reused: true }));
+        await send(again.api, change);
+        expect(again.calls).toEqual(['POST /api/v1/settlements']);
+    });
+
+    it('sends your answer to a payment, and shows it at once while it waits', async () => {
+        const paid = { id: 's3', groupId: 'g1', fromId: 'u2', toId: ME, amount: 400, method: 'upi', status: 'paid_pending', createdAt: new Date() };
+        const ledger: Ledger = { ...seedLedger(), settlements: [paid] };
+        const sendBack: Change = { kind: 'move', id: 'move-s3', settlementId: 's3', groupId: 'g1', action: 'send_back' };
+        expect(withChanges(ledger, [sendBack]).settlements[0]).toMatchObject({ id: 's3', status: 'initiated', pending: true });
+        expect(withChanges(ledger, [sendBack, { ...sendBack, id: 'move-s3-2', action: 'approve' }]).settlements[0].status).toBe('completed');
+        expect(reviveChanges(JSON.stringify([sendBack, { ...sendBack, action: 'steal' }]))).toEqual([sendBack]);
+
+        const server = { id: 's3', groupId: 'g1', fromId: 'u2', toId: 'u1', amount: 400, status: 'initiated', method: 'upi', note: null, createdAt: '2026-11-14T10:00:00.000Z' };
+        const { api, calls } = apiWith(() => json(200, { settlement: server, upiUrl: null }));
+        const withIt = { ...group, settlements: [{ ...server, status: 'paid_pending' }] };
+        const sent = await send(api, sendBack);
+        expect(calls).toEqual(['POST /api/v1/settlements/s3']);
+        if (sent.outcome === 'saved') expect(sent.patch([withIt])[0].settlements).toEqual([expect.objectContaining({ id: 's3', status: 'initiated' })]);
+    });
 });

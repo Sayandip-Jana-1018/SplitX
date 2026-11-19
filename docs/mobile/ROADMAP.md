@@ -401,6 +401,24 @@ I stop and report at the end of each phase, and start the next only when you say
 
 **Your part, done:** the Firebase project (splitit-4e694) and its Android app, the service account key in Vercel, `google-services.json` as a GitHub secret, the Sentry project, and approving the drill.
 
+### Phase 4: the full app, every website screen (started 19 November)
+
+**Exit test:** the settle-up mind map and every website screen work on the phone on real data; a pretend trip (30 expenses added offline, then back online) leaves the phone, the website and the server agreeing to the paisa.
+
+**What's on the website and not yet on the phone** (checked 19 November, page by page): the money flow map and settled history on Settle; the full list of expenses with search and filters, and editing an expense; a group's members, settings, receipts and Balance Journey; contacts; your profile, data export, signed-in devices and account deletion; the notifications list; search. Admin pages (health, ops) and the design labs stay web only. Receipt scanning and voice belong to Phase 5.
+
+The phone already keeps every group whole (people, expenses, settlements), so lists, maps, analytics and the journey are worked out on the phone and work offline. Only writes and server-only data (contacts, notifications, devices, receipts' photos) need new `/api/v1` calls.
+
+**In steps** (each committed, pushed and reported on its own; the phone check comes when you connect it):
+
+1. ✅ **Settle up, complete:** the money flow map (the website's layout code, moved to `src/lib/settleMap.ts` so both draw it the same way; on the phone its amounts are moved off each other and the people, and arrows stop short of names), a chip per group, To settle and Settled, and every answer the receiver has: confirm, send back ("Not yet"), and cash handed over ("Got cash"), all saved on the phone first like the rest.
+2. **Every expense:** one list across groups with search and filters (group, category, who paid), and editing an expense, saved offline first like adding one.
+3. **A group, complete:** members (add by email, remove, leave), name and emoji, deleting a group, its Balance Journey and its receipts.
+4. **Contacts:** your people, adding by email, inviting, and adding them to a group.
+5. **You:** name and UPI ID, your data as a file, signed-in devices (sign one out), deleting your account.
+6. **Notifications and search:** the list behind the bell, read and unread; one search across groups, people and expenses.
+7. **The pretend trip:** a test that adds 30 expenses offline and checks phone, server and website agree to the paisa; then the same by hand on your phone.
+
 ### The old plan's Phase 3: core loop (now part of Phase 4)
 
 - Sign-in, onboarding, groups and trips, add expense, settle-up with UPI, approvals, feed, chat, notifications, search, contacts, invites with deep links, offline, the Dial and Deck with classic fallback. Web pages rebuilt in the same slices.

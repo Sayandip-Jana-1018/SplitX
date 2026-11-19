@@ -5,6 +5,9 @@
  * - An expense carries the id the phone made for it (`clientId`), so sending it twice never saves two.
  * - A payment marked as paid asks for the settlement, then marks it paid; asked again, the server
  *   hands back the same open one, so a retry halfway through never makes two.
+ * - Money handed to you in cash is recorded the same way, from your side: the payment, then accepting
+ *   the cash. Your answer to a payment someone marked as paid (confirm it, send it back, say it never
+ *   came) waits here too, so a trip with no signal can still settle up.
  * - Offline, too slow, or the server having trouble: the change waits and goes with the next try.
  *   Refused (no longer a member, deleted elsewhere): it is dropped and you're told why.
  *
@@ -16,10 +19,16 @@ import { ME, type Expense, type Ledger, type Message, type Settlement } from './
 
 type Api = ReturnType<typeof createApi>;
 
+/** The receiver's answers to a payment, and the state each leaves it in (src/lib/settlementTransitions.ts). */
+export const RECEIVER_MOVES = { approve: 'completed', send_back: 'initiated', accept_cash: 'completed', decline: 'cancelled' } as const;
+export type ReceiverMove = keyof typeof RECEIVER_MOVES;
+
 export type Change =
     | { kind: 'expense'; id: string; body: NewExpense; local: Expense }
     | { kind: 'delete_expense'; id: string; expenseId: string; groupId: string }
-    | { kind: 'payment'; id: string; body: NewSettlement; cash: boolean; local: Settlement }
+    /** You paid (or, `received`, you were paid in cash and say so). */
+    | { kind: 'payment'; id: string; body: NewSettlement; cash: boolean; received?: boolean; local: Settlement }
+    | { kind: 'move'; id: string; settlementId: string; groupId: string; action: ReceiverMove }
     | { kind: 'message'; id: string; groupId: string; body: NewMessage; local: Message };
 
 /** A change the server refused, kept so you can try it again or let it go. */
@@ -43,10 +52,13 @@ export type Sent =
 export function withChanges(ledger: Ledger, changes: Change[]): Ledger {
     if (changes.length === 0) return ledger;
     const deleted = new Set(changes.flatMap((change) => (change.kind === 'delete_expense' ? [change.expenseId] : [])));
+    // The last answer to each payment is the one that counts.
+    const answered = new Map(changes.flatMap((change) => (change.kind === 'move' ? [[change.settlementId, RECEIVER_MOVES[change.action]] as const] : [])));
+    const settlements = answered.size === 0 ? ledger.settlements : ledger.settlements.map((s) => (answered.has(s.id) ? { ...s, status: answered.get(s.id)!, pending: true } : s));
     return {
         ...ledger,
         expenses: [...ledger.expenses.filter((expense) => !deleted.has(expense.id)), ...changes.flatMap((change) => (change.kind === 'expense' ? [{ ...change.local, pending: true }] : []))],
-        settlements: [...ledger.settlements, ...changes.flatMap((change) => (change.kind === 'payment' ? [{ ...change.local, pending: true }] : []))],
+        settlements: [...settlements, ...changes.flatMap((change) => (change.kind === 'payment' ? [{ ...change.local, pending: true }] : []))],
         messages: [...ledger.messages, ...changes.flatMap((change) => (change.kind === 'message' ? [{ ...change.local, pending: true }] : []))],
     };
 }
@@ -90,9 +102,16 @@ export async function send(api: Api, change: Change): Promise<Sent> {
             }
             case 'payment': {
                 const { settlement } = await api.askSettlement(change.body);
-                const moved = settlement.status === 'paid_pending' || settlement.status === 'completed' ? { settlement } : await api.moveSettlement(settlement.id, { action: 'mark_paid', cash: change.cash });
+                // Asked again after a retry, the server hands back the same payment: each step is taken once.
+                const done = change.received ? settlement.status === 'completed' : settlement.status === 'paid_pending' || settlement.status === 'completed';
+                const moved = done ? { settlement } : await api.moveSettlement(settlement.id, change.received ? { action: 'accept_cash' } : { action: 'mark_paid', cash: change.cash });
                 const item = toSyncSettlement(moved.settlement);
                 return { outcome: 'saved', patch: inGroup(change.body.groupId, (group) => ({ ...group, settlements: [item, ...group.settlements.filter((s) => s.id !== item.id)] })) };
+            }
+            case 'move': {
+                const { settlement } = await api.moveSettlement(change.settlementId, { action: change.action });
+                const item = toSyncSettlement(settlement);
+                return { outcome: 'saved', patch: inGroup(change.groupId, (group) => ({ ...group, settlements: group.settlements.map((s) => (s.id === item.id ? item : s)) })) };
             }
             case 'message': {
                 const { message } = await api.sendMessage(change.groupId, change.body);
@@ -114,7 +133,9 @@ export function describe(change: Change): string {
         case 'delete_expense':
             return 'deleting that expense';
         case 'payment':
-            return 'your payment';
+            return change.received ? 'the cash you were paid' : 'your payment';
+        case 'move':
+            return change.action === 'approve' ? 'confirming that payment' : change.action === 'accept_cash' ? 'the cash you were paid' : change.action === 'send_back' ? 'sending that payment back' : 'saying that payment never came';
         case 'message':
             return 'your message';
     }
@@ -130,7 +151,7 @@ export function reviveChanges(text: string | null): Change[] {
             if (change.kind === 'expense') return [{ ...change, local: { ...change.local, createdAt: new Date(change.local.createdAt) } }];
             if (change.kind === 'payment') return [{ ...change, local: { ...change.local, createdAt: new Date(change.local.createdAt) } }];
             if (change.kind === 'message') return [{ ...change, local: { ...change.local, at: new Date(change.local.at) } }];
-            if (change.kind === 'delete_expense') return [change];
+            if (change.kind === 'delete_expense' || (change.kind === 'move' && change.action in RECEIVER_MOVES)) return [change];
             return [];
         });
     } catch {

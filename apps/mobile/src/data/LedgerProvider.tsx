@@ -19,7 +19,7 @@ import { useAuth } from '~/auth/AuthProvider';
 import { useToast } from '~/ui/Toast';
 import { accountLedger, mergeSync, versionsOf } from './account';
 import { makeExpense, personIn, PEOPLE, seedLedger, ME, type Expense, type ExpenseInput, type Ledger, type Message, type Person, type Settlement } from './ledger';
-import { chatMessage, deleting, describe, groupOf, reviveChanges, send, withChanges, type Change, type Stuck } from './outbox';
+import { chatMessage, deleting, describe, groupOf, RECEIVER_MOVES, reviveChanges, send, withChanges, type Change, type ReceiverMove, type Stuck } from './outbox';
 
 export type NewExpense = Omit<ExpenseInput, 'id' | 'createdAt'>;
 
@@ -52,8 +52,13 @@ interface LedgerContext {
     sendMessage: (groupId: string, text: string, remind?: string) => void;
     /** Brings a group's chat from the server; nothing in the demo. */
     loadMessages: (groupId: string) => Promise<void>;
-    /** Online only: you confirm a payment someone marked as paid to you; balances move. */
-    confirmPayment: (settlementId: string) => Promise<void>;
+    /**
+     * Your answer to a payment made to you: confirm it (balances move), send it back (not arrived
+     * yet), take it as cash, or say it never came. Saved on the phone first, like everything else.
+     */
+    answerPayment: (settlementId: string, action: ReceiverMove) => void;
+    /** Someone paid you in cash: recorded from your side, and the balance moves at once. */
+    receivedCash: (input: { groupId: string; fromId: string; amount: number }) => void;
     /** Online only: a new group, with you as its admin. Its id. */
     createGroup: (name: string, emoji: string) => Promise<string>;
     /** Online only: joins by an invite code or link. The group's id. */
@@ -470,12 +475,33 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
         [userId, setChat],
     );
 
-    const confirmPayment = useCallback(
-        async (settlementId: string) => {
-            await api.moveSettlement(settlementId, { action: 'approve' });
-            await refresh();
+    const answerPayment = useCallback(
+        (settlementId: string, action: ReceiverMove) => {
+            const settlement = ledger.settlements.find((candidate) => candidate.id === settlementId);
+            if (!settlement) return;
+            if (!real) {
+                setDemo((current) => ({ ...current, settlements: current.settlements.map((s) => (s.id === settlementId ? { ...s, status: RECEIVER_MOVES[action] } : s)) }));
+                return;
+            }
+            // One answer per payment: a second tap before the first is sent changes nothing.
+            if (kept.current?.changes.some((change) => change.kind === 'move' && change.settlementId === settlementId)) return;
+            queue({ kind: 'move', id: `move-${settlementId}-${Date.now()}`, settlementId, groupId: settlement.groupId, action });
         },
-        [refresh],
+        [ledger.settlements, real, queue],
+    );
+
+    const receivedCash = useCallback(
+        (input: { groupId: string; fromId: string; amount: number }) => {
+            if (!real) {
+                setDemo((current) => ({ ...current, settlements: [...current.settlements, { ...input, id: nextId('s'), toId: ME, method: 'cash', status: 'completed', createdAt: new Date() }] }));
+                return;
+            }
+            if (!userId) return;
+            const id = Crypto.randomUUID();
+            const local: Settlement = { ...input, id, toId: ME, method: 'cash', status: 'completed', createdAt: new Date() };
+            queue({ kind: 'payment', id, local, cash: true, received: true, body: { groupId: input.groupId, toUserId: userId, fromUserId: serverId(input.fromId), amount: input.amount, method: 'cash' } });
+        },
+        [real, userId, queue, serverId],
     );
 
     const createGroup = useCallback(
@@ -539,12 +565,13 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
             setReceipt,
             sendMessage,
             loadMessages,
-            confirmPayment,
+            answerPayment,
+            receivedCash,
             createGroup,
             joinGroup,
             resetLedger,
         }),
-        [ledger, personOf, real, sync, waiting, stuck, retryStuck, discardStuck, catchUp, addExpense, recordPayment, deleteExpense, setReceipt, sendMessage, loadMessages, confirmPayment, createGroup, joinGroup, resetLedger],
+        [ledger, personOf, real, sync, waiting, stuck, retryStuck, discardStuck, catchUp, addExpense, recordPayment, deleteExpense, setReceipt, sendMessage, loadMessages, answerPayment, receivedCash, createGroup, joinGroup, resetLedger],
     );
     return <Context.Provider value={value}>{children}</Context.Provider>;
 }
