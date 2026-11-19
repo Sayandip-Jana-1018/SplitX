@@ -7,6 +7,7 @@ import { loadGroupLedger, planLedgerTransfers } from '@/lib/ledger';
 import { formatCurrency } from '@/lib/utils';
 import { logger } from '@/lib/logger';
 import { pushToPhones } from '@/lib/notifications';
+import { markRead, yourNotifications } from '@/lib/services/notificationsList';
 
 /**
  * A person can send one kind of notification: a reminder to someone who owes
@@ -18,102 +19,6 @@ const ReminderSchema = z.object({
     userId: z.string().min(1).max(64),
     groupId: z.string().min(1).max(64),
 });
-
-function extractGroupIdFromLink(link?: string | null) {
-    if (!link) return null;
-    const match = link.match(/^\/groups\/([^/?#]+)/);
-    return match?.[1] || null;
-}
-
-async function cleanupStaleGroupNotifications(userId: string) {
-    const [recentNotifications, unreadGroupNotifications] = await Promise.all([
-        prisma.notification.findMany({
-            where: { userId },
-            include: {
-                actor: { select: { name: true, image: true } },
-            },
-            orderBy: { createdAt: 'desc' },
-            take: 50,
-        }),
-        prisma.notification.findMany({
-            where: {
-                userId,
-                read: false,
-                link: { startsWith: '/groups/' },
-            },
-            select: { id: true, link: true },
-        }),
-    ]);
-
-    const linkedGroupIds = new Set<string>();
-    for (const notification of recentNotifications) {
-        const groupId = extractGroupIdFromLink(notification.link);
-        if (groupId) linkedGroupIds.add(groupId);
-    }
-    for (const notification of unreadGroupNotifications) {
-        const groupId = extractGroupIdFromLink(notification.link);
-        if (groupId) linkedGroupIds.add(groupId);
-    }
-
-    if (linkedGroupIds.size === 0) {
-        return {
-            notifications: recentNotifications,
-            unreadCount: recentNotifications.filter((notification) => !notification.read).length,
-        };
-    }
-
-    const accessibleGroups = await prisma.group.findMany({
-        where: {
-            id: { in: Array.from(linkedGroupIds) },
-            deletedAt: null,
-            OR: [
-                { ownerId: userId },
-                { members: { some: { userId } } },
-            ],
-        },
-        select: { id: true },
-    });
-
-    const accessibleGroupIds = new Set(accessibleGroups.map((group) => group.id));
-    const staleNotificationIds = new Set<string>();
-
-    for (const notification of recentNotifications) {
-        const groupId = extractGroupIdFromLink(notification.link);
-        if (groupId && !accessibleGroupIds.has(groupId)) {
-            staleNotificationIds.add(notification.id);
-        }
-    }
-
-    for (const notification of unreadGroupNotifications) {
-        const groupId = extractGroupIdFromLink(notification.link);
-        if (groupId && !accessibleGroupIds.has(groupId)) {
-            staleNotificationIds.add(notification.id);
-        }
-    }
-
-    if (staleNotificationIds.size > 0) {
-        await prisma.notification.deleteMany({
-            where: {
-                userId,
-                id: { in: Array.from(staleNotificationIds) },
-            },
-        });
-    }
-
-    const notifications = recentNotifications.filter(
-        (notification) => !staleNotificationIds.has(notification.id)
-    );
-
-    return {
-        notifications,
-        unreadCount: notifications.filter((notification) => !notification.read).length,
-    };
-}
-
-/**
- * GET /api/notifications — list user's notifications (newest first, max 50)
- * PATCH /api/notifications — mark notifications as read
- */
 
 export async function GET() {
     try {
@@ -129,7 +34,7 @@ export async function GET() {
         const user = await prisma.user.findUnique({ where: { email: session.user.email } });
         if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
-        const { notifications, unreadCount } = await cleanupStaleGroupNotifications(user.id);
+        const { notifications, unreadCount } = await yourNotifications(user.id);
 
         return NextResponse.json({ data: notifications, unreadCount });
     } catch (error) {
@@ -154,17 +59,7 @@ export async function PATCH(req: Request) {
         }
         const { ids, markAll } = body as { ids?: string[]; markAll?: boolean };
 
-        if (markAll) {
-            await prisma.notification.updateMany({
-                where: { userId: user.id, read: false },
-                data: { read: true },
-            });
-        } else if (ids && ids.length > 0) {
-            await prisma.notification.updateMany({
-                where: { id: { in: ids }, userId: user.id },
-                data: { read: true },
-            });
-        }
+        await markRead(user.id, { ids, all: markAll });
 
         return NextResponse.json({ success: true });
     } catch (error) {

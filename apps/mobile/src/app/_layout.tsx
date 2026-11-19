@@ -101,6 +101,8 @@ function Frame() {
                             <Stack.Screen name="contacts" />
                             <Stack.Screen name="privacy" />
                             <Stack.Screen name="devices" />
+                            <Stack.Screen name="notifications" />
+                            <Stack.Screen name="search" />
                             <Stack.Screen name="insights" />
                             <Stack.Screen name="profile" />
                             <Stack.Screen name="appearance" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />

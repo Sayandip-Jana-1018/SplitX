@@ -18,6 +18,7 @@ import { AppState, Linking, Platform } from 'react-native';
 import { api } from '~/api';
 import { useAuth } from '~/auth/AuthProvider';
 import { useLedger } from '~/data/LedgerProvider';
+import { refreshInbox } from './inbox';
 import { screenFor } from './links';
 
 /** off: not allowed yet; asked-no: refused (only the phone's settings can change that); on: allowed and sent to the server. */
@@ -142,7 +143,11 @@ export function PushProvider({ children }: { children: ReactNode }) {
     // One arriving while the app is open: bring the groups up to date. A tap: open what it's about.
     useEffect(() => {
         if (!SUPPORTED || !signedIn) return;
-        const received = Notifications.addNotificationReceivedListener(() => void refresh());
+        // A push while the app is open: the groups and the bell's list catch up.
+        const received = Notifications.addNotificationReceivedListener(() => {
+            void refresh();
+            void refreshInbox();
+        });
         const tapped = Notifications.addNotificationResponseReceivedListener((response) => {
             void refresh();
             router.push(screenFor(linkOf(response)) as never);

@@ -19,6 +19,7 @@ import { useAuth } from '~/auth/AuthProvider';
 import { useToast } from '~/ui/Toast';
 import { accountLedger, mergeSync, versionsOf } from './account';
 import { makeExpense, personIn, PEOPLE, seedLedger, ME, type Expense, type ExpenseInput, type Ledger, type Message, type Person, type Settlement } from './ledger';
+import { clearInbox } from '~/notifications/inbox';
 import { chatMessage, deleting, describe, editBody, editing, groupOf, RECEIVER_MOVES, sharesBody, reviveChanges, send, withChanges, type Change, type ReceiverMove, type Stuck } from './outbox';
 
 export type NewExpense = Omit<ExpenseInput, 'id' | 'createdAt'>;
@@ -341,6 +342,7 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
     useEffect(() => {
         if (auth.status !== 'signed_out') return;
         kept.current = null;
+        clearInbox();
         AsyncStorage.getAllKeys()
             .then((keys) => AsyncStorage.multiRemove(keys.filter((key) => key.startsWith('splitit.account.') || key.startsWith('splitit.outbox.') || key.startsWith('splitit.receipts.') || key.startsWith('splitit.stuck.') || key.startsWith('splitit.chat.'))))
             .catch(() => undefined);

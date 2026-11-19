@@ -256,6 +256,28 @@ export type DeviceInfo = z.infer<typeof DeviceInfo>;
 export const DeviceList = z.object({ devices: z.array(DeviceInfo) });
 export type DeviceList = z.infer<typeof DeviceList>;
 
+// ── Notifications (Phase 4 step 6) ──────────────────────────
+
+/** One notification, as the website's bell shows it; `link` is the website's path, which the app maps to its screen. */
+const AppNotification = z.object({
+    id: z.string(),
+    type: z.string(),
+    title: z.string(),
+    body: z.string(),
+    link: z.string().nullable(),
+    read: z.boolean(),
+    createdAt: z.string(),
+    fromName: z.string().nullable(),
+});
+export type AppNotification = z.infer<typeof AppNotification>;
+
+export const NotificationList = z.object({ notifications: z.array(AppNotification), unread: z.number().int().nonnegative() });
+export type NotificationList = z.infer<typeof NotificationList>;
+
+/** Marks these read, or `all` of them. */
+export const MarkRead = z.object({ ids: z.array(z.string().max(64)).max(100).optional(), all: z.boolean().optional() });
+export type MarkRead = z.infer<typeof MarkRead>;
+
 /** A group's receipt photos: for each expense with one, a link that works for an hour. */
 export const GroupReceipts = z.object({ receipts: z.array(z.object({ expenseId: z.string(), url: z.string().url() })) });
 export type GroupReceipts = z.infer<typeof GroupReceipts>;
