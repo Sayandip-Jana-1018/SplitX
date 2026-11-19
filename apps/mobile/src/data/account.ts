@@ -39,7 +39,7 @@ export function accountLedger(groups: SyncGroup[], meId: string): Ledger {
             const id = local(person.id);
             if (!people.has(id) || person.isMember) people.set(id, { id, name: person.name, first: firstName(person.name), image: person.image, upiId: person.upiId });
         }
-        const entry: Group = { id: group.id, name: group.name, emoji: group.emoji, memberIds: group.people.filter((person) => person.isMember).map((person) => local(person.id)) };
+        const entry: Group = { id: group.id, name: group.name, emoji: group.emoji, ownerId: local(group.ownerId), memberIds: group.people.filter((person) => person.isMember).map((person) => local(person.id)) };
         ledger.groups.push(entry);
         for (const expense of group.expenses) {
             const item: Expense = {
@@ -53,6 +53,7 @@ export function accountLedger(groups: SyncGroup[], meId: string): Ledger {
                 splits: expense.splits.map((split) => ({ userId: local(split.userId), amount: split.amount })),
                 receipt: expense.receiptUrl,
                 createdAt: new Date(expense.createdAt),
+                updatedAt: expense.updatedAt,
             };
             ledger.expenses.push(item);
         }

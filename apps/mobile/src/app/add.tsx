@@ -4,6 +4,9 @@
  * by exact amounts, by percentages, or by shares. Every split goes through the website's own
  * rules (resolveSplits), so the app can never save one the server would refuse. Shares are saved
  * as exact amounts, which the server already knows, with the shares kept to show later.
+ *
+ * Opened with an expense (`edit`), the same screen changes it: everything but who paid and the
+ * group, which the server keeps as they are.
  */
 import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -12,13 +15,14 @@ import { useMemo, useState } from 'react';
 import { Platform, Pressable, TextInput, View } from 'react-native';
 import { inferCategory } from '@/lib/categoryInference';
 import { resolveSplits, type SplitRequest, type SplitType } from '@/lib/expenseSplits';
-import { ME } from '~/data/ledger';
+import { ME, type Expense, type Group } from '~/data/ledger';
 import { useLedger } from '~/data/LedgerProvider';
 import { GlassSurface } from '~/glass/GlassSurface';
 import { useLook } from '~/theme/ThemeProvider';
 import { FONT } from '~/theme/type';
 import { CATEGORY_IDS, categoryEmoji, categoryLabel } from '~/ui/category';
 import { Chips } from '~/ui/Chips';
+import { EmptyState } from '~/ui/EmptyState';
 import { Field } from '~/ui/Field';
 import { GlassButton, tap } from '~/ui/GlassButton';
 import { Header } from '~/ui/Header';
@@ -76,22 +80,52 @@ function evenly(memberIds: string[], amount: number, type: SplitMode): Record<st
     return Object.fromEntries(resolved.splits.map((share) => [share.userId, String(share.amount / 100)]));
 }
 
+/** "4800", "3525.75", "12.5": paise as the keypad would have typed them. */
+const typedAmount = (paise: number) => (paise / 100).toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1');
+
+/** The split as the screen holds it, from an expense being changed. */
+function splitFrom(expense: Expense, group: Group): { mode: SplitMode; among: string[]; typed: Record<string, string> } {
+    if (expense.weights) return { mode: 'shares', among: group.memberIds, typed: Object.fromEntries(group.memberIds.map((id) => [id, String(expense.weights?.[id] ?? 0)])) };
+    if (expense.splitType === 'equal') return { mode: 'equal', among: expense.splits.map((share) => share.userId), typed: {} };
+    if (expense.splitType === 'custom') return { mode: 'custom', among: group.memberIds, typed: Object.fromEntries(expense.splits.map((share) => [share.userId, typedAmount(share.amount)])) };
+    // Percentages back from paise, to two places, the last taking what rounding left so they add to 100.
+    const percents = expense.splits.map((share) => ({ id: share.userId, value: Math.round((share.amount / expense.amount) * 10_000) / 100 }));
+    const rest = Math.round((100 - percents.slice(0, -1).reduce((sum, entry) => sum + entry.value, 0)) * 100) / 100;
+    return { mode: 'percentage', among: group.memberIds, typed: Object.fromEntries(percents.map((entry, index) => [entry.id, String(index === percents.length - 1 ? rest : entry.value)])) };
+}
+
 export default function AddExpense() {
-    const params = useLocalSearchParams<{ group?: string }>();
+    const params = useLocalSearchParams<{ group?: string; edit?: string }>();
+    const { ledger } = useLedger();
+    // The expense as it was when the screen opened: what the edit is measured against.
+    const [original] = useState(() => (params.edit ? ledger.expenses.find((expense) => expense.id === params.edit) : undefined));
+    if (params.edit && !original) {
+        return (
+            <Screen tabBar={false}>
+                <Header title="Edit expense" close />
+                <EmptyState emoji="🧾" title="That expense is gone" hint="It was deleted, maybe on another phone or on the website." />
+            </Screen>
+        );
+    }
+    return <ExpenseForm original={original} startGroup={params.group} />;
+}
+
+function ExpenseForm({ original, startGroup }: { original?: Expense; startGroup?: string }) {
     const { tokens } = useLook();
-    const { ledger, personOf, addExpense } = useLedger();
+    const { ledger, personOf, addExpense, editExpense } = useLedger();
     const toast = useToast();
 
-    const [groupId, setGroupId] = useState(() => (ledger.groups.some((candidate) => candidate.id === params.group) ? params.group! : ledger.groups[0].id));
+    const [groupId, setGroupId] = useState(() => original?.groupId ?? (ledger.groups.some((candidate) => candidate.id === startGroup) ? startGroup! : ledger.groups[0].id));
     const group = ledger.groups.find((candidate) => candidate.id === groupId) ?? ledger.groups[0];
-    const [amount, setAmount] = useState('');
-    const [title, setTitle] = useState('');
-    const [picked, setPicked] = useState<string | null>(null);
+    const [start] = useState(() => (original ? splitFrom(original, group) : null));
+    const [amount, setAmount] = useState(() => (original ? typedAmount(original.amount) : ''));
+    const [title, setTitle] = useState(original?.title ?? '');
+    const [picked, setPicked] = useState<string | null>(original?.category ?? null);
     const [choosingCategory, setChoosingCategory] = useState(false);
-    const [payerId, setPayerId] = useState(ME);
-    const [splitType, setSplitType] = useState<SplitMode>('equal');
-    const [among, setAmong] = useState<string[]>(group.memberIds);
-    const [typed, setTyped] = useState<Record<string, string>>({});
+    const [payerId, setPayerId] = useState(original?.payerId ?? ME);
+    const [splitType, setSplitType] = useState<SplitMode>(start?.mode ?? 'equal');
+    const [among, setAmong] = useState<string[]>(start?.among ?? group.memberIds);
+    const [typed, setTyped] = useState<Record<string, string>>(start?.typed ?? {});
 
     const paise = toPaise(amount);
     const guessed = inferCategory(title);
@@ -145,7 +179,7 @@ export default function AddExpense() {
     const save = () => {
         if (!split.ok) return;
         try {
-            addExpense({
+            const input = {
                 groupId: group.id,
                 title: title.trim() || categoryLabel(category),
                 category,
@@ -155,7 +189,14 @@ export default function AddExpense() {
                 among: splitType === 'equal' ? group.memberIds.filter((id) => among.includes(id)) : undefined,
                 shares: splitType === 'equal' ? undefined : split.shares,
                 weights: splitType === 'shares' ? Object.fromEntries(group.memberIds.filter((id) => Number(typed[id] || 0) > 0).map((id) => [id, Number(typed[id])])) : undefined,
-            });
+            };
+            if (original) {
+                const after = editExpense(original.id, input);
+                toast(after === original ? 'Nothing changed' : 'Saved');
+                if (router.canGoBack()) router.back();
+                return;
+            }
+            addExpense(input);
         } catch (error) {
             toast(error instanceof Error ? error.message : 'That expense could not be saved', 'info');
             return;
@@ -170,7 +211,7 @@ export default function AddExpense() {
 
     return (
         <Screen tabBar={false}>
-            <Header title="New expense" eyebrow={`${group.emoji} ${group.name}`} close />
+            <Header title={original ? 'Edit expense' : 'New expense'} eyebrow={`${group.emoji} ${group.name}`} close />
 
             <View style={{ alignItems: 'center', paddingTop: 4 }}>
                 <Text onLiquid tabular numberOfLines={1} adjustsFontSizeToFit accessibilityLabel={`Amount ${rupees(paise)}`} style={{ fontSize: 64, lineHeight: 74, letterSpacing: -2.4, fontFamily: FONT.medium }}>
@@ -214,18 +255,26 @@ export default function AddExpense() {
                 />
             ) : null}
 
-            <View style={{ gap: 10 }}>
-                <Text variant="eyebrow" tone="secondary" onLiquid>
-                    Group
-                </Text>
-                <Chips label="Group" options={ledger.groups.map((candidate) => ({ id: candidate.id, label: candidate.name, emoji: candidate.emoji }))} value={group.id} onChange={chooseGroup} />
-            </View>
+            {original ? null : (
+                <View style={{ gap: 10 }}>
+                    <Text variant="eyebrow" tone="secondary" onLiquid>
+                        Group
+                    </Text>
+                    <Chips label="Group" options={ledger.groups.map((candidate) => ({ id: candidate.id, label: candidate.name, emoji: candidate.emoji }))} value={group.id} onChange={chooseGroup} />
+                </View>
+            )}
 
             <View style={{ gap: 10 }}>
                 <Text variant="eyebrow" tone="secondary" onLiquid>
                     Paid by
                 </Text>
-                <Chips label="Paid by" options={group.memberIds.map((id) => ({ id, label: firstName(id) }))} value={payerId} onChange={setPayerId} />
+                {original ? (
+                    <Text variant="caption" tone="secondary" onLiquid style={{ maxWidth: 300, alignSelf: 'center' }}>
+                        {payerId === ME ? 'You paid' : `${firstName(payerId)} paid`}. To change who paid, delete this and add it again.
+                    </Text>
+                ) : (
+                    <Chips label="Paid by" options={group.memberIds.map((id) => ({ id, label: firstName(id) }))} value={payerId} onChange={setPayerId} />
+                )}
             </View>
 
             <View style={{ gap: 10 }}>
@@ -345,9 +394,9 @@ export default function AddExpense() {
                 </Text>
             </View>
 
-            <GlassButton kind="accent" contentStyle={{ height: 58 }} disabled={!split.ok} onPress={save} accessibilityLabel="Save expense">
+            <GlassButton kind="accent" contentStyle={{ height: 58 }} disabled={!split.ok} onPress={save} accessibilityLabel={original ? 'Save changes' : 'Save expense'}>
                 <Text variant="heading" tone="onAccent">
-                    {paise > 0 ? `Save ${rupees(paise)}` : 'Save expense'}
+                    {original ? 'Save changes' : paise > 0 ? `Save ${rupees(paise)}` : 'Save expense'}
                 </Text>
             </GlassButton>
         </Screen>

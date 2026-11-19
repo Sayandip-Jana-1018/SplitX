@@ -40,6 +40,7 @@ function contentsOf(ledger: GroupLedger, details: Map<string, { category: string
             splits: transaction.splits.map((split) => ({ userId: split.userId, amount: split.amount })).sort((a, b) => (a.userId < b.userId ? -1 : a.userId > b.userId ? 1 : 0)),
             receiptUrl: details.get(transaction.id)?.receiptUrl ?? null,
             createdAt: transaction.createdAt.toISOString(),
+            updatedAt: transaction.updatedAt.toISOString(),
         })),
         settlements: ledger.settlements.map((settlement) => ({
             id: settlement.id,

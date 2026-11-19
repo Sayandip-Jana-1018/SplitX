@@ -412,7 +412,7 @@ The phone already keeps every group whole (people, expenses, settlements), so li
 **In steps** (each committed, pushed and reported on its own; the phone check comes when you connect it):
 
 1. ✅ **Settle up, complete:** the money flow map (the website's layout code, moved to `src/lib/settleMap.ts` so both draw it the same way; on the phone its amounts are moved off each other and the people, and arrows stop short of names), a chip per group, To settle and Settled, and every answer the receiver has: confirm, send back ("Not yet"), and cash handed over ("Got cash"), all saved on the phone first like the rest.
-2. **Every expense:** one list across groups with search and filters (group, category, who paid), and editing an expense, saved offline first like adding one.
+2. ✅ **Every expense:** Activity finds by name, group, person or category, shows the newest or the biggest first, and filters by category, as the website's list does. An expense can be edited (not who paid, or its group, which the server keeps): saved on the phone first, and an edit made elsewhere in the meantime is refused, not overwritten. The website's edit rules moved into the shared service (`updateExpense`), which the new `PATCH /api/v1/expenses/:id` calls too.
 3. **A group, complete:** members (add by email, remove, leave), name and emoji, deleting a group, its Balance Journey and its receipts.
 4. **Contacts:** your people, adding by email, inviting, and adding them to a group.
 5. **You:** name and UPI ID, your data as a file, signed-in devices (sign one out), deleting your account.

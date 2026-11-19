@@ -16,6 +16,7 @@ import {
     ActivityPage,
     CodeSession,
     ErrorBody,
+    ExpenseEdited,
     ExpenseSaved,
     GroupJoined,
     GroupMade,
@@ -37,6 +38,7 @@ import {
     type TokenPair,
     type ActivityQuery,
     type DeviceDetails,
+    type ExpenseEdit,
     type NewExpense,
     type NewGroup,
     type NewMessage,
@@ -225,6 +227,7 @@ export function createApi(options: ApiOptions) {
         /** Saves an expense; the same clientId again saves nothing new (`replayed`). */
         saveExpense: (expense: NewExpense) => authed('/api/v1/expenses', ExpenseSaved, { method: 'POST', body: JSON.stringify(expense) }),
         /** 204: no body, which the client reads as null. */
+        editExpense: (id: string, edit: ExpenseEdit) => authed(`/api/v1/expenses/${encodeURIComponent(id)}`, ExpenseEdited, { method: 'PATCH', body: JSON.stringify(edit) }),
         deleteExpense: (id: string) => authed(`/api/v1/expenses/${encodeURIComponent(id)}`, z.null(), { method: 'DELETE' }),
         askSettlement: (settlement: NewSettlement) => authed('/api/v1/settlements', SettlementSaved, { method: 'POST', body: JSON.stringify(settlement) }),
         moveSettlement: (id: string, move: SettlementMove) => authed(`/api/v1/settlements/${encodeURIComponent(id)}`, SettlementMoved, { method: 'POST', body: JSON.stringify(move) }),

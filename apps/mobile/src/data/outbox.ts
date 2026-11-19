@@ -5,6 +5,9 @@
  * - An expense carries the id the phone made for it (`clientId`), so sending it twice never saves two.
  * - A payment marked as paid asks for the settlement, then marks it paid; asked again, the server
  *   hands back the same open one, so a retry halfway through never makes two.
+ * - An edit carries the expense's version as last seen, so one made elsewhere in the meantime is
+ *   refused rather than overwritten. Edits to one expense waiting together go as one; editing one
+ *   not sent yet just changes what will be sent.
  * - Money handed to you in cash is recorded the same way, from your side: the payment, then accepting
  *   the cash. Your answer to a payment someone marked as paid (confirm it, send it back, say it never
  *   came) waits here too, so a trip with no signal can still settle up.
@@ -13,7 +16,7 @@
  *
  * Pure TypeScript, tested by the website's runner (tests/unit/mobileOutbox.test.ts).
  */
-import type { ChatMessage, NewExpense, NewMessage, NewSettlement, Settlement as ServerSettlement, SyncGroup } from '@/lib/contract/v1';
+import type { ChatMessage, ExpenseEdit, NewExpense, NewMessage, NewSettlement, Settlement as ServerSettlement, SyncGroup } from '@/lib/contract/v1';
 import { ApiError, type createApi } from '../api/client';
 import { ME, type Expense, type Ledger, type Message, type Settlement } from './ledger';
 
@@ -26,6 +29,7 @@ export type ReceiverMove = keyof typeof RECEIVER_MOVES;
 export type Change =
     | { kind: 'expense'; id: string; body: NewExpense; local: Expense }
     | { kind: 'delete_expense'; id: string; expenseId: string; groupId: string }
+    | { kind: 'edit_expense'; id: string; expenseId: string; groupId: string; body: ExpenseEdit; local: Expense }
     /** You paid (or, `received`, you were paid in cash and say so). */
     | { kind: 'payment'; id: string; body: NewSettlement; cash: boolean; received?: boolean; local: Settlement }
     | { kind: 'move'; id: string; settlementId: string; groupId: string; action: ReceiverMove }
@@ -52,21 +56,77 @@ export type Sent =
 export function withChanges(ledger: Ledger, changes: Change[]): Ledger {
     if (changes.length === 0) return ledger;
     const deleted = new Set(changes.flatMap((change) => (change.kind === 'delete_expense' ? [change.expenseId] : [])));
+    const edited = new Map(changes.flatMap((change) => (change.kind === 'edit_expense' ? [[change.expenseId, change.local] as const] : [])));
     // The last answer to each payment is the one that counts.
     const answered = new Map(changes.flatMap((change) => (change.kind === 'move' ? [[change.settlementId, RECEIVER_MOVES[change.action]] as const] : [])));
     const settlements = answered.size === 0 ? ledger.settlements : ledger.settlements.map((s) => (answered.has(s.id) ? { ...s, status: answered.get(s.id)!, pending: true } : s));
     return {
         ...ledger,
-        expenses: [...ledger.expenses.filter((expense) => !deleted.has(expense.id)), ...changes.flatMap((change) => (change.kind === 'expense' ? [{ ...change.local, pending: true }] : []))],
+        expenses: [
+            ...ledger.expenses.filter((expense) => !deleted.has(expense.id)).map((expense) => (edited.has(expense.id) ? { ...edited.get(expense.id)!, pending: true } : expense)),
+            ...changes.flatMap((change) => (change.kind === 'expense' ? [{ ...change.local, pending: true }] : [])),
+        ],
         settlements: [...settlements, ...changes.flatMap((change) => (change.kind === 'payment' ? [{ ...change.local, pending: true }] : []))],
         messages: [...ledger.messages, ...changes.flatMap((change) => (change.kind === 'message' ? [{ ...change.local, pending: true }] : []))],
     };
 }
 
-/** Deleting something that hasn't been sent yet just forgets it. */
+type ServerId = (id: string) => string;
+
+/** What an expense says about itself and how it splits, as the server takes it: your id where the phone says ME. */
+export function sharesBody(expense: Expense, among: string[], serverId: ServerId) {
+    return {
+        title: expense.title,
+        amount: expense.amount,
+        category: expense.category,
+        splitType: expense.splitType,
+        ...(expense.splitType === 'equal'
+            ? { splitAmong: among.map(serverId) }
+            : { splits: expense.splits.map((split) => ({ userId: serverId(split.userId), amount: split.amount })) }),
+    };
+}
+
+const sameShares = (a: Expense['splits'], b: Expense['splits']) => {
+    const key = (shares: Expense['splits']) => shares.map((share) => `${share.userId}:${share.amount}`).sort().join(',');
+    return key(a) === key(b);
+};
+
+/**
+ * An edit as the server takes it: only what changed, with the split whole when it changed at
+ * all, and the version the phone saw. Null when nothing changed.
+ */
+export function editBody(before: Expense, after: Expense, among: string[], serverId: ServerId): ExpenseEdit | null {
+    const body: ExpenseEdit = {};
+    if (after.title !== before.title) body.title = after.title;
+    if (after.category !== before.category) body.category = after.category;
+    if (after.amount !== before.amount || after.splitType !== before.splitType || !sameShares(after.splits, before.splits)) {
+        const shares = sharesBody(after, among, serverId);
+        body.amount = shares.amount;
+        body.splitType = shares.splitType;
+        if ('splitAmong' in shares) body.splitAmong = shares.splitAmong;
+        else body.splits = shares.splits;
+    }
+    if (Object.keys(body).length === 0) return null;
+    if (before.updatedAt) body.expectedUpdatedAt = before.updatedAt;
+    return body;
+}
+
+/** Deleting something that hasn't been sent yet just forgets it; edits waiting for it are dropped too. */
 export function deleting(changes: Change[], expenseId: string, groupId: string): Change[] {
-    if (changes.some((change) => change.kind === 'expense' && change.id === expenseId)) return changes.filter((change) => change.id !== expenseId);
-    return [...changes, { kind: 'delete_expense', id: `delete-${expenseId}`, expenseId, groupId }];
+    const rest = changes.filter((change) => !(change.kind === 'edit_expense' && change.expenseId === expenseId));
+    if (rest.some((change) => change.kind === 'expense' && change.id === expenseId)) return rest.filter((change) => change.id !== expenseId);
+    return [...rest, { kind: 'delete_expense', id: `delete-${expenseId}`, expenseId, groupId }];
+}
+
+/**
+ * An edit joins one already waiting for the same expense: the newer fields win, and the version
+ * first seen is kept, since that is what the server has to still hold.
+ */
+export function editing(changes: Change[], edit: Extract<Change, { kind: 'edit_expense' }>): Change[] {
+    const waiting = changes.find((change): change is Extract<Change, { kind: 'edit_expense' }> => change.kind === 'edit_expense' && change.expenseId === edit.expenseId);
+    if (!waiting) return [...changes, edit];
+    const body = { ...waiting.body, ...edit.body, ...(waiting.body.expectedUpdatedAt ? { expectedUpdatedAt: waiting.body.expectedUpdatedAt } : {}) };
+    return changes.map((change) => (change === waiting ? { ...waiting, body, local: edit.local } : change));
 }
 
 const toSyncSettlement = (settlement: ServerSettlement) => ({
@@ -90,6 +150,11 @@ export async function send(api: Api, change: Change): Promise<Sent> {
                 const { expense } = await api.saveExpense(change.body);
                 const item = { id: expense.id, title: expense.title, category: expense.category, amount: expense.amount, payerId: expense.payerId, splitType: expense.splitType, splits: expense.splits, receiptUrl: null, createdAt: expense.createdAt };
                 return { outcome: 'saved', patch: inGroup(change.body.groupId, (group) => ({ ...group, expenses: [...group.expenses.filter((e) => e.id !== item.id), item] })) };
+            }
+            case 'edit_expense': {
+                const { expense } = await api.editExpense(change.expenseId, change.body);
+                const item = { title: expense.title, category: expense.category, amount: expense.amount, payerId: expense.payerId, splitType: expense.splitType, splits: expense.splits, updatedAt: expense.updatedAt };
+                return { outcome: 'saved', patch: inGroup(change.groupId, (group) => ({ ...group, expenses: group.expenses.map((e) => (e.id === expense.id ? { ...e, ...item } : e)) })) };
             }
             case 'delete_expense': {
                 try {
@@ -132,6 +197,8 @@ export function describe(change: Change): string {
             return `“${change.local.title}”`;
         case 'delete_expense':
             return 'deleting that expense';
+        case 'edit_expense':
+            return `your change to “${change.local.title}”`;
         case 'payment':
             return change.received ? 'the cash you were paid' : 'your payment';
         case 'move':
@@ -148,7 +215,7 @@ export function reviveChanges(text: string | null): Change[] {
         if (!Array.isArray(raw)) return [];
         return raw.flatMap((change: Change): Change[] => {
             if (!change || typeof change !== 'object' || typeof change.id !== 'string') return [];
-            if (change.kind === 'expense') return [{ ...change, local: { ...change.local, createdAt: new Date(change.local.createdAt) } }];
+            if (change.kind === 'expense' || change.kind === 'edit_expense') return [{ ...change, local: { ...change.local, createdAt: new Date(change.local.createdAt) } }];
             if (change.kind === 'payment') return [{ ...change, local: { ...change.local, createdAt: new Date(change.local.createdAt) } }];
             if (change.kind === 'message') return [{ ...change, local: { ...change.local, at: new Date(change.local.at) } }];
             if (change.kind === 'delete_expense' || (change.kind === 'move' && change.action in RECEIVER_MOVES)) return [change];

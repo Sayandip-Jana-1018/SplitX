@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { ErrorBody, ExpenseSaved, GroupDetail } from '@/lib/contract/v1';
+import { ErrorBody, ExpenseEdited, ExpenseSaved, GroupDetail } from '@/lib/contract/v1';
 import { prisma } from '@/lib/db';
 import { startSession } from '@/lib/mobileAuth';
 import { emptyDatabase, groupOf, person } from './fixtures';
@@ -22,6 +22,8 @@ async function bearerFor(user: { id: string }) {
 
 const save = async (headers: Record<string, string>, body: object) =>
     expensesRoute.POST(new Request('https://splitit.test/api/v1/expenses', { method: 'POST', headers, body: JSON.stringify(body) }));
+const change = (headers: Record<string, string>, id: string, body: object) =>
+    expenseRoute.PATCH(new Request(`https://splitit.test/api/v1/expenses/${id}`, { method: 'PATCH', headers, body: JSON.stringify(body) }), { params: Promise.resolve({ id }) });
 const remove = (headers: Record<string, string>, id: string) =>
     expenseRoute.DELETE(new Request(`https://splitit.test/api/v1/expenses/${id}`, { method: 'DELETE', headers }), { params: Promise.resolve({ id }) });
 const balances = async (headers: Record<string, string>, groupId: string) => {
@@ -107,5 +109,64 @@ describe('deleting an expense from the phone', () => {
         const { expense } = ExpenseSaved.parse(await (await save(await bearerFor(alice), { clientId: randomUUID(), groupId: group.id, title: 'Dinner', amount: 900 })).json());
         expect((await remove(await bearerFor(bob), expense.id)).status).toBe(404);
         expect(await prisma.transaction.count({ where: { deletedAt: null } })).toBe(1);
+    });
+});
+
+describe('editing an expense from the phone', () => {
+    it('changes only what is sent, recomputes the shares, and moves balances', async () => {
+        const { alice, group } = await threeFriends();
+        const headers = await bearerFor(alice);
+        const { expense } = ExpenseSaved.parse(await (await save(headers, { clientId: randomUUID(), groupId: group.id, title: 'Dinner', amount: 900, category: 'food' })).json());
+        expect(expense.updatedAt).toBeDefined();
+
+        const answer = await change(headers, expense.id, { title: 'Dinner at Thalassa', amount: 1200, expectedUpdatedAt: expense.updatedAt });
+        expect(answer.status).toBe(200);
+        const { expense: edited } = ExpenseEdited.parse(await answer.json());
+        expect(edited).toMatchObject({ id: expense.id, title: 'Dinner at Thalassa', amount: 1200, category: 'food', groupId: group.id });
+        expect(edited.splits.reduce((sum, split) => sum + split.amount, 0)).toBe(1200);
+        expect(edited.updatedAt).not.toBe(expense.updatedAt);
+        expect(await balances(headers, group.id)).toEqual({ Alice: 800, Bob: -400, Carol: -400 });
+    });
+
+    it('splits again among the people chosen', async () => {
+        const { alice, bob, group } = await threeFriends();
+        const headers = await bearerFor(alice);
+        const { expense } = ExpenseSaved.parse(await (await save(headers, { clientId: randomUUID(), groupId: group.id, title: 'Cab', amount: 900 })).json());
+        const { expense: edited } = ExpenseEdited.parse(await (await change(headers, expense.id, { splitAmong: [alice.id, bob.id] })).json());
+        expect(edited.splits.map((split) => split.amount).sort()).toEqual([450, 450]);
+        expect(await balances(headers, group.id)).toEqual({ Alice: 450, Bob: -450, Carol: 0 });
+    });
+
+    it('refuses an edit made to an older copy, so nobody’s change is lost', async () => {
+        const { alice, group } = await threeFriends();
+        const headers = await bearerFor(alice);
+        const { expense } = ExpenseSaved.parse(await (await save(headers, { clientId: randomUUID(), groupId: group.id, title: 'Dinner', amount: 900 })).json());
+        expect((await change(headers, expense.id, { title: 'First edit', expectedUpdatedAt: expense.updatedAt })).status).toBe(200);
+
+        const late = await change(headers, expense.id, { title: 'Made offline, before the first', expectedUpdatedAt: expense.updatedAt });
+        expect(late.status).toBe(409);
+        expect(ErrorBody.parse(await late.json()).code).toBe('conflict');
+        expect((await prisma.transaction.findUniqueOrThrow({ where: { id: expense.id } })).title).toBe('First edit');
+    });
+
+    it('lets only the payer or the group’s owner edit, and refuses an edit that changes nothing', async () => {
+        const { alice, bob, carol, group } = await threeFriends();
+        const { expense } = ExpenseSaved.parse(await (await save(await bearerFor(bob), { clientId: randomUUID(), groupId: group.id, title: 'Snacks', amount: 300 })).json());
+        expect((await change(await bearerFor(carol), expense.id, { title: 'Mine now' })).status).toBe(404);
+        // Alice owns the group.
+        expect((await change(await bearerFor(alice), expense.id, { title: 'Snacks and tea' })).status).toBe(200);
+        const same = await change(await bearerFor(bob), expense.id, { title: 'Snacks and tea' });
+        expect(same.status).toBe(400);
+        expect(ErrorBody.parse(await same.json()).code).toBe('nothing_to_change');
+    });
+
+    it('needs the new shares to change a custom split, and a signed-in phone', async () => {
+        const { alice, bob, carol, group } = await threeFriends();
+        const headers = await bearerFor(alice);
+        const { expense } = ExpenseSaved.parse(await (await save(headers, { clientId: randomUUID(), groupId: group.id, title: 'Stay', amount: 900, splitType: 'custom', splits: [{ userId: alice.id, amount: 500 }, { userId: bob.id, amount: 200 }, { userId: carol.id, amount: 200 }] })).json());
+        expect((await change(headers, expense.id, { amount: 1000 })).status).toBe(400);
+        const fixed = await change(headers, expense.id, { amount: 1000, splits: [{ userId: alice.id, amount: 600 }, { userId: bob.id, amount: 200 }, { userId: carol.id, amount: 200 }] });
+        expect(fixed.status).toBe(200);
+        expect((await change({ 'content-type': 'application/json' }, expense.id, { title: 'x' })).status).toBe(401);
     });
 });

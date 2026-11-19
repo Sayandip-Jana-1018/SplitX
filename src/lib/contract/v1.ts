@@ -164,12 +164,33 @@ export const Expense = z.object({
     splitType: z.string(),
     splits: z.array(Share),
     createdAt: z.string(),
+    /** When it last changed: an edit sends it back, so an edit made elsewhere since is not overwritten. */
+    updatedAt: z.string().optional(),
 });
 export type Expense = z.infer<typeof Expense>;
 
 /** What saving an expense answers; `replayed` when it was saved before under the same clientId. */
 export const ExpenseSaved = z.object({ expense: Expense, replayed: z.boolean() });
 export type ExpenseSaved = z.infer<typeof ExpenseSaved>;
+
+/**
+ * Changes to an expense: only what's sent changes. A new amount, split type or set of sharers
+ * recomputes the shares as adding one does; percentage and custom splits need each share.
+ */
+export const ExpenseEdit = z.object({
+    title: z.string().trim().min(1).max(100).optional(),
+    amount: z.number().int().positive().max(MAX_EXPENSE_PAISE).optional(),
+    category: z.string().min(1).max(40).optional(),
+    splitType: z.enum(SPLIT_TYPES).optional(),
+    splitAmong: z.array(z.string().max(64)).max(200).optional(),
+    splits: z.array(Share).max(200).optional(),
+    /** The expense's updatedAt as you last saw it: if it changed since, the edit is refused (code "conflict"). */
+    expectedUpdatedAt: z.string().datetime().optional(),
+});
+export type ExpenseEdit = z.infer<typeof ExpenseEdit>;
+
+export const ExpenseEdited = z.object({ expense: Expense });
+export type ExpenseEdited = z.infer<typeof ExpenseEdited>;
 
 export const NewSettlement = z.object({
     groupId: z.string().max(64),
@@ -306,6 +327,8 @@ const SyncExpense = z.object({
     splits: z.array(Share),
     receiptUrl: z.string().nullable(),
     createdAt: z.string(),
+    /** When it last changed (sent since Phase 4; older copies on a phone lack it). */
+    updatedAt: z.string().optional(),
 });
 
 const SyncSettlement = z.object({

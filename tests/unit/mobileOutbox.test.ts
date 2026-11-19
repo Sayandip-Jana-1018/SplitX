@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createApi, type StoredSession } from '../../apps/mobile/src/api/client';
 import { ME, seedLedger, type Expense, type Ledger } from '../../apps/mobile/src/data/ledger';
-import { deleting, groupOf, reviveChanges, send, withChanges, type Change } from '../../apps/mobile/src/data/outbox';
+import { deleting, editBody, editing, groupOf, reviveChanges, send, withChanges, type Change } from '../../apps/mobile/src/data/outbox';
 import type { SyncGroup } from '@/lib/contract/v1';
 
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
@@ -123,5 +123,48 @@ describe('sending one change', () => {
         const sent = await send(api, sendBack);
         expect(calls).toEqual(['POST /api/v1/settlements/s3']);
         if (sent.outcome === 'saved') expect(sent.patch([withIt])[0].settlements).toEqual([expect.objectContaining({ id: 's3', status: 'initiated' })]);
+    });
+});
+
+describe('editing an expense', () => {
+    const saved: Expense = { ...lunch, id: 'srv-9', updatedAt: '2026-11-14T10:00:01.000Z' };
+    const serverId = (id: string) => (id === ME ? 'u1' : id);
+
+    it('sends only what changed, the split whole, and the version the phone saw; nothing when nothing did', () => {
+        expect(editBody(saved, { ...saved, title: 'Lunch at Toit' }, ['u1', 'u2'], serverId)).toEqual({ title: 'Lunch at Toit', expectedUpdatedAt: saved.updatedAt });
+        const bigger = { ...saved, amount: 800, splits: [{ userId: ME, amount: 400 }, { userId: 'u2', amount: 400 }] };
+        expect(editBody(saved, bigger, [ME, 'u2'], serverId)).toEqual({ amount: 800, splitType: 'equal', splitAmong: ['u1', 'u2'], expectedUpdatedAt: saved.updatedAt });
+        const exact = { ...saved, splitType: 'custom' as const, splits: [{ userId: ME, amount: 100 }, { userId: 'u2', amount: 500 }] };
+        expect(editBody(saved, exact, [], serverId)).toMatchObject({ splitType: 'custom', splits: [{ userId: 'u1', amount: 100 }, { userId: 'u2', amount: 500 }] });
+        expect(editBody(saved, { ...saved }, [ME, 'u2'], serverId)).toBeNull();
+    });
+
+    it('goes as one with an edit already waiting, keeping the version first seen; a delete drops it', () => {
+        const first: Change = { kind: 'edit_expense', id: 'edit-srv-9', expenseId: 'srv-9', groupId: 'g1', body: { title: 'A', expectedUpdatedAt: saved.updatedAt }, local: { ...saved, title: 'A' } };
+        const second: Change = { kind: 'edit_expense', id: 'edit-srv-9', expenseId: 'srv-9', groupId: 'g1', body: { category: 'travel', expectedUpdatedAt: 'later' }, local: { ...saved, title: 'A', category: 'travel' } };
+        const both = editing(editing([], first), second);
+        expect(both).toHaveLength(1);
+        expect(both[0].kind === 'edit_expense' && both[0].body).toEqual({ title: 'A', category: 'travel', expectedUpdatedAt: saved.updatedAt });
+        expect(deleting(both, 'srv-9', 'g1')).toEqual([{ kind: 'delete_expense', id: 'delete-srv-9', expenseId: 'srv-9', groupId: 'g1' }]);
+    });
+
+    it('shows the edit at once while it waits, and comes back from storage', () => {
+        const ledger: Ledger = { ...seedLedger(), expenses: [saved] };
+        const change: Change = { kind: 'edit_expense', id: 'edit-srv-9', expenseId: 'srv-9', groupId: 'g1', body: { title: 'Dinner' }, local: { ...saved, title: 'Dinner' } };
+        expect(withChanges(ledger, [change]).expenses).toEqual([{ ...saved, title: 'Dinner', pending: true }]);
+        const back = reviveChanges(JSON.stringify([change]));
+        expect(back[0].kind === 'edit_expense' && back[0].local.createdAt).toEqual(saved.createdAt);
+    });
+
+    it('puts the server’s copy in the group, with its new version', async () => {
+        const answer = { expense: { id: 'srv-9', groupId: 'g1', title: 'Dinner', amount: 600, category: 'food', payerId: 'u1', splitType: 'equal', splits: [{ userId: 'u1', amount: 300 }, { userId: 'u2', amount: 300 }], createdAt: '2026-11-14T10:00:00.000Z', updatedAt: '2026-11-14T11:00:00.000Z' } };
+        const { api, calls } = apiWith(() => json(200, answer));
+        const withIt = { ...group, expenses: [{ id: 'srv-9', title: 'Lunch', category: 'food', amount: 600, payerId: 'u1', splitType: 'equal', splits: answer.expense.splits, receiptUrl: 'https://x.test/r.jpg', createdAt: answer.expense.createdAt, updatedAt: '2026-11-14T10:00:01.000Z' }] };
+        const sent = await send(api, { kind: 'edit_expense', id: 'edit-srv-9', expenseId: 'srv-9', groupId: 'g1', body: { title: 'Dinner' }, local: { ...saved, title: 'Dinner' } });
+        expect(calls).toEqual(['PATCH /api/v1/expenses/srv-9']);
+        if (sent.outcome === 'saved') expect(sent.patch([withIt])[0].expenses[0]).toMatchObject({ title: 'Dinner', updatedAt: '2026-11-14T11:00:00.000Z', receiptUrl: 'https://x.test/r.jpg' });
+
+        const conflict = apiWith(() => json(409, { error: 'Someone changed this expense before your edit arrived. Open it again to see theirs.', code: 'conflict' }));
+        expect((await send(conflict.api, { kind: 'edit_expense', id: 'e', expenseId: 'srv-9', groupId: 'g1', body: { title: 'x' }, local: saved })).outcome).toBe('refused');
     });
 });

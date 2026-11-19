@@ -19,7 +19,7 @@ import { useAuth } from '~/auth/AuthProvider';
 import { useToast } from '~/ui/Toast';
 import { accountLedger, mergeSync, versionsOf } from './account';
 import { makeExpense, personIn, PEOPLE, seedLedger, ME, type Expense, type ExpenseInput, type Ledger, type Message, type Person, type Settlement } from './ledger';
-import { chatMessage, deleting, describe, groupOf, RECEIVER_MOVES, reviveChanges, send, withChanges, type Change, type ReceiverMove, type Stuck } from './outbox';
+import { chatMessage, deleting, describe, editBody, editing, groupOf, RECEIVER_MOVES, sharesBody, reviveChanges, send, withChanges, type Change, type ReceiverMove, type Stuck } from './outbox';
 
 export type NewExpense = Omit<ExpenseInput, 'id' | 'createdAt'>;
 
@@ -46,6 +46,11 @@ interface LedgerContext {
     addExpense: (input: NewExpense) => Expense;
     /** You paid someone (cash, or another way): they confirm it before balances move. */
     recordPayment: (input: { groupId: string; fromId: string; toId: string; amount: number; method: string }) => Settlement;
+    /**
+     * Changes an expense (not who paid, or its group: the server keeps those). Saved on the phone
+     * first; one made elsewhere since is not overwritten, and you're told. Unchanged: nothing sent.
+     */
+    editExpense: (id: string, input: NewExpense) => Expense;
     deleteExpense: (id: string) => void;
     setReceipt: (id: string, uri: string | null) => void;
     /** `remind`: a payment reminder to that person, as the website sends. */
@@ -375,23 +380,7 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
             }
             const clientId = Crypto.randomUUID();
             const expense = makeExpense({ ...input, id: clientId, createdAt: new Date() }, target);
-            queue({
-                kind: 'expense',
-                id: clientId,
-                local: expense,
-                body: {
-                    clientId,
-                    groupId: target.id,
-                    title: expense.title,
-                    amount: expense.amount,
-                    category: expense.category,
-                    payerId: serverId(expense.payerId),
-                    splitType: expense.splitType,
-                    ...(expense.splitType === 'equal'
-                        ? { splitAmong: (input.among ?? target.memberIds).map(serverId) }
-                        : { splits: expense.splits.map((split) => ({ userId: serverId(split.userId), amount: split.amount })) }),
-                },
-            });
+            queue({ kind: 'expense', id: clientId, local: expense, body: { clientId, groupId: target.id, payerId: serverId(expense.payerId), ...sharesBody(expense, input.among ?? target.memberIds, serverId) } });
             return expense;
         },
         [ledger.groups, real, queue, serverId],
@@ -411,6 +400,39 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
             return settlement;
         },
         [real, queue, serverId],
+    );
+
+    const editExpense = useCallback(
+        (id: string, input: NewExpense) => {
+            const before = ledger.expenses.find((expense) => expense.id === id);
+            const target = ledger.groups.find((group) => group.id === before?.groupId);
+            if (!before || !target) throw new Error('That expense is gone');
+            // Who paid and the group stay as they are; the rest is split again by the same rules.
+            const after: Expense = { ...makeExpense({ ...input, id, groupId: before.groupId, payerId: before.payerId, createdAt: before.createdAt }, target), receipt: before.receipt, updatedAt: before.updatedAt };
+            if (!real) {
+                setDemo((current) => ({ ...current, expenses: current.expenses.map((expense) => (expense.id === id ? after : expense)) }));
+                return after;
+            }
+            if (!userId) return before;
+            const among = input.among ?? target.memberIds;
+
+            // Not sent yet: what will be sent changes instead.
+            if (kept.current?.changes.some((change) => change.kind === 'expense' && change.id === id)) {
+                update(userId, (current) => ({
+                    ...current,
+                    changes: current.changes.map((change) => (change.kind === 'expense' && change.id === id ? { ...change, local: after, body: { ...change.body, ...sharesBody(after, among, serverId) } } : change)),
+                }));
+                void flush();
+                return after;
+            }
+
+            const body = editBody(before, after, among, serverId);
+            if (!body) return before;
+            update(userId, (current) => ({ ...current, changes: editing(current.changes, { kind: 'edit_expense', id: `edit-${id}`, expenseId: id, groupId: before.groupId, body, local: after }) }));
+            void flush();
+            return after;
+        },
+        [ledger.expenses, ledger.groups, real, userId, update, flush, serverId],
     );
 
     const deleteExpense = useCallback(
@@ -567,11 +589,12 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
             loadMessages,
             answerPayment,
             receivedCash,
+            editExpense,
             createGroup,
             joinGroup,
             resetLedger,
         }),
-        [ledger, personOf, real, sync, waiting, stuck, retryStuck, discardStuck, catchUp, addExpense, recordPayment, deleteExpense, setReceipt, sendMessage, loadMessages, answerPayment, receivedCash, createGroup, joinGroup, resetLedger],
+        [ledger, personOf, real, sync, waiting, stuck, retryStuck, discardStuck, catchUp, addExpense, recordPayment, deleteExpense, setReceipt, sendMessage, loadMessages, answerPayment, receivedCash, createGroup, editExpense, joinGroup, resetLedger],
     );
     return <Context.Provider value={value}>{children}</Context.Provider>;
 }

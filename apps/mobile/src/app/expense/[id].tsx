@@ -4,7 +4,7 @@
  */
 import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Camera, Image as ImageIcon, Receipt, Trash2 } from 'lucide-react-native';
+import { Camera, Image as ImageIcon, Pencil, Receipt, Trash2 } from 'lucide-react-native';
 import { useState } from 'react';
 import { Image, View } from 'react-native';
 import { ME, type Expense } from '~/data/ledger';
@@ -56,6 +56,8 @@ export default function ExpenseScreen() {
     const share = expense.splits.find((split) => split.userId === ME)?.amount ?? 0;
     const paid = expense.payerId === ME ? expense.amount : 0;
     const effect = paid - share;
+    // As the server allows: whoever paid, or the group's owner (anyone, among the demo's made-up groups).
+    const canChange = expense.payerId === ME || !group?.ownerId || group.ownerId === ME;
     /** The group's own order, which starts with you. */
     const order = (userId: string) => group?.memberIds.indexOf(userId) ?? 0;
 
@@ -206,12 +208,26 @@ export default function ExpenseScreen() {
                     </GlassButton>
                 )}
 
-                <GlassButton kind="thin" contentStyle={{ height: 54, flexDirection: 'row', gap: 10 }} onPress={() => setAsking('delete')}>
-                    <Trash2 size={18} color={tokens.danger} strokeWidth={2.2} />
-                    <Text variant="label" weight="bold" tone="danger">
-                        Delete expense
+                {canChange ? (
+                    <View style={{ flexDirection: 'row', gap: 10 }}>
+                        <GlassButton kind="thin" style={{ flex: 1 }} contentStyle={{ height: 54, flexDirection: 'row', gap: 10 }} onPress={() => router.push({ pathname: '/add', params: { edit: expense.id } })}>
+                            <Pencil size={17} color={tokens.fg} strokeWidth={2.2} />
+                            <Text variant="label" weight="bold">
+                                Edit
+                            </Text>
+                        </GlassButton>
+                        <GlassButton kind="thin" style={{ flex: 1 }} contentStyle={{ height: 54, flexDirection: 'row', gap: 10 }} onPress={() => setAsking('delete')}>
+                            <Trash2 size={18} color={tokens.danger} strokeWidth={2.2} />
+                            <Text variant="label" weight="bold" tone="danger">
+                                Delete
+                            </Text>
+                        </GlassButton>
+                    </View>
+                ) : (
+                    <Text variant="caption" tone="secondary" onLiquid style={{ maxWidth: 300, alignSelf: 'center' }}>
+                        Only {payer}, who paid, or the group’s admin can change or delete this.
                     </Text>
-                </GlassButton>
+                )}
             </Screen>
 
             <Sheet open={asking === 'receipt'} onClose={() => setAsking(null)} title="Add a receipt" hint="It stays on this phone until accounts arrive in Phase 3.">

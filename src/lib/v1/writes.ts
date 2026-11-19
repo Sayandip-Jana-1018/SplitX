@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/db';
-import type { ChatMessage, Expense, MessagePage, NewExpense, NewMessage, NewSettlement, Settlement, SettlementMove } from '@/lib/contract/v1';
-import { createExpense, deleteExpense, type CreatedExpense } from '@/lib/services/expenses';
+import type { ChatMessage, Expense, ExpenseEdit, MessagePage, NewExpense, NewMessage, NewSettlement, Settlement, SettlementMove } from '@/lib/contract/v1';
+import { createExpense, deleteExpense, updateExpense } from '@/lib/services/expenses';
 import { ChatRefused, listGroupMessages, sendGroupMessage, type ChatMessageRow } from '@/lib/services/groupChat';
 import { decideApproval, markPaid, openUpi, receiverRecords, requestSettlement } from '@/lib/services/settlements';
 import { TransitionRefused } from '@/lib/settlementTransitions';
@@ -16,7 +16,9 @@ async function actorOf(userId: string) {
     return prisma.user.findUnique({ where: { id: userId }, select: { id: true, name: true } });
 }
 
-function expenseOf(expense: CreatedExpense, groupId: string): Expense {
+type ExpenseRow = { id: string; title: string; amount: number; category: string; payerId: string; splitType: string; splits: { userId: string; amount: number }[]; createdAt: Date; updatedAt: Date };
+
+function expenseOf(expense: ExpenseRow, groupId: string): Expense {
     return {
         id: expense.id,
         groupId,
@@ -27,6 +29,7 @@ function expenseOf(expense: CreatedExpense, groupId: string): Expense {
         splitType: expense.splitType,
         splits: expense.splits.map((split) => ({ userId: split.userId, amount: split.amount })),
         createdAt: expense.createdAt.toISOString(),
+        updatedAt: expense.updatedAt.toISOString(),
     };
 }
 
@@ -62,6 +65,18 @@ export async function saveExpense(userId: string, input: NewExpense): Promise<Wr
     );
     if (!outcome.ok) return outcome;
     return { ok: true, value: { expense: expenseOf(outcome.expense, input.groupId), replayed: outcome.replayed } };
+}
+
+/** Edits an expense you paid, or one in a group you own, by the website's rules (updateExpense). */
+export async function editExpense(userId: string, expenseId: string, edit: ExpenseEdit): Promise<WriteOutcome<{ expense: Expense }>> {
+    const actor = await actorOf(userId);
+    if (!actor) return { ok: false, status: 401, error: 'Your session has ended. Sign in again.', code: 'unauthenticated' };
+    const outcome = await updateExpense(actor, expenseId, edit);
+    if (!outcome.ok) {
+        const error = outcome.code === 'not_found' ? 'That expense isn’t here, or isn’t yours to change.' : outcome.code === 'conflict' ? 'Someone changed this expense before your edit arrived. Open it again to see theirs.' : outcome.error;
+        return { ok: false, status: outcome.status, error, code: outcome.code };
+    }
+    return { ok: true, value: { expense: expenseOf(outcome.expense, outcome.expense.trip.group.id) } };
 }
 
 /** Deletes an expense you paid, or one in a group you own. */
