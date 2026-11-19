@@ -192,6 +192,53 @@ export type ExpenseEdit = z.infer<typeof ExpenseEdit>;
 export const ExpenseEdited = z.object({ expense: Expense });
 export type ExpenseEdited = z.infer<typeof ExpenseEdited>;
 
+// ── Contacts and invitations (Phase 4 step 4) ───────────────
+
+/** One of your contacts; `userId` is their account's when their email has one (they can be invited into a group). */
+export const Contact = z.object({
+    id: z.string(),
+    name: z.string(),
+    email: z.string(),
+    phone: z.string().nullable(),
+    userId: z.string().nullable(),
+    image: z.string().nullable(),
+});
+export type Contact = z.infer<typeof Contact>;
+
+export const ContactList = z.object({ contacts: z.array(Contact) });
+export type ContactList = z.infer<typeof ContactList>;
+
+export const NewContact = z.object({
+    name: z.string().trim().min(1, 'Add their name').max(100),
+    email: z.string().trim().max(254).email('Enter a valid email address'),
+    phone: z.string().trim().max(30).optional(),
+});
+export type NewContact = z.infer<typeof NewContact>;
+
+export const ContactAdded = z.object({ contact: Contact });
+export type ContactAdded = z.infer<typeof ContactAdded>;
+
+/** A link to send a contact: to sign up, or (with a group) to join it. */
+export const ContactInviteRequest = z.object({ groupId: z.string().max(64).optional() });
+export const ContactInviteLink = z.object({ url: z.string().url(), message: z.string() });
+export type ContactInviteLink = z.infer<typeof ContactInviteLink>;
+
+export const GroupInvitationRequest = z.object({ groupId: z.string().max(64), inviteeId: z.string().max(64) });
+export type GroupInvitationRequest = z.infer<typeof GroupInvitationRequest>;
+
+/** An invitation into a group, waiting for your answer. */
+export const Invitation = z.object({ id: z.string(), groupId: z.string(), groupName: z.string(), groupEmoji: z.string(), fromName: z.string(), createdAt: z.string() });
+export type Invitation = z.infer<typeof Invitation>;
+
+export const InvitationList = z.object({ invitations: z.array(Invitation) });
+export type InvitationList = z.infer<typeof InvitationList>;
+
+export const InvitationAnswer = z.object({ accept: z.boolean() });
+export type InvitationAnswer = z.infer<typeof InvitationAnswer>;
+
+export const InvitationAnswered = z.object({ status: z.string(), groupId: z.string().nullable() });
+export type InvitationAnswered = z.infer<typeof InvitationAnswered>;
+
 /** A group's receipt photos: for each expense with one, a link that works for an hour. */
 export const GroupReceipts = z.object({ receipts: z.array(z.object({ expenseId: z.string(), url: z.string().url() })) });
 export type GroupReceipts = z.infer<typeof GroupReceipts>;

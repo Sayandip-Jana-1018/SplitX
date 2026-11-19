@@ -9,6 +9,7 @@ import { Appear } from '~/ui/Appear';
 import { AvatarStack } from '~/ui/Avatar';
 import { EmptyState } from '~/ui/EmptyState';
 import { GroupActions } from '~/ui/GroupActions';
+import { Invitations } from '~/ui/Invitations';
 import { SyncNote } from '~/ui/SyncNote';
 import { GlassButton } from '~/ui/GlassButton';
 import { members, rupees } from '~/ui/money';
@@ -35,6 +36,7 @@ export default function Groups() {
                 </Text>
             </View>
             <SyncNote />
+            <Invitations />
             <GroupActions />
             {ledger.groups.length === 0 ? <EmptyState emoji="👥" title="No groups yet" hint="Make one for a trip, a flat or a dinner, or join one with the invite link someone sent you." /> : null}
             {ledger.groups.map((group, index) => {

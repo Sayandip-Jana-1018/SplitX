@@ -18,4 +18,8 @@ describe('where a tapped notification opens in the app', () => {
         expect(screenFor('/groups/../../profile')).toBe('/home');
         expect(screenFor('https://evil.example/groups/x')).toBe('/home');
     });
+
+    it('opens Groups for an invitation into a group, where it waits to be answered', () => {
+        expect(screenFor('/invitations/inv_123')).toBe('/groups');
+    });
 });

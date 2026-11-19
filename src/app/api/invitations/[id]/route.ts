@@ -1,16 +1,16 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
-import { createNotification } from '@/lib/notifications';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
+import { answerInvitation } from '@/lib/services/contacts';
 
 const ActionSchema = z.object({
     status: z.enum(['accepted', 'declined']),
 });
 
 /**
- * PATCH /api/invitations/[id] — accept or decline an invitation
+ * PATCH /api/invitations/[id] — accept or decline an invitation (rules: src/lib/services/contacts.ts)
  */
 export async function PATCH(
     req: Request,
@@ -26,87 +26,14 @@ export async function PATCH(
         if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
         const { id } = await params;
-
         const parsed = ActionSchema.safeParse(await req.json().catch(() => null));
         if (!parsed.success) {
             return NextResponse.json({ error: 'status must be "accepted" or "declined"' }, { status: 400 });
         }
 
-        // Find the invitation
-        const invitation = await prisma.groupInvitation.findUnique({
-            where: { id },
-            include: {
-                group: { select: { id: true, name: true, emoji: true } },
-                inviter: { select: { id: true, name: true } },
-            },
-        });
-
-        if (!invitation) {
-            return NextResponse.json({ error: 'Invitation not found' }, { status: 404 });
-        }
-
-        // Only the invitee can respond
-        if (invitation.inviteeId !== user.id) {
-            return NextResponse.json({ error: 'Not your invitation' }, { status: 403 });
-        }
-
-        if (invitation.status !== 'pending') {
-            return NextResponse.json({
-                success: true,
-                status: invitation.status,
-                groupId: invitation.status === 'accepted' ? invitation.groupId : undefined,
-            });
-        }
-
-        const newStatus = parsed.data.status;
-
-        // Update invitation status
-        await prisma.groupInvitation.update({
-            where: { id },
-            data: { status: newStatus },
-        });
-
-        if (newStatus === 'accepted') {
-            // Add user to the group
-            await prisma.groupMember.upsert({
-                where: {
-                    groupId_userId: {
-                        groupId: invitation.groupId,
-                        userId: user.id,
-                    },
-                },
-                create: {
-                    groupId: invitation.groupId,
-                    userId: user.id,
-                    role: 'member',
-                },
-                update: {},
-            });
-
-            // Notify the inviter
-            await createNotification({
-                userId: invitation.inviterId,
-                type: 'group_invite_accepted',
-                title: 'Invitation Accepted!',
-                body: `${user.name || 'Someone'} accepted your invite to ${invitation.group.emoji} ${invitation.group.name}`,
-                link: `/groups/${invitation.groupId}`,
-            });
-        } else {
-            // Notify the inviter about decline
-            await createNotification({
-                userId: invitation.inviterId,
-                type: 'group_activity',
-                title: 'Invitation Declined',
-                body: `${user.name || 'Someone'} declined your invite to ${invitation.group.emoji} ${invitation.group.name}`,
-                link: `/groups/${invitation.groupId}`,
-            });
-        }
-
-        return NextResponse.json({
-            success: true,
-            status: newStatus,
-            groupId: newStatus === 'accepted' ? invitation.groupId : undefined,
-        });
+        const outcome = await answerInvitation(user, id, parsed.data.status);
+        if (!outcome.ok) return NextResponse.json({ error: outcome.error }, { status: outcome.status });
+        return NextResponse.json({ success: true, ...outcome.value });
     } catch (error) {
         logger.error('Invitation action error', { err: error });
         return NextResponse.json({ error: 'Failed to process invitation' }, { status: 500 });

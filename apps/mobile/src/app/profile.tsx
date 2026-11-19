@@ -4,7 +4,7 @@
  */
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
-import { Bell, ChevronRight, CircleHelp, LogOut, Palette, PenLine, RotateCcw, ShieldCheck, type LucideIcon } from 'lucide-react-native';
+import { Bell, ChevronRight, CircleHelp, Contact as ContactIcon, LogOut, Palette, PenLine, RotateCcw, ShieldCheck, type LucideIcon } from 'lucide-react-native';
 import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { useAuth, useYou } from '~/auth/AuthProvider';
@@ -69,6 +69,7 @@ export default function Profile() {
     };
     const rows: Row[] = [
         ...(signedIn ? [{ icon: PenLine, label: 'Name and UPI ID', onPress: () => router.push({ pathname: '/your-name', params: { edit: '1' } }) }] : []),
+        { icon: ContactIcon, label: 'Contacts', onPress: () => router.push('/contacts') },
         { icon: Palette, label: 'Appearance', onPress: () => router.push('/appearance') },
         signedIn
             ? { icon: Bell, label: 'Notifications', onPress: notifications, detail: push.state === 'on' ? 'On' : push.state === 'asked-no' ? 'Blocked' : push.state === 'unsupported' ? 'In the app' : 'Off' }

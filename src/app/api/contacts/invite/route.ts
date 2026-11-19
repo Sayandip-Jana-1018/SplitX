@@ -3,15 +3,16 @@ import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
+import { contactInvite } from '@/lib/services/contacts';
 import { siteUrl } from '@/lib/siteUrl';
-import { inviteIsLive, replaceInviteCode } from '@/lib/groupInvite';
 
 const InviteSchema = z.object({
     contactId: z.string().min(1).max(64),
     groupId: z.string().min(1).max(64).optional(),
 });
 
-// POST /api/contacts/invite — send an invite to a contact
+// POST /api/contacts/invite — a link and message to send a contact (to sign up, or to join one of
+// your groups); the page shares it. The rules live in src/lib/services/contacts.ts.
 export async function POST(req: Request) {
     try {
         const session = await auth();
@@ -27,47 +28,15 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
         }
 
-        // Get the contact
-        const contact = await prisma.contact.findFirst({
-            where: { id: parsed.data.contactId, ownerId: user.id },
-        });
-        if (!contact) {
-            return NextResponse.json({ error: 'Contact not found' }, { status: 404 });
-        }
-
-        // Build the invite URL: the site's public address, never a localhost fallback.
-        const site = siteUrl(req);
-        let inviteUrl = `${site}/register`;
-
-        // A group's invite link goes only to its own members: anyone holding the
-        // code can join. This used to answer for any group ID it was given.
-        if (parsed.data.groupId) {
-            const group = await prisma.group.findFirst({
-                where: {
-                    id: parsed.data.groupId,
-                    deletedAt: null,
-                    OR: [{ ownerId: user.id }, { members: { some: { userId: user.id } } }],
-                },
-                select: { id: true, inviteCode: true, inviteCodeIssuedAt: true },
-            });
-            if (!group) {
-                return NextResponse.json({ error: 'Group not found' }, { status: 404 });
-            }
-            // Never an expired link: a member may renew one (lib/groupInvite.ts).
-            const { inviteCode } = inviteIsLive(group.inviteCodeIssuedAt)
-                ? group
-                : await replaceInviteCode(group.id, group.inviteCode);
-            inviteUrl = `${site}/join/${inviteCode}`;
-        }
-
-        // For now, return the invite URL — in production you'd use SendGrid/Resend/etc.
-        // The frontend will use the native share API to send via mail/message
+        // The site's public address, never a localhost fallback.
+        const outcome = await contactInvite(user.id, parsed.data.contactId, parsed.data.groupId, siteUrl(req) ?? new URL(req.url).origin);
+        if (!outcome.ok) return NextResponse.json({ error: outcome.error }, { status: outcome.status });
         return NextResponse.json({
             success: true,
-            inviteUrl,
-            contactEmail: contact.email,
-            contactName: contact.name,
-            message: `Hey ${contact.name}! Join me on SplitIT to split expenses easily. Click here: ${inviteUrl}`,
+            inviteUrl: outcome.value.url,
+            contactEmail: outcome.value.email,
+            contactName: outcome.value.name,
+            message: outcome.value.message,
         });
     } catch (error) {
         logger.error('Invite error', { err: error });
