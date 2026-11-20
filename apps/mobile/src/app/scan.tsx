@@ -2,14 +2,15 @@
  * Scanning a bill: a photo from the camera or from your photos, read by the server's AI (the
  * website's own scan, POST /api/v1/receipts/scan), and shown back for you to check: every item,
  * the taxes and charges, and the printed total. Adding it opens a new expense already filled in,
- * with the photo kept as its receipt.
+ * with the photo kept as its receipt; or splitting it item by item, by who had what (SplitByItems).
  *
  * The photo is shrunk on the phone first (scanPhoto.ts). The reading needs a connection and an
- * account; without either, the screen says so and offers adding by hand.
+ * account; without either, the screen says so and offers adding by hand. The demo shows a sample
+ * bill instead, read as the server would read it, so its results and splitting can be tried.
  */
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
-import { Camera, ImageIcon, RotateCcw, TriangleAlert } from 'lucide-react-native';
+import { Camera, ImageIcon, ListChecks, RotateCcw, TriangleAlert } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Image, View } from 'react-native';
 import type { ReceiptScan } from '@/lib/contract/v1';
@@ -24,10 +25,37 @@ import { GlassButton } from '~/ui/GlassButton';
 import { Header } from '~/ui/Header';
 import { rupees } from '~/ui/money';
 import { Screen } from '~/ui/Screen';
+import { SplitByItems } from '~/ui/SplitByItems';
 import { Text } from '~/ui/Text';
 import { useToast } from '~/ui/Toast';
 
-type Stage = { kind: 'choose' } | { kind: 'reading'; uri: string } | { kind: 'read'; uri: string; scan: ReceiptScan } | { kind: 'failed'; uri: string; message: string };
+type Stage =
+    | { kind: 'choose' }
+    | { kind: 'reading'; uri: string }
+    | { kind: 'read'; uri: string; scan: ReceiptScan }
+    | { kind: 'split'; uri: string; scan: ReceiptScan }
+    | { kind: 'failed'; uri: string; message: string };
+
+/** The demo's bill: the sample every Gemini model read right on 21 November. */
+const SAMPLE: ReceiptScan = {
+    merchant: 'Spice Route Kitchen',
+    date: '2026-11-14',
+    items: [
+        { name: 'Paneer Tikka', quantity: 1, price: 32_000 },
+        { name: 'Butter Naan', quantity: 4, price: 24_000 },
+        { name: 'Dal Makhani', quantity: 1, price: 28_000 },
+        { name: 'Chicken Biryani', quantity: 2, price: 70_000 },
+        { name: 'Fresh Lime Soda', quantity: 3, price: 27_000 },
+        { name: 'Gulab Jamun', quantity: 2, price: 22_000 },
+    ],
+    subtotal: 203_000,
+    taxes: { 'Service Charge 5%': 10_150, 'CGST 2.5%': 5_075, 'SGST 2.5%': 5_075 },
+    total: 223_300,
+    currency: 'INR',
+    category: 'food',
+    confidence: 0.99,
+    notes: null,
+};
 
 /** After this long, the reading says it is taking a careful second look. */
 const SLOW_MS = 9_000;
@@ -55,11 +83,22 @@ export default function Scan() {
         [],
     );
 
-    if (auth.status !== 'signed_in') {
+    if (auth.status !== 'signed_in' && stage.kind === 'choose') {
         return (
             <Screen tabBar={false}>
                 <Header title="Scan a bill" close />
-                <EmptyState emoji="🧾" title="Scanning needs an account" hint="Sign in, and SplitIT reads your bills for you: every item, the taxes and the total." />
+                <EmptyState
+                    emoji="🧾"
+                    title="Scanning needs an account"
+                    hint="Sign in, and SplitIT reads your bills for you: every item, the taxes and the total."
+                    action={
+                        <GlassButton kind="thin" contentStyle={{ height: 46, paddingHorizontal: 22 }} onPress={() => setStage({ kind: 'read', uri: '', scan: SAMPLE })}>
+                            <Text variant="label" weight="bold">
+                                Try a sample bill
+                            </Text>
+                        </GlassButton>
+                    }
+                />
             </Screen>
         );
     }
@@ -98,16 +137,19 @@ export default function Scan() {
     const addIt = (uri: string, scan: ReceiptScan) => {
         router.replace({
             pathname: '/add',
-            params: { amount: String(scan.total), title: scan.merchant ?? '', category: knownCategory(scan.category), receipt: uri },
+            params: { amount: String(scan.total), title: scan.merchant ?? '', category: knownCategory(scan.category), ...(uri ? { receipt: uri } : {}) },
         });
     };
 
     return (
         <Screen tabBar={false}>
-            <Header title="Scan a bill" close />
+            <Header title={stage.kind === 'split' ? 'Split by item' : 'Scan a bill'} eyebrow={stage.kind === 'split' ? (stage.scan.merchant ?? undefined) : undefined} close />
             {stage.kind === 'choose' ? <Choose onPick={pick} /> : null}
             {stage.kind === 'reading' ? <Reading uri={stage.uri} slow={slow} /> : null}
-            {stage.kind === 'read' ? <Result uri={stage.uri} scan={stage.scan} onAdd={() => addIt(stage.uri, stage.scan)} onAgain={() => setStage({ kind: 'choose' })} /> : null}
+            {stage.kind === 'read' ? (
+                <Result uri={stage.uri} scan={stage.scan} onAdd={() => addIt(stage.uri, stage.scan)} onSplit={() => setStage({ kind: 'split', uri: stage.uri, scan: stage.scan })} onAgain={() => setStage({ kind: 'choose' })} />
+            ) : null}
+            {stage.kind === 'split' ? <SplitByItems scan={stage.scan} receipt={stage.uri} /> : null}
             {stage.kind === 'failed' ? <Failed uri={stage.uri} message={stage.message} onAgain={() => setStage({ kind: 'choose' })} /> : null}
         </Screen>
     );
@@ -141,6 +183,8 @@ function Choose({ onPick }: { onPick: (from: 'camera' | 'photos') => void }) {
 }
 
 function Photo({ uri, dim }: { uri: string; dim?: boolean }) {
+    // The demo's sample bill has no photo.
+    if (!uri) return null;
     return (
         <GlassSurface style={{ padding: 8, alignItems: 'center' }}>
             <Image source={{ uri }} resizeMode="contain" accessibilityIgnoresInvertColors style={{ width: '100%', height: 220, borderRadius: 16, opacity: dim ? 0.55 : 1 }} />
@@ -191,7 +235,7 @@ function Warning({ children }: { children: string }) {
     );
 }
 
-function Result({ uri, scan, onAdd, onAgain }: { uri: string; scan: ReceiptScan; onAdd: () => void; onAgain: () => void }) {
+function Result({ uri, scan, onAdd, onSplit, onAgain }: { uri: string; scan: ReceiptScan; onAdd: () => void; onSplit: () => void; onAgain: () => void }) {
     const { tokens } = useLook();
     const taxes = Object.entries(scan.taxes);
     const when = scan.date ? new Date(`${scan.date}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : null;
@@ -240,6 +284,14 @@ function Result({ uri, scan, onAdd, onAgain }: { uri: string; scan: ReceiptScan;
                     {`Add ${rupees(scan.total)} as an expense`}
                 </Text>
             </GlassButton>
+            {scan.items.length > 1 ? (
+                <GlassButton kind="thin" contentStyle={{ height: 52, flexDirection: 'row', gap: 8 }} accessibilityLabel="Split the bill item by item" onPress={onSplit}>
+                    <ListChecks size={18} color={tokens.fg} strokeWidth={2.2} />
+                    <Text variant="label" weight="bold">
+                        Split item by item
+                    </Text>
+                </GlassButton>
+            ) : null}
             <GlassButton kind="thin" contentStyle={{ height: 48, flexDirection: 'row', gap: 8 }} onPress={onAgain}>
                 <RotateCcw size={17} color={tokens.fg} strokeWidth={2.2} />
                 <Text variant="label" weight="bold">
