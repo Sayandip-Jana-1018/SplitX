@@ -1,9 +1,8 @@
 # ═══════════════════════════════════════════════════════════════
 #   SplitIT — the live site, checked every 15 minutes (D-106)
 #
-#   Production is splitsj.vercel.app. Prometheus, Alertmanager and the
-#   rest run only on the Kind runs and the AWS days, so without this
-#   nothing would notice the site real people use going down.
+#   Production is splitsj.vercel.app. Nothing else watches it, so without
+#   this nothing would notice the site real people use going down.
 #
 #   scripts/uptime.mjs asks what a visitor's browser asks: the app, the
 #   home page and its own JavaScript, the security headers, the sign-in
@@ -11,9 +10,6 @@
 #   20 s later; one that fails twice fails the run, and GitHub emails
 #   the failure. The run also opens an issue for the incident, and
 #   closes it with the outage's length when every check passes again.
-#
-#   GitHub starts scheduled runs late when it is busy, sometimes by
-#   hours, so /ops calls a quiet spell late before it calls it stopped.
 # ═══════════════════════════════════════════════════════════════
 name: Production checks
 

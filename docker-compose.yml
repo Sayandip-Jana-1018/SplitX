@@ -1,73 +1,15 @@
 # ═══════════════════════════════════════════════════════════════
-#   SplitIT — Full Development Stack
-#   Run: docker compose --profile ci up -d
-#   App only: docker compose up -d
+#   SplitIT — the two services local development needs
+#   Run: docker compose up -d postgres redis
 #
-#   Required in .env: POSTGRES_PASSWORD, REDIS_PASSWORD, METRICS_TOKEN (see .env.example).
-#   Monitoring (Prometheus, Grafana, Loki) runs in the Kubernetes cluster, not
-#   here: `npm run k8s:up`, then http://grafana.localhost (D-052).
-#   So does Jenkins, which deploys releases to it: http://jenkins.localhost
-#   (D-055). The old Compose Jenkins mounted the Docker socket, root on the VM.
-#   The app's images are pinned by digest (the ci profile's only by version),
-#   and every service has a memory limit so the whole stack fits the 10 GB
-#   Docker VM. Build the app image with provenance using `npm run image:build`;
-#   Compose then just runs `splitx:local`.
-#   Every port except the app binds to 127.0.0.1 — admin UIs with known
-#   defaults must not be reachable from a shared network (e.g. campus wifi).
-#   Postgres/Redis use host ports 5433/6380 so they can't be shadowed by a
-#   native Postgres/Redis already listening on 5432/6379.
+#   Required in .env: POSTGRES_PASSWORD, REDIS_PASSWORD (see .env.example).
+#   The app itself runs with `npm run dev`; production is Vercel, Neon and
+#   Upstash. Postgres 17 and Redis 7.4, as CI tests against.
+#   Both bind to 127.0.0.1 only, on host ports 5433/6380 so they can't be
+#   shadowed by a native Postgres/Redis already listening on 5432/6379.
 # ═══════════════════════════════════════════════════════════════
 
 services:
-
-  # ── SplitIT Application ──
-  splitx:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        # Filled in by `npm run image:build` (git commit, version, build time);
-        # a plain `docker compose build` leaves them unknown.
-        GIT_SHA: ${GIT_SHA:-unknown}
-        APP_VERSION: ${APP_VERSION:-dev}
-        BUILD_DATE: ${BUILD_DATE:-unknown}
-    image: splitx:local
-    container_name: splitx-app
-    deploy:
-      resources:
-        limits:
-          memory: 1g
-          cpus: "2"
-    ports:
-      - "3000:3000"
-    env_file:
-      - .env
-    environment:
-      NODE_ENV: production
-      PORT: 3000
-      HOSTNAME: "0.0.0.0"
-      NEXTAUTH_URL: "http://localhost:3000"
-      DATABASE_URL: "postgresql://splitx:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/splitx"
-      DIRECT_URL: "postgresql://splitx:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/splitx"
-      METRICS_TOKEN: ${METRICS_TOKEN:?Set METRICS_TOKEN in .env}
-      # Rate limiting uses the compose Redis over TCP (takes precedence over Upstash).
-      REDIS_URL: "redis://:${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}@redis:6379/0"
-      # Nothing sits in front of the container locally, so no forwarded address is trustworthy.
-      TRUSTED_PROXY_HOPS: "0"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000/api/health/live"]
-      interval: 30s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-    networks:
-      - splitx-network
 
   # ── PostgreSQL (Local Development DB) ──
   postgres:
@@ -91,8 +33,6 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
-    networks:
-      - splitx-network
 
   # ── Redis (rate limiting) ──
   # Limiter counters are ephemeral by design: no persistence, bounded memory,
@@ -126,55 +66,6 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
-    networks:
-      - splitx-network
-
-  # ── SonarQube (Code Quality Analysis) ──
-  sonarqube:
-    image: sonarqube:26.9.0.129388-community
-    container_name: splitx-sonarqube
-    deploy:
-      resources:
-        limits:
-          memory: 3g
-    profiles: ["ci"]
-    ports:
-      - "127.0.0.1:9000:9000"
-    environment:
-      SONAR_ES_BOOTSTRAP_CHECKS_DISABLE: "true"
-    volumes:
-      - sonarqube_data:/opt/sonarqube/data
-      - sonarqube_logs:/opt/sonarqube/logs
-      - sonarqube_extensions:/opt/sonarqube/extensions
-    restart: unless-stopped
-    networks:
-      - splitx-network
-
-  # ── Nexus (Artifact Repository) ──
-  nexus:
-    image: sonatype/nexus3:3.96.3@sha256:a406f4e9dc149e050723a93bf57964311f6d1c88e1dcbed2e42ea373319a1772
-    container_name: splitx-nexus
-    deploy:
-      resources:
-        limits:
-          memory: 2g
-    profiles: ["ci"]
-    ports:
-      - "127.0.0.1:8081:8081"
-      - "127.0.0.1:8082:8082"
-    volumes:
-      - nexus_data:/nexus-data
-    restart: unless-stopped
-    networks:
-      - splitx-network
 
 volumes:
   postgres_data:
-  sonarqube_data:
-  sonarqube_logs:
-  sonarqube_extensions:
-  nexus_data:
-
-networks:
-  splitx-network:
-    driver: bridge

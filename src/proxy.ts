@@ -34,7 +34,6 @@ const PROTECTED_ROUTES = [
     '/settings',
     '/history',
     '/admin',
-    '/ops',
 ];
 
 // Routes that should redirect to dashboard if already authenticated
@@ -83,8 +82,8 @@ function clearSessionCookies(request: NextRequest, response: NextResponse) {
  * API Gateway HTTP API (D-114). The load balancer is open to the internet, the
  * only way API Gateway can reach it, so anyone could call it directly and skip
  * the edge's HTTPS. The edge adds this header with a value only it has
- * (terraform/edge, from Secrets Manager). Where ORIGIN_VERIFY_SECRET is unset
- * (Vercel, Kind) nothing changes.
+ * (terraform/edge at the tag devops-submission, from Secrets Manager). Where
+ * ORIGIN_VERIFY_SECRET is unset, as on Vercel, nothing changes.
  */
 const ORIGIN_VERIFY_HEADER = 'x-origin-verify';
 // Reached directly, not through the edge: the load balancer's health check and

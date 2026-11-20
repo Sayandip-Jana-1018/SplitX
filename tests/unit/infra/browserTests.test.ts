@@ -4,8 +4,8 @@ import { describe, expect, it } from 'vitest';
 /*
  * The browser tests (tests/e2e, D-107) run in CI's e2e job. What makes them
  * worth having is where they run: a production build (the service worker and
- * the secure session cookie exist only there), a real Postgres and Redis, and
- * a release that waits for them. These checks keep it that way.
+ * the secure session cookie exist only there), and a real Postgres and Redis.
+ * These checks keep it that way.
  */
 
 const ci = readFileSync('.github/workflows/ci.yml', 'utf8').replaceAll('\r\n', '\n');
@@ -28,11 +28,6 @@ describe('the e2e job', () => {
     it('uses no repository secret: its session secret is made for the run, and masked', () => {
         expect(job).not.toContain('secrets.');
         expect(job).toContain('echo "::add-mask::$secret"');
-    });
-
-    it('is one of the jobs a release waits for', () => {
-        const needs = /\n {2}release:\n[\s\S]*?\n {4}needs: \[([^\]]+)\]/.exec(ci)?.[1].split(',').map((name) => name.trim());
-        expect(needs).toContain('e2e');
     });
 
     it('keeps the report when something fails', () => {

@@ -10,16 +10,10 @@
             "entry": [
                 // Run by hand or by a workflow, as `node scripts/<name>.mjs`.
                 "scripts/*.mjs",
-                // Run by Jenkins' pipeline (Jenkinsfile) and by the relay's container.
-                "jenkins/**/*.mjs",
-                // Run by the Nexus provisioning Job (nexus/provision.yaml).
-                "nexus/*.mjs",
                 // Loaded by the browser, never imported.
                 "public/sw.js"
             ],
             "ignore": [
-                // k6 scripts: they run in k6, not in Node.
-                "load/**",
                 // The phone app, a separate project with its own packages and checks.
                 "apps/**"
             ],
@@ -32,24 +26,9 @@
                 "postcss-load-config"
             ],
             "ignoreBinaries": [
-                // Installed on the machine or the runner, not from npm. cosign is in
-                // Jenkins' agent image (jenkins/deploy.mjs verifies releases with it).
-                "gitleaks",
-                "kubectl",
-                "kind",
-                "cosign",
-                // macOS only: scripts/lib/power.mjs keeps a Mac awake during a cluster run.
-                "pmset"
+                // Installed on the machine or the runner, not from npm.
+                "gitleaks"
             ]
-        },
-        // ops-api and the traffic lab: their own package, image and dependencies (D-097).
-        "ops": {
-            "ignore": [
-                // The lab's k6 script, run by k6.
-                "lab/preview.js"
-            ],
-            // Copied into the ops image from Grafana's k6 image (ops/Dockerfile).
-            "ignoreBinaries": ["k6"]
         }
     }
 }

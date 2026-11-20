@@ -1,5 +1,9 @@
 # Demo day: the runbook
 
+> **A record, not a guide (2026-11-20).** The DevOps platform this runbook drives was retired from `main` after the project was signed off
+> ([D-125](DECISIONS.md)). The files it names are at the tag
+> [`devops-submission`](https://github.com/Sayandip-Jana-1018/SplitIT/tree/devops-submission), as submitted.
+
 SplitIT's demo platform runs on AWS only on the two days that need it: the **rehearsal** and the
 **demo**. `aws-up` builds it that morning, and `aws-down` removes it that evening, or at 23:30 IST by
 itself. On any other day, `splitsj.vercel.app` serves the app, and the edge's address answers 404.

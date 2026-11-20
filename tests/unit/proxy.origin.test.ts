@@ -4,7 +4,7 @@ import { metrics } from '@/lib/metrics';
 import { setRateLimitStore } from '@/lib/rateLimit';
 import type { RateLimitStore } from '@/lib/rateLimit/store';
 import { proxy } from '@/proxy';
-import { INTERNAL_SPELLINGS } from '../../scripts/lib/platform-checks.mjs';
+import { INTERNAL_SPELLINGS } from '../helpers/internalSpellings';
 
 /*
  * On the EKS platform the load balancer is open to the internet, the only way

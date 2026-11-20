@@ -5613,6 +5613,32 @@ it again unless a fixed k6 has replaced it. The reason: the fix distrusts a few 
 
 ---
 
+## Phase 19 — The app after the course
+
+### D-125 · The DevOps platform retires from main
+**2026-11-20** · ✅ done, at the user's request.
+
+The project was submitted and signed off on 2026-10-10, and the AWS account closed after it. What stayed on `main` kept running for nobody: Kind end-to-end every night
+(failing since the platform's AWS half went), `aws-down` every night against an account that no longer exists, and a release job that built, scanned and signed images no cluster
+pulls, held open by k6 exceptions due to expire on 2026-12-15. The app is Vercel, Neon and Upstash, and now a phone app too.
+
+**Kept as it was submitted:** the tag [`devops-submission`](https://github.com/Sayandip-Jana-1018/SplitIT/tree/devops-submission) is commit 8105192, the state that was signed off,
+with every file this decision removes. The workflow runs stay in Actions, and this log, the runbook and `docs/evidence/` stay here, so the submitted report's links still open.
+
+**Removed from main:** `k8s/`, `helm/`, `terraform/`, `cloudformation/`, `jenkins/`, `nexus/`, `monitoring/`, `policy/`, `load/`, `ops/` (ops-api and the traffic lab),
+`synopsis/`, the Dockerfiles and bake file, the AWS and demo guides, the five `aws-*` and `kind-e2e` workflows and their composite actions, CI's `manifests`, `iac`,
+`terraform` and `release` jobs, the `/ops` page and its API, and the scripts and tests that served only those.
+
+**Kept, because the app uses them:** CI's checks, the real-database job (minus the cluster's `schema.sql` comparison) and the browser tests; the secret scan, CodeQL and
+SonarQube Cloud; the production checks every 15 minutes (D-106); the production database workflow and its restore drill; the phone app's APK build; and a Compose file with
+just the local Postgres and Redis.
+
+**Not yet decided:** `/scale` and the public settlement preview behind it were built for the autoscaling demo, and the proxy's preview admission, the preview's rate limit, the
+EKS edge's origin check (a no-op without `ORIGIN_VERIFY_SECRET`) and the Prometheus metrics (`/api/metrics`, token-protected) are woven into the site's request path. They work
+on Vercel, so removing them is a change to the app, made separately if at all.
+
+---
+
 ## Open problems
 
 | ID | Problem | Why it matters | Status / planned fix |

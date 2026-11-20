@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { isInternalPath } from '@/lib/security/internalPaths';
-import { INTERNAL_SPELLINGS } from '../../scripts/lib/platform-checks.mjs';
+import { INTERNAL_SPELLINGS } from '../helpers/internalSpellings';
 
 describe('the internal paths, however they are spelled (D-043, D-114)', () => {
     it.each(INTERNAL_SPELLINGS)('knows %s', (path) => {

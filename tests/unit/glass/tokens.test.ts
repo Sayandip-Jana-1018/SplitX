@@ -56,7 +56,6 @@ describe('one colour', () => {
         /receiptUpload\.ts/,
         /app\/layout\.tsx/,
         /glass-lab\//,
-        /app\/\(app\)\/ops\//,
         /styles\/themes\//,
     ];
     const HEX = /#[0-9a-fA-F]{3,8}\b/g;
