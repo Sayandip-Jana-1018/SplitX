@@ -18,7 +18,7 @@
  * the canvas reaches MARGIN past the layer on every side so shadows at the edge aren't cut off.
  */
 import { Canvas, Picture, Skia, type SkPicture } from '@shopify/react-native-skia';
-import { useIsFocused } from 'expo-router';
+import { useFocusEffect, useIsFocused } from 'expo-router';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Keyboard, PixelRatio, useWindowDimensions, View, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native';
 import { useAnimatedReaction, useFrameCallback, useSharedValue, type SharedValue } from 'react-native-reanimated';
@@ -365,6 +365,14 @@ interface Strip {
 const AHEAD = 160;
 
 /**
+ * How long after its screen is left a page lets its strips go. Every canvas holds its own GPU
+ * buffers: with each tab's strips kept, four tabs held 640 MB of graphics memory on a Galaxy S23
+ * Ultra. Long enough for the screen leaving to finish fading with its glass on; coming back, the
+ * strips are drawn again within a frame or two, while the screen is still fading in.
+ */
+const RELEASE_MS = 600;
+
+/**
  * The glass inside a vertical scroll view, drawn in strips half a window tall that are part of the
  * scrolling content. A canvas behind the scroll view, as GlassLayer draws, can only follow a
  * scroll: the words move with the phone's own scrolling at once, and the canvas draws the glass at
@@ -413,6 +421,20 @@ function Strips({ root, relayout, entries, kit, offset }: StripsProps) {
     const [range, setRange] = useState({ first: 0, last: 2 });
     const [strips, setStrips] = useState<Strip[]>([]);
     const signature = useSharedValue(Number.NaN);
+
+    // A screen that isn't showing lets its strips go (RELEASE_MS), and takes them back when it is.
+    const [released, setReleased] = useState(false);
+    const releaseTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+    useFocusEffect(
+        useCallback(() => {
+            clearTimeout(releaseTimer.current);
+            setReleased(false);
+            return () => {
+                releaseTimer.current = setTimeout(() => setReleased(true), RELEASE_MS);
+            };
+        }, []),
+    );
+    useEffect(() => () => clearTimeout(releaseTimer.current), []);
 
     // The strips within one strip of the window are mounted, ready before they scroll into view.
     useAnimatedReaction(
@@ -475,7 +497,7 @@ function Strips({ root, relayout, entries, kit, offset }: StripsProps) {
     // No strip past the content's end (its last pane's shadow included).
     const lastIndex = Math.min(range.last, Math.floor((box.height + MARGIN) / stripHeight));
     const indices: number[] = [];
-    if (box.width > 0) for (let index = range.first; index <= lastIndex; index++) indices.push(index);
+    if (box.width > 0 && !released) for (let index = range.first; index <= lastIndex; index++) indices.push(index);
 
     return (
         // The content's own box: the strips sit in it, behind the words, and scroll with them.
