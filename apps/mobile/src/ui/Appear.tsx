@@ -11,6 +11,10 @@
  *
  * Toasts and the onboarding pages keep Reanimated's animations: they need exit animations, and
  * nothing above them moves.
+ *
+ * `rise`: it also comes up from that many points below, as a transform (layout is untouched). Only
+ * for content with no glass inside: a pane of glass draws where it was measured, not where a
+ * transform moves its content.
  */
 import { useEffect } from 'react';
 import type { ViewProps } from 'react-native';
@@ -21,9 +25,10 @@ interface Props extends ViewProps {
     /** Milliseconds before it starts. */
     delay?: number;
     duration?: number;
+    rise?: number;
 }
 
-export function Appear({ delay = 0, duration = 380, style, ...rest }: Props) {
+export function Appear({ delay = 0, duration = 380, rise = 0, style, ...rest }: Props) {
     const { calm } = useLook();
     const opacity = useSharedValue(calm ? 1 : 0);
 
@@ -37,6 +42,6 @@ export function Appear({ delay = 0, duration = 380, style, ...rest }: Props) {
         if (calm) opacity.set(1);
     }, [calm, opacity]);
 
-    const fade = useAnimatedStyle(() => ({ opacity: opacity.value }));
+    const fade = useAnimatedStyle(() => (rise ? { opacity: opacity.value, transform: [{ translateY: (1 - opacity.value) * rise }] } : { opacity: opacity.value }));
     return <Animated.View style={[style, fade]} {...rest} />;
 }

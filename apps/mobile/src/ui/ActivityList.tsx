@@ -9,6 +9,7 @@ import type { ActivityItem } from '~/data/ledger';
 import { useLedger } from '~/data/LedgerProvider';
 import { GlassSurface } from '~/glass/GlassSurface';
 import { useLook } from '~/theme/ThemeProvider';
+import { Appear } from './Appear';
 import { categoryEmoji } from './category';
 import { EmptyState } from './EmptyState';
 import { rupees } from './money';
@@ -47,8 +48,9 @@ function Sheet({ items, showGroup, timeOnly = false }: { items: ActivityItem[]; 
     return (
         <GlassSurface style={{ paddingHorizontal: 16, paddingVertical: 4 }}>
             {items.map((item, index) => (
+                // The first rows come in one after another; the rest are there already.
+                <Appear key={item.id} delay={Math.min(index, 8) * 45} duration={320} rise={index < 8 ? 10 : 0}>
                 <Pressable
-                    key={item.id}
                     disabled={item.kind !== 'expense'}
                     accessibilityRole={item.kind === 'expense' ? 'button' : undefined}
                     onPress={() => router.push(`/expense/${item.id}`)}
@@ -75,6 +77,7 @@ function Sheet({ items, showGroup, timeOnly = false }: { items: ActivityItem[]; 
                         </Text>
                     </View>
                 </Pressable>
+                </Appear>
             ))}
         </GlassSurface>
     );

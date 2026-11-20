@@ -22,6 +22,7 @@ import { rupees } from '~/ui/money';
 import { RollingAmount } from '~/ui/RollingAmount';
 import { Screen } from '~/ui/Screen';
 import { Segmented } from '~/ui/Segmented';
+import { SettledUp } from '~/ui/SettledUp';
 import { SettleMap } from '~/ui/SettleMap';
 import { SyncNote } from '~/ui/SyncNote';
 import { Text } from '~/ui/Text';
@@ -185,7 +186,7 @@ export default function Settle() {
 
             {view === 'pending' ? (
                 mine.length === 0 ? (
-                    <EmptyState emoji="🎉" title="All settled up" hint={scope === ALL ? 'Nobody owes anybody in your groups. Enjoy it.' : 'Nothing between you and anyone here. Enjoy it.'} />
+                    <SettledUp hint={scope === ALL ? 'Nobody owes anybody in your groups. Enjoy it.' : 'Nothing between you and anyone here. Enjoy it.'} />
                 ) : (
                     <GlassSurface style={{ paddingHorizontal: 14, paddingVertical: 4 }}>
                         {mine.map((transfer, index) => {
