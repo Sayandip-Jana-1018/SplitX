@@ -20,15 +20,10 @@ describe('policyFor', () => {
         ['GET', '/api/auth/providers'],
         ['GET', '/api/health/live'],
         ['GET', '/api/health/ready'],
-        ['GET', '/api/metrics'],
         ['GET', '/dashboard'],
         ['GET', '/_next/data/abc.json'],
     ])('never limits %s %s', (method, path) => {
         expect(policyFor(method, path)).toBeNull();
-    });
-
-    it('gives the CPU-heavy settlement preview its own tighter limit, per identity', () => {
-        expect(policyFor('POST', '/api/settlements/preview')).toMatchObject({ name: 'preview', limit: 60, keyBy: 'identity' });
     });
 
     it.each([
@@ -43,11 +38,11 @@ describe('policyFor', () => {
     it('reads per-environment limits and ignores invalid values', () => {
         vi.stubEnv('RATE_LIMIT_API_PER_MINUTE', '600');
         vi.stubEnv('RATE_LIMIT_AUTH_PER_MINUTE', '5');
-        vi.stubEnv('RATE_LIMIT_PREVIEW_PER_MINUTE', 'nope');
+        vi.stubEnv('RATE_LIMIT_API_NETWORK_PER_MINUTE', 'nope');
         vi.stubEnv('RATE_LIMIT_AUTH_NETWORK_PER_MINUTE', '500');
         expect(policyFor('POST', '/api/register')?.networkLimit).toBe(500);
         expect(policyFor('GET', '/api/groups')?.limit).toBe(600);
         expect(policyFor('POST', '/api/register')?.limit).toBe(5);
-        expect(policyFor('POST', '/api/settlements/preview')?.limit).toBe(60);
+        expect(policyFor('GET', '/api/groups')?.networkLimit).toBe(3_600);
     });
 });

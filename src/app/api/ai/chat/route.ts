@@ -3,7 +3,6 @@ import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { isFeatureEnabled } from '@/lib/featureFlags';
-import { recordAiChat } from '@/lib/metrics';
 import { takeAiQuota } from '@/lib/aiQuota';
 import { generateWithGemini } from '@/lib/gemini';
 import { loadGroupLedgers, planLedgerTransfers } from '@/lib/ledger';
@@ -182,7 +181,6 @@ export async function POST(req: Request) {
         let reply: string;
         if (quota && !quota.ok) {
             reply = `_${quota.error} Here is a quick answer from your data._\n\n${localAnswer()}`;
-            recordAiChat('local', 'ok');
         } else if (quota) {
             const gemini = await generateWithGemini({
                 system: systemPrompt(context),
@@ -194,10 +192,8 @@ export async function POST(req: Request) {
             });
             if (!gemini.ok) logger.warn('Gemini chat unavailable', { reason: gemini.reason, status: gemini.status });
             reply = gemini.ok ? gemini.text : BUSY_NOTE + localAnswer();
-            recordAiChat('gemini', gemini.ok ? 'ok' : 'error');
         } else {
             reply = localAnswer();
-            recordAiChat('local', 'ok');
         }
 
         try {

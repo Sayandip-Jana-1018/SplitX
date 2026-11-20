@@ -64,7 +64,7 @@ the tag [`devops-submission`](https://github.com/Sayandip-Jana-1018/SplitIT/tree
 what it measured is in [docs/evidence](docs/evidence/).
 
 Every decision, what was rejected, and the measurement behind each claim is in
-**[docs/DECISIONS.md](docs/DECISIONS.md)**: 125 decisions, with the open problems at the end.
+**[docs/DECISIONS.md](docs/DECISIONS.md)**: 126 decisions, with the open problems at the end.
 
 ---
 
@@ -81,7 +81,6 @@ Every decision, what was rejected, and the measurement behind each claim is in
   ceiling per network, so a classroom behind one address isn't refused as one person
   ([D-045](docs/DECISIONS.md), [D-076](docs/DECISIONS.md)).
 - **Everywhere:** installable as a PWA, in solid colours and blends, light and dark, built for phones first.
-- **`/scale`:** the public demo page from the course. Plan a trip for up to 2,000 people.
 
 ### The settlement engine
 

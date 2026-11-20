@@ -1,27 +1,25 @@
-import { timingSafeEqual } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 import { logger } from '@/lib/logger';
-import { metrics, recordProxyDecision, type ProxyDecision } from '@/lib/metrics';
 import { newTraceContext, REQUEST_ID_HEADER, type TraceContext } from '@/lib/observability/trace';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { clientIp } from '@/lib/rateLimit/clientIp';
 import { hitIdentityLocally } from '@/lib/rateLimit/local';
 import { DEVICE_COOKIE, deviceCookieOptions, mintDevice, verifyDevice } from '@/lib/rateLimit/device';
 import { resolveIdentity, verifiedSessionUserId } from '@/lib/rateLimit/identity';
-import { PREVIEW_ADMISSION_HEADER, tryAdmitPreview } from '@/lib/previewAdmission';
-import { arrivalTime, previewMaxQueueMs, REQUEST_START_HEADER, requestStartValue } from '@/lib/requestQueue';
-import { isInternalPath } from '@/lib/security/internalPaths';
 
 /**
  * Next.js Proxy — runs on every matched request.
  * Handles: request IDs, auth redirects, rate limiting, security headers.
  *
- * HTTP metrics are not recorded here: the proxy returns before the route
- * handler runs, so it can see neither the real status code nor the real
- * duration. They come from the request span in lib/observability/httpMetrics.ts.
+ * Requests that reach a route get their access log line from the request span
+ * (lib/observability/requestLog.ts), which knows the real status and duration;
+ * the proxy returns before the route runs, so it logs only what it answers itself.
  */
+
+/** What the proxy did with a request, for its log line. */
+type ProxyDecision = 'pass' | 'redirect_login' | 'redirect_dashboard' | 'rate_limited' | 'limiter_error';
 
 // Routes that require authentication
 const PROTECTED_ROUTES = [
@@ -77,75 +75,13 @@ function clearSessionCookies(request: NextRequest, response: NextResponse) {
     return response;
 }
 
-/**
- * On the EKS platform, only requests that came through SplitIT's own edge, an
- * API Gateway HTTP API (D-114). The load balancer is open to the internet, the
- * only way API Gateway can reach it, so anyone could call it directly and skip
- * the edge's HTTPS. The edge adds this header with a value only it has
- * (terraform/edge at the tag devops-submission, from Secrets Manager). Where
- * ORIGIN_VERIFY_SECRET is unset, as on Vercel, nothing changes.
- */
-const ORIGIN_VERIFY_HEADER = 'x-origin-verify';
-// Reached directly, not through the edge: the load balancer's health check and
-// the kubelet's probes, and Prometheus (whose endpoint wants its own token).
-const DIRECT_PATHS = new Set(['/api/health/live', '/api/health/ready', '/api/metrics']);
-
-/**
- * The value our edge sends, where the app runs behind it. `next dev` never
- * does, while the developer's .env holds the value for aws:secrets (D-092),
- * which would refuse every page of their own dev server. A production build
- * fixes NODE_ENV when it is built, so nothing at run time turns this off.
- */
-function edgeSecret(): string | undefined {
-    return process.env.NODE_ENV === 'development' ? undefined : process.env.ORIGIN_VERIFY_SECRET;
-}
-
-function carriesEdgeHeader(request: NextRequest, expected: string): boolean {
-    const given = Buffer.from(request.headers.get(ORIGIN_VERIFY_HEADER) ?? '');
-    const wanted = Buffer.from(expected);
-    return given.length === wanted.length && timingSafeEqual(given, wanted);
-}
-
-function fromOurEdge(request: NextRequest): boolean {
-    const expected = edgeSecret();
-    if (!expected || DIRECT_PATHS.has(request.nextUrl.pathname)) return true;
-    return carriesEdgeHeader(request, expected);
-}
-
-/**
- * A visitor asking for an internal path in any spelling (lib/security/
- * internalPaths.ts): the request came through the edge, whose header only the
- * edge adds. The cluster's own callers, Prometheus and the probes, reach the
- * pod without it.
- */
-function internalPathFromOutside(request: NextRequest): boolean {
-    const expected = edgeSecret();
-    return Boolean(expected) && isInternalPath(request.nextUrl.pathname) && carriesEdgeHeader(request, expected as string);
-}
-
-/** Lets the request continue to its route, carrying its trace and arrival time. */
-function forward(request: NextRequest, trace: TraceContext, receivedAt: number, previewAdmission?: string) {
+/** Lets the request continue to its route, carrying its trace. */
+function forward(request: NextRequest, trace: TraceContext) {
     const headers = new Headers(request.headers);
-    // The routes never see the edge's secret.
-    headers.delete(ORIGIN_VERIFY_HEADER);
     headers.set('traceparent', trace.traceparent);
     headers.delete('tracestate');
     headers.set(REQUEST_ID_HEADER, trace.traceId);
-    headers.set(REQUEST_START_HEADER, requestStartValue(receivedAt));
-    // Only this proxy grants admissions. A value sent by a client would let one
-    // request release the slot another request is holding.
-    headers.delete(PREVIEW_ADMISSION_HEADER);
-    if (previewAdmission) headers.set(PREVIEW_ADMISSION_HEADER, previewAdmission);
     return NextResponse.next({ request: { headers } });
-}
-
-function overloaded(trace: TraceContext) {
-    const response = NextResponse.json(
-        { success: false, error: 'SplitIT is busy right now. Please try again in a moment.', code: 'OVERLOADED', requestId: trace.traceId },
-        { status: 503, headers: { 'Retry-After': '1' } }
-    );
-    applySecurityHeaders(response);
-    return response;
 }
 
 /** Whether the visitor's own connection is HTTPS, as reported by the proxy that terminated it. */
@@ -166,15 +102,9 @@ function ensureDeviceCookie(request: NextRequest, response: NextResponse) {
     if (value) response.cookies.set(DEVICE_COOKIE, value, deviceCookieOptions(isHttps(request)));
 }
 
-// Set by the Kubernetes downward API. Naming the pod in each response makes load
-// balancing across replicas visible; outside Kubernetes nothing is exposed.
-const SERVED_BY = process.env.POD_NAME;
-
 function decide(request: NextRequest, trace: TraceContext, response: NextResponse, decision: ProxyDecision) {
     response.headers.set(REQUEST_ID_HEADER, trace.traceId);
-    if (SERVED_BY) response.headers.set('x-served-by', SERVED_BY);
     ensureDeviceCookie(request, response);
-    recordProxyDecision(decision, request.method, response.status);
     if (decision === 'redirect_login' || decision === 'redirect_dashboard' || decision === 'rate_limited') {
         // Requests answered here never reach a route, so they get their access log line here.
         logger.info('request', {
@@ -190,24 +120,8 @@ function decide(request: NextRequest, trace: TraceContext, response: NextRespons
 }
 
 export async function proxy(request: NextRequest) {
-    // The ingress's arrival time when it is trusted to stamp one (B-016), so the
-    // wait before this proxy ran counts too.
-    const receivedAt = arrivalTime(request.headers);
     const { pathname } = request.nextUrl;
     const trace = newTraceContext();
-
-    // ── Only through our edge (EKS) ──
-    // Counted, not logged: the load balancer is open to the internet (D-114),
-    // and a flood of refused requests must not become a flood of log lines.
-    if (!fromOurEdge(request) || internalPathFromOutside(request)) {
-        const response = new NextResponse('Not available', {
-            status: 403,
-            headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' },
-        });
-        response.headers.set(REQUEST_ID_HEADER, trace.traceId);
-        recordProxyDecision('origin_refused', request.method, response.status);
-        return response;
-    }
 
     // ── Auth Route Protection ──
     // Skip auth checks for static assets and API routes (API routes have their own auth)
@@ -234,40 +148,15 @@ export async function proxy(request: NextRequest) {
         // redirect, so a cookie that won't clear can't start a loop. (Pages are
         // never rate limited.)
         if (session === 'stale') {
-            return decide(request, trace, clearSessionCookies(request, forward(request, trace, receivedAt)), 'pass');
+            return decide(request, trace, clearSessionCookies(request, forward(request, trace)), 'pass');
         }
-    }
-
-    // ── Load shedding at the front door ──
-    // A settlement preview that has already waited past its budget is refused
-    // here, before the rate limiter's Redis round trip and before its body is
-    // read. Refusing it in the route came too late: under overload the steps in
-    // front of the route were the queue, refused requests waited 22 s to hear
-    // so, and liveness probes waited behind them. Counted, not logged, so an
-    // overload cannot add a synchronous log write per refused request.
-    const isPreview = request.method === 'POST' && pathname === '/api/settlements/preview';
-    if (isPreview && Date.now() - receivedAt > previewMaxQueueMs()) {
-        metrics.settlementPreviews.inc({ mode: 'unknown', outcome: 'shed' });
-        return decide(request, trace, overloaded(trace), 'shed_queue');
     }
 
     // ── Rate Limiting ──
     const limit = await checkRateLimit(request);
 
     if (limit.outcome === 'skip') {
-        return decide(request, trace, forward(request, trace, receivedAt), 'pass');
-    }
-
-    // A preview the limiter lets through still needs a free slot in this process
-    // (lib/previewAdmission.ts): the cap on accepted work is what keeps the event
-    // loop, and every probe waiting on it, responsive under overload.
-    let admission: string | undefined;
-    if (isPreview && limit.outcome !== 'deny') {
-        if (!tryAdmitPreview(trace.traceId)) {
-            metrics.settlementPreviews.inc({ mode: 'unknown', outcome: 'shed' });
-            return decide(request, trace, overloaded(trace), 'shed_capacity');
-        }
-        admission = trace.traceId;
+        return decide(request, trace, forward(request, trace), 'pass');
     }
 
     if (limit.outcome === 'disabled' || limit.outcome === 'error') {
@@ -286,14 +175,14 @@ export async function proxy(request: NextRequest) {
             }
         }
         // Everything else fails open: a missing or unavailable limiter must not take the API down.
-        const response = forward(request, trace, receivedAt, admission);
+        const response = forward(request, trace);
         applySecurityHeaders(response);
         return decide(request, trace, response, limit.outcome === 'error' ? 'limiter_error' : 'pass');
     }
 
     const retryAfterSeconds = Math.max(1, Math.ceil(limit.resetMs / 1000));
     const response = limit.outcome === 'allow'
-        ? forward(request, trace, receivedAt, admission)
+        ? forward(request, trace)
         : NextResponse.json(
             {
                 success: false,

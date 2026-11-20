@@ -5,8 +5,8 @@
 export async function register() {
     if (process.env.NEXT_RUNTIME !== 'nodejs') return;
 
-    const { startHttpMetrics } = await import('./lib/observability/httpMetrics');
-    startHttpMetrics();
+    const { startRequestLog } = await import('./lib/observability/requestLog');
+    startRequestLog();
 
     const { warmRateLimiter } = await import('./lib/rateLimit');
     warmRateLimiter();

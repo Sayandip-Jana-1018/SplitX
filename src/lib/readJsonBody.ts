@@ -5,7 +5,7 @@ export class BodyTooLargeError extends Error {
     }
 }
 
-export class InvalidJsonError extends Error {
+class InvalidJsonError extends Error {
     constructor() {
         super('Request body is not valid JSON');
         this.name = 'InvalidJsonError';

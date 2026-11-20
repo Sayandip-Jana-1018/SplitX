@@ -1,6 +1,5 @@
 import { NextRequest } from 'next/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { metrics } from '@/lib/metrics';
 import { checkRateLimit, setRateLimitStore } from '@/lib/rateLimit';
 import { mintDevice } from '@/lib/rateLimit/device';
 import type { HitResult, RateLimitStore } from '@/lib/rateLimit/store';
@@ -22,14 +21,8 @@ function fakeStore(behaviour: (key: string, limit: number) => Promise<HitResult>
 const req = (path: string, method = 'GET', xff = '198.51.100.7') =>
     new NextRequest(`http://localhost${path}`, { method, headers: { 'x-forwarded-for': xff } });
 
-async function checks(policy: string, outcome: string) {
-    const { values } = await metrics.rateLimitChecks.get();
-    return values.find((v) => v.labels.policy === policy && v.labels.outcome === outcome)?.value ?? 0;
-}
-
 describe('checkRateLimit', () => {
     beforeEach(() => {
-        metrics.rateLimitChecks.reset();
         vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     });
     afterEach(async () => {
@@ -53,7 +46,6 @@ describe('checkRateLimit', () => {
         const result = await checkRateLimit(req('/api/groups'));
         expect(result).toMatchObject({ outcome: 'allow', limit: 120, remaining: 89, resetMs: 12_000 });
         expect(calls[0].key).toMatch(/^api:ip:[0-9a-f]{32}$/);
-        expect(await checks('api', 'allow')).toBe(1);
     });
 
     it('denies over the limit', async () => {
@@ -61,7 +53,6 @@ describe('checkRateLimit', () => {
         await setRateLimitStore(store);
 
         expect(await checkRateLimit(req('/api/groups'))).toMatchObject({ outcome: 'deny', remaining: 0 });
-        expect(await checks('api', 'deny')).toBe(1);
     });
 
     it('fails open when the backend errors', async () => {
@@ -72,7 +63,6 @@ describe('checkRateLimit', () => {
 
         const result = await checkRateLimit(req('/api/groups'));
         expect(result.outcome).toBe('error');
-        expect(await checks('api', 'error')).toBe(1);
     });
 
     it('fails open when the backend is slower than RATE_LIMIT_TIMEOUT_MS', async () => {
@@ -115,7 +105,6 @@ describe('checkRateLimit for anonymous devices (B-015)', () => {
         new NextRequest(`http://localhost${path}`, { method: 'POST', headers: { 'x-forwarded-for': xff, cookie } });
 
     beforeEach(() => {
-        metrics.rateLimitChecks.reset();
         vi.stubEnv('AUTH_SECRET', SECRET);
         vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     });
@@ -129,32 +118,29 @@ describe('checkRateLimit for anonymous devices (B-015)', () => {
         const { store, calls } = fakeStore(async () => ({ allowed: true, count: 5, resetMs: 30_000 }));
         await setRateLimitStore(store);
 
-        const result = await checkRateLimit(fromDevice('/api/settlements/preview', 'sx_device=' + mintDevice()));
+        const result = await checkRateLimit(fromDevice('/api/groups', 'sx_device=' + mintDevice()));
 
         expect(calls).toHaveLength(2);
-        expect(calls[0]).toMatchObject({ limit: 60 });
-        expect(calls[0].key).toMatch(/^preview:device:[0-9a-f]{32}$/);
-        expect(calls[1]).toMatchObject({ limit: 2_400 });
-        expect(calls[1].key).toMatch(/^preview:net:ip:[0-9a-f]{32}$/);
-        expect(result).toMatchObject({ outcome: 'allow', scope: 'identity', limit: 60, remaining: 55 });
-        expect(await checks('preview', 'allow')).toBe(1);
-        expect(await checks('preview_network', 'allow')).toBe(1);
+        expect(calls[0]).toMatchObject({ limit: 120 });
+        expect(calls[0].key).toMatch(/^api:device:[0-9a-f]{32}$/);
+        expect(calls[1]).toMatchObject({ limit: 3_600 });
+        expect(calls[1].key).toMatch(/^api:net:ip:[0-9a-f]{32}$/);
+        expect(result).toMatchObject({ outcome: 'allow', scope: 'identity', limit: 120, remaining: 115 });
     });
 
     it('refuses the whole network once its ceiling is reached, even for a device under its own limit', async () => {
-        const { store } = fakeStore(async (key) => (key.includes(':net:') ? { allowed: false, count: 2_400, resetMs: 9_000 } : { allowed: true, count: 1, resetMs: 50_000 }));
+        const { store } = fakeStore(async (key) => (key.includes(':net:') ? { allowed: false, count: 3_600, resetMs: 9_000 } : { allowed: true, count: 1, resetMs: 50_000 }));
         await setRateLimitStore(store);
 
-        const result = await checkRateLimit(fromDevice('/api/settlements/preview', 'sx_device=' + mintDevice()));
-        expect(result).toMatchObject({ outcome: 'deny', scope: 'network', limit: 2_400, remaining: 0, resetMs: 9_000 });
-        expect(await checks('preview_network', 'deny')).toBe(1);
+        const result = await checkRateLimit(fromDevice('/api/groups', 'sx_device=' + mintDevice()));
+        expect(result).toMatchObject({ outcome: 'deny', scope: 'network', limit: 3_600, remaining: 0, resetMs: 9_000 });
     });
 
     it("does not spend the network's allowance on a request the device's own limit refused", async () => {
-        const { store, calls } = fakeStore(async () => ({ allowed: false, count: 60, resetMs: 5_000 }));
+        const { store, calls } = fakeStore(async () => ({ allowed: false, count: 120, resetMs: 5_000 }));
         await setRateLimitStore(store);
 
-        const result = await checkRateLimit(fromDevice('/api/settlements/preview', 'sx_device=' + mintDevice()));
+        const result = await checkRateLimit(fromDevice('/api/groups', 'sx_device=' + mintDevice()));
         expect(result).toMatchObject({ outcome: 'deny', scope: 'identity' });
         expect(calls).toHaveLength(1);
     });
@@ -163,19 +149,19 @@ describe('checkRateLimit for anonymous devices (B-015)', () => {
         const { store, calls } = fakeStore(async () => ({ allowed: true, count: 1, resetMs: 1 }));
         await setRateLimitStore(store);
 
-        await checkRateLimit(fromDevice('/api/settlements/preview', ''));
+        await checkRateLimit(fromDevice('/api/groups', ''));
         expect(calls).toHaveLength(1);
-        expect(calls[0].key).toMatch(/^preview:ip:/);
-        expect(calls[0]).toMatchObject({ limit: 60 });
+        expect(calls[0].key).toMatch(/^api:ip:/);
+        expect(calls[0]).toMatchObject({ limit: 120 });
     });
 
     it('reads the network ceilings from the environment', async () => {
-        vi.stubEnv('RATE_LIMIT_PREVIEW_NETWORK_PER_MINUTE', '500');
+        vi.stubEnv('RATE_LIMIT_AUTH_NETWORK_PER_MINUTE', '500');
         vi.stubEnv('RATE_LIMIT_API_NETWORK_PER_MINUTE', '700');
         const { store, calls } = fakeStore(async () => ({ allowed: true, count: 1, resetMs: 1 }));
         await setRateLimitStore(store);
 
-        await checkRateLimit(fromDevice('/api/settlements/preview', 'sx_device=' + mintDevice()));
+        await checkRateLimit(fromDevice('/api/register', 'sx_device=' + mintDevice()));
         await checkRateLimit(fromDevice('/api/groups', 'sx_device=' + mintDevice()));
         expect(calls[1].limit).toBe(500);
         expect(calls[3].limit).toBe(700);

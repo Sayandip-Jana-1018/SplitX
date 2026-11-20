@@ -5635,7 +5635,21 @@ just the local Postgres and Redis.
 
 **Not yet decided:** `/scale` and the public settlement preview behind it were built for the autoscaling demo, and the proxy's preview admission, the preview's rate limit, the
 EKS edge's origin check (a no-op without `ORIGIN_VERIFY_SECRET`) and the Prometheus metrics (`/api/metrics`, token-protected) are woven into the site's request path. They work
-on Vercel, so removing them is a change to the app, made separately if at all.
+on Vercel, so removing them is a change to the app, made separately if at all. **Decided the same day: D-126.**
+
+### D-126 · The demo's parts leave the request path
+**2026-11-20** · ✅ done, at the user's request, for a launch of about 100 to 200 people.
+
+**Removed:** `/scale` and `POST /api/settlements/preview`, a public, unauthenticated endpoint that planned trips of up to 2,000 people: on Vercel, anyone who found it could spend
+the site's compute, for nothing a real user sees. With it go the proxy's per-process preview admission and queue-time shedding (D-046), which mean little where every instance is
+its own process, the preview's rate limit, the `x-served-by` pod header, the EKS edge's origin check and its internal-path refusals (D-114), and the Prometheus metrics: nothing
+scrapes `/api/metrics` any more, and each serverless instance would count alone anyway. `prom-client` leaves the dependencies.
+
+**Kept:** the rate limits for sign-in and the API, per device under a network ceiling (B-015, B-025, D-076), and their tests, now on an ordinary API route; request IDs on every
+response and in every log line; the access log, now written by the same OpenTelemetry request span without counting (`lib/observability/requestLog.ts`); and the health endpoints the
+production checks read.
+
+**What a launch of this size needs that the app does not have yet:** error reports that reach someone (B-032).
 
 ---
 

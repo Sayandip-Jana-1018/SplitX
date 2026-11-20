@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { takeAiQuota } from '@/lib/aiQuota';
-import { recordReceiptScan } from '@/lib/metrics';
 import { logger } from '@/lib/logger';
 import { adjustmentLooksWrong } from '@/lib/receiptSplit';
 import { formatCurrency } from '@/lib/utils';
@@ -158,7 +157,6 @@ export async function POST(req: Request) {
             });
         } catch (error) {
             const name = (error as { name?: string })?.name;
-            recordReceiptScan('upstream_error');
             return NextResponse.json(
                 {
                     error: name === 'TimeoutError' || name === 'AbortError'
@@ -172,7 +170,6 @@ export async function POST(req: Request) {
         if (!openaiRes.ok) {
             const err = await openaiRes.text();
             logger.error('OpenAI API error', { status: openaiRes.status, body: err.slice(0, 500) });
-            recordReceiptScan(openaiRes.status === 429 ? 'rate_limited' : 'upstream_error');
             if (openaiRes.status === 401) {
                 return NextResponse.json({ error: 'Invalid OpenAI API key' }, { status: 503 });
             }
@@ -186,7 +183,6 @@ export async function POST(req: Request) {
         const content = openaiData.choices?.[0]?.message?.content;
 
         if (!content) {
-            recordReceiptScan('upstream_error');
             return NextResponse.json({ error: 'Empty response from AI' }, { status: 502 });
         }
 
@@ -200,7 +196,6 @@ export async function POST(req: Request) {
             parsed = JSON.parse(cleaned);
         } catch {
             logger.error('Failed to parse AI response', { responseLength: content.length });
-            recordReceiptScan('unparseable');
             return NextResponse.json(
                 { error: 'AI returned invalid data. Please try again with a clearer image.' },
                 { status: 422 }
@@ -262,11 +257,9 @@ export async function POST(req: Request) {
             result.notes = result.notes ? `${result.notes}. ${note}` : note;
         }
 
-        recordReceiptScan('success');
         return NextResponse.json(result);
     } catch (error) {
         logger.error('Receipt scan error', { err: error });
-        recordReceiptScan('error');
         return NextResponse.json(
             { error: 'Failed to process receipt. Please try again.' },
             { status: 500 }

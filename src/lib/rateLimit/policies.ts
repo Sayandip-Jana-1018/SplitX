@@ -8,20 +8,18 @@
  *   stops guessing is per account (ten tries per quarter hour, lib/auth.ts);
  *   what stops inbox flooding is per address (lib/emailVerification.ts, the
  *   forgot-password route).
- * - `preview`: the settlement preview, which does real CPU work per request.
  * - `api`: everything else under /api, keyed by the verified user when signed in.
  *
- * Probes, scrapes and NextAuth's own session polling are never limited.
+ * Health checks and NextAuth's own session polling are never limited.
  * Limits are per minute and configurable per environment.
  *
  * Identity-keyed policies also carry a network ceiling. An anonymous device is
- * limited on its own so a classroom behind one NAT is not one person (B-015),
+ * limited on its own so many people behind one NAT are not one person (B-015),
  * but device identities are free to mint, so the address they share keeps a
- * limit too. The defaults are sized for a demo of about a hundred phones on one
- * network, each planning a trip every few seconds, with room to spare.
+ * limit too.
  */
 
-type PolicyName = 'auth' | 'preview' | 'api';
+type PolicyName = 'auth' | 'api';
 
 export interface RateLimitPolicy {
     name: PolicyName;
@@ -34,7 +32,7 @@ export interface RateLimitPolicy {
 
 const MINUTE_MS = 60_000;
 
-const UNLIMITED_PREFIXES = ['/api/health/', '/api/metrics'];
+const UNLIMITED_PREFIXES = ['/api/health/'];
 
 const CREDENTIAL_ROUTES = new Set([
     '/api/auth/callback/credentials',
@@ -66,15 +64,6 @@ export function policyFor(method: string, pathname: string): RateLimitPolicy | n
     // Session, CSRF and provider lookups are polled by the NextAuth client itself.
     if (pathname.startsWith('/api/auth/')) return null;
 
-    if (pathname === '/api/settlements/preview') {
-        return {
-            name: 'preview',
-            limit: perMinute('RATE_LIMIT_PREVIEW_PER_MINUTE', 60),
-            windowMs: MINUTE_MS,
-            keyBy: 'identity',
-            networkLimit: perMinute('RATE_LIMIT_PREVIEW_NETWORK_PER_MINUTE', 2_400),
-        };
-    }
     return {
         name: 'api',
         limit: perMinute('RATE_LIMIT_API_PER_MINUTE', 120),

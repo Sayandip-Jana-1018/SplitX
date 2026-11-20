@@ -5,7 +5,6 @@ import { prisma } from '@/lib/db';
 import { deduplicateTranscript } from '@/lib/deduplicateTranscript';
 import { takeAiQuota } from '@/lib/aiQuota';
 import { generateWithGemini } from '@/lib/gemini';
-import { recordVoiceParse } from '@/lib/metrics';
 import { logger } from '@/lib/logger';
 
 /**
@@ -63,7 +62,6 @@ export async function POST(req: Request) {
         }
 
         if (!process.env.GEMINI_API_KEY) {
-            recordVoiceParse('local');
             return NextResponse.json(parseTranscriptLocally(cleanedTranscript, memberNames));
         }
 
@@ -72,12 +70,10 @@ export async function POST(req: Request) {
 
         const quota = await takeAiQuota('voice', user.id);
         if (!quota.ok) {
-            recordVoiceParse('local');
             return NextResponse.json(parseTranscriptLocally(cleanedTranscript, memberNames));
         }
 
-        const { result, provider } = await parseWithGemini(cleanedTranscript, memberNames, groupName);
-        recordVoiceParse(provider);
+        const { result } = await parseWithGemini(cleanedTranscript, memberNames, groupName);
         return NextResponse.json(result);
     } catch (error) {
         logger.error('Voice parse error', { err: error });

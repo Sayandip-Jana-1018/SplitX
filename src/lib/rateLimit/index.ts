@@ -1,6 +1,5 @@
 import type { NextRequest } from 'next/server';
 import { logger } from '@/lib/logger';
-import { metrics } from '@/lib/metrics';
 import { withTimeout } from '@/lib/withTimeout';
 import { clientIp } from './clientIp';
 import { ipIdentity, resolveIdentity, type RequestIdentity } from './identity';
@@ -10,14 +9,14 @@ import { createRedisStore, createUpstashStore, type RateLimitStore } from './sto
 /**
  * Rate limiting for API requests.
  *
- * Backend: REDIS_URL (TCP — Kubernetes, Docker) takes precedence over
+ * Backend: REDIS_URL (TCP — local Docker, CI) takes precedence over
  * UPSTASH_REDIS_REST_URL/TOKEN (REST — Vercel). With neither configured the
- * limiter is disabled, which is logged and exported as a metric rather than
- * silent.
+ * limiter is disabled, which is logged rather than silent.
  *
  * When the backend is slow or down the request is allowed ("fails open") and
- * counted as outcome="error": rate limiting protects the service, and an
- * outage of the limiter must not become an outage of the API.
+ * the error is logged: rate limiting protects the service, and an outage of
+ * the limiter must not become an outage of the API. Sign-in fails closed
+ * instead (the proxy counts it locally).
  */
 
 export type RateLimitResult =
@@ -66,7 +65,6 @@ function getStore(): RateLimitStore | null {
     else if (upstashUrl && upstashToken) created = createUpstashStore(upstashUrl, upstashToken, reportBackendError);
     globalForLimiter.__splititRateLimitStore = created;
 
-    metrics.rateLimiterInfo.set({ backend: created?.backend ?? 'disabled' }, 1);
     if (!created) logger.warn('Rate limiting is disabled: set REDIS_URL or UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN');
     return created;
 }
@@ -95,13 +93,11 @@ export async function checkRateLimit(request: NextRequest): Promise<RateLimitRes
     const ip = clientIp(request.headers);
     const identity = policy.keyBy === 'ip' ? ipIdentity(ip) : await resolveIdentity(request, ip);
 
-    const started = performance.now();
     try {
         const hit = await withTimeout(
             backend.hit(`${policy.name}:${identity.key}`, policy.limit, policy.windowMs, Date.now()),
             timeoutMs()
         );
-        metrics.rateLimitChecks.inc({ policy: policy.name, outcome: hit.allowed ? 'allow' : 'deny' });
 
         // An anonymous device counts against its network's ceiling as well (B-015).
         // Only once the device itself is allowed: refused requests are not counted,
@@ -111,9 +107,7 @@ export async function checkRateLimit(request: NextRequest): Promise<RateLimitRes
                 backend.hit(`${policy.name}:net:${identity.network.key}`, policy.networkLimit, policy.windowMs, Date.now()),
                 timeoutMs()
             );
-            metrics.rateLimitChecks.inc({ policy: `${policy.name}_network`, outcome: networkHit.allowed ? 'allow' : 'deny' });
             if (!networkHit.allowed) {
-                metrics.rateLimitDuration.observe({ backend: backend.backend }, (performance.now() - started) / 1000);
                 return {
                     outcome: 'deny',
                     scope: 'network',
@@ -126,7 +120,6 @@ export async function checkRateLimit(request: NextRequest): Promise<RateLimitRes
             }
         }
 
-        metrics.rateLimitDuration.observe({ backend: backend.backend }, (performance.now() - started) / 1000);
         return {
             outcome: hit.allowed ? 'allow' : 'deny',
             scope: 'identity',
@@ -137,8 +130,6 @@ export async function checkRateLimit(request: NextRequest): Promise<RateLimitRes
             resetMs: hit.resetMs,
         };
     } catch (error) {
-        metrics.rateLimitDuration.observe({ backend: backend.backend }, (performance.now() - started) / 1000);
-        metrics.rateLimitChecks.inc({ policy: policy.name, outcome: 'error' });
         reportBackendError(error);
         return { outcome: 'error', policy, identity, error };
     }

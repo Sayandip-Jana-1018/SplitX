@@ -3,7 +3,6 @@ import { createAuditLog } from '@/lib/auditLog';
 import { serializeSettlementAuditSnapshot } from '@/lib/auditPayloads';
 import { prisma } from '@/lib/db';
 import { loadGroupLedger, settlementRoom, type SettlementRoom } from '@/lib/ledger';
-import { recordSettlementCompleted } from '@/lib/metrics';
 import { createBulkNotifications, createNotification } from '@/lib/notifications';
 import { transitionSettlement, TransitionRefused, type TransitionSettlement } from '@/lib/settlementTransitions';
 import { generateUpiLink } from '@/lib/upi';
@@ -284,7 +283,6 @@ export async function decideApproval(actor: Actor, settlementId: string, approvi
         return settlement;
     }
 
-    recordSettlementCompleted(settlement.method, settlement.amount);
     await createNotification({
         userId: settlement.fromId,
         actorId: actor.id,
@@ -357,7 +355,6 @@ export async function receiverRecords(actor: Actor, settlementId: string, record
     }
 
     if (record === 'accept_cash') {
-        recordSettlementCompleted('cash', settlement.amount);
         try {
             await createNotification({
                 userId: settlement.fromId,

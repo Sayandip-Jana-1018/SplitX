@@ -3,7 +3,6 @@ import { createAuditLog } from '@/lib/auditLog';
 import { serializeTransactionAuditSnapshot } from '@/lib/auditPayloads';
 import { prisma } from '@/lib/db';
 import { resolveSplits, SPLIT_TYPES, type SplitType } from '@/lib/expenseSplits';
-import { recordTransactionCreated } from '@/lib/metrics';
 import { isOwnReceiptUrl } from '@/lib/receiptUrl';
 import { formatCurrency } from '@/lib/utils';
 import { pushToPhones } from '@/lib/notifications';
@@ -143,7 +142,6 @@ export async function createExpense(actor: { id: string; name: string | null }, 
         throw error;
     }
     // Expenses carrying a receipt come from the scan flow.
-    recordTransactionCreated(receiptUrl ? 'receipt' : 'manual', category, transaction.amount);
 
     await createAuditLog({
         userId: actor.id,

@@ -18,5 +18,3 @@ export function createRandom(seed: number) {
         pick: <T>(items: readonly T[]) => items[Math.floor(next() * items.length)],
     };
 }
-
-export type SeededRandom = ReturnType<typeof createRandom>;

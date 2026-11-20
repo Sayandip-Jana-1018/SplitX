@@ -1,6 +1,5 @@
 import { NextRequest } from 'next/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { metrics } from '@/lib/metrics';
 import { setRateLimitStore } from '@/lib/rateLimit';
 import { DEVICE_COOKIE, mintDevice } from '@/lib/rateLimit/device';
 import { clearLocalLimits } from '@/lib/rateLimit/local';
@@ -10,15 +9,8 @@ import { proxy } from '@/proxy';
 const store = (hit: RateLimitStore['hit']): RateLimitStore => ({ backend: 'redis', hit, warm: async () => {}, close: async () => {} });
 const api = (path = '/api/groups') => new NextRequest(`http://localhost${path}`, { headers: { 'x-forwarded-for': '198.51.100.7' } });
 
-async function decisions(decision: string) {
-    const { values } = await metrics.proxyDecisions.get();
-    return values.find((v) => v.labels.decision === decision)?.value ?? 0;
-}
-
 describe('proxy rate limiting', () => {
     beforeEach(() => {
-        metrics.proxyDecisions.reset();
-        metrics.httpRequestsTotal.reset();
         vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
         vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     });
@@ -37,7 +29,6 @@ describe('proxy rate limiting', () => {
         expect(res.headers.get('x-ratelimit-remaining')).toBe('0');
         const body = await res.json();
         expect(body).toMatchObject({ code: 'RATE_LIMITED', requestId: res.headers.get('x-request-id') });
-        expect(await decisions('rate_limited')).toBe(1);
     });
 
     it('forwards allowed requests with remaining capacity', async () => {
@@ -46,7 +37,6 @@ describe('proxy rate limiting', () => {
 
         expect(res.headers.get('x-middleware-next')).toBe('1');
         expect(res.headers.get('x-ratelimit-remaining')).toBe('100');
-        expect(await decisions('pass')).toBe(1);
     });
 
     describe('sign-in and sign-up without the shared limiter', () => {
@@ -91,7 +81,7 @@ describe('proxy rate limiting', () => {
         });
     });
 
-    it('lets requests through when the limiter backend is down, and counts it', async () => {
+    it('lets requests through when the limiter backend is down', async () => {
         await setRateLimitStore(store(async () => {
             throw new Error('ECONNREFUSED');
         }));
@@ -99,9 +89,6 @@ describe('proxy rate limiting', () => {
 
         expect(res.status).toBe(200);
         expect(res.headers.get('x-middleware-next')).toBe('1');
-        expect(await decisions('limiter_error')).toBe(1);
-        // Forwarded, so the route span counts the response — the proxy must not count it too.
-        expect((await metrics.httpRequestsTotal.get()).values).toHaveLength(0);
     });
 
     it('does not rate limit health probes even when the limiter would deny', async () => {

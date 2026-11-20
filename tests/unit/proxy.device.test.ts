@@ -26,7 +26,7 @@ describe('proxy device cookies (B-015)', () => {
     });
 
     it('gives an anonymous page visit a genuine device cookie, HttpOnly and SameSite=Lax', async () => {
-        const res = await visit('/scale');
+        const res = await visit('/');
         const cookie = res.cookies.get(DEVICE_COOKIE);
 
         expect(verifyDevice(cookie?.value)).not.toBeNull();
@@ -39,37 +39,37 @@ describe('proxy device cookies (B-015)', () => {
     });
 
     it('marks the cookie Secure when the visitor connected over HTTPS', async () => {
-        const res = await visit('/scale', { 'x-forwarded-proto': 'https' });
+        const res = await visit('/login', { 'x-forwarded-proto': 'https' });
         expect(res.headers.get('set-cookie')).toMatch(/Secure/i);
     });
 
     it('sets it on API responses too, including a refusal, so the next request counts as this device', async () => {
         await setRateLimitStore(denyAll);
-        const res = await visit('/api/settlements/preview', {}, 'POST');
+        const res = await visit('/api/groups');
 
         expect(res.status).toBe(429);
         expect(verifyDevice(res.cookies.get(DEVICE_COOKIE)?.value)).not.toBeNull();
     });
 
     it('leaves a genuine cookie alone', async () => {
-        const res = await visit('/scale', { cookie: `${DEVICE_COOKIE}=${mintDevice()}` });
+        const res = await visit('/login', { cookie: `${DEVICE_COOKIE}=${mintDevice()}` });
         expect(res.cookies.get(DEVICE_COOKIE)).toBeUndefined();
     });
 
     it('replaces a forged or altered cookie with a genuine one', async () => {
-        const res = await visit('/scale', { cookie: `${DEVICE_COOKIE}=AAAAAAAAAAAAAAAAAAAAAA.AAAAAAAAAAAAAAAAAAAAAA` });
+        const res = await visit('/login', { cookie: `${DEVICE_COOKIE}=AAAAAAAAAAAAAAAAAAAAAA.AAAAAAAAAAAAAAAAAAAAAA` });
         expect(verifyDevice(res.cookies.get(DEVICE_COOKIE)?.value)).not.toBeNull();
     });
 
     it('gives a signed-in visitor none: they are limited by account', async () => {
-        const res = await visit('/scale', { cookie: 'authjs.session-token=anything' });
+        const res = await visit('/login', { cookie: 'authjs.session-token=anything' });
         expect(res.cookies.get(DEVICE_COOKIE)).toBeUndefined();
     });
 
     it('sets nothing when no auth secret is configured', async () => {
         vi.stubEnv('AUTH_SECRET', '');
         vi.stubEnv('NEXTAUTH_SECRET', '');
-        const res = await visit('/scale');
+        const res = await visit('/');
         expect(res.cookies.get(DEVICE_COOKIE)).toBeUndefined();
     });
 });

@@ -4,9 +4,9 @@ import { CONTENT_SECURITY_POLICY, PERMISSIONS_POLICY } from './src/lib/security/
 const nextConfig: NextConfig = {
   output: 'standalone',
   // Load these from node_modules once per process instead of bundling a copy
-  // into each server entry point. Separate copies split the metrics registry
-  // and the OpenTelemetry context that instrumentation relies on.
-  serverExternalPackages: ['prom-client', '@opentelemetry/api', '@opentelemetry/sdk-trace-node', 'ioredis'],
+  // into each server entry point. Separate copies split the OpenTelemetry
+  // context the request log relies on, and the Redis connection.
+  serverExternalPackages: ['@opentelemetry/api', '@opentelemetry/sdk-trace-node', 'ioredis'],
   images: {
     remotePatterns: [
       {

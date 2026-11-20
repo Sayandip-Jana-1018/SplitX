@@ -1,6 +1,6 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CONTENT_SECURITY_POLICY, parseCspReports, PERMISSIONS_POLICY } from '@/lib/security/contentSecurityPolicy';
-import { metrics } from '@/lib/metrics';
+import { logger } from '@/lib/logger';
 
 const { POST } = await import('@/app/api/csp-report/route');
 
@@ -68,16 +68,18 @@ describe('parseCspReports', () => {
 });
 
 describe('POST /api/csp-report', () => {
-    afterEach(() => metrics.cspViolations.reset());
+    afterEach(() => vi.restoreAllMocks());
 
     const report = (body: string) => POST(new Request('http://localhost/api/csp-report', { method: 'POST', body }));
 
-    it('counts each violation by directive and kind of source', async () => {
+    it('logs each violation by directive and kind of source', async () => {
+        const warn = vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
         const res = await report(JSON.stringify({ 'csp-report': { 'violated-directive': 'img-src', 'blocked-uri': 'https://tracker.example/p.gif', 'document-uri': 'https://splitx.example/' } }));
 
         expect(res.status).toBe(204);
-        const values = (await metrics.cspViolations.get()).values;
-        expect(values).toEqual([expect.objectContaining({ labels: { directive: 'img-src', source: 'external' }, value: 1 })]);
+        expect(warn).toHaveBeenCalledWith('Content-Security-Policy violation reported', {
+            violations: [expect.objectContaining({ directive: 'img-src', source: 'external' })],
+        });
     });
 
     it('refuses bodies that are not JSON or are over 16 KB', async () => {
