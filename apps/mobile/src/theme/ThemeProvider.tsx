@@ -23,6 +23,8 @@ interface Look {
     tokens: Tokens;
     /** What the shaders paint with. */
     pal: GlassPalette;
+    /** The saved look has been read: until then it is the default, and the change to the saved one is no choice of yours. */
+    restored: boolean;
     setPreference: (value: ModePreference) => void;
     setPalette: (value: PaletteId) => void;
     setGlassStyle: (value: GlassStyleId) => void;
@@ -49,6 +51,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     const [glassStyle, setGlassState] = useState<GlassStyleId>('liquid');
     const [motion, setMotionState] = useState<MotionPreference>('full');
     const [reduceMotion, setReduceMotion] = useState(false);
+    const [restored, setRestored] = useState(false);
 
     useEffect(() => {
         AsyncStorage.multiGet(Object.values(KEYS))
@@ -61,7 +64,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
                 if (savedGlass && (GLASS_STYLE_IDS as readonly string[]).includes(savedGlass)) setGlassState(savedGlass as GlassStyleId);
                 if (saved[KEYS.motion] === 'calm') setMotionState('calm');
             })
-            .catch(() => undefined);
+            .catch(() => undefined)
+            .finally(() => setRestored(true));
         AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion).catch(() => undefined);
         const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
         return () => subscription.remove();
@@ -78,6 +82,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
             calm: motion === 'calm' || reduceMotion,
             tokens: tokensFor(paletteId, mode),
             pal: glassPalette(paletteId, mode),
+            restored,
             setPreference: (next) => {
                 setPreferenceState(next);
                 remember(KEYS.preference, next);
@@ -95,7 +100,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
                 remember(KEYS.motion, next);
             },
         }),
-        [preference, mode, paletteId, glassStyle, motion, reduceMotion],
+        [preference, mode, paletteId, glassStyle, motion, reduceMotion, restored],
     );
     return <LookContext.Provider value={value}>{children}</LookContext.Provider>;
 }

@@ -52,10 +52,8 @@ function RootLayout() {
     const [fontsLoaded, fontError] = useFonts(FONT_FILES);
     const ready = fontsLoaded || Boolean(fontError);
 
-    useEffect(() => {
-        if (ready) SplashScreen.hideAsync().catch(() => undefined);
-    }, [ready]);
-
+    // The splash stays until the fonts and your saved look are in (Frame hides it), so the first
+    // frame is already in your colours.
     if (!ready) return null;
     return (
         <GestureHandlerRootView style={{ flex: 1 }}>
@@ -69,7 +67,10 @@ function RootLayout() {
 }
 
 function Frame() {
-    const { mode, tokens } = useLook();
+    const { mode, tokens, restored } = useLook();
+    useEffect(() => {
+        if (restored) SplashScreen.hideAsync().catch(() => undefined);
+    }, [restored]);
     const navigationTheme = useMemo(() => {
         const base = mode === 'dark' ? DarkTheme : DefaultTheme;
         return { ...base, colors: { ...base.colors, background: 'transparent', card: 'transparent', primary: tokens.accentText, text: tokens.fg } };

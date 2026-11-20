@@ -233,7 +233,7 @@
     --accent-500-rgb: 228, 183, 80;
 }
 
-/* Emerald Gold (a blend: its page and floating colours come from src/lib/glass/palette.ts) */
+/* Jade Gold (a blend: its page and floating colours come from src/lib/glass/palette.ts) */
 [data-palette="emerald-gold"] {
     --h: 85;
     --c: 0.65;

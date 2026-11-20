@@ -35,7 +35,7 @@ export const PALETTE_NAMES: Record<PaletteId, string> = {
     midnight: 'Midnight',
     'noir-gold': 'Noir Gold',
     royal: 'Royal',
-    'emerald-gold': 'Emerald Gold',
+    'emerald-gold': 'Jade Gold',
     'rose-gold': 'Rose Gold',
     ocean: 'Ocean',
     berry: 'Berry',

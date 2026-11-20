@@ -6,7 +6,10 @@ import { AddButton, GlassTabBar, TabButton } from '~/nav/GlassTabBar';
 export default function TabsLayout() {
     return (
         <Tabs>
-            <TabSlot />
+            {/* Its own style lets it grow to fit the screen it shows (flexShrink 0): in a browser the
+                screen then grew past the window, the page scrolled instead of the screen, and the tab
+                bar rode up with it. flex: 1 holds it to the window, as on a phone. */}
+            <TabSlot style={{ flex: 1 }} />
             <TabList asChild>
                 <GlassTabBar>
                     <TabTrigger name="home" href="/home" asChild>

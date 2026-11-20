@@ -112,17 +112,18 @@ export default function Profile() {
                     </GlassSurface>
                 </View>
 
+                {/* Two equal cards at the size of Home's, so the two screens read as one app. */}
                 <View style={{ flexDirection: 'row', gap: 12 }}>
-                    <GlassSurface style={{ flex: 1, paddingVertical: 16, gap: 2 }}>
-                        <Text variant="title" tabular>
+                    <GlassSurface style={{ flex: 1, paddingVertical: 16, paddingHorizontal: 10, gap: 4 }}>
+                        <Text variant="heading" tabular>
                             {ledger.groups.length}
                         </Text>
                         <Text variant="caption" tone="secondary">
                             {ledger.groups.length === 1 ? 'group' : 'groups'}
                         </Text>
                     </GlassSurface>
-                    <GlassSurface style={{ flex: 1.6, paddingVertical: 16, gap: 2 }}>
-                        <Text variant="title" tabular numberOfLines={1} adjustsFontSizeToFit>
+                    <GlassSurface style={{ flex: 1, paddingVertical: 16, paddingHorizontal: 10, gap: 4 }}>
+                        <Text variant="heading" tabular numberOfLines={1} adjustsFontSizeToFit>
                             {rupees(paid)}
                         </Text>
                         <Text variant="caption" tone="secondary">

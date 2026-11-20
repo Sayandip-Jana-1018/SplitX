@@ -60,7 +60,7 @@ const GlassContext = createContext<Glass | null>(null);
 const START = (Date.now() % 600_000) / 1000;
 
 export function GlassProvider({ children }: { children: ReactNode }) {
-    const { calm, pal } = useLook();
+    const { calm, pal, restored } = useLook();
     const { width, height } = useWindowDimensions();
     const time = useSharedValue(START);
     const touch = useSharedValue<number[]>([0, 0, -1]);
@@ -72,19 +72,23 @@ export function GlassProvider({ children }: { children: ReactNode }) {
     }, [calm, still]);
     const liquid = useDerivedValue(() => liquidUniforms(time.value, width, height, pal, touch.value, before.value, rip.value), webDeps([pal, width, height]));
 
-    // A new colour or mode spreads from where it was chosen: the last touch, if it was just now.
+    // A new colour or mode spreads from where it was chosen: the last touch, if it was just now. The
+    // saved one, read as the app opens, is simply where it starts: no ripple from the default to it.
     const shown = useRef(pal);
+    const wasRestored = useRef(restored);
     useEffect(() => {
+        const restoring = !wasRestored.current && restored;
+        wasRestored.current = restored;
         if (shown.current === pal) return;
         const old = shown.current;
         shown.current = pal;
-        if (calm) return;
+        if (calm || restoring || !restored) return;
         const [x, y, at] = touch.value;
         const now = time.value;
         const fresh = at >= 0 && now - at < 1.5;
         before.set(old);
         rip.set([fresh ? x : width / 2, fresh ? y : height / 2, now]);
-    }, [pal, calm, touch, time, before, rip, width, height]);
+    }, [pal, calm, restored, touch, time, before, rip, width, height]);
     const frameMs = useSharedValue(PACE[0].frameMs);
     const due = useSharedValue(0);
     const last = useSharedValue(0);
