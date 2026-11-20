@@ -288,7 +288,7 @@ I stop and report at the end of each phase, and start the next only when you say
 | 2 | Accounts and real data | ✅ You use the real app, with real friends, on the live site (live 15 November) |
 | 3 | Notifications and reliability | ✅ A push reached your phone; the restore drill passed (15 November) |
 | 4 | The full app: every website screen, the core loop | Code done 19 November: settle-up map and every web screen on the phone; the pretend trip passes as a test. Left: the trip by hand on your phone |
-| 5 | Smart input and auto-capture | Real alerts become correct expenses; receipt scans work |
+| 5 | Smart input and auto-capture | Started 21 November: receipt scans work again (Gemini), on the website and the phone. Next: item by item, voice, share, UPI QR, capture |
 | 6 | Missing money features | Ledger tests hold for every new case |
 | 7 | The delight layer | Gamification and the last moments, inside budget |
 | 8 | Hardening | Security, privacy, accessibility reports with no high issues; a real signing key |
@@ -418,6 +418,22 @@ The phone already keeps every group whole (people, expenses, settlements), so li
 5. ✅ **You:** name and UPI ID (already there); Privacy and data, with your data as one file to keep or send (the website's export, now shared in `src/lib/services/account.ts`) and closing your account (type DELETE, refused while you owe or are owed, every phone signed out); Your phones, this one first, signing another out. Fixed on the way: the website's "sign out of all devices" now also ends the phone app's sessions and stops their pushes (`endPhoneSessions`), and deleting an account removes its phones and their tokens.
 6. ✅ **Notifications and search:** a bell on every main screen with the unread count, and its list (today's first, tap to open and mark read, mark all read), kept up to date as screens open and pushes arrive (the website's list moved into `src/lib/services/notificationsList.ts`, behind the new `/api/v1/notifications`); and one search across groups, people and every expense and payment, with the website's quick actions, worked out on the phone so it works offline. The top bar now holds you and search on the left, notifications and the look on the right.
 7. ✅ **The pretend trip** (`tests/database/pretendTrip.test.ts`): the app's own client, outbox and ledger against the server's own routes and a real Postgres. 30 expenses of every split kind added with no signal, one deleted before it was sent, then back online on a line that loses answers after the server has acted, and an edit sent the same way. The phone (from sync), the server (the website's ledger) and an independent sum agree on every balance to the paisa, nothing is saved twice, and what the phone showed offline is share for share what the server saved. It found two real bugs, both fixed: an edit whose answer was lost was refused on retry as a conflict with itself (now an edit already in place is answered as done); and the phone could give an equal split's leftover paise to a different person than the server (it now splits by the server's ids). **Still to do by hand:** the same trip on your phone in airplane mode.
+
+### Phase 5: smart input and auto-capture (started 21 November)
+
+**Exit test:** a real bill scans to the right total on the phone and the website; real payment alerts become correct expenses, each payment once, against a corpus built from your masked alerts (at least 95% of amounts right, at most 2% false captures); no raw alert text leaves the phone.
+
+**Why the scans failed (13 November):** the AI scan's OpenAI account had run out of credit, and the website called that a "rate limit". The Gemini key the chat already uses works: on a sample bill every Gemini model read all six items, the GST, the service charge and the printed total right, the lite models in 2.6 to 3.8 seconds and the bigger Flash models in 36 to 45 seconds.
+
+**In steps** (each committed and pushed on its own; checked on your phone as they land):
+
+1. **Receipt scans that work:** one scan service for the website and the phone (`src/lib/services/receiptScan.ts`), reading with Gemini's quick model and, only when that finds nothing to add up, its careful one; OpenAI stays as the fallback when it's the only key. Out of credit is no longer called "busy". On the phone, a Scan screen (Home's Scan): a photo from the camera or your photos, shrunk on the phone, read by `POST /api/v1/receipts/scan`, shown back item by item, then added as an expense with the photo kept as its receipt. **Your part:** scan the real bill that failed.
+2. **Item by item:** splitting a scanned bill by who had what, as the website's scan page does.
+3. **Voice:** say an expense ("dinner 1,200 split with Ravi and Meera"), read by the phone's own speech recognition and the server's voice parser, landing as a filled-in expense.
+4. **Share and paste:** share a payment screenshot or message to SplitIT from any app, or paste a copied one, and it becomes a filled-in expense.
+5. **Scan a UPI QR, pay and split:** the QR opens your UPI app with the amount; back in SplitIT, the expense is ready to save.
+6. **Reading on the phone:** ML Kit text recognition, so a bill can be read with no signal.
+7. **Payment auto-capture (Android):** first the two proofs (a week of masked alerts captured on your phone, and ₹1 UPI test payments between your own accounts), then everything in section 7: the allowlist, rule packs, merging duplicates, the review inbox, settle-up matching, the kill switch, and a test that no raw text leaves the phone.
 
 ### The old plan's Phase 3: core loop (now part of Phase 4)
 

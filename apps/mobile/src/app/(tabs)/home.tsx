@@ -38,7 +38,7 @@ function greeting(): string {
 const ACTIONS: { label: string; icon: LucideIcon; kind: GlassKind; href: string }[] = [
     { label: 'Add', icon: Plus, kind: 'accent', href: '/add' },
     { label: 'Settle', icon: ArrowLeftRight, kind: 'thin', href: '/settle' },
-    { label: 'Scan', icon: ScanLine, kind: 'thin', href: '/add' },
+    { label: 'Scan', icon: ScanLine, kind: 'thin', href: '/scan' },
     { label: 'Insights', icon: ChartPie, kind: 'thin', href: '/insights' },
 ];
 

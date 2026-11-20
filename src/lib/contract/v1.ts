@@ -502,3 +502,32 @@ export const ProfileUpdate = z.object({
     upiId: z.string().trim().max(100).regex(/^[\w.-]+@[\w]+$/, 'Invalid UPI ID format (e.g. name@bank)').optional().or(z.literal('')),
 });
 export type ProfileUpdate = z.infer<typeof ProfileUpdate>;
+
+// ── Receipt scans (POST /api/v1/receipts/scan) ──
+
+/** The most a scanned photo may be, as a data URL: the app shrinks photos well under it. */
+export const RECEIPT_IMAGE_MAX_CHARS = 4_000_000;
+
+/** A photo of a bill, as a JPEG, PNG or WebP data URL. */
+export const ReceiptScanRequest = z.object({ image: z.string().max(RECEIPT_IMAGE_MAX_CHARS) });
+export type ReceiptScanRequest = z.infer<typeof ReceiptScanRequest>;
+
+/** What a bill says, every amount in paise. `price` is a row's total (quantity × unit price). */
+export const ReceiptScan = z.object({
+    merchant: z.string().nullable(),
+    /** As printed, YYYY-MM-DD, when the bill shows one. */
+    date: z.string().nullable(),
+    items: z.array(z.object({ name: z.string(), quantity: z.number(), price: z.number().int() })),
+    subtotal: z.number().int(),
+    /** Taxes and charges by name: CGST, SGST, Service Charge… */
+    taxes: z.record(z.string(), z.number().int()),
+    total: z.number().int(),
+    /** ISO 4217 code of the amounts as printed. SplitIT records rupees, so anything else is shown as a warning. */
+    currency: z.string(),
+    category: z.string(),
+    /** 0 to 1: how sure the reader is. Below about 0.5, ask the person to check. */
+    confidence: z.number(),
+    /** Anything that doesn't add up, said plainly. */
+    notes: z.string().nullable(),
+});
+export type ReceiptScan = z.infer<typeof ReceiptScan>;

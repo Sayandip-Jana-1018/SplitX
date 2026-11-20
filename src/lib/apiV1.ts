@@ -21,11 +21,14 @@ export function v1Json<T>(data: T, status = 200) {
 
 const BODY_LIMIT = 16 * 1024;
 
-/** The request's body, checked against its schema; or the answer that says what was wrong with it. */
-export async function readV1Body<T>(request: Request, schema: z.ZodType<T>): Promise<{ ok: true; data: T } | { ok: false; response: NextResponse }> {
+/**
+ * The request's body, checked against its schema; or the answer that says what was wrong with it.
+ * Bodies are small (16 KB), except where a route says otherwise: a receipt's photo.
+ */
+export async function readV1Body<T>(request: Request, schema: z.ZodType<T>, limitBytes = BODY_LIMIT): Promise<{ ok: true; data: T } | { ok: false; response: NextResponse }> {
     let raw: unknown;
     try {
-        raw = await readJsonBody(request, BODY_LIMIT);
+        raw = await readJsonBody(request, limitBytes);
     } catch (error) {
         return { ok: false, response: error instanceof BodyTooLargeError ? v1Error('That request is too large.', 413, 'too_large') : v1Error('Send JSON.', 400, 'invalid_json') };
     }

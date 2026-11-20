@@ -32,6 +32,7 @@ import {
     MessagePage,
     MessageSent,
     NotificationList,
+    ReceiptScan,
     SettlementMoved,
     SettlementSaved,
     GroupDetail,
@@ -99,6 +100,9 @@ const EARLY_MS = 30_000;
 
 const OFFLINE = 'You’re offline. Your changes are kept and sent when you’re back.';
 
+/** A request's own time limit, for the few that take longer than most (a receipt scan). */
+type RequestOptions = RequestInit & { timeoutMs?: number };
+
 export function createApi(options: ApiOptions) {
     const send = options.fetch ?? fetch;
     const timeoutMs = options.timeoutMs ?? 15_000;
@@ -106,9 +110,9 @@ export function createApi(options: ApiOptions) {
     let access: { token: string; expiresAt: number } | null = null;
     let refreshing: Promise<void> | null = null;
 
-    async function request(path: string, init: RequestInit = {}): Promise<Response> {
+    async function request(path: string, { timeoutMs: own, ...init }: RequestOptions = {}): Promise<Response> {
         const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        const timer = setTimeout(() => controller.abort(), own ?? timeoutMs);
         try {
             return await send(`${options.baseUrl}${path}`, {
                 ...init,
@@ -170,7 +174,7 @@ export function createApi(options: ApiOptions) {
         return refreshing;
     }
 
-    async function authed<T>(path: string, schema: z.ZodType<T>, init: RequestInit = {}): Promise<T> {
+    async function authed<T>(path: string, schema: z.ZodType<T>, init: RequestOptions = {}): Promise<T> {
         if (!access || access.expiresAt - EARLY_MS <= now()) await refresh();
         const go = () => request(path, { ...init, headers: { ...init.headers, Authorization: `Bearer ${access?.token ?? ''}` } });
         let response = await go();
@@ -246,6 +250,8 @@ export function createApi(options: ApiOptions) {
         },
         me: () => authed('/api/v1/me', MeAnswer).then((answer) => answer.me),
         /** Saves an expense; the same clientId again saves nothing new (`replayed`). */
+        /** A photo of a bill (a JPEG data URL) read by the server's AI: a careful second look can take a minute. */
+        scanReceipt: (image: string) => authed('/api/v1/receipts/scan', ReceiptScan, { method: 'POST', body: JSON.stringify({ image }), timeoutMs: 95_000 }),
         saveExpense: (expense: NewExpense) => authed('/api/v1/expenses', ExpenseSaved, { method: 'POST', body: JSON.stringify(expense) }),
         editExpense: (id: string, edit: ExpenseEdit) => authed(`/api/v1/expenses/${encodeURIComponent(id)}`, ExpenseEdited, { method: 'PATCH', body: JSON.stringify(edit) }),
         /** 204: no body, which the client reads as null. */

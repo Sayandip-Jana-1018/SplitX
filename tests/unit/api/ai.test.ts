@@ -185,17 +185,21 @@ describe('POST /api/receipt-scan', () => {
         expect(fetchMock).not.toHaveBeenCalled();
     });
 
-    it('gives up on a scan that takes too long', async () => {
-        fetchMock.mockRejectedValue(new DOMException('The operation timed out.', 'TimeoutError'));
+    it('gives up on a scan that takes too long, after the quick and the careful model both have', async () => {
+        generateWithGemini.mockResolvedValue({ ok: false, reason: 'timeout' });
 
         const res = await scan('data:image/jpeg;base64,/9j/AAAA');
 
         expect(res.status).toBe(504);
-        expect(fetchMock.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
+        expect(generateWithGemini).toHaveBeenCalledTimes(2);
+        for (const [call] of generateWithGemini.mock.calls) {
+            expect(call.timeoutMs).toBeGreaterThan(0);
+            expect(call.image).toEqual({ mimeType: 'image/jpeg', data: '/9j/AAAA' });
+        }
+        expect(fetchMock).not.toHaveBeenCalled();
     });
 
-    const modelReads = (bill: Record<string, unknown>) => fetchMock.mockImplementation(async () =>
-        new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(bill) } }] })));
+    const modelReads = (bill: Record<string, unknown>) => generateWithGemini.mockResolvedValue({ ok: true, text: JSON.stringify(bill) });
     const scanned = async () => (await scan('data:image/jpeg;base64,/9j/AAAA')).json();
 
     it('counts each item row once, since its price is already quantity × unit price', async () => {

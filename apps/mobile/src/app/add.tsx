@@ -7,6 +7,9 @@
  *
  * Opened with an expense (`edit`), the same screen changes it: everything but who paid and the
  * group, which the server keeps as they are.
+ *
+ * Opened from a scanned bill (scan.tsx), it starts filled in: the printed total, the shop's name and
+ * the category, and the photo is kept as the new expense's receipt.
  */
 import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -95,7 +98,7 @@ function splitFrom(expense: Expense, group: Group): { mode: SplitMode; among: st
 }
 
 export default function AddExpense() {
-    const params = useLocalSearchParams<{ group?: string; edit?: string }>();
+    const params = useLocalSearchParams<{ group?: string; edit?: string; amount?: string; title?: string; category?: string; receipt?: string }>();
     const { ledger } = useLedger();
     // The expense as it was when the screen opened: what the edit is measured against.
     const [original] = useState(() => (params.edit ? ledger.expenses.find((expense) => expense.id === params.edit) : undefined));
@@ -107,20 +110,29 @@ export default function AddExpense() {
             </Screen>
         );
     }
-    return <ExpenseForm original={original} startGroup={params.group} />;
+    const scanned = params.amount ? { amount: Number(params.amount), title: params.title ?? '', category: params.category, receipt: params.receipt } : undefined;
+    return <ExpenseForm original={original} startGroup={params.group} scanned={scanned} />;
 }
 
-function ExpenseForm({ original, startGroup }: { original?: Expense; startGroup?: string }) {
+/** A bill read by the scan: what the new expense starts with. */
+interface Scanned {
+    amount: number;
+    title: string;
+    category?: string;
+    receipt?: string;
+}
+
+function ExpenseForm({ original, startGroup, scanned }: { original?: Expense; startGroup?: string; scanned?: Scanned }) {
     const { tokens } = useLook();
-    const { ledger, personOf, addExpense, editExpense } = useLedger();
+    const { ledger, personOf, addExpense, editExpense, setReceipt } = useLedger();
     const toast = useToast();
 
     const [groupId, setGroupId] = useState(() => original?.groupId ?? (ledger.groups.some((candidate) => candidate.id === startGroup) ? startGroup! : ledger.groups[0].id));
     const group = ledger.groups.find((candidate) => candidate.id === groupId) ?? ledger.groups[0];
     const [start] = useState(() => (original ? splitFrom(original, group) : null));
-    const [amount, setAmount] = useState(() => (original ? typedAmount(original.amount) : ''));
-    const [title, setTitle] = useState(original?.title ?? '');
-    const [picked, setPicked] = useState<string | null>(original?.category ?? null);
+    const [amount, setAmount] = useState(() => (original ? typedAmount(original.amount) : scanned && scanned.amount > 0 ? typedAmount(scanned.amount) : ''));
+    const [title, setTitle] = useState(original?.title ?? scanned?.title ?? '');
+    const [picked, setPicked] = useState<string | null>(original?.category ?? (scanned?.category && scanned.category !== 'general' ? scanned.category : null));
     const [choosingCategory, setChoosingCategory] = useState(false);
     const [payerId, setPayerId] = useState(original?.payerId ?? ME);
     const [splitType, setSplitType] = useState<SplitMode>(start?.mode ?? 'equal');
@@ -196,7 +208,8 @@ function ExpenseForm({ original, startGroup }: { original?: Expense; startGroup?
                 if (router.canGoBack()) router.back();
                 return;
             }
-            addExpense(input);
+            const added = addExpense(input);
+            if (scanned?.receipt) setReceipt(added.id, scanned.receipt);
         } catch (error) {
             toast(error instanceof Error ? error.message : 'That expense could not be saved', 'info');
             return;
