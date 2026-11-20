@@ -79,6 +79,8 @@ function LayeredSurface({ kind = 'reg', radius = 24, glassStyle, scale, dimmed, 
         const { width, height } = event.nativeEvent.layout;
         size.set([width, height]);
         measure();
+        // Its new size may have moved the glass below it too.
+        layer.relayout();
         onLayout?.(event);
     };
 

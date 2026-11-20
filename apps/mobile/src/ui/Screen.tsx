@@ -1,14 +1,14 @@
 /**
  * A screen over the liquid: it scrolls, keeps clear of the notch and the floating tab bar,
  * and keeps everything on one centre axis, at a readable width on a tablet too. Its glass is drawn
- * by one layer that stays still behind the scrolling content. The keyboard shortens it rather than
- * covering it, and a tap on a button while typing presses the button (not just closes the keyboard).
+ * by the scroll view, in strips that scroll with the content (GlassScrollView). The keyboard
+ * shortens it rather than covering it, and a tap on a button while typing presses the button (not
+ * just closes the keyboard).
  */
 import { useState, type ReactNode } from 'react';
 import { KeyboardAvoidingView, RefreshControl, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GlassScrollView } from '~/glass/GlassScroll';
-import { GlassLayer } from '~/glass/layer';
 import { useLook } from '~/theme/ThemeProvider';
 
 /** The floating tab bar's height, with the gap above it. */
@@ -34,7 +34,7 @@ export function Screen({ children, tabBar = true, contentStyle, onRefresh }: Pro
           }
         : undefined;
     return (
-        <GlassLayer style={{ flex: 1 }}>
+        <View style={{ flex: 1 }}>
             <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
             <GlassScrollView
                 style={{ flex: 1 }}
@@ -51,7 +51,7 @@ export function Screen({ children, tabBar = true, contentStyle, onRefresh }: Pro
                 <View style={[{ width: '100%', maxWidth: 560, gap: 22 }, contentStyle]}>{children}</View>
             </GlassScrollView>
             </KeyboardAvoidingView>
-        </GlassLayer>
+        </View>
     );
 }
 
